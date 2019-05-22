@@ -1,0 +1,12 @@
+left recursion
+okay to assume no left-recursion--define predicate
+
+ambiguity
+prove that if an input is ambiguous, the parser will detect the ambiguity
+defining two grammar relations--one for recognizing, one for deriving
+prove that if the recognizer rel holds, parser returns a tree that corresponds
+to that judgment
+
+multiple prefixes problem
+long-term--make prediction that covers longest prefix
+short-term--require parser to cover entire input
