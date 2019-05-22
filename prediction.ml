@@ -1,14 +1,9 @@
-(* Representations of grammar symbols *)
-type terminal     = string
-type nonterminal  = char
-type symbol       = T of terminal | NT of nonterminal
-(* Finite sets of nonterminals *)
-module NtAsOt     =
-  struct
-    type t        = nonterminal
-    let compare   = compare
-  end    
-module NtSet      = Set.Make(NtAsOt)
+open Defs
+
+(* A grammar location is a triple (x, rpre, rsuf) such that 
+   (x, rpre ++ rsuf) is a grammar production. *)
+type grammar_loc  = nonterminal * symbol list * symbol list
+
 (* Finite sets of sentential forms *)
 module GammaAsOt  =
   struct
@@ -16,38 +11,24 @@ module GammaAsOt  =
     let compare   = compare
   end
 module GammaSet   = Set.Make(GammaAsOt)
-(* Grammar-related definitions *)                           
-type production   = nonterminal * symbol list
-type grammar      = production list
-(* A grammar location is a triple (x, rpre, rsuf) such that 
-   (x, rpre ++ rsuf) is a grammar production. *)
-type grammar_loc  = nonterminal * symbol list * symbol list
-(* Definitions related to input that the parser consumes. *)
-type sym_arg      = S_arg of symbol | G_arg of grammar_loc
-type literal      = string
-type token        = terminal * literal
-(* Parser return values *)
-type tree         = Leaf of literal | Node of nonterminal * forest
-and  forest       = tree list
-type parse_res    = S_accept of tree * token list
-                  | G_accept of tree list * token list
-                  | Reject   of string
-                  | Error    of string
-(* Prediction-related definitions *)                                 
-type ('a,'b) sum  = Inl of 'a | Inr of 'b                                 
+
+(* Subparser used by the ALL( * ) prediction mechanism *)
 type subparser    = { location   : grammar_loc
                     ; stack      : grammar_loc list
                     ; prediction : symbol list
                     }
-type loc_stack    = grammar_loc * grammar_loc list
+
+(* Finite map from (location * stack) pairs to production right-hand sides
+   (used by ALL( * ) to detect ambiguity) *)
+type locstk_pair  = grammar_loc * grammar_loc list
 module LsAsOt     =
   struct
-    type t        = loc_stack
+    type t        = locstk_pair
     let compare   = compare
   end
 module LsMap      = Map.Make(LsAsOt)
-type loc_pred_map = GammaSet.t LsMap.t
-                          
+type ls_pred_map  = GammaSet.t LsMap.t
+
 let filterLhsEq (g : grammar) (x : nonterminal) : production list =
   List.filter (fun (x', gamma) -> x = x') g
                        
@@ -104,17 +85,25 @@ let rec allEq (xs : 'a list) : bool =
 let allPredictionsEq (sps : subparser list) : bool =
   allEq (predictions sps)
 
-let addSpToMap (sp : subparser) (m : ls_ps_map) : ls_ps_map =
+let cardGtOne (s : GammaSet.t) : bool =
+  GammaSet.cardinal s > 1
+
+(* kludge until Tufts OCaml version is updated *)
+let find_opt (pr : locstk_pair) (m : ls_pred_map) : (GammaSet.t) option =
+  try 
+    let gamma = LsMap.find pr m 
+    in  Some gamma
+  with
+    Not_found -> None
+
+let addSpToMap (sp : subparser) (m : ls_pred_map) : ls_pred_map =
   let {location = loc; stack = stk; prediction = pred} = sp in
-  match LsMap.find_opt (loc, stk) m with
+  match find_opt (loc, stk) m with
   | Some s -> LsMap.add (loc, stk) (GammaSet.add pred s) m
   | None   -> LsMap.add (loc, stk) (GammaSet.singleton pred) m
         
-let mkLocstackPredsMap (sps : subparser list) : ls_ps_map =
+let mkLocstackPredsMap (sps : subparser list) : ls_pred_map =
   List.fold_right addSpToMap sps LsMap.empty
-
-let cardGtOne (s : GammaSet.t) : bool =
-  GammaSet.cardinal s > 1
 
 let allLocsAmbiguous (sps : subparser list) : bool =
   let m = mkLocstackPredsMap sps
@@ -162,46 +151,3 @@ let rec llPredict' (g : grammar) (sps : subparser list) (ts : token list) : (str
 let llPredict (g : grammar) (stk : grammar_loc list) (x : nonterminal) (ts : token list) : (string, symbol list) sum =  
   let sps = startState g stk x
   in  llPredict' g sps ts
-           
-let rec parse' (g   : grammar)
-               (sa  : sym_arg)
-               (ts  : token list)
-               (stk : grammar_loc list) :
-               parse_res = 
-  match sa with
-  | S_arg (T a) ->
-     (match ts with
-      | []               -> Reject "input exhausted"
-      | (a', lit) :: ts' ->
-         if a = a' then S_accept (Leaf lit, ts') else Reject "token mismatch")
-  | S_arg (NT x) ->
-     (match llPredict g stk x ts with
-      | Inl s     -> Reject s
-      | Inr gamma ->
-         (match parse' g (G_arg (x, [], gamma)) ts stk with
-          | S_accept _        -> Error "this can't happen"
-          | G_accept (f, ts') -> S_accept (Node (x, f), ts')
-          | Reject s          -> Reject s
-          | Error s           -> Error s))
-  | G_arg (_, _, [])         -> G_accept ([], ts)
-  | G_arg (x, rpre, sym :: gamma') ->
-     match parse' g (S_arg sym) ts ((x, rpre, gamma') :: stk) with
-     | G_accept _           -> Error "this can't happen"
-     | Reject s             -> Reject s
-     | Error s              -> Error s
-     | S_accept (lsib, ts') ->
-        (* skipping the visited set component in OCaml version *)
-        match parse' g (G_arg (x, rpre @ [sym], gamma')) ts' stk with
-        | S_accept _             -> Error "this can't happen"
-        | Reject s               -> Reject s
-        | Error s                -> Error s
-        | G_accept (rsibs, ts'') -> G_accept (lsib :: rsibs, ts'')
-
-let parse g sym ts = parse' g (S_arg sym) ts []
-          
-let g = [ ('S', [T "a"])
-        ; ('S', [T "b"])
-        ]
-
-let ts = [("a", "sam")]
-          
