@@ -29,3 +29,4 @@ type parse_res    = S_accept of tree * token list
 
 (* Generally useful definitions *)
 type ('a,'b) sum  = Inl of 'a | Inr of 'b                                 
+let id x          = x

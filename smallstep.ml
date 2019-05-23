@@ -1,15 +1,17 @@
 open Defs
+open Formatting
 open Prediction
 
-type lookahead    = LA of terminal | EOF
+(* LL(1)-related definitions *)
+type lookahead = LA of terminal | EOF
 
-module PtKeyAsOt  =
-  struct
-    type t        = nonterminal * lookahead
-    let compare   = compare
-  end
-module ParseTable = Map.Make(PtKeyAsOt)
-type parse_table  = (symbol list) ParseTable.t
+module ParseTable = Map.Make(struct
+                               type t = nonterminal * lookahead
+                               let compare = compare
+                             end)
+
+type parse_table = (symbol list) ParseTable.t
+
 let pt_find_opt (k : nonterminal * lookahead) (m : parse_table) : (symbol list) option =
   try 
     let gamma = ParseTable.find k m in Some gamma
@@ -27,7 +29,7 @@ type frame = { lhs_opt : nonterminal option
              ; rhs_suf : symbol list
              ; sem_val : forest
              }
-
+    
 (* A stack is essentially a non-empty list of frames *)
 type stack        = frame * frame list
 
@@ -35,18 +37,36 @@ type parser_state = stack * token list
 
 type step_result  = StepAccept of forest * token list
                   | StepReject of string
-                  | StepK      of stack * token list
+                  | StepK      of parser_state
                   | StepError  of string
 
 type parse_result = Accept of forest * token list
                   | Reject of string
                   | Error  of string
-                                                     
+
+let showFrame fr : string =
+  let {lhs_opt = lo; rhs_pre = rpre; rhs_suf = rsuf} = fr in
+  let template = "parsed   : %s \n" ^^
+                 "to_parse : %s   "
+  in  Printf.sprintf template
+                     (showGamma rpre)
+                     (showGamma rsuf)
+
+let showStack ((fr, stk') : stack) : string =
+  let frame_bound = "\n--------\n" in
+  let ss = (showFrame fr) :: (List.map showFrame stk') in 
+  String.concat frame_bound ss
+
+let showState (stk : stack) (ts : token list) : string =
+  let bound = "*****" in
+  String.concat "\n" ["INPUT" ; bound ; (showTokens ts) ; "STACK" ; bound ; showStack stk]
+                   
 let mkFrame (lo : nonterminal option) (rpre : symbol list) (rsuf : symbol list) (sv : forest) : frame =
   { lhs_opt = lo ; rhs_pre = rpre ; rhs_suf = rsuf ; sem_val = sv }
 
- let step (tbl : parse_table) ((fr, stk') : stack) (ts : token list) : step_result =
-   let {lhs_opt = lo; rhs_pre = rpre; rhs_suf = rsuf; sem_val = sv} = fr in
+let step (tbl : parse_table) ((fr, stk') : stack) (ts : token list) : step_result =
+  let _ = print_string ((showState (fr, stk') ts) ^ "\n\n") in
+  let {lhs_opt = lo; rhs_pre = rpre; rhs_suf = rsuf; sem_val = sv} = fr in
    match rsuf with
    | [] ->
       (match (lo, stk') with
@@ -98,8 +118,9 @@ let g = [ ('S', [T "a"])
         ; ('S', [T "b"])
         ]
 
-let tbl = ParseTable.add ('S', LA "a") [T "a"; T "c"]
-            (ParseTable.add ('S', LA "b") [T "b"; T "c"] ParseTable.empty)
-                           
-let ts = [("a", "sam"); ("c", "anna")]
-                                           
+let tbl = ParseTable.add ('S', LA "int") [T "int"; T "str"]
+            (ParseTable.add ('S', LA "char") [T "char"; T "str"] ParseTable.empty)
+
+let ts = [("int", "42"); ("str", "hello")]
+            
+let _ = parse tbl (NT 'S') ts

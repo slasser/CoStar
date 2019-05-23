@@ -1,6 +1,6 @@
 OCAMLBUILD = ocamlbuild
 
-SOURCES   = defs.ml bigstep.ml smallstep.ml
+SOURCES   = bigstep.ml defs.ml formatting.ml prediction.ml smallstep.ml
 BIGSTEP   = bigstep.byte
 SMALLSTEP = smallstep.byte
 #PACKS = oUnit
