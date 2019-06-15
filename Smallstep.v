@@ -102,13 +102,16 @@ Definition step (tbl : parse_table) (st : state) : step_result :=
           else
             StepReject "token mismatch"
         end
-      | NT x :: gamma' =>
-        match ParseTable.find (x, peek ts) tbl with
-        | Some gamma_callee =>
-          let callee := mkFrame gamma_callee []
-          in  StepK (mkState ts (callee, fr :: frs) (NtSet.remove x av))
-        | None => StepReject "no parse table entry"
-        end
+      | NT x :: gamma' => 
+        if NtSet.mem x av then
+          match ParseTable.find (x, peek ts) tbl with
+          | Some gamma_callee =>
+            let callee := mkFrame gamma_callee []
+            in  StepK (mkState ts (callee, fr :: frs) (NtSet.remove x av))
+          | None => StepReject "no parse table entry"
+          end
+        else
+          StepError "left recursion detected"
       end
     end
   end.
@@ -252,24 +255,6 @@ Proof.
       omega.
 Qed.
 
-Lemma stackScore_le_after_return :
-  forall callee caller caller' sym gamma frs b e,
-    callee.(syms) = []
-    -> caller.(syms) = sym :: gamma
-    -> caller'.(syms) = gamma
-    -> 0 < e
-    -> stackScore (caller', frs) b e <= stackScore (callee, caller :: frs) b e.
-Proof.
-  intros callee caller caller' sym gamma frs b e Hnil Hcons Htl Hnz.
-  erewrite stackScore_pre_return; eauto.
-  unfold stackScore. unfold headFrameScore. unfold headFrameSize. subst.
-  assert (fact : forall a b c d, a <= c -> b <= d -> a + b <= c + d) by (intros; omega).
-  apply fact.
-  - apply Nat.mul_le_mono_l.
-    apply nonzero_exponents_lt_powers_le; auto.
-  - admit.
-Admitted.
-
 Lemma nonzero_exponents_lt_tailFrameScore_le :
   forall fr b e1 e2,
     0 < e1 < e2
@@ -326,7 +311,7 @@ Proof.
   apply mem_true_cardinality_neq_0 in Hm; omega.
 Qed.
 
-  Lemma post_return_state_lt_pre_return_state :
+Lemma post_return_state_lt_pre_return_state :
   forall st st' ts callee caller caller' frs x gamma av tbl,
     st = mkState ts (callee, caller :: frs) av
     -> st' = mkState ts (caller', frs) (NtSet.add x av)
@@ -365,6 +350,126 @@ Proof.
     apply thd_lt; auto.
 Qed.
 
+(* TO DO *)
+Lemma some_math :
+  forall v b e1 e2,
+    v < b
+    -> e1 < e2
+    -> v * (b ^ e1) < b ^ e2.
+Admitted.
+
+Lemma list_element_le_listMax :
+  forall xs x,
+    In x xs -> x <= listMax xs.
+Proof.
+  intros xs; induction xs as [| x' xs IH]; intros x Hin; simpl; inv Hin.
+  - apply Nat.le_max_l.
+  - apply IH in H. 
+    apply Nat.max_le_iff; auto.
+Qed.
+
+Lemma gamma_in_table_length_in_entryLengths :
+  forall k gamma tbl,
+    In (k, gamma) (ParseTable.elements tbl)
+    -> In (List.length gamma) (entryLengths tbl).
+Proof.
+  intros k gamma tbl Hin.
+  unfold entryLengths.
+  induction (ParseTable.elements tbl) as [| (k', gamma') prs IH]; inv Hin; simpl in *.
+  - inv H; auto.
+  - apply IH in H; auto.
+Qed.
+
+(*Module Export PF  := WFactsOn 
+Module Export NP  := MSetProperties.Properties NtSet.
+Module Export NEP := EqProperties NtSet.
+Module Export ND  := WDecideOn NT_as_DT NtSet.
+*)
+
+Module Export PF := WFacts ParseTable.
+
+Lemma pt_findA_In :
+  forall (k : ParseTable.key) (gamma : list symbol) (l : list (ParseTable.key * list symbol)),
+    findA (PF.eqb k) l = Some gamma
+    -> In (k, gamma) l.
+Proof.
+  intros.
+  induction l.
+  - inv H.
+  - simpl in *.
+    destruct a as (k', gamma').
+    destruct (PF.eqb k k') eqn:Heq.
+    + inv H.
+      unfold PF.eqb in *.
+      destruct (PF.eq_dec k k').
+      * subst; auto.
+      * inv Heq.
+    + right; auto.
+Qed.
+
+Lemma find_Some_gamma_in_table :
+  forall k (gamma : list symbol) tbl,
+    ParseTable.find k tbl = Some gamma -> In (k, gamma) (ParseTable.elements tbl).
+  intros k gamma tbl Hf.
+  rewrite elements_o in Hf.
+  apply pt_findA_In in Hf; auto.
+Qed.
+
+Lemma tbl_lookup_result_le_max :
+  forall k tbl gamma,
+    ParseTable.find k tbl = Some gamma
+    -> List.length gamma <= maxEntryLength tbl.
+Proof.
+  intros k tbl gamma Hf.
+  unfold maxEntryLength.
+  apply list_element_le_listMax.
+  apply gamma_in_table_length_in_entryLengths with (k := k).
+  apply find_Some_gamma_in_table; auto.
+Qed.  
+
+Lemma tbl_lookup_result_lt_max_plus_1 :
+  forall k tbl gamma,
+    ParseTable.find k tbl = Some gamma
+    -> List.length gamma < 1 + maxEntryLength tbl.
+Proof.
+  intros k tbl gamma Hf.
+  apply (tbl_lookup_result_le_max k tbl gamma) in Hf; omega.
+Qed.
+
+Lemma post_push_state_lt_pre_push_st :
+  forall st st' ts callee caller frs x gamma_caller gamma_callee av tbl,
+    st = mkState ts (caller, frs) av
+    -> st' = mkState ts (callee, caller :: frs) (NtSet.remove x av)
+    -> caller.(syms) = NT x :: gamma_caller
+    -> callee.(syms)  = gamma_callee
+    -> ParseTable.find (x, peek ts) tbl = Some gamma_callee
+    -> NtSet.mem x av = true
+    -> nat_triple_lex (meas st' tbl) (meas st tbl).
+Proof.
+  intros st st' ts callee caller frs x gamma_caller gamma_callee av tbl Hst Hst' Hcaller Hcallee Hfind Hmem; subst.
+  apply snd_lt; simpl.
+  rewrite remove_cardinal_1; auto.
+  unfold headFrameScore. unfold headFrameSize.
+  unfold tailFrameScore. unfold tailFrameSize. rewrite Hcaller.
+  simpl.
+rewrite plus_assoc. 
+apply plus_lt_compat_r.
+apply plus_lt_compat_r.
+assert (remove_cardinal_minus_1 : forall x s,
+           NtSet.mem x s = true
+           -> NtSet.cardinal (NtSet.remove x s) = 
+              NtSet.cardinal s - 1).
+{ intros x' s Hm.
+  replace (NtSet.cardinal s) with (S (NtSet.cardinal (NtSet.remove x' s))).
+  - omega.
+  - apply remove_cardinal_1; auto. }
+rewrite remove_cardinal_minus_1; auto.
+apply some_math.
+  - eapply tbl_lookup_result_lt_max_plus_1; eauto.
+  - erewrite <- remove_cardinal_1; eauto. 
+    omega.
+Qed.
+
 Lemma step_meas_lt :
   forall tbl st st',
     step tbl st = StepK st'
@@ -382,9 +487,18 @@ Proof.
     inv Hs.
     eapply post_return_state_lt_pre_return_state; simpl; eauto.
     simpl; auto.
-  - admit.
-  - admit.
-Admitted.
+  - (* terminal case *) 
+    destruct ts as [| (y', l) ts']; try congruence.
+    destruct (t_eq_dec y' y); try congruence.
+    inv Hs.
+    apply fst_lt; simpl; auto.
+  - (* nonterminal case -- push a new frame onto the stack *)
+    destruct (NtSet.mem x av) eqn:Hm; try congruence.
+    destruct (ParseTable.find (x, peek ts) tbl) as [gamma |] eqn:Hf; try congruence.
+    inv Hs.
+    eapply post_push_state_lt_pre_push_st; eauto.
+    simpl; eauto.
+Qed.
 
 Lemma add_ain't_empty :
   forall x s,
