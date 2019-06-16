@@ -350,13 +350,74 @@ Proof.
     apply thd_lt; auto.
 Qed.
 
+(*
+Lemma nonzero_base_power_gt_zero :
+  forall e b, 0 < b -> 0 < b ^ e.
+Proof.
+  intros e b Hlt.
+  destruct b as [| b]; try omega.
+  destruct e as [| e].
+  - simpl; auto.
+  - destruct e as [| e].
+    + simpl; omega.
+    + assert (Hz : 0 = 0 ^ S e) by (rewrite <- Nat.pow_1_r; auto).
+      rewrite Hz.
+      apply Nat.pow_lt_mono.
+  intros e; induction e as [| e IH]; intros b Hlt; simpl in *.
+  - auto.
+  - destruct b as [| b]; try omega. 
+
+    
+Lemma nonzero_base_power_gt_zero :
+  forall e b, 0 < b -> 0 < b ^ e.
+Proof.
+  intros b e Hlt; induction b as [| b IH]; simpl in *.
+  - omega.
+  - destruct e as [| e]; simpl; try omega. 
+    destruct b as [| b].
+    + rewrite Nat.pow_1_l; auto.
+    + assert (0 < S b) by omega.
+      apply IH in H.
+      eapply lt_trans with (m := S b ^ S e); auto.
+*)      
 (* TO DO *)
-Lemma some_math :
-  forall v b e1 e2,
+Lemma lt_lt_mul_nonzero_r :
+  forall y x z,
+    x < y -> 0 < z -> x < y * z.
+Proof.
+  intros y x z Hxy Hz.
+  destruct z as [| z]; try omega.
+  rewrite Nat.mul_succ_r. 
+  apply Nat.lt_lt_add_l; auto.
+Qed.
+
+Lemma base_gt_zero_power_gt_zero :
+  forall b e, 0 < b -> 0 < b ^ e.
+Proof.
+  intros b e Hlt; induction e as [| e IH]; simpl in *; auto.
+  destruct b as [| b]; try omega.
+  apply lt_lt_mul_nonzero_r; auto.
+Qed.
+
+Lemma less_significant_value_lt_more_significant_digit :
+  forall e2 e1 v b,
     v < b
     -> e1 < e2
     -> v * (b ^ e1) < b ^ e2.
-Admitted.
+Proof.
+  intros e2; induction e2 as [| e2]; intros e1 v b Hvb Hee; simpl in *; try omega.
+  destruct b as [| b]; try omega.
+  destruct e1 as [| e1].
+  - rewrite Nat.mul_1_r.
+    apply lt_lt_mul_nonzero_r; auto.
+    apply base_gt_zero_power_gt_zero; omega.    
+  - rewrite Nat.pow_succ_r; try omega. 
+    rewrite <- Nat.mul_comm.
+    rewrite <- Nat.mul_assoc.
+    apply mult_lt_compat_l; try omega.
+    rewrite Nat.mul_comm.
+    apply IHe2; omega. 
+Qed.
 
 Lemma list_element_le_listMax :
   forall xs x,
@@ -379,12 +440,6 @@ Proof.
   - inv H; auto.
   - apply IH in H; auto.
 Qed.
-
-(*Module Export PF  := WFactsOn 
-Module Export NP  := MSetProperties.Properties NtSet.
-Module Export NEP := EqProperties NtSet.
-Module Export ND  := WDecideOn NT_as_DT NtSet.
-*)
 
 Module Export PF := WFacts ParseTable.
 
@@ -464,7 +519,7 @@ assert (remove_cardinal_minus_1 : forall x s,
   - omega.
   - apply remove_cardinal_1; auto. }
 rewrite remove_cardinal_minus_1; auto.
-apply some_math.
+apply less_significant_value_lt_more_significant_digit.
   - eapply tbl_lookup_result_lt_max_plus_1; eauto.
   - erewrite <- remove_cardinal_1; eauto. 
     omega.
@@ -500,14 +555,9 @@ Proof.
     simpl; eauto.
 Qed.
 
-Lemma add_ain't_empty :
-  forall x s,
-    ~ NtSet.Empty (NtSet.add x s).
-Proof. 
-  unfold not; intros x s He.
-  specialize (He x); ND.fsetdec.
-Qed.
-             
+Print Assumptions step_meas_lt.
+
+(* to do *)             
 let rec run (tbl : parse_table) (stk : stack) (ts : token list) : parse_result =
   match step tbl stk ts with
   | StepAccept (f, ts') -> Accept (f, ts')
