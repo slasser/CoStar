@@ -350,37 +350,6 @@ Proof.
     apply thd_lt; auto.
 Qed.
 
-(*
-Lemma nonzero_base_power_gt_zero :
-  forall e b, 0 < b -> 0 < b ^ e.
-Proof.
-  intros e b Hlt.
-  destruct b as [| b]; try omega.
-  destruct e as [| e].
-  - simpl; auto.
-  - destruct e as [| e].
-    + simpl; omega.
-    + assert (Hz : 0 = 0 ^ S e) by (rewrite <- Nat.pow_1_r; auto).
-      rewrite Hz.
-      apply Nat.pow_lt_mono.
-  intros e; induction e as [| e IH]; intros b Hlt; simpl in *.
-  - auto.
-  - destruct b as [| b]; try omega. 
-
-    
-Lemma nonzero_base_power_gt_zero :
-  forall e b, 0 < b -> 0 < b ^ e.
-Proof.
-  intros b e Hlt; induction b as [| b IH]; simpl in *.
-  - omega.
-  - destruct e as [| e]; simpl; try omega. 
-    destruct b as [| b].
-    + rewrite Nat.pow_1_l; auto.
-    + assert (0 < S b) by omega.
-      apply IH in H.
-      eapply lt_trans with (m := S b ^ S e); auto.
-*)      
-(* TO DO *)
 Lemma lt_lt_mul_nonzero_r :
   forall y x z,
     x < y -> 0 < z -> x < y * z.
@@ -555,31 +524,25 @@ Proof.
     simpl; eauto.
 Qed.
 
-Print Assumptions step_meas_lt.
+Require Import Program.Wf.
 
-(* to do *)             
-let rec run (tbl : parse_table) (stk : stack) (ts : token list) : parse_result =
-  match step tbl stk ts with
-  | StepAccept (f, ts') -> Accept (f, ts')
-  | StepReject s        -> Reject s
-  | StepError s         -> Error s
-  | StepK (stk', ts')   -> run tbl stk' ts'
+Lemma nat_triple_lex_wf : well_founded nat_triple_lex.
+  apply triple_lex_wf; apply lt_wf.
+Qed.
 
-let parse (tbl : parse_table) (s : symbol) (ts : token list) =
-  let fr_init = { lhs_opt = None
-                ; rhs_pre = []
-                ; rhs_suf = [s]
-                ; sem_val = []
-                }
-  in  run tbl (fr_init, []) ts
-
-let g = [ ('S', [T "a"])
-        ; ('S', [T "b"])
-        ]
-
-let tbl = ParseTable.add ('S', LA "int") [T "int"; T "str"]
-            (ParseTable.add ('S', LA "char") [T "char"; T "str"] ParseTable.empty)
-
-let ts = [("int", "42"); ("str", "hello")]
-            
-let _ = parse tbl (NT 'S') ts
+Program Fixpoint run (tbl : parse_table) 
+                     (st : state) 
+                     { measure (meas st tbl) (nat_triple_lex) } : parse_result :=
+  match step tbl st with
+  | StepAccept sv ts => Accept sv ts
+  | StepReject s     => Reject s
+  | StepError s      => Error s
+  | StepK st'        => run tbl st'
+  end. 
+Next Obligation.
+  apply step_meas_lt; auto.
+Defined.
+Next Obligation.
+apply measure_wf.
+apply nat_triple_lex_wf.
+Defined.
