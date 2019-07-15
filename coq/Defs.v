@@ -1,4 +1,4 @@
-Require Import MSets PeanoNat String.
+Require Import FMaps MSets PeanoNat String.
 
 (* Representations of grammar symbols *)
 Definition terminal    := string.
@@ -40,5 +40,67 @@ Inductive tree    := Leaf : literal -> tree
 
 Definition forest := list tree.
 
-(* Generally useful definitions *)
-Definition id A (x : A) := x.
+(* LL(1)-related definitions -- THESE WILL GET DELETED *)
+Inductive lookahead := LA : terminal -> lookahead 
+                     | EOF : lookahead.
+
+Definition pt_key := (nonterminal * lookahead)%type.
+
+Definition pt_key_eq_dec :
+  forall k k2 : pt_key,
+    {k = k2} + {k <> k2}.
+Proof. repeat decide equality. Defined.
+
+Module MDT_PtKey.
+  Definition t := pt_key.
+  Definition eq_dec := pt_key_eq_dec.
+End MDT_PtKey.
+
+Module PtKey_as_DT := Make_UDT(MDT_PtKey).
+
+Module ParseTable := FMapWeakList.Make PtKey_as_DT.
+
+Definition parse_table := ParseTable.t (list symbol).
+
+Definition peek (input : list token) : lookahead :=
+  match input with
+  | nil => EOF
+  | (a, lit) :: _ => LA a
+  end.
+
+Definition ntKeys (tbl : parse_table) : list nonterminal :=
+  List.map (fun pr => match pr with 
+                      | ((x, _), _) => x
+                      end)
+           (ParseTable.elements tbl).
+
+Definition fromNtList (ls : list nonterminal) : NtSet.t :=
+  fold_right NtSet.add NtSet.empty ls.
+
+Definition allNts (tbl : parse_table) : NtSet.t := 
+  fromNtList (ntKeys tbl).
+
+Definition entryLengths (tbl : parse_table) : list nat :=
+  List.map (fun pr => match pr with
+                      | (_, gamma) => List.length gamma
+                      end)
+           (ParseTable.elements tbl).
+
+Definition listMax (xs : list nat) : nat := 
+  fold_right max 0 xs.
+
+Definition maxEntryLength (tbl : parse_table) : nat :=
+  listMax (entryLengths tbl).
+
+Record frame := mkFrame { syms    : list symbol
+                        ; sem_val : forest
+                        }.
+
+Definition stack := (frame * list frame)%type.
+
+Record state := mkState { tokens : list token
+                        ; stk    : stack
+                        ; avail  : NtSet.t
+                        }.
+
+

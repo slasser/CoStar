@@ -2,34 +2,6 @@ Require Import FMaps Omega PeanoNat String.
 Require Import Defs.
 Import ListNotations.
 
-(* LL(1)-related definitions *)
-Inductive lookahead := LA : terminal -> lookahead 
-                     | EOF : lookahead.
-
-Definition pt_key := (nonterminal * lookahead)%type.
-
-Definition pt_key_eq_dec :
-  forall k k2 : pt_key,
-    {k = k2} + {k <> k2}.
-Proof. repeat decide equality. Defined.
-
-Module MDT_PtKey.
-  Definition t := pt_key.
-  Definition eq_dec := pt_key_eq_dec.
-End MDT_PtKey.
-
-Module PtKey_as_DT := Make_UDT(MDT_PtKey).
-
-Module ParseTable := FMapWeakList.Make PtKey_as_DT.
-
-Definition parse_table := ParseTable.t (list symbol).
-
-Definition peek (input : list token) : lookahead :=
-  match input with
-  | nil => EOF
-  | (a, lit) :: _ => LA a
-  end.
-
 Record frame := mkFrame { syms    : list symbol
                         ; sem_val : forest
                         }.
@@ -49,30 +21,6 @@ Inductive step_result := StepAccept : forest -> list token -> step_result
 Inductive parse_result := Accept : forest -> list token -> parse_result
                         | Reject : string -> parse_result
                         | Error  : string -> parse_result.
-
-Definition ntKeys (tbl : parse_table) : list nonterminal :=
-  List.map (fun pr => match pr with 
-                      | ((x, _), _) => x
-                      end)
-           (ParseTable.elements tbl).
-
-Definition fromNtList (ls : list nonterminal) : NtSet.t :=
-  fold_right NtSet.add NtSet.empty ls.
-
-Definition allNts (tbl : parse_table) : NtSet.t := 
-  fromNtList (ntKeys tbl).
-
-Definition entryLengths (tbl : parse_table) : list nat :=
-  List.map (fun pr => match pr with
-                      | (_, gamma) => List.length gamma
-                      end)
-           (ParseTable.elements tbl).
-
-Definition listMax (xs : list nat) : nat := 
-  fold_right max 0 xs.
-
-Definition maxEntryLength (tbl : parse_table) : nat :=
-  listMax (entryLengths tbl).
 
 Definition step (tbl : parse_table) (st : state) : step_result :=
   match st with
