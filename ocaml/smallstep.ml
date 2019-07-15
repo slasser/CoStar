@@ -33,7 +33,7 @@ type frame = { lhs_opt : nonterminal option
 (* A stack is essentially a non-empty list of frames *)
 type stack        = frame * frame list
 
-type parser_state = stack * token list
+type parser_state = stack * token list * NtSet.t
 
 type step_result  = StepAccept of forest * token list
                   | StepReject of string
@@ -56,16 +56,22 @@ let showStack ((fr, stk') : stack) : string =
   let frame_bound = "\n--------\n" in
   let ss = (showFrame fr) :: (List.map showFrame stk') in 
   String.concat frame_bound ss
-
-let showState (stk : stack) (ts : token list) : string =
+                
+let showState ((stk, ts, vis) : parser_state) : string =
   let bound = "*****" in
-  String.concat "\n" ["INPUT" ; bound ; (showTokens ts) ; "STACK" ; bound ; showStack stk]
+  String.concat "\n" ["STACK" ; bound ; showStack stk ; "INPUT" ; bound ; (showTokens ts); bound ; "VISITED" ; bound ; (showNtSet vis)]
                    
 let mkFrame (lo : nonterminal option) (rpre : symbol list) (rsuf : symbol list) (sv : forest) : frame =
   { lhs_opt = lo ; rhs_pre = rpre ; rhs_suf = rsuf ; sem_val = sv }
 
-let step (tbl : parse_table) ((fr, stk') : stack) (ts : token list) : step_result =
-  let _ = print_string ((showState (fr, stk') ts) ^ "\n\n") in
+let stackHeight ((fr, stk') : stack) : int =
+  List.length stk'                  
+    
+let step (tbl : parse_table) (((fr, stk'), ts, vis) : parser_state) : step_result =
+  (*let _ = Printf.printf "input length : %d\n" (List.length ts) in
+  let _ = Printf.printf "visited set size : %d\n" (NtSet.cardinal vis) in
+  let _ = Printf.printf "stack height : %d\n" (stackHeight (fr, stk')) in
+  let _ = print_string (showState ((fr, stk'), ts, vis) ^ "\n\n\n") in *)
   let {lhs_opt = lo; rhs_pre = rpre; rhs_suf = rsuf; sem_val = sv} = fr in
    match rsuf with
    | [] ->
@@ -79,7 +85,7 @@ let step (tbl : parse_table) ((fr, stk') : stack) (ts : token list) : step_resul
            | NT x' :: rsuf'' ->
               if x = x' then
                 let caller' = mkFrame lo' (rpre' @ [NT x]) rsuf'' (sv' @ [Node (x, sv)])
-                in  StepK ((caller', stk''), ts)
+                in  StepK ((caller', stk''), ts, NtSet.remove x vis)
               else
                 StepError "impossible")
        | (None, _ :: _) -> StepError "impossible"
@@ -90,21 +96,21 @@ let step (tbl : parse_table) ((fr, stk') : stack) (ts : token list) : step_resul
        | (a', l) :: ts' ->
           if a = a' then
             let fr' = mkFrame lo (rpre @ [T a]) rsuf' (sv @ [Leaf a])
-            in  StepK ((fr', stk'), ts')
+            in  StepK ((fr', stk'), ts', NtSet.empty)
           else
             StepReject "token mismatch")
    | NT x :: rsuf' ->
       match pt_find_opt (x, peek ts) tbl with
       | Some gamma -> let callee = mkFrame (Some x) [] gamma []
-                      in  StepK ((callee, fr :: stk'), ts)
+                      in  StepK ((callee, fr :: stk'), ts, NtSet.add x vis) 
       | None       -> StepReject "no parse table entry"
                              
-let rec run (tbl : parse_table) (stk : stack) (ts : token list) : parse_result =
-  match step tbl stk ts with
+let rec run (tbl : parse_table) (st : parser_state) : parse_result =
+  match step tbl st with
   | StepAccept (f, ts') -> Accept (f, ts')
   | StepReject s        -> Reject s
   | StepError s         -> Error s
-  | StepK (stk', ts')   -> run tbl stk' ts'
+  | StepK st'           -> run tbl st'
 
 let parse (tbl : parse_table) (s : symbol) (ts : token list) =
   let fr_init = { lhs_opt = None
@@ -112,15 +118,29 @@ let parse (tbl : parse_table) (s : symbol) (ts : token list) =
                 ; rhs_suf = [s]
                 ; sem_val = []
                 }
-  in  run tbl (fr_init, []) ts
+  in  run tbl ((fr_init, []), ts, NtSet.empty)
 
-let g = [ ('S', [T "a"])
-        ; ('S', [T "b"])
-        ]
+(* TESTING *)
+let g1   = [ ('S', [T "a"])
+           ; ('S', [T "b"])
+           ]
 
-let tbl = ParseTable.add ('S', LA "int") [T "int"; T "str"]
-            (ParseTable.add ('S', LA "char") [T "char"; T "str"] ParseTable.empty)
-
-let ts = [("int", "42"); ("str", "hello")]
+let tbl1 = ParseTable.add ('S', LA "int") [T "int"; T "str"]
+             (ParseTable.add ('S', LA "char") [T "char"; T "str"] ParseTable.empty)
+             
+let ts1  = [("int", "42"); ("str", "hello")]
             
-let _ = parse tbl (NT 'S') ts
+let _    = parse tbl1 (NT 'S') ts1
+
+let g2   = [ ('X', [NT 'Y'; NT 'Y'])
+           ; ('Y', [])
+           ]
+
+let tbl2 = ParseTable.add ('X', EOF) [NT 'Y'; NT 'Y']
+             (ParseTable.add ('Y', EOF) [] ParseTable.empty)
+
+let ts2  = []
+
+let _    = parse tbl2 (NT 'X') ts2
+
+             

@@ -1,0 +1,98 @@
+DIGEST 830508f3064e297216d679e468db13ba
+FGallStar.Defs
+R15:19 Coq.MSets.MSets <> <> lib
+R21:28 Coq.Arith.PeanoNat <> <> lib
+R30:35 Coq.Strings.String <> <> lib
+def 91:98 <> terminal
+R106:111 Coq.Strings.String <> string ind
+def 125:135 <> nonterminal
+R140:142 Coq.Init.Datatypes <> nat ind
+ind 155:160 <> symbol
+constr 171:171 <> T
+constr 222:223 <> NT
+R184:187 Coq.Init.Logic <> :type_scope:x_'->'_x not
+R188:193 GallStar.Defs <> symbol ind
+R176:183 GallStar.Defs <> terminal def
+R238:241 Coq.Init.Logic <> :type_scope:x_'->'_x not
+R242:247 GallStar.Defs <> symbol ind
+R227:237 GallStar.Defs <> nonterminal def
+prf 257:264 <> t_eq_dec
+R282:289 GallStar.Defs <> terminal def
+R296:296 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R303:307 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R315:315 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R298:300 Coq.Init.Logic <> :type_scope:x_'='_x not
+R297:297 GallStar.Defs <> a var
+R301:302 GallStar.Defs <> a' var
+R309:312 Coq.Init.Logic <> :type_scope:x_'<>'_x not
+R308:308 GallStar.Defs <> a var
+R313:314 GallStar.Defs <> a' var
+prf 365:373 <> nt_eq_dec
+R391:401 GallStar.Defs <> nonterminal def
+R408:408 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R415:419 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R427:427 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R410:412 Coq.Init.Logic <> :type_scope:x_'='_x not
+R409:409 GallStar.Defs <> x var
+R413:414 GallStar.Defs <> x' var
+R421:424 Coq.Init.Logic <> :type_scope:x_'<>'_x not
+R420:420 GallStar.Defs <> x var
+R425:426 GallStar.Defs <> x' var
+mod 505:510 <> MDT_NT
+def 526:526 MDT_NT t
+R536:546 GallStar.Defs <> nonterminal def
+def 562:567 MDT_NT eq_dec
+R572:581 Coq.Arith.PeanoNat Nat eq_dec thm
+R588:593 GallStar.Defs MDT_NT <> mod
+R617:624 Coq.Structures.Equalities Make_UDT <> modtype
+R626:631 GallStar.Defs MDT_NT <> modtype
+mod 603:610 <> NT_as_DT
+R656:672 Coq.MSets.MSetWeakList Make <> modtype
+R674:681 GallStar.Defs NT_as_DT <> modtype
+mod 642:646 <> NtSet
+R705:712 Coq.MSets.MSetFacts WFactsOn <> modtype
+R714:721 GallStar.Defs NT_as_DT <> modtype
+R723:727 GallStar.Defs NtSet <> modtype
+mod 698:699 <> NF
+R751:775 Coq.MSets.MSetProperties Properties <> modtype
+R777:781 GallStar.Defs NtSet <> modtype
+mod 744:745 <> NP
+R805:816 Coq.MSets.MSetEqProperties EqProperties <> modtype
+R818:822 GallStar.Defs NtSet <> modtype
+mod 798:800 <> NEP
+R846:854 Coq.MSets.MSetDecide WDecideOn <> modtype
+R856:863 GallStar.Defs NT_as_DT <> modtype
+R865:869 GallStar.Defs NtSet <> modtype
+mod 839:840 <> ND
+def 933:942 <> production
+R959:961 Coq.Init.Datatypes <> :type_scope:x_'*'_x not
+R948:958 GallStar.Defs <> nonterminal def
+R962:965 Coq.Init.Datatypes <> list ind
+R967:972 GallStar.Defs <> symbol ind
+def 1004:1010 <> grammar
+R1018:1021 Coq.Init.Datatypes <> list ind
+R1023:1032 GallStar.Defs <> production def
+def 1108:1114 <> literal
+R1119:1124 Coq.Strings.String <> string ind
+def 1138:1142 <> token
+R1158:1160 Coq.Init.Datatypes <> :type_scope:x_'*'_x not
+R1150:1157 GallStar.Defs <> terminal def
+R1161:1167 GallStar.Defs <> literal def
+ind 1215:1218 <> tree
+constr 1226:1229 <> Leaf
+constr 1270:1273 <> Node
+R1240:1243 Coq.Init.Logic <> :type_scope:x_'->'_x not
+R1244:1247 GallStar.Defs <> tree ind
+R1233:1239 GallStar.Defs <> literal def
+R1288:1291 Coq.Init.Logic <> :type_scope:x_'->'_x not
+R1301:1304 Coq.Init.Logic <> :type_scope:x_'->'_x not
+R1305:1308 GallStar.Defs <> tree ind
+R1292:1295 Coq.Init.Datatypes <> list ind
+R1297:1300 GallStar.Defs <> tree ind
+R1277:1287 GallStar.Defs <> nonterminal def
+def 1323:1328 <> forest
+R1333:1336 Coq.Init.Datatypes <> list ind
+R1338:1341 GallStar.Defs <> tree ind
+def 1391:1392 <> id
+R1401:1401 GallStar.Defs <> A var
+R1407:1407 GallStar.Defs <> x var
