@@ -14,6 +14,10 @@ Lemma nt_eq_dec : forall x x' : nonterminal,
     {x = x'} + {x <> x'}.
 Proof. decide equality. Defined.
 
+Lemma gamma_eq_dec : forall gamma gamma' : list symbol,
+    {gamma = gamma'} + {gamma <> gamma'}.
+Proof. repeat decide equality. Defined.
+
 (* Finite sets of nonterminals *)
 Module MDT_NT.
   Definition t      := nonterminal.
