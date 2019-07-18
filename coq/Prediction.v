@@ -6,9 +6,7 @@ Definition grammar_loc     := (nonterminal * list symbol * list symbol)%type.
 
 Definition subparser_stack := (grammar_loc * list grammar_loc)%type.
 
-Record subparser           := mkSp { avail      : NtSet.t
-                                   ; prediction : list symbol
-                                   ; ts         : list token
+Record subparser           := mkSp { prediction : list symbol
                                    ; stack      : subparser_stack
                                    }.
 
@@ -21,6 +19,63 @@ Fixpoint rhssForNt (x : nonterminal) (ps : list production) : list (list symbol)
     else 
       rhssForNt x ps'
   end.
+
+Inductive subparser_move_result :=
+| SpMoveSucc   : subparser -> subparser_move_result
+| SpMoveDieOff : subparser_move_result
+| SpMoveError  : subparser_move_result.
+
+Definition moveSubparser  (tok : token) (sp : subparser) : subparser_move_result :=
+  match sp with
+  | mkSp pred stk =>
+    match stk with
+    (* Subparser is in a final configuration, but an input token remains *)
+    | ((_, _, []), []) => SpMoveDieOff
+    (* Impossible if the previous call was a closure *)
+    | ((_, _, []), _ :: _) => SpMoveError
+    (* Impossible if the previous call was a closure *)
+    | ((_, _, NT _ :: _), _) => SpMoveError
+    | ((x, pre, T a :: suf), locs) =>
+      match tok with
+      | (a', _) =>
+        if t_eq_dec a' a then
+          SpMoveSucc (mkSp pred ((x, pre ++ [T a], suf), locs))
+        else
+          (* token mismatch *)
+          SpMoveDieOff
+      end
+    end
+  end.
+
+Inductive move_result :=
+| MoveSucc   : list subparser -> move_result
+| MoveError  : move_result.
+
+Fixpoint spsAfterMoveOrError (rs : list subparser_move_result) : move_result :=
+  match rs with
+  | []       => MoveSucc []
+  | r :: rs' =>
+    match spsAfterMoveOrError rs' with
+    | MoveSucc sps =>
+      match r with
+      | SpMoveSucc sp => MoveSucc (sp :: sps)
+      | SpMoveDieOff  => MoveSucc sps
+      | SpMoveError   => MoveError
+      end
+    | MoveError => MoveError
+    end
+  end.
+
+Definition move (tok : token) (sps : list subparser) : move_result :=
+  let rs := map (moveSubparser tok) sps
+  in  spsAfterMoveOrError rs.
+                        
+
+
+
+
+
+
 
 Definition subparserStep (g : grammar) (sp : subparser) : list subparser :=
   match sp with

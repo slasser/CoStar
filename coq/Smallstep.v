@@ -2,17 +2,6 @@ Require Import FMaps Omega PeanoNat String.
 Require Import Defs.
 Import ListNotations.
 
-Record frame := mkFrame { syms    : list symbol
-                        ; sem_val : forest
-                        }.
-
-Definition stack := (frame * list frame)%type.
-
-Record state := mkState { tokens : list token
-                        ; stk    : stack
-                        ; avail  : NtSet.t
-                        }.
-
 Inductive step_result := StepAccept : forest -> list token -> step_result
                        | StepReject : string -> step_result
                        | StepK      : state  -> step_result

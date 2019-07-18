@@ -11,44 +11,44 @@ R146:148 Coq.Init.Datatypes <> nat ind
 ind 161:166 <> symbol
 constr 177:177 <> T
 constr 228:229 <> NT
-R190:193 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R190:193 Coq.Init.Logic <> :type_scope:x_'->'_x not
 R194:199 GallStar.Defs <> symbol ind
 R182:189 GallStar.Defs <> terminal def
-R244:247 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R244:247 Coq.Init.Logic <> :type_scope:x_'->'_x not
 R248:253 GallStar.Defs <> symbol ind
 R233:243 GallStar.Defs <> nonterminal def
 prf 263:270 <> t_eq_dec
 R288:295 GallStar.Defs <> terminal def
-R302:302 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R309:313 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R321:321 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R304:306 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R302:302 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R309:313 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R321:321 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R304:306 Coq.Init.Logic <> :type_scope:x_'='_x not
 R303:303 GallStar.Defs <> a var
 R307:308 GallStar.Defs <> a' var
-R315:318 Coq.Init.Logic <> ::type_scope:x_'<>'_x not
+R315:318 Coq.Init.Logic <> :type_scope:x_'<>'_x not
 R314:314 GallStar.Defs <> a var
 R319:320 GallStar.Defs <> a' var
 prf 371:379 <> nt_eq_dec
 R397:407 GallStar.Defs <> nonterminal def
-R414:414 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R421:425 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R433:433 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R416:418 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R414:414 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R421:425 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R433:433 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R416:418 Coq.Init.Logic <> :type_scope:x_'='_x not
 R415:415 GallStar.Defs <> x var
 R419:420 GallStar.Defs <> x' var
-R427:430 Coq.Init.Logic <> ::type_scope:x_'<>'_x not
+R427:430 Coq.Init.Logic <> :type_scope:x_'<>'_x not
 R426:426 GallStar.Defs <> x var
 R431:432 GallStar.Defs <> x' var
 prf 476:487 <> gamma_eq_dec
 R513:516 Coq.Init.Datatypes <> list ind
 R518:523 GallStar.Defs <> symbol ind
-R530:530 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R545:549 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R565:565 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R536:538 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R530:530 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R545:549 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R565:565 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R536:538 Coq.Init.Logic <> :type_scope:x_'='_x not
 R531:535 GallStar.Defs <> gamma var
 R539:544 GallStar.Defs <> gamma' var
-R555:558 Coq.Init.Logic <> ::type_scope:x_'<>'_x not
+R555:558 Coq.Init.Logic <> :type_scope:x_'<>'_x not
 R550:554 GallStar.Defs <> gamma var
 R559:564 GallStar.Defs <> gamma' var
 mod 650:655 <> MDT_NT
@@ -78,7 +78,7 @@ R1001:1008 GallStar.Defs NT_as_DT <> modtype
 R1010:1014 GallStar.Defs NtSet <> modtype
 mod 984:985 <> ND
 def 1078:1087 <> production
-R1104:1106 Coq.Init.Datatypes <> ::type_scope:x_'*'_x not
+R1104:1106 Coq.Init.Datatypes <> :type_scope:x_'*'_x not
 R1093:1103 GallStar.Defs <> nonterminal def
 R1107:1110 Coq.Init.Datatypes <> list ind
 R1112:1117 GallStar.Defs <> symbol ind
@@ -88,17 +88,17 @@ R1168:1177 GallStar.Defs <> production def
 def 1253:1259 <> literal
 R1264:1269 Coq.Strings.String <> string ind
 def 1283:1287 <> token
-R1303:1305 Coq.Init.Datatypes <> ::type_scope:x_'*'_x not
+R1303:1305 Coq.Init.Datatypes <> :type_scope:x_'*'_x not
 R1295:1302 GallStar.Defs <> terminal def
 R1306:1312 GallStar.Defs <> literal def
 ind 1360:1363 <> tree
 constr 1371:1374 <> Leaf
 constr 1415:1418 <> Node
-R1385:1388 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R1385:1388 Coq.Init.Logic <> :type_scope:x_'->'_x not
 R1389:1392 GallStar.Defs <> tree ind
 R1378:1384 GallStar.Defs <> literal def
-R1433:1436 Coq.Init.Logic <> ::type_scope:x_'->'_x not
-R1446:1449 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R1433:1436 Coq.Init.Logic <> :type_scope:x_'->'_x not
+R1446:1449 Coq.Init.Logic <> :type_scope:x_'->'_x not
 R1450:1453 GallStar.Defs <> tree ind
 R1437:1440 Coq.Init.Datatypes <> list ind
 R1442:1445 GallStar.Defs <> tree ind
@@ -109,23 +109,23 @@ R1483:1486 GallStar.Defs <> tree ind
 ind 1558:1566 <> lookahead
 constr 1571:1572 <> LA
 constr 1622:1624 <> EOF
-R1584:1587 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R1584:1587 Coq.Init.Logic <> :type_scope:x_'->'_x not
 R1588:1596 GallStar.Defs <> lookahead ind
 R1576:1583 GallStar.Defs <> terminal def
 R1628:1636 GallStar.Defs <> lookahead ind
 def 1651:1656 <> pt_key
-R1673:1675 Coq.Init.Datatypes <> ::type_scope:x_'*'_x not
+R1673:1675 Coq.Init.Datatypes <> :type_scope:x_'*'_x not
 R1662:1672 GallStar.Defs <> nonterminal def
 R1676:1684 GallStar.Defs <> lookahead ind
 def 1705:1717 <> pt_key_eq_dec
 R1737:1742 GallStar.Defs <> pt_key def
-R1749:1749 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R1756:1760 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R1768:1768 Coq.Init.Specif <> ::type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
-R1751:1753 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1749:1749 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R1756:1760 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R1768:1768 Coq.Init.Specif <> :type_scope:'{'_x_'}'_'+'_'{'_x_'}' not
+R1751:1753 Coq.Init.Logic <> :type_scope:x_'='_x not
 R1750:1750 GallStar.Defs <> k var
 R1754:1755 GallStar.Defs <> k2 var
-R1762:1765 Coq.Init.Logic <> ::type_scope:x_'<>'_x not
+R1762:1765 Coq.Init.Logic <> :type_scope:x_'<>'_x not
 R1761:1761 GallStar.Defs <> k var
 R1766:1767 GallStar.Defs <> k2 var
 mod 1819:1827 <> MDT_PtKey
@@ -151,10 +151,10 @@ R2101:2109 GallStar.Defs <> lookahead ind
 R2122:2126 GallStar.Defs <> input var
 R2137:2139 Coq.Init.Datatypes <> nil constr
 R2144:2146 GallStar.Defs <> EOF constr
-R2160:2163 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
-R2152:2152 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2154:2155 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2159:2159 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2160:2163 Coq.Init.Datatypes <> :list_scope:x_'::'_x not
+R2152:2152 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2154:2155 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2159:2159 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
 R2169:2170 GallStar.Defs <> LA constr
 def 2193:2198 <> ntKeys
 R2207:2217 GallStar.Defs <> parse_table def
@@ -164,12 +164,12 @@ R2244:2251 Coq.Lists.List <> map def
 R2359:2377 GallStar.Defs <> elements def
 R2379:2381 GallStar.Defs <> tbl var
 R2270:2271 GallStar.Defs <> pr var
-R2303:2303 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2310:2311 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2313:2313 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2304:2304 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2306:2307 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2309:2309 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2303:2303 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2310:2311 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2313:2313 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2304:2304 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2306:2307 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2309:2309 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
 def 2397:2406 <> fromNtList
 R2414:2417 Coq.Init.Datatypes <> list ind
 R2419:2429 GallStar.Defs <> nonterminal def
@@ -192,9 +192,9 @@ R2625:2632 Coq.Lists.List <> map def
 R2754:2772 GallStar.Defs <> elements def
 R2774:2776 GallStar.Defs <> tbl var
 R2651:2652 GallStar.Defs <> pr var
-R2683:2683 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2685:2686 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
-R2692:2692 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2683:2683 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2685:2686 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2692:2692 Coq.Init.Datatypes <> :core_scope:'('_x_','_x_','_'..'_','_x_')' not
 R2697:2707 Coq.Lists.List <> length syndef
 def 2792:2798 <> listMax
 R2806:2809 Coq.Init.Datatypes <> list ind
@@ -217,7 +217,7 @@ R2983:2986 Coq.Init.Datatypes <> list ind
 R2988:2993 GallStar.Defs <> symbol ind
 R3042:3047 GallStar.Defs <> forest def
 def 3099:3110 <> parser_stack
-R3128:3130 Coq.Init.Datatypes <> ::type_scope:x_'*'_x not
+R3128:3130 Coq.Init.Datatypes <> :type_scope:x_'*'_x not
 R3116:3127 GallStar.Defs <> parser_frame rec
 R3131:3134 Coq.Init.Datatypes <> list ind
 R3136:3147 GallStar.Defs <> parser_frame rec
