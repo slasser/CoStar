@@ -34,6 +34,18 @@ Module Export ND  := WDecideOn NT_as_DT NtSet.
 Definition production := (nonterminal * list symbol)%type.            
 Definition grammar    := list production.
 
+Definition lhs (p : production) : nonterminal :=
+  let (x, _) := p in x.
+
+Definition lhss (g : grammar) : list nonterminal :=
+  map lhs g.
+
+Definition rhs (p : production) : list symbol :=
+  let (_, gamma) := p in gamma.
+
+Definition rhss (g : grammar) : list (list symbol) :=
+  map rhs g.
+
 (* Definitions related to input that the parser consumes. *)
 Definition literal := string.
 Definition token   := (terminal * literal)% type.

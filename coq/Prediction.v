@@ -108,6 +108,23 @@ Definition stackScore (stk : subparser_stack) (b : nat) (e : nat) : nat :=
   let (hl, tls) := stk
   in  headLocScore hl b e + tailLocsScore tls b (1 + e).
 
+Definition stackHeight (stk : subparser_stack) : nat :=
+  let (_, locs) := stk in List.length locs.
+
+Definition rhsLengths (g : grammar) : list nat :=
+  map (fun rhs => List.length rhs) (rhss g).
+
+Definition maxRhsLength (g : grammar) : nat :=
+  listMax (rhsLengths g).
+
+Definition meas (g : grammar) (spp : subparser_plus) : nat * nat :=
+  match spp with
+  | mkSpPlus av (mkSp _ stk) =>
+    let m := maxRhsLength g in
+    let e := NtSet.cardinal av in
+    (stackScore stk (1 + m) e, stackHeight stk)
+  end.
+
 Fixpoint spClosure (g : grammar) (spp : subparser_plus) : list subparser_closure_result :=
   match spp with
   | mkSpPlus av sp =>
