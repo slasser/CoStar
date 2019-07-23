@@ -3,6 +3,23 @@ Require Import Defs.
 Require Import Lex.
 Import ListNotations.
 
+Record parser_state    := Pst { avail   : NtSet.t
+                              ; loc_stk : location_stack
+                              ; tokens  : list token
+                              ; val_stk : semval_stack
+                              }.
+
+Record parser_frame := parserFrame { syms    : list symbol
+                                   ; sem_val : forest
+                                   }.
+
+Definition parser_stack := (parser_frame * list parser_frame)%type.
+
+Record parser_state := parserState { avail  : NtSet.t
+                                   ; stack  : parser_stack 
+                                   ; tokens : list token
+                                   }.
+
 Inductive step_result := StepAccept : forest -> list token -> step_result
                        | StepReject : string -> step_result
                        | StepK      : parser_state  -> step_result

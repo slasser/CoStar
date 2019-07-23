@@ -1,7 +1,5 @@
 Require Import Relation_Definitions.
 
-Ltac inv H := inversion H; subst; clear H.
-
 Section PairLT.
     
     Variables (A B : Type) (ltA : relation A) (ltB : relation B).

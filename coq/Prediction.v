@@ -3,13 +3,10 @@ Require Import Defs.
 Require Import Lex.
 Import ListNotations.
 
-Definition grammar_loc     := (nonterminal * list symbol * list symbol)%type.
-
-Definition subparser_stack := (grammar_loc * list grammar_loc)%type.
-
-Record subparser           := mkSp { prediction : list symbol
-                                   ; stack      : subparser_stack
-                                   }.
+Record subparser := Sp { avail   : NtSet.t
+                       ; loc_stk : location_stack
+                       ; pred    : list symbol
+                       }.
 
 Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
   match ps with
@@ -28,8 +25,8 @@ Inductive subparser_move_result :=
 
 Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
   match sp with
-  | mkSp pred stk =>
-    match stk with
+  | Sp _ l_stk pred =>
+    match l_stk with
     (* Subparser is in a final configuration, but an input token remains *)
     | ((_, _, []), []) => SpMoveDieOff
     (* Impossible if the previous call was a closure *)
@@ -40,7 +37,7 @@ Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          SpMoveSucc (mkSp pred ((x, pre ++ [T a], suf), locs))
+          SpMoveSucc (Sp NtSet.empty ((x, pre ++ [T a], suf), locs) pred)
         else
           (* token mismatch *)
           SpMoveDieOff
@@ -71,56 +68,12 @@ Definition move (tok : token) (sps : list subparser) : move_result :=
   let rs := map (moveSp tok) sps
   in  spsAfterMoveOrError rs.
 
-Record subparser_plus := mkSpPlus { av : NtSet.t
-                                  ; sp : subparser
-                                  }.
-
-
-Definition headFrameSuffixLength (loc : grammar_loc) : nat :=
-  match loc with
-  | (_, _, suf) => List.length suf
-  end.
-
-Definition headFrameScore (loc : grammar_loc) (b : nat) (e : nat) : nat :=
-  headFrameSuffixLength loc * (b ^ e).
-
-Definition tailFrameSuffixSize (loc : grammar_loc) : nat :=
-  match loc with
-  | (_, _, suf) =>
-    match suf with
-    | [] => 0
-    | _ :: suf' => List.length suf'
-    end
-  end.
-
-Definition tailFrameScore (loc : grammar_loc) (b : nat) (e : nat) : nat :=
-  tailFrameSuffixSize loc * (b ^ e).
-
-Fixpoint tailFramesScore (locs : list grammar_loc) (b : nat) (e : nat) : nat :=
-  match locs with
-  | [] => 0
-  | loc :: locs' => tailFrameScore loc b e + tailFramesScore locs' b (1 + e)
-  end.
-
-Definition stackScore (stk : subparser_stack) (b : nat) (e : nat) : nat :=
-  let (hl, tls) := stk
-  in  headFrameScore hl b e + tailFramesScore tls b (1 + e).
-
-Definition stackHeight (stk : subparser_stack) : nat :=
-  let (_, locs) := stk in List.length locs.
-
-Definition rhsLengths (g : grammar) : list nat :=
-  map (fun rhs => List.length rhs) (rhss g).
-
-Definition maxRhsLength (g : grammar) : nat :=
-  listMax (rhsLengths g).
-
-Definition meas (g : grammar) (spp : subparser_plus) : nat * nat :=
-  match spp with
-  | mkSpPlus av (mkSp _ stk) =>
+Definition meas (g : grammar) (sp : subparser) : nat * nat :=
+  match sp with
+  | Sp av l_stk _ =>
     let m := maxRhsLength g in
     let e := NtSet.cardinal av in
-    (stackScore stk (1 + m) e, stackHeight stk)
+    (stackScore l_stk (1 + m) e, stackHeight l_stk)
   end.
 
 Definition nat_lex_pair := pair_lex nat nat lt lt.

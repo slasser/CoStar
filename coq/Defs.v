@@ -108,15 +108,11 @@ Definition listMax (xs : list nat) : nat :=
 Definition maxEntryLength (tbl : parse_table) : nat :=
   listMax (entryLengths tbl).
 
-Record parser_frame := parserFrame { syms    : list symbol
-                                   ; sem_val : forest
-                                   }.
+(* Grammar locations *)
+Definition l_frame := (nonterminal * list symbol * list symbol)%type.
+Definition l_stack := (l_frame * list l_frame)%type.
 
-Definition parser_stack := (parser_frame * list parser_frame)%type.
-
-Record parser_state := parserState { avail  : NtSet.t
-                                   ; stack  : parser_stack 
-                                   ; tokens : list token
-                                   }.
+(* Semantic value stacks *)
+Definition v_stack   := (forest * list forest)%type.
 
 
