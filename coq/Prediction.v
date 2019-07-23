@@ -200,8 +200,8 @@ Definition flat_map' {A B : Type} :
   forall (l : list A) (f : forall x, In x l -> list B), list B.
   refine(fix fm (l : list A) (f : forall x, In x l -> list B) :=
          match l as l' return l = l' -> _ with
-         | [] => fun _ => []
-         | h :: t => fun Heq => (f h _) ++ fm t _
+         | []     => fun _ => []
+         | h :: t => fun Heq => (f h _) ++ (fm t _)
          end eq_refl).
   - subst.
     apply in_eq.
@@ -210,7 +210,6 @@ Definition flat_map' {A B : Type} :
     { apply in_cons; auto. }
     eapply f; eauto.
 Defined.
-
 
 (* Here's what didn't work--the fact that the recursive call argument
    is in spps does not appear in the context *)
@@ -225,6 +224,42 @@ Program Fixpoint spClosure (g : grammar)
   end.
 Next Obligation.
 Abort.
+
+Lemma spp_lt_after_step :
+  forall g spp spp' spps',
+    spClosureStep g spp = ScsCont spps'
+    -> In spp' spps'
+    -> nat_lex_pair (meas g spp') (meas g spp).
+Proof.
+  intros g spp spp' spps' Hstep Hin.
+  unfold spClosureStep in Hstep.
+  destruct spp as [av [pred stk]].
+  destruct stk as (((x, pre), suf), locs).
+  destruct suf as [| sym suf'].
+  - destruct locs as [| caller locs']; try congruence.
+    destruct caller as ((x_caller, pre_caller), suf_caller).
+    destruct suf_caller as [| [y | x'] suf_caller']; try congruence.
+    destruct (nt_eq_dec x' x); try congruence; subst.
+    inv Hstep.
+    destruct Hin.
+    + subst.
+      simpl.
+      admit.
+    + inv H.
+  - destruct sym as [a | y]; try congruence.
+    destruct (NtSet.mem y av); try congruence.
+    inv Hstep.
+    eapply in_map_iff in Hin.
+    destruct Hin as [stk [Heq Hin]]; subst.
+    eapply in_map_iff in Hin.
+    destruct Hin as [suf [Heq Hin]]; subst.
+    simpl.
+
+ScsCont spps = spClosureStep g spp0
+  spp : subparser_plus
+  Hin : In spp spps
+  ============================
+  nat_lex_pair (meas g spp) (meas g spp0)
 
 (* This does work -- note the alternative flat_map implementation *)
 Program Fixpoint spClosure (g : grammar)
