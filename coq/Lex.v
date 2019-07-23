@@ -1,4 +1,5 @@
 Require Import Relation_Definitions.
+Require Import Tactics.
 
 Section PairLT.
     
@@ -66,3 +67,7 @@ Section TripleLT.
     Defined.
     
 End TripleLT.
+
+Definition lex_nat_pair := pair_lex nat nat lt lt.
+
+Definition lex_nat_triple := triple_lex nat nat nat lt lt lt.

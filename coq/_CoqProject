@@ -1,7 +1,9 @@
 -R . GallStar
 
-Defs.v
+Tactics.v
+Lemmas.v
 Lex.v
+Defs.v
 Termination.v
 Prediction.v
 Smallstep.v

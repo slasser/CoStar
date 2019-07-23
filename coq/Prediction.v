@@ -1,11 +1,14 @@
 Require Import Arith List Omega PeanoNat Program.Wf String.
 Require Import Defs.
+Require Import Lemmas.
 Require Import Lex.
+Require Import Tactics.
+Require Import Termination.
 Import ListNotations.
 
-Record subparser := Sp { avail   : NtSet.t
-                       ; loc_stk : location_stack
-                       ; pred    : list symbol
+Record subparser := Sp { avail      : NtSet.t
+                       ; prediction : list symbol
+                       ; stack      : l_stack
                        }.
 
 Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
@@ -25,8 +28,8 @@ Inductive subparser_move_result :=
 
 Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
   match sp with
-  | Sp _ l_stk pred =>
-    match l_stk with
+  | Sp _ pred stk =>
+    match stk with
     (* Subparser is in a final configuration, but an input token remains *)
     | ((_, _, []), []) => SpMoveDieOff
     (* Impossible if the previous call was a closure *)
@@ -37,7 +40,7 @@ Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          SpMoveSucc (Sp NtSet.empty ((x, pre ++ [T a], suf), locs) pred)
+          SpMoveSucc (Sp NtSet.empty pred ((x, pre ++ [T a], suf), locs))
         else
           (* token mismatch *)
           SpMoveDieOff
@@ -70,62 +73,37 @@ Definition move (tok : token) (sps : list subparser) : move_result :=
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
-  | Sp av l_stk _ =>
+  | Sp av _ stk =>
     let m := maxRhsLength g in
     let e := NtSet.cardinal av in
-    (stackScore l_stk (1 + m) e, stackHeight l_stk)
+    (stackScore stk (1 + m) e, stackHeight stk)
   end.
-
-Definition nat_lex_pair := pair_lex nat nat lt lt.
-
-Lemma tailFrameScore_cons :
-  forall x pre sym suf b e,
-    tailFrameScore (x, pre, sym :: suf) b e = List.length suf * b ^ e.
-Proof.
-  auto.
-Qed.
-
-Lemma nonzero_exponents_lt_stackScore_le :
-  forall v b e1 e2 e3 e4 frs,
-    0 < e1 < e2
-    -> 0 < e3 < e4
-    -> v * (b ^ e1) + tailFramesScore frs b e3 <= 
-       v * (b ^ e2) + tailFramesScore frs b e4.
-Proof.
-Admitted.
-
-Lemma mem_true_cardinality_gt_0 :
-  forall x s,
-    NtSet.mem x s = true -> 0 < NtSet.cardinal s.
-Admitted.
 
 Inductive sp_closure_step_result :=
 | ScsDone  : subparser -> sp_closure_step_result
-| ScsCont  : list subparser_plus -> sp_closure_step_result
+| ScsCont  : list subparser -> sp_closure_step_result
 | ScsError : sp_closure_step_result.
 
-Definition spClosureStep (g : grammar) (spp : subparser_plus) : sp_closure_step_result :=
-  match spp with
-  | mkSpPlus av sp =>
-    match sp with
-    | mkSp pred stk => 
-      match stk with
-      | (loc, locs) =>
-        match loc with
-        | (x, _, []) =>
-          match locs with
-          | []              => ScsDone sp
-          | caller :: locs' =>
-            match caller with
-            | (x_caller, pre_caller, suf_caller) =>
-              match suf_caller with
-              | []                   => ScsError
-              | T _ :: _             => ScsError
-              | NT x' :: suf_caller' =>
+Definition spClosureStep (g : grammar) (sp : subparser) : sp_closure_step_result :=
+  match sp with
+  | Sp av pred stk =>
+    match stk with
+    | (fr, frs) =>
+      match fr with
+      | (x, _, []) =>
+        match frs with
+        | []              => ScsDone sp
+        | caller :: frs' =>
+          match caller with
+          | (x_caller, pre_caller, suf_caller) =>
+            match suf_caller with
+            | []                   => ScsError
+            | T _ :: _             => ScsError
+            | NT x' :: suf_caller' =>
                 if nt_eq_dec x' x then
-                  let stk' := ((x_caller, pre_caller ++ [NT x], suf_caller'), locs') in
-                  let spp' := mkSpPlus (NtSet.add x av) (mkSp pred stk')
-                  in  ScsCont [spp']
+                  let stk' := ((x_caller, pre_caller ++ [NT x], suf_caller'), frs') in
+                  let sp' := Sp (NtSet.add x av) pred stk'
+                  in  ScsCont [sp']
                 else
                   ScsError
               end
@@ -134,13 +112,12 @@ Definition spClosureStep (g : grammar) (spp : subparser_plus) : sp_closure_step_
         | (_, _, T _ :: _)     => ScsDone sp
         | (_, _, NT y :: suf') =>
           if NtSet.mem y av then
-            let rhss := rhssForNt g y in
-            let stks := map (fun rhs => ((y, [], rhs), loc :: locs)) rhss in
-            let spps := map (fun stk => mkSpPlus (NtSet.remove y av) (mkSp pred stk)) stks in
-            ScsCont spps
+            let rhss  := rhssForNt g y in
+            let stks' := map (fun rhs => ((y, [], rhs), fr :: frs)) rhss in
+            let sps'  := map (fun stk => Sp (NtSet.remove y av) pred stk) stks' 
+            in  ScsCont sps'
           else
             ScsError
-        end
       end
     end
   end.
@@ -166,11 +143,10 @@ Defined.
 
 (* Here's what didn't work--the fact that the recursive call argument
    is in spps does not appear in the context *)
-Program Fixpoint spClosure (g : grammar)
-                           (spp : subparser_plus)
-                           {measure (meas g spp) (nat_lex_pair)} :
+Program Fixpoint spClosure (g : grammar) (sp : subparser)
+                           {measure (meas g sp) (lex_nat_pair)} :
                            list closure_step_result :=
-  match spClosureStep g spp with
+  match spClosureStep g sp with
   | ScsDone sp => [CsSucc sp]
   | ScsError   => [CsError]
   | ScsCont spps => flat_map (fun spp => spClosure g spp) spps
@@ -178,190 +154,71 @@ Program Fixpoint spClosure (g : grammar)
 Next Obligation.
 Abort.
 
-Lemma spp_lt_after_step :
-  forall g spp spp' spps',
-    spClosureStep g spp = ScsCont spps'
-    -> In spp' spps'
-    -> nat_lex_pair (meas g spp') (meas g spp).
+Lemma subparser_lt_after_return :
+  forall g sp sp' av pred pred' callee caller caller' frs x gamma,
+    sp = Sp av pred (callee, caller :: frs)
+    -> sp' = Sp (NtSet.add x av) pred' (caller', frs)
+    -> symbolsToProcess callee  = []
+    -> symbolsToProcess caller  = NT x :: gamma
+    -> symbolsToProcess caller' = gamma
+    -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g spp spp' spps' Hstep Hin.
+  intros g sp sp' av pred pred' callee caller caller' frs x gamma
+         Hsp Hsp' Hcallee Hcaller Hcaller'; subst.
+  unfold meas.
+  pose proof (stackScore_le_after_return callee caller caller' x av frs (1 + maxRhsLength g)) as Hle.
+  apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
+  - apply pair_fst_lt; auto.
+  - rewrite Heq; apply pair_snd_lt; auto.
+Qed.
+  
+(* to do -- move lemmas about termination in the "push" case to Termination file *)
+Lemma subparser_lt_after_step :
+  forall g sp sp' sps',
+    spClosureStep g sp = ScsCont sps'
+    -> In sp' sps'
+    -> lex_nat_pair (meas g sp') (meas g sp).
+Proof.
+  intros g sp sp' sps' Hstep Hin.
   unfold spClosureStep in Hstep.
-  destruct spp as [av [pred stk]].
-  destruct stk as (((x, pre), suf), locs).
+  destruct sp as [av pred stk].
+  destruct stk as (((x, pre), suf), frs).
   destruct suf as [| sym suf'].
-  - destruct locs as [| caller locs']; try congruence.
+  - destruct frs as [| caller frs']; tc.
     destruct caller as ((x_caller, pre_caller), suf_caller).
-    destruct suf_caller as [| [y | x'] suf_caller']; try congruence.
-    destruct (nt_eq_dec x' x); try congruence; subst.
+    destruct suf_caller as [| [a | x'] suf_caller']; tc.
+    destruct (nt_eq_dec x' x); tc; subst.
     inv Hstep.
-    destruct Hin.
-    + subst.
-      simpl.
-      admit.
-    + inv H.
-  - destruct sym as [a | y]; try congruence.
-    destruct (NtSet.mem y av); try congruence.
+    apply in_singleton_eq in Hin; subst.
+    eapply subparser_lt_after_return; eauto.
+    simpl; auto.
+  - destruct sym as [a | y]; tc.
+    destruct (NtSet.mem y av); tc.
     inv Hstep.
     eapply in_map_iff in Hin.
     destruct Hin as [stk [Heq Hin]]; subst.
     eapply in_map_iff in Hin.
     destruct Hin as [suf [Heq Hin]]; subst.
-    simpl.
-
-ScsCont spps = spClosureStep g spp0
-  spp : subparser_plus
-  Hin : In spp spps
-  ============================
-  nat_lex_pair (meas g spp) (meas g spp0)
+    admit.
+Admitted.
 
 (* This does work -- note the alternative flat_map implementation *)
 Program Fixpoint spClosure (g : grammar)
-                           (spp : subparser_plus)
-                           {measure (meas g spp) (nat_lex_pair)} :
+                           (sp : subparser)
+                           {measure (meas g sp) (lex_nat_pair)} :
                            list closure_step_result :=
-  match spClosureStep g spp with
+  match spClosureStep g sp with
   | ScsDone sp => [CsSucc sp]
   | ScsError   => [CsError]
   | ScsCont spps => flat_map' spps (fun spp Hin => spClosure g spp)
   end.
 Next Obligation.
-Admitted.
-
-Program Fixpoint spClosure (g : grammar)
-                           (spp : subparser_plus)
-                           {measure (meas g spp) (nat_lex_pair) } :
-  list subparser_closure_result :=
-  match spp with
-  | mkSpPlus av sp =>
-    match sp with
-    | mkSp pred stk => 
-      match stk with
-      | (loc, locs) =>
-        match loc with
-        | (x, _, []) =>
-          match locs with
-          | []              => [SpClosureSucc sp]
-          | caller :: locs' =>
-            match caller with
-            | (x_caller, pre_caller, suf_caller) =>
-              match suf_caller with
-              | []                   => [SpClosureError]
-              | T _ :: _             => [SpClosureError]
-              | NT x' :: suf_caller' =>
-                if nt_eq_dec x' x then
-                  let stk' := ((x_caller, pre_caller ++ [NT x], suf_caller'), locs') in
-                  let spp' := mkSpPlus (NtSet.add x av) (mkSp pred stk')
-                  in  spClosure g spp'
-                else
-                  [SpClosureError]
-              end
-            end
-          end
-        | (_, _, T _ :: _)     => [SpClosureSucc sp]
-        | (_, _, NT y :: suf') =>
-          if NtSet.mem y av then
-            let rhss := rhssForNt g y in
-            let stks := map (fun rhs => ((y, [], rhs), loc :: locs)) rhss in
-            let spps := map (fun stk => mkSpPlus (NtSet.remove y av) (mkSp pred stk)) stks in
-            let res := flat_map (fun sp => spClosure g sp) spps
-            in  res
-          else
-            [SpClosureError]
-        end
-      end
-    end
-  end.
-Next Obligation.
-  unfold headFrameScore; simpl.
-  rewrite tailFrameScore_cons.
-  destruct (NtSet.mem x av0) eqn:Hm.
-  - rewrite add_cardinal_1; auto.
-    pose proof nonzero_exponents_lt_stackScore_le as Hnz.
-    specialize (Hnz (List.length suf_caller')
-                    (S (maxRhsLength g))
-                    (NtSet.cardinal av0)
-                    (S (NtSet.cardinal av0))
-                    (S (NtSet.cardinal av0))
-                    (S (S (NtSet.cardinal av0)))
-                    locs').
-    apply le_lt_or_eq in Hnz.
-    + destruct Hnz as [Hlt | Heq].
-      * apply pair_fst_lt; auto.
-      * rewrite Heq; apply pair_snd_lt; auto.
-    + split; auto.
-      eapply mem_true_cardinality_gt_0; eauto.
-    + split; omega.
-  - rewrite add_cardinal_2; auto.
-    simpl.
-    apply pair_snd_lt; auto.
+  eapply subparser_lt_after_step; eauto.
 Defined.
 Next Obligation.
-  simpl.
-  unfold headFrameScore; simpl.
-        
-
-    
-
-Fixpoint spClosureStep (spp : subparser_plus) : closure_step_result :=
-  match spp with
-  | mkSpPlus (mkSp pred stk) av =>
-    match 
-    
-
-
-
-
-
-
-Definition subparserStep (g : grammar) (sp : subparser) : list subparser :=
-  match sp with
-  | mkSp av pred ts (loc, locs) =>
-    match loc with
-    | (x, pre, suf) =>
-      match suf with
-      | [] =>
-        match locs with
-        | [] =>
-          match ts with
-          (* subparser has concluded and consumed the entire input *)
-          | []     => [sp] 
-          (* die off; subparser has concluded but some tokens remain *)
-          | _ :: _ => []
-          end
-        | (x_caller, pre_caller, suf_caller) :: locs' =>
-          match suf_caller with
-          | []                   => [] (* impossible *)
-          | T _ :: _             => [] (* impossible *)
-          | NT x' :: suf_caller' =>
-            if nt_eq_dec x' x then
-              (* simulate a return to the caller frame *)
-              let caller' := (x_caller, pre_caller ++ [NT x], suf_caller')
-              in  [mkSp (NtSet.add x av) pred ts (caller', locs')]
-            else
-              [] (* impossible *)
-          end
-        end
-      | T a :: suf' =>
-        match ts with
-        (* die off; input exhausted *)
-        | []             => [] 
-        | (a', l) :: ts' =>
-          if t_eq_dec a' a then 
-            let loc' := (x, pre ++ [T a], suf')
-            in  [mkSp NtSet.empty pred ts' (loc', locs)]
-          else
-            (* die off; token mismatch *)
-            []
-        end
-      | NT x :: gamma' => 
-        if NtSet.mem x av then
-          let rhss := rhssForNt x g
-          in  map (fun rhs => mkSp (NtSet.remove x av) pred ts ((x, [], rhs), loc :: locs)) rhss
-        else
-          [] (* die off; left recursion detected *)
-      end
-    end
-  end.
+  apply measure_wf.
+  apply pair_lex_wf; apply lt_wf.
+Defined.
 
 Inductive prediction_step_result :=
 | PstepSucc   : list symbol    -> prediction_step_result

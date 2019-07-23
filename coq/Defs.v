@@ -112,7 +112,15 @@ Definition maxEntryLength (tbl : parse_table) : nat :=
 Definition l_frame := (nonterminal * list symbol * list symbol)%type.
 Definition l_stack := (l_frame * list l_frame)%type.
 
+Definition symbolsToProcess (fr : l_frame) : list symbol :=
+  match fr with
+  | (_, _, suf) => suf
+  end.
+
+Definition symbolsProcessed (fr : l_frame) : list symbol :=
+  match fr with
+  | (_, pre, _) => pre
+  end.
+
 (* Semantic value stacks *)
 Definition v_stack   := (forest * list forest)%type.
-
-
