@@ -196,6 +196,24 @@ Inductive closure_step_result :=
 | CsSucc  : subparser -> closure_step_result
 | CsError : closure_step_result.
 
+Definition flat_map' {A B : Type} :
+  forall (l : list A) (f : forall x, In x l -> list B), list B.
+  refine(fix fm (l : list A) (f : forall x, In x l -> list B) :=
+         match l as l' return l = l' -> _ with
+         | [] => fun _ => []
+         | h :: t => fun Heq => (f h _) ++ fm t _
+         end eq_refl).
+  - subst.
+    apply in_eq.
+  - subst; intros x Hin.
+    assert (Ht : In x (h :: t)).
+    { apply in_cons; auto. }
+    eapply f; eauto.
+Defined.
+
+
+(* Here's what didn't work--the fact that the recursive call argument
+   is in spps does not appear in the context *)
 Program Fixpoint spClosure (g : grammar)
                            (spp : subparser_plus)
                            {measure (meas g spp) (nat_lex_pair)} :
@@ -206,10 +224,25 @@ Program Fixpoint spClosure (g : grammar)
   | ScsCont spps => flat_map (fun spp => spClosure g spp) spps
   end.
 Next Obligation.
-Abort.    
+Abort.
 
-Program Fixpoint spClosure (g : grammar) (spp : subparser_plus)
-                           {measure (meas g spp) (nat_lex_pair) } : list subparser_closure_result :=
+(* This does work -- note the alternative flat_map implementation *)
+Program Fixpoint spClosure (g : grammar)
+                           (spp : subparser_plus)
+                           {measure (meas g spp) (nat_lex_pair)} :
+                           list closure_step_result :=
+  match spClosureStep g spp with
+  | ScsDone sp => [CsSucc sp]
+  | ScsError   => [CsError]
+  | ScsCont spps => flat_map' spps (fun spp Hin => spClosure g spp)
+  end.
+Next Obligation.
+Admitted.
+
+Program Fixpoint spClosure (g : grammar)
+                           (spp : subparser_plus)
+                           {measure (meas g spp) (nat_lex_pair) } :
+  list subparser_closure_result :=
   match spp with
   | mkSpPlus av sp =>
     match sp with
