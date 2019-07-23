@@ -1,32 +1,33 @@
 Require Import FMaps Omega PeanoNat String. 
 Require Import Defs.
+Require Import Lex.
 Import ListNotations.
 
 Inductive step_result := StepAccept : forest -> list token -> step_result
                        | StepReject : string -> step_result
-                       | StepK      : state  -> step_result
+                       | StepK      : parser_state  -> step_result
                        | StepError  : string -> step_result.
 
 Inductive parse_result := Accept : forest -> list token -> parse_result
                         | Reject : string -> parse_result
                         | Error  : string -> parse_result.
 
-Definition step (tbl : parse_table) (st : state) : step_result :=
+Definition step (tbl : parse_table) (st : parser_state) : step_result :=
   match st with
-  | mkState ts (fr, frs) av =>
+  | parserState av (fr, frs) ts =>
     match fr with
-    | mkFrame gamma sv =>
+    | parserFrame gamma sv =>
       match gamma with
       | [] => 
         match frs with
         | [] => StepAccept sv ts
-        | mkFrame gamma_caller sv_caller :: frs' =>
+        | parserFrame gamma_caller sv_caller :: frs' =>
           match gamma_caller with
           | [] => StepError "impossible"
           | T _ :: _ => StepError "impossible"
           | NT x :: gamma_caller' => 
-            let caller' := mkFrame gamma_caller' (sv_caller ++ [Node x sv])
-            in  StepK (mkState ts (caller', frs') (NtSet.add x av))
+            let caller' := parserFrame gamma_caller' (sv_caller ++ [Node x sv])
+            in  StepK (parserState (NtSet.add x av) (caller', frs') ts)
           end
         end
       | T a :: gamma' =>
@@ -34,8 +35,8 @@ Definition step (tbl : parse_table) (st : state) : step_result :=
         | [] => StepReject "input exhausted"
         | (a', l) :: ts' =>
           if t_eq_dec a' a then 
-            let fr' := mkFrame gamma' (sv ++ [Leaf l])
-            in  StepK (mkState ts' (fr', frs) (allNts tbl))
+            let fr' := parserFrame gamma' (sv ++ [Leaf l])
+            in  StepK (parserState (allNts tbl) (fr', frs) ts')
           else
             StepReject "token mismatch"
         end
@@ -43,8 +44,8 @@ Definition step (tbl : parse_table) (st : state) : step_result :=
         if NtSet.mem x av then
           match ParseTable.find (x, peek ts) tbl with
           | Some gamma_callee =>
-            let callee := mkFrame gamma_callee []
-            in  StepK (mkState ts (callee, fr :: frs) (NtSet.remove x av))
+            let callee := parserFrame gamma_callee []
+            in  StepK (parserState (NtSet.remove x av) (callee, fr :: frs) ts)
           | None => StepReject "no parse table entry"
           end
         else
@@ -53,80 +54,43 @@ Definition step (tbl : parse_table) (st : state) : step_result :=
     end
   end.
 
-Definition headFrameSize (fr : frame) : nat :=
+Definition headFrameSize (fr : parser_frame) : nat :=
   List.length fr.(syms).
 
-Definition headFrameScore (fr : frame) (b : nat) (e : nat) : nat :=
+Definition headFrameScore (fr : parser_frame) (b : nat) (e : nat) : nat :=
   headFrameSize fr * (b ^ e).
 
-Definition tailFrameSize (fr : frame) : nat :=
+Definition tailFrameSize (fr : parser_frame) : nat :=
   match fr.(syms) with
   | [] => 0
   | _ :: syms' => List.length syms'
   end.
 
-Definition tailFrameScore (fr : frame) (b : nat) (e : nat) : nat :=
+Definition tailFrameScore (fr : parser_frame) (b : nat) (e : nat) : nat :=
   tailFrameSize fr * (b ^ e).
 
-Fixpoint tailFramesScore (frs : list frame) (b : nat) (e : nat) : nat :=
+Fixpoint tailFramesScore (frs : list parser_frame) (b : nat) (e : nat) : nat :=
   match frs with
   | [] => 0
   | fr :: frs' => tailFrameScore fr b e + tailFramesScore frs' b (1 + e)
   end.
 
-Definition stackScore (stk : stack) (b : nat) (e : nat) : nat :=
+Definition stackScore (stk : parser_stack) (b : nat) (e : nat) : nat :=
   let (hf, tfs) := stk
   in  headFrameScore hf b e + tailFramesScore tfs b (1 + e).
 
-Ltac inv H := inversion H; subst; clear H.
-
-  Section TripleLT.
-    
-    Variables (A B C : Type) (ltA : relation A) (ltB : relation B) (ltC : relation C).
-    
-    Inductive triple_lex : A * B * C -> A * B * C -> Prop :=
-    | fst_lt : forall x x' y y' z z', ltA x x' -> triple_lex (x, y, z) (x', y', z')
-    | snd_lt : forall x y y' z z', ltB y y' -> triple_lex (x, y, z) (x, y', z')
-    | thd_lt : forall x y z z', ltC z z' -> triple_lex (x, y, z) (x, y, z').
-    
-    Hint Constructors triple_lex.
-    
-    Theorem triple_lex_trans :
-      transitive _ ltA -> transitive _ ltB -> transitive _ ltC -> transitive _ triple_lex.
-    Proof.
-      intros tA tB tC [[x1 y1] z1] [[x2 y2] z2] [[x3 y3] z3] H12 H23.
-      inv H12; inv H23; eauto.
-    Defined.
-    
-    Theorem triple_lex_wf :
-      well_founded ltA -> well_founded ltB -> well_founded ltC -> well_founded triple_lex.
-    Proof.
-      intros wfA wfB wfC [[x y] z].
-      revert y z.
-      induction (wfA x) as [x _ IHx].
-      intros y.
-      induction (wfB y) as [y _ IHy].
-      intros z.
-      induction (wfC z) as [z _ IHz].
-      constructor.
-      intros [[x' y'] z'] H.
-      inv H; eauto.
-    Defined.
-    
-  End TripleLT.
-
-Definition stackHeight (stk : stack) : nat :=
+Definition stackHeight (stk : parser_stack) : nat :=
   let (_, frs) := stk in List.length frs.
 
-Definition meas (st : state) (tbl : parse_table) : nat * nat * nat :=
+Definition meas (st : parser_state) (tbl : parse_table) : nat * nat * nat :=
   let m := maxEntryLength tbl        in
   let e := NtSet.cardinal st.(avail) in
-  (List.length st.(tokens), stackScore st.(stk) (1+m) e, stackHeight st.(stk)).
+  (List.length st.(tokens), stackScore st.(stack) (1+m) e, stackHeight st.(stack)).
 
 Lemma meas_unfold : 
   forall st tbl, meas st tbl = (List.length st.(tokens), 
-                                stackScore st.(stk) (1 + maxEntryLength tbl) (NtSet.cardinal st.(avail)),
-                                stackHeight st.(stk)).
+                                stackScore st.(stack) (1 + maxEntryLength tbl) (NtSet.cardinal st.(avail)),
+                                stackHeight st.(stack)).
 Proof. 
   auto.
 Qed.
@@ -250,8 +214,8 @@ Qed.
 
 Lemma post_return_state_lt_pre_return_state :
   forall st st' ts callee caller caller' frs x gamma av tbl,
-    st = mkState ts (callee, caller :: frs) av
-    -> st' = mkState ts (caller', frs) (NtSet.add x av)
+    st = parserState av (callee, caller :: frs) ts
+    -> st' = parserState (NtSet.add x av) (caller', frs) ts
     -> callee.(syms) = []
     -> caller.(syms) = NT x :: gamma
     -> caller'.(syms) = gamma
@@ -275,16 +239,16 @@ Proof.
                   frs).
     apply le_lt_or_eq in Hle.
     + destruct Hle as [Hlt | Heq]; subst.
-      * apply snd_lt; auto.
+      * apply triple_snd_lt; auto.
       * rewrite Heq.
-        apply thd_lt; auto.
+        apply triple_thd_lt; auto.
     + split; auto.
       eapply mem_true_cardinality_gt_0; eauto.
     + split; auto.
       omega.
   - (* x isn't in av, so the cardinality increase by 1 *)
     rewrite add_cardinal_2; auto.
-    apply thd_lt; auto.
+    apply triple_thd_lt; auto.
 Qed.
 
 Lemma lt_lt_mul_nonzero_r :
@@ -399,8 +363,8 @@ Qed.
 
 Lemma post_push_state_lt_pre_push_st :
   forall st st' ts callee caller frs x gamma_caller gamma_callee av tbl,
-    st = mkState ts (caller, frs) av
-    -> st' = mkState ts (callee, caller :: frs) (NtSet.remove x av)
+    st = parserState av (caller, frs) ts
+    -> st' = parserState (NtSet.remove x av) (callee, caller :: frs) ts
     -> caller.(syms) = NT x :: gamma_caller
     -> callee.(syms)  = gamma_callee
     -> ParseTable.find (x, peek ts) tbl = Some gamma_callee
@@ -408,7 +372,7 @@ Lemma post_push_state_lt_pre_push_st :
     -> nat_triple_lex (meas st' tbl) (meas st tbl).
 Proof.
   intros st st' ts callee caller frs x gamma_caller gamma_callee av tbl Hst Hst' Hcaller Hcallee Hfind Hmem; subst.
-  apply snd_lt; simpl.
+  apply triple_snd_lt; simpl.
   rewrite remove_cardinal_1; auto.
   unfold headFrameScore. unfold headFrameSize.
   unfold tailFrameScore. unfold tailFrameSize. rewrite Hcaller.
@@ -438,7 +402,7 @@ Lemma step_meas_lt :
 Proof.
   intros tbl st st' Hs.
   unfold step in Hs.
-  destruct st as [ts [fr frs] av].
+  destruct st as [av [fr frs] ts].
   destruct fr as [gamma sv].
   destruct gamma as [| [y | x] gamma'].
   - (* return from the current frame *)
@@ -452,7 +416,7 @@ Proof.
     destruct ts as [| (y', l) ts']; try congruence.
     destruct (t_eq_dec y' y); try congruence.
     inv Hs.
-    apply fst_lt; simpl; auto.
+    apply triple_fst_lt; simpl; auto.
   - (* nonterminal case -- push a new frame onto the stack *)
     destruct (NtSet.mem x av) eqn:Hm; try congruence.
     destruct (ParseTable.find (x, peek ts) tbl) as [gamma |] eqn:Hf; try congruence.
@@ -468,7 +432,7 @@ Lemma nat_triple_lex_wf : well_founded nat_triple_lex.
 Qed.
 
 Program Fixpoint run (tbl : parse_table) 
-                     (st : state) 
+                     (st : parser_state) 
                      { measure (meas st tbl) (nat_triple_lex) } : parse_result :=
   match step tbl st with
   | StepAccept sv ts => Accept sv ts

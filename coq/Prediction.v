@@ -1,5 +1,6 @@
-Require Import List PeanoNat String.
+Require Import Arith List Omega PeanoNat Program.Wf String.
 Require Import Defs.
+Require Import Lex.
 Import ListNotations.
 
 Definition grammar_loc     := (nonterminal * list symbol * list symbol)%type.
@@ -74,19 +75,16 @@ Record subparser_plus := mkSpPlus { av : NtSet.t
                                   ; sp : subparser
                                   }.
 
-Inductive subparser_closure_result :=
-| SpClosureSucc  : subparser -> subparser_closure_result
-| SpClosureError : subparser_closure_result.
 
-Definition headLocSize (loc : grammar_loc) : nat :=
+Definition headFrameSuffixLength (loc : grammar_loc) : nat :=
   match loc with
   | (_, _, suf) => List.length suf
   end.
 
-Definition headLocScore (loc : grammar_loc) (b : nat) (e : nat) : nat :=
-  headLocSize loc * (b ^ e).
+Definition headFrameScore (loc : grammar_loc) (b : nat) (e : nat) : nat :=
+  headFrameSuffixLength loc * (b ^ e).
 
-Definition tailLocSize (loc : grammar_loc) : nat :=
+Definition tailFrameSuffixSize (loc : grammar_loc) : nat :=
   match loc with
   | (_, _, suf) =>
     match suf with
@@ -95,18 +93,18 @@ Definition tailLocSize (loc : grammar_loc) : nat :=
     end
   end.
 
-Definition tailLocScore (loc : grammar_loc) (b : nat) (e : nat) : nat :=
-  tailLocSize loc * (b ^ e).
+Definition tailFrameScore (loc : grammar_loc) (b : nat) (e : nat) : nat :=
+  tailFrameSuffixSize loc * (b ^ e).
 
-Fixpoint tailLocsScore (locs : list grammar_loc) (b : nat) (e : nat) : nat :=
+Fixpoint tailFramesScore (locs : list grammar_loc) (b : nat) (e : nat) : nat :=
   match locs with
   | [] => 0
-  | loc :: locs' => tailLocScore loc b e + tailLocsScore locs' b (1 + e)
+  | loc :: locs' => tailFrameScore loc b e + tailFramesScore locs' b (1 + e)
   end.
 
 Definition stackScore (stk : subparser_stack) (b : nat) (e : nat) : nat :=
   let (hl, tls) := stk
-  in  headLocScore hl b e + tailLocsScore tls b (1 + e).
+  in  headFrameScore hl b e + tailFramesScore tls b (1 + e).
 
 Definition stackHeight (stk : subparser_stack) : nat :=
   let (_, locs) := stk in List.length locs.
@@ -125,7 +123,93 @@ Definition meas (g : grammar) (spp : subparser_plus) : nat * nat :=
     (stackScore stk (1 + m) e, stackHeight stk)
   end.
 
-Fixpoint spClosure (g : grammar) (spp : subparser_plus) : list subparser_closure_result :=
+Definition nat_lex_pair := pair_lex nat nat lt lt.
+
+Lemma tailFrameScore_cons :
+  forall x pre sym suf b e,
+    tailFrameScore (x, pre, sym :: suf) b e = List.length suf * b ^ e.
+Proof.
+  auto.
+Qed.
+
+Lemma nonzero_exponents_lt_stackScore_le :
+  forall v b e1 e2 e3 e4 frs,
+    0 < e1 < e2
+    -> 0 < e3 < e4
+    -> v * (b ^ e1) + tailFramesScore frs b e3 <= 
+       v * (b ^ e2) + tailFramesScore frs b e4.
+Proof.
+Admitted.
+
+Lemma mem_true_cardinality_gt_0 :
+  forall x s,
+    NtSet.mem x s = true -> 0 < NtSet.cardinal s.
+Admitted.
+
+Inductive sp_closure_step_result :=
+| ScsDone  : subparser -> sp_closure_step_result
+| ScsCont  : list subparser_plus -> sp_closure_step_result
+| ScsError : sp_closure_step_result.
+
+Definition spClosureStep (g : grammar) (spp : subparser_plus) : sp_closure_step_result :=
+  match spp with
+  | mkSpPlus av sp =>
+    match sp with
+    | mkSp pred stk => 
+      match stk with
+      | (loc, locs) =>
+        match loc with
+        | (x, _, []) =>
+          match locs with
+          | []              => ScsDone sp
+          | caller :: locs' =>
+            match caller with
+            | (x_caller, pre_caller, suf_caller) =>
+              match suf_caller with
+              | []                   => ScsError
+              | T _ :: _             => ScsError
+              | NT x' :: suf_caller' =>
+                if nt_eq_dec x' x then
+                  let stk' := ((x_caller, pre_caller ++ [NT x], suf_caller'), locs') in
+                  let spp' := mkSpPlus (NtSet.add x av) (mkSp pred stk')
+                  in  ScsCont [spp']
+                else
+                  ScsError
+              end
+            end
+          end
+        | (_, _, T _ :: _)     => ScsDone sp
+        | (_, _, NT y :: suf') =>
+          if NtSet.mem y av then
+            let rhss := rhssForNt g y in
+            let stks := map (fun rhs => ((y, [], rhs), loc :: locs)) rhss in
+            let spps := map (fun stk => mkSpPlus (NtSet.remove y av) (mkSp pred stk)) stks in
+            ScsCont spps
+          else
+            ScsError
+        end
+      end
+    end
+  end.
+
+Inductive closure_step_result :=
+| CsSucc  : subparser -> closure_step_result
+| CsError : closure_step_result.
+
+Program Fixpoint spClosure (g : grammar)
+                           (spp : subparser_plus)
+                           {measure (meas g spp) (nat_lex_pair)} :
+                           list closure_step_result :=
+  match spClosureStep g spp with
+  | ScsDone sp => [CsSucc sp]
+  | ScsError   => [CsError]
+  | ScsCont spps => flat_map (fun spp => spClosure g spp) spps
+  end.
+Next Obligation.
+Abort.    
+
+Program Fixpoint spClosure (g : grammar) (spp : subparser_plus)
+                           {measure (meas g spp) (nat_lex_pair) } : list subparser_closure_result :=
   match spp with
   | mkSpPlus av sp =>
     match sp with
@@ -157,21 +241,45 @@ Fixpoint spClosure (g : grammar) (spp : subparser_plus) : list subparser_closure
           if NtSet.mem y av then
             let rhss := rhssForNt g y in
             let stks := map (fun rhs => ((y, [], rhs), loc :: locs)) rhss in
-            let spps := map (fun stk => mkSpPlus (NtSet.remove y av) (mkSp pred stk)) stks
-            in  List.concat (map (spClosure g) spps)
+            let spps := map (fun stk => mkSpPlus (NtSet.remove y av) (mkSp pred stk)) stks in
+            let res := flat_map (fun sp => spClosure g sp) spps
+            in  res
           else
             [SpClosureError]
         end
       end
     end
   end.
-
+Next Obligation.
+  unfold headFrameScore; simpl.
+  rewrite tailFrameScore_cons.
+  destruct (NtSet.mem x av0) eqn:Hm.
+  - rewrite add_cardinal_1; auto.
+    pose proof nonzero_exponents_lt_stackScore_le as Hnz.
+    specialize (Hnz (List.length suf_caller')
+                    (S (maxRhsLength g))
+                    (NtSet.cardinal av0)
+                    (S (NtSet.cardinal av0))
+                    (S (NtSet.cardinal av0))
+                    (S (S (NtSet.cardinal av0)))
+                    locs').
+    apply le_lt_or_eq in Hnz.
+    + destruct Hnz as [Hlt | Heq].
+      * apply pair_fst_lt; auto.
+      * rewrite Heq; apply pair_snd_lt; auto.
+    + split; auto.
+      eapply mem_true_cardinality_gt_0; eauto.
+    + split; omega.
+  - rewrite add_cardinal_2; auto.
+    simpl.
+    apply pair_snd_lt; auto.
+Defined.
+Next Obligation.
+  simpl.
+  unfold headFrameScore; simpl.
         
 
-      
-Inductive closure_step_result :=
-| ClosureStepSucc  : list subparser_plus -> closure_step_result
-| ClosureStepError : closure_step_result.
+    
 
 Fixpoint spClosureStep (spp : subparser_plus) : closure_step_result :=
   match spp with

@@ -1,4 +1,6 @@
 -R . GallStar
 
 Defs.v
+Lex.v
+Prediction.v
 Smallstep.v
