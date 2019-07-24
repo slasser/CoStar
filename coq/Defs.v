@@ -1,4 +1,5 @@
-Require Import FMaps MSets PeanoNat String.
+Require Import FMaps List MSets PeanoNat String.
+Import ListNotations.
 
 (* Representations of grammar symbols *)
 Definition terminal    := string.
@@ -45,6 +46,16 @@ Definition rhs (p : production) : list symbol :=
 
 Definition rhss (g : grammar) : list (list symbol) :=
   map rhs g.
+
+Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
+  match ps with
+  | []                 => []
+  | (x', gamma) :: ps' => 
+    if nt_eq_dec x' x then 
+      gamma :: rhssForNt ps' x
+    else 
+      rhssForNt ps' x
+  end.
 
 (* Definitions related to input that the parser consumes. *)
 Definition literal := string.

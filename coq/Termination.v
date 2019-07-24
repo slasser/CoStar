@@ -1,5 +1,6 @@
 Require Import Arith List Omega.
 Require Import Defs.
+Require Import Tactics.
 Import ListNotations.
 
 (* Definitions related to well-founded measures *)
@@ -117,7 +118,8 @@ Lemma stackScore_le_after_return :
   forall callee caller caller' x av frs b,
     symbolsToProcess callee = []
     -> symbolsToProcess caller = NT x :: symbolsToProcess caller'
-    -> stackScore (caller', frs) b (NtSet.cardinal (NtSet.add x av)) <= stackScore (callee, caller :: frs) b (NtSet.cardinal av).
+    -> stackScore (caller', frs) b (NtSet.cardinal (NtSet.add x av))
+       <= stackScore (callee, caller :: frs) b (NtSet.cardinal av).
 Proof.
   intros callee caller caller' x av frs b Hcallee Hcaller.
   unfold stackScore. 
@@ -130,4 +132,126 @@ Proof.
       eapply mem_true_cardinality_gt_0; eauto.
     + split; omega.
   - rewrite add_cardinal_2; auto.
+Qed.
+
+Lemma remove_cardinal_minus_1 :
+  forall (x : nonterminal) (s : NtSet.t),
+    NtSet.mem x s = true
+    -> NtSet.cardinal (NtSet.remove x s) = NtSet.cardinal s - 1.
+Proof.
+  intros x s Hm.
+  rewrite <- remove_cardinal_1 with (s := s) (x := x); auto.
+  omega.
+Qed.
+
+Lemma lt_lt_mul_nonzero_r :
+  forall y x z,
+    x < y -> 0 < z -> x < y * z.
+Proof.
+  intros y x z Hxy Hz.
+  destruct z as [| z]; try omega.
+  rewrite Nat.mul_succ_r. 
+  apply Nat.lt_lt_add_l; auto.
+Qed.
+
+Lemma base_gt_zero_power_gt_zero :
+  forall b e, 0 < b -> 0 < b ^ e.
+Proof.
+  intros b e Hlt; induction e as [| e IH]; simpl in *; auto.
+  destruct b as [| b]; try omega.
+  apply lt_lt_mul_nonzero_r; auto.
+Qed.
+
+Lemma less_significant_value_lt_more_significant_digit :
+  forall e2 e1 v b,
+    v < b
+    -> e1 < e2
+    -> v * (b ^ e1) < b ^ e2.
+Proof.
+  intros e2; induction e2 as [| e2]; intros e1 v b Hvb Hee; simpl in *; try omega.
+  destruct b as [| b]; try omega.
+  destruct e1 as [| e1].
+  - rewrite Nat.mul_1_r.
+    apply lt_lt_mul_nonzero_r; auto.
+    apply base_gt_zero_power_gt_zero; omega.    
+  - rewrite Nat.pow_succ_r; try omega. 
+    rewrite <- Nat.mul_comm.
+    rewrite <- Nat.mul_assoc.
+    apply mult_lt_compat_l; try omega.
+    rewrite Nat.mul_comm.
+    apply IHe2; omega. 
+Qed.
+
+Lemma list_elt_le_listmax :
+  forall (x : nat) (ys : list nat),
+    In x ys -> x <= listMax ys.
+Proof.
+  intros x ys Hin; induction ys as [| y ys IH]; simpl in *.
+  - inv Hin.
+  - destruct Hin as [Heq | Hin]; subst.
+    + apply Max.le_max_l.
+    + apply IH in Hin.
+      eapply le_trans; eauto.
+      apply Max.le_max_r.
+Qed.
+
+Lemma rhs_in_grammar_length_in_rhsLengths :
+  forall g rhs,
+    In rhs (rhss g) -> In (List.length rhs) (rhsLengths g).
+Proof.
+  intros g rhs Hin; induction g as [| (x, rhs') ps IH];
+  simpl in *; inv Hin; auto.
+Qed.
+
+Lemma in_rhssForNT_in_rhss :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> In rhs (rhss g).
+Proof.
+  intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
+  - inv Hin.
+  - destruct (nt_eq_dec x' x); subst; auto.
+    destruct Hin as [Heq | Hin]; subst; auto.
+Qed.
+  
+Lemma grammar_rhs_length_le_max :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> List.length rhs <= maxRhsLength g.
+Proof.
+  intros; unfold maxRhsLength.
+  apply list_elt_le_listmax.
+  apply rhs_in_grammar_length_in_rhsLengths.
+  eapply in_rhssForNT_in_rhss; eauto.
+Qed.
+
+Lemma grammar_rhs_length_lt_max_plus_1 :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> List.length rhs < 1 + maxRhsLength g.
+Proof.
+  intros g x rhs Hin.
+  apply grammar_rhs_length_le_max in Hin; omega.
+Qed.
+
+Lemma stackScore_lt_after_push :
+  forall g callee caller frs y suf' rhs av,
+    symbolsToProcess callee = rhs
+    -> symbolsToProcess caller = NT y :: suf'
+    -> NtSet.mem y av = true
+    -> In rhs (rhssForNt g y)
+    -> stackScore (callee, caller :: frs)
+                  (1 + maxRhsLength g)
+                  (NtSet.cardinal (NtSet.remove y av))
+       <
+       stackScore (caller, frs)
+                  (1 + maxRhsLength g)
+                  (NtSet.cardinal av).
+Proof.
+  intros g callee caller frs y suf' rhs av Hcallee Hcaller Hmem Hin; simpl.
+  rewrite remove_cardinal_1; auto.
+  unfold headFrameScore; unfold headFrameSize; rewrite Hcallee.
+  unfold tailFrameScore; unfold tailFrameSize; rewrite Hcaller; simpl.
+  rewrite plus_assoc; repeat apply plus_lt_compat_r.
+  rewrite remove_cardinal_minus_1; auto.
+  apply less_significant_value_lt_more_significant_digit.
+  - eapply grammar_rhs_length_lt_max_plus_1; eauto.
+  - erewrite <- remove_cardinal_1; eauto; omega.
 Qed.

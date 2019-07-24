@@ -11,16 +11,6 @@ Record subparser := Sp { avail      : NtSet.t
                        ; stack      : l_stack
                        }.
 
-Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
-  match ps with
-  | []                 => []
-  | (x', gamma) :: ps' => 
-    if nt_eq_dec x' x then 
-      gamma :: rhssForNt ps' x
-    else 
-      rhssForNt ps' x
-  end.
-
 Inductive subparser_move_result :=
 | SpMoveSucc   : subparser -> subparser_move_result
 | SpMoveDieOff : subparser_move_result
@@ -155,24 +145,41 @@ Next Obligation.
 Abort.
 
 Lemma subparser_lt_after_return :
-  forall g sp sp' av pred pred' callee caller caller' frs x gamma,
+  forall g sp sp' av pred callee caller caller' frs x gamma,
     sp = Sp av pred (callee, caller :: frs)
-    -> sp' = Sp (NtSet.add x av) pred' (caller', frs)
+    -> sp' = Sp (NtSet.add x av) pred (caller', frs)
     -> symbolsToProcess callee  = []
     -> symbolsToProcess caller  = NT x :: gamma
     -> symbolsToProcess caller' = gamma
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g sp sp' av pred pred' callee caller caller' frs x gamma
+  intros g sp sp' av pred callee caller caller' frs x gamma
          Hsp Hsp' Hcallee Hcaller Hcaller'; subst.
   unfold meas.
-  pose proof (stackScore_le_after_return callee caller caller' x av frs (1 + maxRhsLength g)) as Hle.
+  pose proof (stackScore_le_after_return callee caller caller'
+                                         x av frs (1 + maxRhsLength g)) as Hle.
   apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
   - apply pair_fst_lt; auto.
   - rewrite Heq; apply pair_snd_lt; auto.
-Qed.
+Defined.
+
+Lemma subparser_lt_after_push :
+  forall g sp sp' av pred caller callee frs x y pre suf' rhs,
+    sp = Sp av pred (caller, frs)
+    -> sp' = Sp (NtSet.remove y av) pred (callee, caller :: frs)
+    -> caller = (x, pre, NT y :: suf')
+    -> callee = (y, [], rhs)
+    ->  NtSet.mem y av = true
+    -> In rhs (rhssForNt g y)
+    -> lex_nat_pair (meas g sp') (meas g sp).
+Proof.
+  intros g sp sp' av pred caller callee frs x y pre suf' rhs
+         Hsp Hsp' Hcaller Hcallee Hmem Hin; subst.
+  unfold meas.
+  apply pair_fst_lt.
+  eapply stackScore_lt_after_push; simpl; eauto.
+Defined.
   
-(* to do -- move lemmas about termination in the "push" case to Termination file *)
 Lemma subparser_lt_after_step :
   forall g sp sp' sps',
     spClosureStep g sp = ScsCont sps'
@@ -193,14 +200,14 @@ Proof.
     eapply subparser_lt_after_return; eauto.
     simpl; auto.
   - destruct sym as [a | y]; tc.
-    destruct (NtSet.mem y av); tc.
+    destruct (NtSet.mem y av) eqn:Hmem; tc.
     inv Hstep.
     eapply in_map_iff in Hin.
     destruct Hin as [stk [Heq Hin]]; subst.
     eapply in_map_iff in Hin.
     destruct Hin as [suf [Heq Hin]]; subst.
-    admit.
-Admitted.
+    eapply subparser_lt_after_push; eauto.
+Defined.
 
 (* This does work -- note the alternative flat_map implementation *)
 Program Fixpoint spClosure (g : grammar)
