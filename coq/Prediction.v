@@ -131,6 +131,21 @@ Definition flat_map' {A B : Type} :
     eapply f; eauto.
 Defined.
 
+Definition map' {A B : Type} :
+  forall (l : list A) (f : forall x, In x l -> B), list B.
+  refine(fix m (l : list A) (f : forall x, In x l -> B) :=
+         match l as l' return l = l' -> _ with
+         | []     => fun _ => []
+         | h :: t => fun Heq => (f h _) :: (m t _)
+         end eq_refl).
+  - subst.
+    apply in_eq.
+  - subst; intros x Hin.
+    assert (Ht : In x (h :: t)).
+    { apply in_cons; auto. }
+    eapply f; eauto.
+Defined.
+
 (* Here's what didn't work--the fact that the recursive call argument
    is in spps does not appear in the context *)
 Program Fixpoint spClosure (g : grammar) (sp : subparser)
@@ -225,6 +240,99 @@ Defined.
 Next Obligation.
   apply measure_wf.
   apply pair_lex_wf; apply lt_wf.
+Defined.
+
+(* Next steps : try to define closure with a single function, implement the main prediction loop *)
+
+Lemma acc_after_return :
+  forall (g  : grammar)
+         (sp : subparser)
+         (av : NtSet.t)
+         (pred pre pre' suf_tl : list symbol)
+         (callee : l_frame)
+         (frs frs_tl : list l_frame)
+         (x y y' : nonterminal)
+         (stk' : l_stack),
+    Acc lex_nat_pair (meas g sp)
+    -> sp = Sp av pred (callee, frs)
+    -> callee = (y', pre', [])
+    -> frs  = (x, pre, NT y :: suf_tl) :: frs_tl
+    -> stk' = ((x, pre ++ [NT y], suf_tl), frs_tl)
+    -> Acc lex_nat_pair (meas g (Sp (NtSet.add y av) pred stk')).
+Proof.
+  intros g sp av pred pre pre' suf_tl callee frs fr_tl x y y' stk'
+         Hac Hsp hce Hfrs Hstk'; subst.
+  eapply Acc_inv; eauto.
+  eapply subparser_lt_after_return; eauto.
+  simpl; auto.
+Defined.
+
+Lemma acc_after_push :
+  forall (g : grammar)
+         (sp sp' : subparser)
+         (av : NtSet.t)
+         (pred pre suf_tl : list symbol)
+         (fr : l_frame)
+         (frs : list l_frame)
+         (x y : nonterminal)
+         (sps' : list subparser)
+         (pushRhs : list symbol -> subparser),
+    Acc lex_nat_pair (meas g sp)
+    -> sp = Sp av pred (fr, frs)
+    -> fr = (x, pre, NT y :: suf_tl)
+    -> NtSet.mem y av = true
+    -> pushRhs = (fun rhs => Sp (NtSet.remove y av)
+                                pred
+                                ((y, [], rhs), fr :: frs))
+    -> sps' = map pushRhs (rhssForNt g y)
+    -> In sp' sps'
+    -> Acc lex_nat_pair (meas g sp').
+Admitted.
+
+Definition spClosure' :
+  forall (g:grammar) (sp : subparser),
+    (Acc lex_nat_pair (meas g sp)) -> list (option subparser).
+  refine(fix f g sp (a : Acc lex_nat_pair (meas g sp)) {struct a} : list (option subparser) :=
+           match sp as sp' return sp = sp' -> _ with
+           | Sp av pred (fr, frs) =>
+             fun Hsp =>
+               match fr as fr' return fr = fr' -> _ with
+               | (_, _, []) =>
+                 fun Hfr =>
+                   match frs as frs' return frs = frs' -> _ with
+                   | []                    => fun _ => [Some sp]
+                   | (_, _, []) :: _       => fun _ => [None]
+                   | (_, _, T _ :: _) :: _ => fun _ => [None]
+                   | (x, pre, NT y :: suf') :: frs' =>
+                     fun Hfrs =>
+                       let stk':= ((x, pre ++ [NT y], suf'), frs')
+                       in  f g
+                             (Sp (NtSet.add y av) pred stk')
+                             (acc_after_return _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                                               a Hsp Hfr Hfrs eq_refl)
+                   end eq_refl
+               | (_, _, T _ :: _)     => fun _ => [Some sp]
+               | (x, pre, NT y :: suf') =>
+                 fun Hfr =>
+                   match NtSet.mem y av as b return NtSet.mem y av = b -> _ with
+                   | true =>
+                     fun Hm =>
+                       let pushRhs := fun rhs => Sp (NtSet.remove y av)
+                                                    pred
+                                                    ((y, [], rhs), fr :: frs)
+                       in
+                       let sps' := map pushRhs (rhssForNt g y)
+                       in  flat_map' sps'
+                                     (fun sp' Hin => f g sp' _)
+                   | false => fun _ => [None]
+                   end eq_refl
+               end eq_refl
+           end eq_refl).
+  - subst; eapply Acc_inv; eauto.
+    assert (In sp' (map pushRhs (rhssForNt g y))) by auto.
+    apply in_map_iff in H.
+    destruct H as [rhs [Heq Hin']]; subst.
+    eapply subparser_lt_after_push; unfold pushRhs; eauto.
 Defined.
 
 Inductive prediction_step_result :=

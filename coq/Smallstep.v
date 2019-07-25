@@ -195,54 +195,6 @@ Proof.
     apply triple_thd_lt; auto.
 Qed.
 
-Lemma lt_lt_mul_nonzero_r :
-  forall y x z,
-    x < y -> 0 < z -> x < y * z.
-Proof.
-  intros y x z Hxy Hz.
-  destruct z as [| z]; try omega.
-  rewrite Nat.mul_succ_r. 
-  apply Nat.lt_lt_add_l; auto.
-Qed.
-
-Lemma base_gt_zero_power_gt_zero :
-  forall b e, 0 < b -> 0 < b ^ e.
-Proof.
-  intros b e Hlt; induction e as [| e IH]; simpl in *; auto.
-  destruct b as [| b]; try omega.
-  apply lt_lt_mul_nonzero_r; auto.
-Qed.
-
-Lemma less_significant_value_lt_more_significant_digit :
-  forall e2 e1 v b,
-    v < b
-    -> e1 < e2
-    -> v * (b ^ e1) < b ^ e2.
-Proof.
-  intros e2; induction e2 as [| e2]; intros e1 v b Hvb Hee; simpl in *; try omega.
-  destruct b as [| b]; try omega.
-  destruct e1 as [| e1].
-  - rewrite Nat.mul_1_r.
-    apply lt_lt_mul_nonzero_r; auto.
-    apply base_gt_zero_power_gt_zero; omega.    
-  - rewrite Nat.pow_succ_r; try omega. 
-    rewrite <- Nat.mul_comm.
-    rewrite <- Nat.mul_assoc.
-    apply mult_lt_compat_l; try omega.
-    rewrite Nat.mul_comm.
-    apply IHe2; omega. 
-Qed.
-
-Lemma list_element_le_listMax :
-  forall xs x,
-    In x xs -> x <= listMax xs.
-Proof.
-  intros xs; induction xs as [| x' xs IH]; intros x Hin; simpl; inv Hin.
-  - apply Nat.le_max_l.
-  - apply IH in H. 
-    apply Nat.max_le_iff; auto.
-Qed.
-
 Lemma gamma_in_table_length_in_entryLengths :
   forall k gamma tbl,
     In (k, gamma) (ParseTable.elements tbl)
@@ -328,6 +280,7 @@ assert (remove_cardinal_minus_1 : forall x s,
            NtSet.mem x s = true
            -> NtSet.cardinal (NtSet.remove x s) = 
               NtSet.cardinal s - 1).
+       
 { intros x' s Hm.
   replace (NtSet.cardinal s) with (S (NtSet.cardinal (NtSet.remove x' s))).
   - omega.
