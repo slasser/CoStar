@@ -244,6 +244,8 @@ Defined.
 
 (* Next steps : try to define closure with a single function, implement the main prediction loop *)
 
+Set Implicit Arguments.
+
 Lemma acc_after_return :
   forall (g  : grammar)
          (sp : subparser)
@@ -267,6 +269,8 @@ Proof.
   simpl; auto.
 Defined.
 
+(* Interesting -- the defined version of this lemma completes the spClosure' 
+   definition, but the admitted version doesn't *)
 Lemma acc_after_push :
   forall (g : grammar)
          (sp sp' : subparser)
@@ -274,66 +278,73 @@ Lemma acc_after_push :
          (pred pre suf_tl : list symbol)
          (fr : l_frame)
          (frs : list l_frame)
-         (x y : nonterminal)
-         (sps' : list subparser)
-         (pushRhs : list symbol -> subparser),
+         (x y : nonterminal),
     Acc lex_nat_pair (meas g sp)
     -> sp = Sp av pred (fr, frs)
     -> fr = (x, pre, NT y :: suf_tl)
     -> NtSet.mem y av = true
-    -> pushRhs = (fun rhs => Sp (NtSet.remove y av)
-                                pred
-                                ((y, [], rhs), fr :: frs))
-    -> sps' = map pushRhs (rhssForNt g y)
-    -> In sp' sps'
+    -> In sp' (map (fun rhs => Sp (NtSet.remove y av)
+                                  pred
+                                  ((y, [], rhs), fr :: frs))
+                   (rhssForNt g y))
     -> Acc lex_nat_pair (meas g sp').
-Admitted.
-
-Definition spClosure' :
-  forall (g:grammar) (sp : subparser),
-    (Acc lex_nat_pair (meas g sp)) -> list (option subparser).
-  refine(fix f g sp (a : Acc lex_nat_pair (meas g sp)) {struct a} : list (option subparser) :=
-           match sp as sp' return sp = sp' -> _ with
-           | Sp av pred (fr, frs) =>
-             fun Hsp =>
-               match fr as fr' return fr = fr' -> _ with
-               | (_, _, []) =>
-                 fun Hfr =>
-                   match frs as frs' return frs = frs' -> _ with
-                   | []                    => fun _ => [Some sp]
-                   | (_, _, []) :: _       => fun _ => [None]
-                   | (_, _, T _ :: _) :: _ => fun _ => [None]
-                   | (x, pre, NT y :: suf') :: frs' =>
-                     fun Hfrs =>
-                       let stk':= ((x, pre ++ [NT y], suf'), frs')
-                       in  f g
-                             (Sp (NtSet.add y av) pred stk')
-                             (acc_after_return _ _ _ _ _ _ _ _ _ _ _ _ _ _
-                                               a Hsp Hfr Hfrs eq_refl)
-                   end eq_refl
-               | (_, _, T _ :: _)     => fun _ => [Some sp]
-               | (x, pre, NT y :: suf') =>
-                 fun Hfr =>
-                   match NtSet.mem y av as b return NtSet.mem y av = b -> _ with
-                   | true =>
-                     fun Hm =>
-                       let pushRhs := fun rhs => Sp (NtSet.remove y av)
-                                                    pred
-                                                    ((y, [], rhs), fr :: frs)
-                       in
-                       let sps' := map pushRhs (rhssForNt g y)
-                       in  flat_map' sps'
-                                     (fun sp' Hin => f g sp' _)
-                   | false => fun _ => [None]
-                   end eq_refl
-               end eq_refl
-           end eq_refl).
-  - subst; eapply Acc_inv; eauto.
-    assert (In sp' (map pushRhs (rhssForNt g y))) by auto.
-    apply in_map_iff in H.
-    destruct H as [rhs [Heq Hin']]; subst.
-    eapply subparser_lt_after_push; unfold pushRhs; eauto.
+Proof.
+  intros g sp sp' av pred pre suf_tl fr frs x y
+         Ha Hsp Hfr Hm Hin; subst.
+  eapply Acc_inv; eauto.
+  apply in_map_iff in Hin.
+  destruct Hin as [rhs [Heq Hin]]; subst.
+  eapply subparser_lt_after_push; eauto.
 Defined.
+ 
+Fixpoint spc' (g : grammar) (sp : subparser)
+              (a : Acc lex_nat_pair (meas g sp)) {struct a} :
+              list (option subparser) :=
+  match sp as s return sp = s -> _ with
+  | Sp av pred (fr, frs) =>
+    fun Hs =>
+      match fr as hd return fr = hd -> _ with
+      | (_, _, []) =>
+        fun Hf =>
+          match frs as tl return frs = tl -> _ with
+          | []                    => fun _ => [Some sp]
+          | (_, _, []) :: _       => fun _ => [None]
+          | (_, _, T _ :: _) :: _ => fun _ => [None]
+          | (x, pre, NT y :: suf') :: frs' =>
+            fun Hfrs =>
+              let stk':= ((x, pre ++ [NT y], suf'), frs') in
+              spc' g (Sp (NtSet.add y av) pred stk')
+                   (acc_after_return _ a Hs Hf Hfrs eq_refl)
+          end eq_refl
+      | (_, _, T _ :: _)       => fun _ => [Some sp]
+      | (x, pre, NT y :: suf') =>
+        fun Hf =>
+          match NtSet.mem y av as b return NtSet.mem y av = b -> _ with
+          | true =>
+            fun Hm =>
+              let sps' :=
+                  map (fun rhs =>
+                         Sp (NtSet.remove y av) pred ((y, [], rhs), fr :: frs))
+                      (rhssForNt g y)
+              in  flat_map' sps'
+                            (fun sp' Hi =>
+                               spc' g sp' (acc_after_push _ _ a Hs Hf Hm Hi))
+                        
+          | false => fun _ => [None]
+          end eq_refl
+      end eq_refl
+  end eq_refl.
+
+Fixpoint foo {A} (os : list (option A)) : option (list A) :=
+  match os with
+  | [] => Some []
+  | None :: _ => None
+  | Some x :: t =>
+    match foo t with
+    | None => None
+    | Some xs => Some (x :: xs)
+    end
+  end.
 
 Inductive prediction_step_result :=
 | PstepSucc   : list symbol    -> prediction_step_result
