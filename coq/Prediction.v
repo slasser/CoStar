@@ -201,11 +201,11 @@ Definition closure (g : grammar) (sps : list subparser) :
   let es := flat_map (fun sp => spc g sp (lex_nat_pair_wf _)) sps
   in  sumOfListSum es.
 
-Inductive prediction_step_result :=
-| PstepSucc   : list symbol    -> prediction_step_result
-| PstepAmbig  : list symbol    -> prediction_step_result
-| PstepReject : string         -> prediction_step_result
-| PstepK      : list subparser -> prediction_step_result.
+Inductive prediction_result :=
+| PredSucc   : list symbol   -> prediction_result
+| PredAmbig  : list symbol   -> prediction_result
+| PredReject :                  prediction_result
+| PredError  : error_message -> prediction_result.
       
 Definition allEqual_opt (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : option A :=
   if forallb (beq x) xs then Some x else None.
@@ -214,25 +214,48 @@ Definition beqGamma (xs ys : list symbol) : bool :=
   if gamma_eq_dec xs ys then true else false.
 
 Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : option (list symbol) :=
-  allEqual_opt _ beqGamma sp.(prediction) (map prediction sps).
+  allEqual_opt beqGamma sp.(prediction) (map prediction sps).
 
 (* to do -- create a map from symbol list lists (representing remaining symbols to process) to predictions, return true if there's only one key *)
 Definition conflicted (sps : list subparser) : bool :=
   true.
 
-Definition llPredictStep (g : grammar) (sps : list subparser) : prediction_step_result :=
-  match sps with
-  | []      => PstepReject "all subparsers died off"
-  | sp :: sps' =>  
+Definition finalConfig (sp : subparser) : bool :=
+  match sp with
+  | Sp _ _ ((_, _, []), []) => true
+  | _                       => false
+  end.
+
+Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
+  match filter finalConfig sps with
+  | []         => PredReject
+  | sp :: sps' => 
     match allPredictionsEqual sp sps' with
-    | Some gamma => PstepSucc gamma
-    | None       =>
-      if conflicted sps then
-        PstepAmbig sp.(prediction)
-      else
-        PstepK (List.concat (map (subparserStep g) sps))
+    | Some gamma => PredSucc gamma
+    | None       => PredAmbig sp.(prediction)
     end
   end.
-      
 
-Definition ll1PredictStep (g : grammar) (sps : list subparser_state) : list subparser_state) 
+Fixpoint llPredict (g : grammar) (ts : list token) (sps : list subparser) : prediction_result :=
+  match ts with
+  | []       => handleFinalSubparsers sps
+  | t :: ts' =>
+    match sps with 
+    | []         => PredReject
+    | sp :: sps' =>
+      match allPredictionsEqual sp sps' with
+      | Some gamma => PredSucc gamma
+      | None       => 
+        match move t sps with
+        | inl msg => PredError msg
+        | inr mv  =>
+          match closure g mv with
+          | inl msg => PredError msg
+          | inr cl  => llPredict g ts' cl
+          end
+        end
+      end
+    end
+  end.
+
+(* to do : start state *)
