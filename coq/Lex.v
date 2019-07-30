@@ -1,4 +1,4 @@
-Require Import Relation_Definitions.
+Require Import Arith Relation_Definitions.
 Require Import Tactics.
 
 Section PairLT.
@@ -70,4 +70,14 @@ End TripleLT.
 
 Definition lex_nat_pair := pair_lex nat nat lt lt.
 
+Lemma lex_nat_pair_wf : well_founded lex_nat_pair.
+Proof.
+  apply pair_lex_wf; apply lt_wf.
+Defined.
+
 Definition lex_nat_triple := triple_lex nat nat nat lt lt lt.
+
+Lemma lex_nat_triple_wf : well_founded lex_nat_triple.
+Proof.
+  apply triple_lex_wf; apply lt_wf.
+Defined.

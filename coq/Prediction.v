@@ -1,68 +1,65 @@
 Require Import Arith List Omega PeanoNat Program.Wf String.
-Require Import Defs.
-Require Import Lemmas.
-Require Import Lex.
-Require Import Tactics.
-Require Import Termination.
+Require Import GallStar.Defs.
+Require Import GallStar.Lemmas.
+Require Import GallStar.Lex.
+Require Import GallStar.Tactics.
+Require Import GallStar.Termination.
+Require Import GallStar.Utils.
 Import ListNotations.
 Set Implicit Arguments.
+
+(* Hide an alternative definition of "sum" from NtSet *)
+Definition sum := Datatypes.sum.
 
 Record subparser := Sp { avail      : NtSet.t
                        ; prediction : list symbol
                        ; stack      : l_stack
                        }.
 
+Open Scope string_scope.
+
+(* error messages for move and closure operations *)
+Definition error_message := string.
+Definition mvRetErr := "subparser in return state during move operation".
+Definition mvNtErr  := "subparser in NT state during move operation".
+Definition clRetErr := "no nonterminal to return to".
+Definition clRecErr := "left recursion detected".
+
+Open Scope list_scope.
+
 (* "move" operation *)
 
-Inductive subparser_move_result :=
-| SpMoveSucc   : subparser -> subparser_move_result
-| SpMoveDieOff : subparser_move_result
-| SpMoveError  : subparser_move_result.
-
-Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
+(* Step from a subparser to...
+   None -- token mismatch
+   Some (inl err_msg) -- unreachable/error state
+   Some (inr sp')     -- successfully consume a token 
+*)
+Definition moveSp (tok : token) (sp : subparser) :
+  option (sum error_message subparser) :=
   match sp with
   | Sp _ pred stk =>
     match stk with
-    (* Subparser is in a final configuration, but an input token remains *)
-    | ((_, _, []), []) => SpMoveDieOff
-    (* Impossible if the previous call was a closure *)
-    | ((_, _, []), _ :: _) => SpMoveError
-    (* Impossible if the previous call was a closure *)
-    | ((_, _, NT _ :: _), _) => SpMoveError
-    | ((x, pre, T a :: suf), locs) =>
+    | ((_, _, []), [])            => None
+    | ((_, _, []), _ :: _)        => Some (inl mvRetErr)
+    | ((_, _, NT _ :: _), _)      => Some (inl mvNtErr)
+    | ((x, pre, T a :: suf), frs) =>
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          SpMoveSucc (Sp NtSet.empty pred ((x, pre ++ [T a], suf), locs))
+          Some (inr (Sp NtSet.empty pred ((x, pre ++ [T a], suf), frs)))
         else
-          (* token mismatch *)
-          SpMoveDieOff
+          None
       end
     end
   end.
 
-Inductive move_result :=
-| MoveSucc   : list subparser -> move_result
-| MoveError  : move_result.
-
-Fixpoint spsAfterMoveOrError (rs : list subparser_move_result) : move_result :=
-  match rs with
-  | []       => MoveSucc []
-  | r :: rs' =>
-    match spsAfterMoveOrError rs' with
-    | MoveSucc sps =>
-      match r with
-      | SpMoveSucc sp => MoveSucc (sp :: sps)
-      | SpMoveDieOff  => MoveSucc sps
-      | SpMoveError   => MoveError
-      end
-    | MoveError => MoveError
-    end
-  end.
-
-Definition move (tok : token) (sps : list subparser) : move_result :=
-  let rs := map (moveSp tok) sps
-  in  spsAfterMoveOrError rs.
+(* Return a list of the subparsers that successfully stepped to a new state,
+   or an error message if any subparsers reached an error state *)
+Definition move (tok : token) (sps : list subparser) :
+  sum error_message (list subparser) :=
+  let os := map (moveSp tok) sps in
+  let es := extractSomes os      
+  in  sumOfListSum es.
 
 (* "closure" operation *)
 
@@ -73,21 +70,6 @@ Definition meas (g : grammar) (sp : subparser) : nat * nat :=
     let e := NtSet.cardinal av in
     (stackScore stk (1 + m) e, stackHeight stk)
   end.
-
-Definition dflat_map {A B : Type} :
-  forall (l : list A) (f : forall x, In x l -> list B), list B.
-  refine(fix dfm (l : list A) (f : forall x, In x l -> list B) :=
-         match l as l' return l = l' -> _ with
-         | []     => fun _ => []
-         | h :: t => fun Heq => (f h _) ++ (dfm t _)
-         end eq_refl).
-  - subst.
-    apply in_eq.
-  - subst; intros x Hin.
-    assert (Ht : In x (h :: t)).
-    { apply in_cons; auto. }
-    eapply f; eauto.
-Defined.
 
 Lemma subparser_lt_after_return :
   forall g sp sp' av pred callee caller caller' frs x gamma,
@@ -174,9 +156,9 @@ Proof.
   eapply subparser_lt_after_push; eauto.
 Defined.
  
-Fixpoint spc' (g : grammar) (sp : subparser)
-              (a : Acc lex_nat_pair (meas g sp)) {struct a} :
-              list (option subparser) :=
+Fixpoint spc (g : grammar) (sp : subparser)
+             (a : Acc lex_nat_pair (meas g sp)) {struct a} :
+             list (sum error_message subparser) :=
   match sp as s return sp = s -> _ with
   | Sp av pred (fr, frs) =>
     fun Hs =>
@@ -184,16 +166,16 @@ Fixpoint spc' (g : grammar) (sp : subparser)
       | (_, _, []) =>
         fun Hf =>
           match frs as tl return frs = tl -> _ with
-          | []                    => fun _ => [Some sp]
-          | (_, _, []) :: _       => fun _ => [None]
-          | (_, _, T _ :: _) :: _ => fun _ => [None]
+          | []                    => fun _ => [inr sp]
+          | (_, _, []) :: _       => fun _ => [inl clRetErr]
+          | (_, _, T _ :: _) :: _ => fun _ => [inl clRetErr]
           | (x, pre, NT y :: suf') :: frs' =>
             fun Hfrs =>
               let stk':= ((x, pre ++ [NT y], suf'), frs') in
-              spc' g (Sp (NtSet.add y av) pred stk')
-                   (acc_after_return _ a Hs Hf Hfrs eq_refl)
+              spc g (Sp (NtSet.add y av) pred stk')
+                  (acc_after_return _ a Hs Hf Hfrs eq_refl)
           end eq_refl
-      | (_, _, T _ :: _)       => fun _ => [Some sp]
+      | (_, _, T _ :: _)       => fun _ => [inr sp]
       | (x, pre, NT y :: suf') =>
         fun Hf =>
           match NtSet.mem y av as b return NtSet.mem y av = b -> _ with
@@ -205,25 +187,19 @@ Fixpoint spc' (g : grammar) (sp : subparser)
                       (rhssForNt g y)
               in  dflat_map sps'
                             (fun sp' Hi =>
-                               spc' g sp' (acc_after_push _ _ a Hs Hf Hm Hi))
+                               spc g sp' (acc_after_push _ _ a Hs Hf Hm Hi))
                         
-          | false => fun _ => [None]
+          | false => fun _ => [inl clRecErr]
           end eq_refl
       end eq_refl
   end eq_refl.
 
 (* to do : write function that extracts all "success" results from the closure result *)
 
-Fixpoint foo {A} (os : list (option A)) : option (list A) :=
-  match os with
-  | [] => Some []
-  | None :: _ => None
-  | Some x :: t =>
-    match foo t with
-    | None => None
-    | Some xs => Some (x :: xs)
-    end
-  end.
+Definition closure (g : grammar) (sps : list subparser) :
+  sum error_message (list subparser) :=
+  let es := flat_map (fun sp => spc g sp (lex_nat_pair_wf _)) sps
+  in  sumOfListSum es.
 
 Inductive prediction_step_result :=
 | PstepSucc   : list symbol    -> prediction_step_result
