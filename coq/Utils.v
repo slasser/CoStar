@@ -34,3 +34,6 @@ Definition dflat_map {A B : Type} :
     { apply in_cons; auto. }
     eapply f; eauto.
 Defined.
+
+Definition allEqual_opt (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : option A :=
+  if forallb (beq x) xs then Some x else None.

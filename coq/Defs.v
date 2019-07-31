@@ -19,6 +19,9 @@ Lemma gamma_eq_dec : forall gamma gamma' : list symbol,
     {gamma = gamma'} + {gamma <> gamma'}.
 Proof. repeat decide equality. Defined.
 
+Definition beqGamma (xs ys : list symbol) : bool :=
+  if gamma_eq_dec xs ys then true else false.
+
 (* Finite sets of nonterminals *)
 Module MDT_NT.
   Definition t      := nonterminal.

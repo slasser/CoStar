@@ -19,7 +19,7 @@ Record subparser := Sp { avail      : NtSet.t
 Open Scope string_scope.
 
 (* error messages for move and closure operations *)
-Definition error_message := string.
+Definition err_msg  := string.
 Definition mvRetErr := "subparser in return state during move operation".
 Definition mvNtErr  := "subparser in NT state during move operation".
 Definition clRetErr := "no nonterminal to return to".
@@ -35,7 +35,7 @@ Open Scope list_scope.
    Some (inr sp')     -- successfully consume a token 
 *)
 Definition moveSp (tok : token) (sp : subparser) :
-  option (sum error_message subparser) :=
+  option (sum err_msg subparser) :=
   match sp with
   | Sp _ pred stk =>
     match stk with
@@ -56,7 +56,7 @@ Definition moveSp (tok : token) (sp : subparser) :
 (* Return a list of the subparsers that successfully stepped to a new state,
    or an error message if any subparsers reached an error state *)
 Definition move (tok : token) (sps : list subparser) :
-  sum error_message (list subparser) :=
+  sum err_msg (list subparser) :=
   let os := map (moveSp tok) sps in
   let es := extractSomes os      
   in  sumOfListSum es.
@@ -155,10 +155,11 @@ Proof.
   destruct Hin as [rhs [Heq Hin]]; subst.
   eapply subparser_lt_after_push; eauto.
 Defined.
- 
+
+(* subparser closure *)
 Fixpoint spc (g : grammar) (sp : subparser)
              (a : Acc lex_nat_pair (meas g sp)) {struct a} :
-             list (sum error_message subparser) :=
+             list (sum err_msg subparser) :=
   match sp as s return sp = s -> _ with
   | Sp av pred (fr, frs) =>
     fun Hs =>
@@ -194,46 +195,27 @@ Fixpoint spc (g : grammar) (sp : subparser)
       end eq_refl
   end eq_refl.
 
-(* to do : write function that extracts all "success" results from the closure result *)
-
 Definition closure (g : grammar) (sps : list subparser) :
-  sum error_message (list subparser) :=
+  sum err_msg (list subparser) :=
   let es := flat_map (fun sp => spc g sp (lex_nat_pair_wf _)) sps
   in  sumOfListSum es.
 
 (* LL prediction *)
 
 Inductive prediction_result :=
-| PredSucc   : list symbol   -> prediction_result
-| PredAmbig  : list symbol   -> prediction_result
-| PredReject :                  prediction_result
-| PredError  : error_message -> prediction_result.
-      
-Definition allEqual_opt (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : option A :=
-  if forallb (beq x) xs then Some x else None.
-
-Definition beqGamma (xs ys : list symbol) : bool :=
-  if gamma_eq_dec xs ys then true else false.
-
-Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : option (list symbol) :=
-  allEqual_opt beqGamma sp.(prediction) (map prediction sps).
-
-(* to do -- create a map from symbol list lists (representing remaining symbols to process) to predictions, return true if there's only one key *)
-Definition conflicted (sps : list subparser) : bool :=
-  true.
-
-Definition startState (g : grammar) (x : nonterminal) (stk : l_stack) : sum error_message (list subparser) :=
-  match stk with
-  | (fr, frs) =>
-    let init := map (fun rhs => Sp (allNts g) rhs ((x, [], rhs), fr :: frs)) (rhssForNt g x)
-    in  closure g init
-  end.
+| PredSucc   : list symbol -> prediction_result
+| PredAmbig  : list symbol -> prediction_result
+| PredReject :                prediction_result
+| PredError  : err_msg     -> prediction_result.
 
 Definition finalConfig (sp : subparser) : bool :=
   match sp with
   | Sp _ _ ((_, _, []), []) => true
   | _                       => false
   end.
+
+Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : option (list symbol) :=
+  allEqual_opt _ beqGamma sp.(prediction) (map prediction sps).
 
 Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
   match filter finalConfig sps with
@@ -267,7 +249,17 @@ Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : pre
     end
   end.
 
-Definition llPredict (g : grammar) (x : nonterminal) (ts : list token) (stk : l_stack) : prediction_result :=
+Definition startState (g : grammar) (x : nonterminal)
+                      (stk : l_stack) : sum err_msg (list subparser) :=
+  match stk with
+  | (fr, frs) =>
+    let init := map (fun rhs => Sp (allNts g) rhs ((x, [], rhs), fr :: frs))
+                    (rhssForNt g x)
+    in  closure g init
+  end.
+
+Definition llPredict (g : grammar) (x : nonterminal) (stk : l_stack)
+                     (ts : list token) : prediction_result :=
   match startState g x stk with
   | inl msg => PredError msg
   | inr sps => llPredict' g ts sps
