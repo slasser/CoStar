@@ -201,6 +201,8 @@ Definition closure (g : grammar) (sps : list subparser) :
   let es := flat_map (fun sp => spc g sp (lex_nat_pair_wf _)) sps
   in  sumOfListSum es.
 
+(* LL prediction *)
+
 Inductive prediction_result :=
 | PredSucc   : list symbol   -> prediction_result
 | PredAmbig  : list symbol   -> prediction_result
@@ -220,6 +222,13 @@ Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : option 
 Definition conflicted (sps : list subparser) : bool :=
   true.
 
+Definition startState (g : grammar) (x : nonterminal) (stk : l_stack) : sum error_message (list subparser) :=
+  match stk with
+  | (fr, frs) =>
+    let init := map (fun rhs => Sp (allNts g) rhs ((x, [], rhs), fr :: frs)) (rhssForNt g x)
+    in  closure g init
+  end.
+
 Definition finalConfig (sp : subparser) : bool :=
   match sp with
   | Sp _ _ ((_, _, []), []) => true
@@ -236,7 +245,7 @@ Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
     end
   end.
 
-Fixpoint llPredict (g : grammar) (ts : list token) (sps : list subparser) : prediction_result :=
+Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : prediction_result :=
   match ts with
   | []       => handleFinalSubparsers sps
   | t :: ts' =>
@@ -251,11 +260,16 @@ Fixpoint llPredict (g : grammar) (ts : list token) (sps : list subparser) : pred
         | inr mv  =>
           match closure g mv with
           | inl msg => PredError msg
-          | inr cl  => llPredict g ts' cl
+          | inr cl  => llPredict' g ts' cl
           end
         end
       end
     end
   end.
 
-(* to do : start state *)
+Definition llPredict (g : grammar) (x : nonterminal) (ts : list token) (stk : l_stack) : prediction_result :=
+  match startState g x stk with
+  | inl msg => PredError msg
+  | inr sps => llPredict' g ts sps
+  end.
+

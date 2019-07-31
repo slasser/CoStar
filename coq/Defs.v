@@ -57,6 +57,12 @@ Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol)
       rhssForNt ps' x
   end.
 
+Definition fromNtList (ls : list nonterminal) : NtSet.t :=
+  fold_right NtSet.add NtSet.empty ls.
+
+Definition allNts (g : grammar) : NtSet.t := 
+  fromNtList (lhss g).
+
 (* Definitions related to input that the parser consumes. *)
 Definition literal := string.
 Definition token   := (terminal * literal)% type.
@@ -101,10 +107,10 @@ Definition ntKeys (tbl : parse_table) : list nonterminal :=
                       end)
            (ParseTable.elements tbl).
 
-Definition fromNtList (ls : list nonterminal) : NtSet.t :=
+Definition fromNtList' (ls : list nonterminal) : NtSet.t :=
   fold_right NtSet.add NtSet.empty ls.
 
-Definition allNts (tbl : parse_table) : NtSet.t := 
+Definition allNts' (tbl : parse_table) : NtSet.t := 
   fromNtList (ntKeys tbl).
 
 Definition entryLengths (tbl : parse_table) : list nat :=
