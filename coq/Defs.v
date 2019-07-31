@@ -129,18 +129,10 @@ Definition maxEntryLength (tbl : parse_table) : nat :=
   listMax (entryLengths tbl).
 
 (* Grammar locations *)
-Definition l_frame := (nonterminal * list symbol * list symbol)%type.
-Definition l_stack := (l_frame * list l_frame)%type.
-
-Definition symbolsToProcess (fr : l_frame) : list symbol :=
-  match fr with
-  | (_, _, suf) => suf
-  end.
-
-Definition symbolsProcessed (fr : l_frame) : list symbol :=
-  match fr with
-  | (_, pre, _) => pre
-  end.
+Record location := Loc { l_nt : nonterminal
+                       ; rpre : list symbol
+                       ; rsuf : list symbol
+                       }.
 
 (* Semantic value stacks *)
-Definition v_stack   := (forest * list forest)%type.
+Definition sem_stack  := (forest * list forest)%type.

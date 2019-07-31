@@ -1,64 +1,62 @@
 Require Import FMaps Omega PeanoNat String. 
-Require Import Defs.
-Require Import Lex.
+Require Import GallStar.Defs.
+Require Import GallStar.Lex.
+Require Import GallStar.Prediction.
 Import ListNotations.
 
-Record parser_state    := Pst { avail   : NtSet.t
-                              ; loc_stk : location_stack
-                              ; tokens  : list token
-                              ; val_stk : semval_stack
+Record p_frame := Fr { l_nt : nonterminal
+                     ; rpre : list symbol
+                     ; rsuf : list symbol
+                     ; semv : forest
+                     }.
+
+Definition p_stack := (p_frame * list p_frame)%type.
+
+Record parser_state    := Pst { avail  : NtSet.t
+                              ; stack  : p_stack               
+                              ; tokens : list token
                               }.
-
-Record parser_frame := parserFrame { syms    : list symbol
-                                   ; sem_val : forest
-                                   }.
-
-Definition parser_stack := (parser_frame * list parser_frame)%type.
-
-Record parser_state := parserState { avail  : NtSet.t
-                                   ; stack  : parser_stack 
-                                   ; tokens : list token
-                                   }.
 
 Inductive step_result := StepAccept : forest -> list token -> step_result
                        | StepReject : string -> step_result
-                       | StepK      : parser_state  -> step_result
+                       | StepK      : parser_state -> step_result
                        | StepError  : string -> step_result.
 
 Inductive parse_result := Accept : forest -> list token -> parse_result
                         | Reject : string -> parse_result
                         | Error  : string -> parse_result.
 
-Definition step (tbl : parse_table) (st : parser_state) : step_result :=
+Definition step (g : grammar) (st : parser_state) : step_result :=
   match st with
-  | parserState av (fr, frs) ts =>
+  | Pst av (fr, frs) ts =>
     match fr with
-    | parserFrame gamma sv =>
-      match gamma with
+    | Fr x pre suf sv =>
+      match suf with
       | [] => 
         match frs with
         | [] => StepAccept sv ts
-        | parserFrame gamma_caller sv_caller :: frs' =>
-          match gamma_caller with
-          | [] => StepError "impossible"
-          | T _ :: _ => StepError "impossible"
-          | NT x :: gamma_caller' => 
-            let caller' := parserFrame gamma_caller' (sv_caller ++ [Node x sv])
-            in  StepK (parserState (NtSet.add x av) (caller', frs') ts)
+        | (Fr x_cr pre_cr suf_cr sv_cr) :: frs_tl =>
+          match suf_cr with
+          | []                => StepError "impossible"
+          | T _ :: _          => StepError "impossible"
+          | NT x' :: suf_cr'  => 
+            let cr' := Fr x_cr (pre_cr ++ [NT x']) suf_cr' (sv_cr ++ [Node x sv])
+            in  StepK (Pst (NtSet.add x av) (cr', frs_tl) ts)
           end
         end
-      | T a :: gamma' =>
+      | T a :: suf_tl =>
         match ts with
         | [] => StepReject "input exhausted"
-        | (a', l) :: ts' =>
+        | (a', l) :: ts_tl =>
           if t_eq_dec a' a then 
-            let fr' := parserFrame gamma' (sv ++ [Leaf l])
-            in  StepK (parserState (allNts tbl) (fr', frs) ts')
+            let fr' := Fr x (pre ++ [T a]) suf_tl (sv ++ [Leaf l])
+            in  StepK (Pst (allNts g) (fr', frs) ts_tl)
           else
             StepReject "token mismatch"
         end
-      | NT x :: gamma' => 
+      | NT x :: suf_tl => 
         if NtSet.mem x av then
+          match 
           match ParseTable.find (x, peek ts) tbl with
           | Some gamma_callee =>
             let callee := parserFrame gamma_callee []

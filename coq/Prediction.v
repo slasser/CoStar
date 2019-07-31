@@ -11,9 +11,11 @@ Set Implicit Arguments.
 (* Hide an alternative definition of "sum" from NtSet *)
 Definition sum := Datatypes.sum.
 
+Definition location_stack := (location * list location)%type.
+
 Record subparser := Sp { avail      : NtSet.t
                        ; prediction : list symbol
-                       ; stack      : l_stack
+                       ; stack      : location_stack
                        }.
 
 Open Scope string_scope.
@@ -39,14 +41,14 @@ Definition moveSp (tok : token) (sp : subparser) :
   match sp with
   | Sp _ pred stk =>
     match stk with
-    | ((_, _, []), [])            => None
-    | ((_, _, []), _ :: _)        => Some (inl mvRetErr)
-    | ((_, _, NT _ :: _), _)      => Some (inl mvNtErr)
-    | ((x, pre, T a :: suf), frs) =>
+    | (Loc _ _ [], [])               => None
+    | (Loc _ _ [], _ :: _)           => Some (inl mvRetErr)
+    | (Loc _ _ (NT _ :: _), _)       => Some (inl mvNtErr)
+    | (Loc x pre (T a :: suf), locs) =>
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          Some (inr (Sp NtSet.empty pred ((x, pre ++ [T a], suf), frs)))
+          Some (inr (Sp NtSet.empty pred (Loc x (pre ++ [T a]) suf, locs)))
         else
           None
       end
@@ -65,29 +67,31 @@ Definition move (tok : token) (sps : list subparser) :
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
-  | Sp av _ stk =>
-    let m := maxRhsLength g    in
-    let e := NtSet.cardinal av in
-    (stackScore stk (1 + m) e, stackHeight stk)
+  | Sp av _ (loc, locs) =>
+    let sym_stk := (rsuf loc, map rsuf locs) in
+    let m := maxRhsLength g                  in
+    let e := NtSet.cardinal av               
+    in  (stackScore sym_stk (1 + m) e, stackHeight sym_stk)
   end.
 
 Lemma subparser_lt_after_return :
   forall g sp sp' av pred callee caller caller' frs x gamma,
     sp = Sp av pred (callee, caller :: frs)
     -> sp' = Sp (NtSet.add x av) pred (caller', frs)
-    -> symbolsToProcess callee  = []
-    -> symbolsToProcess caller  = NT x :: gamma
-    -> symbolsToProcess caller' = gamma
+    -> rsuf callee  = []
+    -> rsuf caller  = NT x :: gamma
+    -> rsuf caller' = gamma
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
   intros g sp sp' av pred callee caller caller' frs x gamma
          Hsp Hsp' Hcallee Hcaller Hcaller'; subst.
   unfold meas.
-  pose proof (stackScore_le_after_return callee caller caller'
-                                         x av frs (1 + maxRhsLength g)) as Hle.
+  pose proof (stackScore_le_after_return
+                (rsuf callee) (rsuf caller) (rsuf caller')
+                x av (map rsuf frs) (1 + maxRhsLength g)) as Hle.
   apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
   - apply pair_fst_lt; auto.
-  - rewrite Heq; apply pair_snd_lt; auto.
+  - simpl in *; rewrite Heq; apply pair_snd_lt; auto.
 Defined.
 
 Lemma acc_after_return :
@@ -95,14 +99,37 @@ Lemma acc_after_return :
          (sp : subparser)
          (av : NtSet.t)
          (pred pre pre' suf_tl : list symbol)
-         (callee : l_frame)
-         (frs frs_tl : list l_frame)
+         (callee : location)
+         (frs frs_tl : list location)
          (x y y' : nonterminal)
-         (stk' : l_stack),
+         (stk' : location_stack),
     Acc lex_nat_pair (meas g sp)
     -> sp = Sp av pred (callee, frs)
-    -> callee = (y', pre', [])
-    -> frs  = (x, pre, NT y :: suf_tl) :: frs_tl
+    -> callee = Loc y' pre' []
+    -> frs  = (Loc x pre (NT y :: suf_tl)) :: frs_tl
+    -> stk' = (Loc x (pre ++ [NT y]) suf_tl, frs_tl)
+    -> Acc lex_nat_pair (meas g (Sp (NtSet.add y av) pred stk')).
+Proof.
+  intros g sp av pred pre pre' suf_tl callee frs fr_tl x y y' stk'
+         Hac Hsp hce Hfrs Hstk'; subst.
+  eapply Acc_inv; eauto.
+  eapply subparser_lt_after_return; eauto.
+  simpl; auto.
+Defined.
+
+Lemma acc_after_return :
+  forall (g  : grammar)
+         (sp : subparser)
+         (av : NtSet.t)
+         (pred pre pre' suf_tl : list symbol)
+         (callee : location)
+         (frs frs_tl : list location)
+         (x y y' : nonterminal)
+         (stk' : location_stack),
+    Acc lex_nat_pair (meas g sp)
+    -> sp = Sp av pred (callee, frs)
+    -> callee = Loc y' pre' []
+    -> frs  = (Loc x pre (NT y :: suf_tl) :: frs_tl
     -> stk' = ((x, pre ++ [NT y], suf_tl), frs_tl)
     -> Acc lex_nat_pair (meas g (Sp (NtSet.add y av) pred stk')).
 Proof.
