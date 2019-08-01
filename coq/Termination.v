@@ -117,14 +117,14 @@ Proof.
 Qed.
 
 Lemma stackScore_le_after_return :
-    forall callee caller caller' x suf' av locs b,
+    forall callee caller caller' x x' suf' av locs b,
       callee.(rsuf) = []
-      -> caller.(rsuf) = NT x :: suf'
+      -> caller.(rsuf) = NT x' :: suf'
       -> caller'.(rsuf) = suf'
       -> stackScore (caller', locs) b (NtSet.cardinal (NtSet.add x av))
          <= stackScore (callee, caller :: locs) b (NtSet.cardinal av).
 Proof.
-  intros callee caller caller' x suf' av locs b Hcallee Hcaller Hcaller'; subst.
+  intros callee caller caller' x x' suf' av locs b Hcallee Hcaller Hcaller'; subst.
   unfold stackScore; simpl.
   unfold headFrameScore; unfold headFrameSize; rewrite Hcallee; simpl.
   unfold tailFrameScore; unfold tailFrameSize; rewrite Hcaller.
@@ -234,6 +234,7 @@ Proof.
   apply grammar_rhs_length_le_max in Hin; omega.
 Qed.
 
+(* to do: this can probably be "In rhs (rhss g)" instead of "In rhs (rhssForNt *)
 Lemma stackScore_lt_after_push :
   forall g callee caller x suf' av rhs locs,
     callee.(rsuf) = rhs

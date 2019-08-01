@@ -74,17 +74,17 @@ Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   end.
 
 Lemma subparser_lt_after_return :
-  forall g sp sp' av pred callee caller caller' locs x suf',
+  forall g sp sp' av pred callee caller caller' locs x x' suf',
     sp = Sp av pred (callee, caller :: locs)
     -> sp' = Sp (NtSet.add x av) pred (caller', locs)
     -> callee.(rsuf)  = []
-    -> caller.(rsuf)  = NT x :: suf'
+    -> caller.(rsuf)  = NT x' :: suf'
     -> caller'.(rsuf) = suf'
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g sp sp' av pred ce cr cr' locs x suf' Hsp Hsp' Hce Hcr Hr'; subst.
+  intros g sp sp' av pred ce cr cr' locs x x' suf' Hsp Hsp' Hce Hcr Hr'; subst.
   unfold meas.
-  pose proof (stackScore_le_after_return ce cr cr' x cr'.(rsuf)
+  pose proof (stackScore_le_after_return ce cr cr' x x' cr'.(rsuf)
                                          av locs (1 + maxRhsLength g)) as Hle.
   apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
   - apply pair_fst_lt; auto.

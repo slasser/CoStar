@@ -345,7 +345,17 @@ Lemma state_lt_after_return :
     -> caller.(loc).(rsuf)  = NT x' :: suf_cr_tl
     -> caller'.(loc).(rsuf) = suf_cr_tl
     -> lex_nat_triple (meas g st') (meas g st).
-Admitted.
+Proof.
+  intros g st st' ts ce cr cr' frs x x' suf_cr_tl av
+         Hst hst' Hce Hcr Hcr'; subst.
+  unfold meas. unfold locStackOf.
+  pose proof (stackScore_le_after_return (loc ce) (loc cr) (loc cr')
+                                         x x' (rsuf (loc cr')) av (map loc frs)
+                                         (1 + maxRhsLength g)) as Hle.
+  apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
+  - apply triple_snd_lt; auto.
+  - rewrite Heq; apply triple_thd_lt; auto.
+Defined.
 
 Lemma state_lt_after_push :
   forall g st st' ts callee caller frs x suf_tl gamma av,
@@ -353,78 +363,26 @@ Lemma state_lt_after_push :
     -> st' = Pst (NtSet.remove x av) (callee, caller :: frs) ts
     -> caller.(loc).(rsuf) = NT x :: suf_tl
     -> callee.(loc).(rsuf) = gamma
-    -> In gamma (rhss g)
+    -> In gamma (rhssForNt g x)
     -> NtSet.mem x av = true
     -> lex_nat_triple (meas g st') (meas g st).
-Admitted.
-(*  intros st st' ts callee caller frs x gamma_caller gamma_callee av tbl Hst Hst' Hcaller Hcallee Hfind Hmem; subst.
-  apply triple_snd_lt; simpl.
-  rewrite remove_cardinal_1; auto.
-  unfold headFrameScore. unfold headFrameSize.
-  unfold tailFrameScore. unfold tailFrameSize. rewrite Hcaller.
-  simpl.
-rewrite plus_assoc. 
-apply plus_lt_compat_r.
-apply plus_lt_compat_r.
-assert (remove_cardinal_minus_1 : forall x s,
-           NtSet.mem x s = true
-           -> NtSet.cardinal (NtSet.remove x s) = 
-              NtSet.cardinal s - 1).
-       
-{ intros x' s Hm.
-  replace (NtSet.cardinal s) with (S (NtSet.cardinal (NtSet.remove x' s))).
-  - omega.
-  - apply remove_cardinal_1; auto. }
-rewrite remove_cardinal_minus_1; auto.
-apply less_significant_value_lt_more_significant_digit.
-  - eapply tbl_lookup_result_lt_max_plus_1; eauto.
-  - erewrite <- remove_cardinal_1; eauto. 
-    omega.
-Qed.
-*)
-(*
 Proof.
-  intros st st' ts callee caller caller' frs x gamma av tbl Hst Hst' Hnil Hcons Htl; subst.
-  unfold meas; simpl.
-  rewrite headFrameScore_nil with (fr := callee); simpl; auto.
-  erewrite tailFrameScore_cons; eauto.
-  unfold headFrameScore. unfold headFrameSize.
-  destruct (NtSet.mem x av) eqn:Hm.
-  - (* x is already in av, so the cardinality stays the same *)
-    rewrite add_cardinal_1; auto.
-    pose proof nonzero_exponents_lt_stackScore_le as Hle. 
-    specialize (Hle (List.length caller'.(syms))
-                  (S (maxEntryLength tbl)) 
-                  (NtSet.cardinal av)
-                  (S (NtSet.cardinal av))
-                  (S (NtSet.cardinal av))
-                  (S (S (NtSet.cardinal av)))
-                  frs).
-    apply le_lt_or_eq in Hle.
-    + destruct Hle as [Hlt | Heq]; subst.
-      * apply triple_snd_lt; auto.
-      * rewrite Heq.
-        apply triple_thd_lt; auto.
-    + split; auto.
-      eapply mem_true_cardinality_gt_0; eauto.
-    + split; auto.
-      omega.
-  - (* x isn't in av, so the cardinality increase by 1 *)
-    rewrite add_cardinal_2; auto.
-    apply triple_thd_lt; auto.
-Qed.
- *)
+  intros g st st' ts ce cr frs x suf_tl gamma av
+         Hst Hst' Hcr Hce Hi Hm; subst.
+  apply triple_snd_lt.
+  eapply stackScore_lt_after_push; eauto.
+Defined.
 
-Lemma PredSucc_result_in_grammar :
+Lemma PredSucc_result_in_rhssForNt :
   forall g x stk ts gamma,
     llPredict g x stk ts = PredSucc gamma
-    -> In gamma (rhss g).
+    -> In gamma (rhssForNt g x).
 Admitted.
 
-Lemma PredAmbig_result_in_grammar :
+Lemma PredAmbig_result_in_rhssForNt :
   forall g x stk ts gamma,
     llPredict g x stk ts = PredAmbig gamma
-    -> In gamma (rhss g).
+    -> In gamma (rhssForNt g x).
 Admitted.
 
 Lemma step_meas_lt :
@@ -453,14 +411,14 @@ Proof.
     destruct (NtSet.mem y av) eqn:Hm; tc.
     destruct (llPredict g y _ ts) as [gamma|gamma| |msg] eqn:Hp; tc.
     + inv Hs.
-      apply PredSucc_result_in_grammar in Hp.
+      apply PredSucc_result_in_rhssForNt in Hp.
       eapply state_lt_after_push; eauto.
       simpl; auto.
     + inv Hs.
-      apply PredAmbig_result_in_grammar in Hp.
+      apply PredAmbig_result_in_rhssForNt in Hp.
       eapply state_lt_after_push; eauto.
       simpl; auto.
-Qed.
+Defined.
 
 Require Import Program.Wf.
 
