@@ -2,16 +2,20 @@ Require Import FMaps Omega PeanoNat String.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Prediction.
+Require Import GallStar.Tactics.
+Require Import GallStar.Termination.
 Import ListNotations.
+Open Scope list_scope.
 
-Record p_frame := Fr { l_nt : nonterminal
-                     ; rpre : list symbol
-                     ; rsuf : list symbol
-                     ; semv : forest
-                     }.
+Record frame := Fr { loc : location
+                   ; sem : forest
+                   }.                               
 
-Definition p_stack := (p_frame * list p_frame)%type.
+Definition p_stack := (frame * list frame)%type.
 
+Definition locStackOf (stk : p_stack) : location_stack :=
+  let (fr, frs) := stk in (fr.(loc), map loc frs).
+  
 Record parser_state    := Pst { avail  : NtSet.t
                               ; stack  : p_stack               
                               ; tokens : list token
@@ -30,38 +34,43 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
   match st with
   | Pst av (fr, frs) ts =>
     match fr with
-    | Fr x pre suf sv =>
+    | Fr (Loc x pre suf) sv =>
       match suf with
       | [] => 
         match frs with
         | [] => StepAccept sv ts
-        | (Fr x_cr pre_cr suf_cr sv_cr) :: frs_tl =>
+        | (Fr (Loc x_cr pre_cr suf_cr) sv_cr) :: frs_tl =>
           match suf_cr with
-          | []                => StepError "impossible"
-          | T _ :: _          => StepError "impossible"
-          | NT x' :: suf_cr'  => 
-            let cr' := Fr x_cr (pre_cr ++ [NT x']) suf_cr' (sv_cr ++ [Node x sv])
+          | []                 => StepError "impossible"
+          | T _ :: _           => StepError "impossible"
+          | NT x' :: suf_cr_tl => 
+            let cr' := Fr (Loc x_cr (pre_cr ++ [NT x]) suf_cr_tl)
+                          (sv_cr ++ [Node x sv])
             in  StepK (Pst (NtSet.add x av) (cr', frs_tl) ts)
           end
         end
       | T a :: suf_tl =>
         match ts with
-        | [] => StepReject "input exhausted"
+        | []               => StepReject "input exhausted"
         | (a', l) :: ts_tl =>
           if t_eq_dec a' a then 
-            let fr' := Fr x (pre ++ [T a]) suf_tl (sv ++ [Leaf l])
+            let fr' := Fr (Loc x (pre ++ [T a]) suf_tl) (sv ++ [Leaf l])
             in  StepK (Pst (allNts g) (fr', frs) ts_tl)
           else
             StepReject "token mismatch"
         end
       | NT x :: suf_tl => 
         if NtSet.mem x av then
-          match 
-          match ParseTable.find (x, peek ts) tbl with
-          | Some gamma_callee =>
-            let callee := parserFrame gamma_callee []
-            in  StepK (parserState (NtSet.remove x av) (callee, fr :: frs) ts)
-          | None => StepReject "no parse table entry"
+          match llPredict g x (locStackOf (fr, frs)) ts with
+          | PredSucc rhs =>
+            let callee := Fr (Loc x [] rhs) []
+            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
+          (* maybe flip a bit indicating ambiguity? *)
+          | PredAmbig rhs =>
+            let callee := Fr (Loc x [] rhs) []
+            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
+          | PredReject    => StepReject "prediction found no viable right-hand sides"
+          | PredError msg => StepError msg
           end
         else
           StepError "left recursion detected"
@@ -69,7 +78,7 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
     end
   end.
 
-Definition headFrameSize (fr : parser_frame) : nat :=
+(*Definition headFrameSize (fr : parser_frame) : nat :=
   List.length fr.(syms).
 
 Definition headFrameScore (fr : parser_frame) (b : nat) (e : nat) : nat :=
@@ -96,12 +105,17 @@ Definition stackScore (stk : parser_stack) (b : nat) (e : nat) : nat :=
 
 Definition stackHeight (stk : parser_stack) : nat :=
   let (_, frs) := stk in List.length frs.
+ *)
 
-Definition meas (st : parser_state) (tbl : parse_table) : nat * nat * nat :=
-  let m := maxEntryLength tbl        in
-  let e := NtSet.cardinal st.(avail) in
-  (List.length st.(tokens), stackScore st.(stack) (1+m) e, stackHeight st.(stack)).
+Definition meas (g : grammar) (st : parser_state) : nat * nat * nat :=
+  match st with
+  | Pst av stk ts =>
+    let m := maxRhsLength g    in
+    let e := NtSet.cardinal av in
+    (List.length ts, stackScore (locStackOf stk) (1 + m) e, stackHeight stk)
+  end.
 
+(*
 Lemma meas_unfold : 
   forall st tbl, meas st tbl = (List.length st.(tokens), 
                                 stackScore st.(stack) (1 + maxEntryLength tbl) (NtSet.cardinal st.(avail)),
@@ -109,7 +123,9 @@ Lemma meas_unfold :
 Proof. 
   auto.
 Qed.
+ *)
 
+(*
 Definition nat_triple_lex : relation (nat * nat * nat) :=
   triple_lex nat nat nat lt lt lt.
 
@@ -319,26 +335,149 @@ Proof.
     eapply post_push_state_lt_pre_push_st; eauto.
     simpl; eauto.
 Qed.
+ *)
+
+Lemma state_lt_after_return :
+  forall g st st' ts callee caller caller' frs x x' suf_cr_tl av,
+    st = Pst av (callee, caller :: frs) ts
+    -> st' = Pst (NtSet.add x av) (caller', frs) ts
+    -> callee.(loc).(rsuf)  = []
+    -> caller.(loc).(rsuf)  = NT x' :: suf_cr_tl
+    -> caller'.(loc).(rsuf) = suf_cr_tl
+    -> lex_nat_triple (meas g st') (meas g st).
+Admitted.
+
+Lemma state_lt_after_push :
+  forall g st st' ts callee caller frs x suf_tl gamma av,
+    st = Pst av (caller, frs) ts
+    -> st' = Pst (NtSet.remove x av) (callee, caller :: frs) ts
+    -> caller.(loc).(rsuf) = NT x :: suf_tl
+    -> callee.(loc).(rsuf) = gamma
+    -> In gamma (rhss g)
+    -> NtSet.mem x av = true
+    -> lex_nat_triple (meas g st') (meas g st).
+Admitted.
+(*  intros st st' ts callee caller frs x gamma_caller gamma_callee av tbl Hst Hst' Hcaller Hcallee Hfind Hmem; subst.
+  apply triple_snd_lt; simpl.
+  rewrite remove_cardinal_1; auto.
+  unfold headFrameScore. unfold headFrameSize.
+  unfold tailFrameScore. unfold tailFrameSize. rewrite Hcaller.
+  simpl.
+rewrite plus_assoc. 
+apply plus_lt_compat_r.
+apply plus_lt_compat_r.
+assert (remove_cardinal_minus_1 : forall x s,
+           NtSet.mem x s = true
+           -> NtSet.cardinal (NtSet.remove x s) = 
+              NtSet.cardinal s - 1).
+       
+{ intros x' s Hm.
+  replace (NtSet.cardinal s) with (S (NtSet.cardinal (NtSet.remove x' s))).
+  - omega.
+  - apply remove_cardinal_1; auto. }
+rewrite remove_cardinal_minus_1; auto.
+apply less_significant_value_lt_more_significant_digit.
+  - eapply tbl_lookup_result_lt_max_plus_1; eauto.
+  - erewrite <- remove_cardinal_1; eauto. 
+    omega.
+Qed.
+*)
+(*
+Proof.
+  intros st st' ts callee caller caller' frs x gamma av tbl Hst Hst' Hnil Hcons Htl; subst.
+  unfold meas; simpl.
+  rewrite headFrameScore_nil with (fr := callee); simpl; auto.
+  erewrite tailFrameScore_cons; eauto.
+  unfold headFrameScore. unfold headFrameSize.
+  destruct (NtSet.mem x av) eqn:Hm.
+  - (* x is already in av, so the cardinality stays the same *)
+    rewrite add_cardinal_1; auto.
+    pose proof nonzero_exponents_lt_stackScore_le as Hle. 
+    specialize (Hle (List.length caller'.(syms))
+                  (S (maxEntryLength tbl)) 
+                  (NtSet.cardinal av)
+                  (S (NtSet.cardinal av))
+                  (S (NtSet.cardinal av))
+                  (S (S (NtSet.cardinal av)))
+                  frs).
+    apply le_lt_or_eq in Hle.
+    + destruct Hle as [Hlt | Heq]; subst.
+      * apply triple_snd_lt; auto.
+      * rewrite Heq.
+        apply triple_thd_lt; auto.
+    + split; auto.
+      eapply mem_true_cardinality_gt_0; eauto.
+    + split; auto.
+      omega.
+  - (* x isn't in av, so the cardinality increase by 1 *)
+    rewrite add_cardinal_2; auto.
+    apply triple_thd_lt; auto.
+Qed.
+ *)
+
+Lemma PredSucc_result_in_grammar :
+  forall g x stk ts gamma,
+    llPredict g x stk ts = PredSucc gamma
+    -> In gamma (rhss g).
+Admitted.
+
+Lemma PredAmbig_result_in_grammar :
+  forall g x stk ts gamma,
+    llPredict g x stk ts = PredAmbig gamma
+    -> In gamma (rhss g).
+Admitted.
+
+Lemma step_meas_lt :
+  forall g st st',
+    step g st = StepK st'
+    -> lex_nat_triple (meas g st') (meas g st).
+Proof.
+  intros g st st' Hs.
+  unfold step in Hs.
+  destruct st as [av [fr frs] ts].
+  destruct fr as [[x pre suf] sv].
+  destruct suf as [| [a | y] suf_tl].
+  - (* return from the current frame *)
+    destruct frs as [| caller frs_tl]; tc.
+    destruct caller as [[x_cr pre_cr suf_cr] sv_cr].
+    destruct suf_cr as [| [a | x'] suf_cr_tl]; tc.
+    inv Hs.
+    eapply state_lt_after_return with (x' := x'); simpl; eauto.
+    simpl; auto.
+  - (* terminal case *) 
+    destruct ts as [| (a', l) ts_tl]; tc.
+    destruct (t_eq_dec a' a); tc; subst.
+    inv Hs.
+    apply triple_fst_lt; simpl; auto.
+  - (* nonterminal case -- push a new frame onto the stack *)
+    destruct (NtSet.mem y av) eqn:Hm; tc.
+    destruct (llPredict g y _ ts) as [gamma|gamma| |msg] eqn:Hp; tc.
+    + inv Hs.
+      apply PredSucc_result_in_grammar in Hp.
+      eapply state_lt_after_push; eauto.
+      simpl; auto.
+    + inv Hs.
+      apply PredAmbig_result_in_grammar in Hp.
+      eapply state_lt_after_push; eauto.
+      simpl; auto.
+Qed.
 
 Require Import Program.Wf.
 
-Lemma nat_triple_lex_wf : well_founded nat_triple_lex.
-  apply triple_lex_wf; apply lt_wf.
-Qed.
-
-Program Fixpoint run (tbl : parse_table) 
-                     (st : parser_state) 
-                     { measure (meas st tbl) (nat_triple_lex) } : parse_result :=
-  match step tbl st with
+Program Fixpoint multistep (g  : grammar) 
+                           (st : parser_state) 
+                           { measure (meas g st) (lex_nat_triple) } :
+                           parse_result :=
+  match step g st with
   | StepAccept sv ts => Accept sv ts
   | StepReject s     => Reject s
   | StepError s      => Error s
-  | StepK st'        => run tbl st'
+  | StepK st'        => multistep g st'
   end. 
 Next Obligation.
   apply step_meas_lt; auto.
 Defined.
 Next Obligation.
 apply measure_wf.
-apply nat_triple_lex_wf.
+apply lex_nat_triple_wf.
 Defined.
