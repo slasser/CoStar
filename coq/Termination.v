@@ -5,63 +5,41 @@ Import ListNotations.
 
 (* Definitions related to well-founded measures *)
 
-(*
 Definition headFrameSize (loc : location) : nat :=
-  List.length loc.(rsuf).
+  length loc.(rsuf).
 
-Definition headFrameScore (fr : l_frame) (b : nat) (e : nat) : nat :=
-  headFrameSize fr * (b ^ e).
+Definition headFrameScore (loc : location) (b : nat) (e : nat) : nat :=
+  headFrameSize loc * (b ^ e).
 
-Definition tailFrameSize (fr : l_frame) : nat :=
-  match (symbolsToProcess fr) with
+Definition tailFrameSize (loc : location) : nat :=
+  match loc.(rsuf) with
   | []        => 0
-  | _ :: suf' => List.length suf'
+  | _ :: suf' => length suf'
   end.
 
-Definition tailFrameScore (fr : l_frame) (b : nat) (e : nat) : nat :=
-  tailFrameSize fr * (b ^ e).
+Definition tailFrameScore (loc : location) (b : nat) (e : nat) : nat :=
+  tailFrameSize loc * (b ^ e).
 
-Fixpoint tailFramesScore (frs : list l_frame) (b : nat) (e : nat) : nat :=
-  match frs with
+Fixpoint tailFramesScore (locs : list location) (b : nat) (e : nat) : nat :=
+  match locs with
   | []         => 0
-  | fr :: frs' => tailFrameScore fr b e + tailFramesScore frs' b (1 + e)
-  end.
- *)
-
-Definition sym_frame := list symbol.
-
-Definition sym_stack := (sym_frame * list sym_frame)%type.
-
-Definition headFrameScore (fr : sym_frame) (b : nat) (e : nat) : nat :=
-  length fr * (b ^ e).
-
-Definition tailFrameSize (fr : sym_frame) : nat :=
-  match fr with
-  | []       => 0
-  | _ :: fr' => List.length fr'
+  | loc :: locs' => tailFrameScore loc b e + tailFramesScore locs' b (1 + e)
   end.
 
-Definition tailFrameScore (fr : sym_frame) (b : nat) (e : nat) : nat :=
-  tailFrameSize fr * (b ^ e).
+Definition location_stack := (location * list location)%type.
 
-Fixpoint tailFramesScore (frs : list sym_frame) (b : nat) (e : nat) : nat :=
-  match frs with
-  | []         => 0
-  | fr :: frs' => tailFrameScore fr b e + tailFramesScore frs' b (1 + e)
-  end.
-
-Definition stackScore (stk : sym_stack) (b : nat) (e : nat) : nat :=
-  let (fr, frs) := stk
-  in  headFrameScore fr b e + tailFramesScore frs b (1 + e).
-
-Definition stackHeight (stk : sym_stack) : nat :=
-  let (_, frs) := stk in length frs.
+Definition stackScore (stk : location_stack) (b : nat) (e : nat) : nat :=
+  let (loc, locs) := stk
+  in  headFrameScore loc b e + tailFramesScore locs b (1 + e).
 
 Definition rhsLengths (g : grammar) : list nat :=
   map (fun rhs => List.length rhs) (rhss g).
 
 Definition maxRhsLength (g : grammar) : nat :=
   listMax (rhsLengths g).
+
+Definition stackHeight {A} (stk : A * list A) : nat :=
+  let (_, frs) := stk in length frs.
 
 (* Termination-related lemmas *)
   
@@ -83,36 +61,36 @@ Proof.
 Qed.
   
 Lemma nonzero_exponents_lt_tailFrameScore_le :
-  forall fr b e1 e2,
+  forall loc b e1 e2,
     0 < e1 < e2
-    -> tailFrameScore fr b e1 <= tailFrameScore fr b e2.
+    -> tailFrameScore loc b e1 <= tailFrameScore loc b e2.
 Proof.
-  intros fr b e1 e2 Hlt.
+  intros loc b e1 e2 Hlt.
   unfold tailFrameScore. 
   apply Nat.mul_le_mono_l.
   apply nonzero_exponents_lt_powers_le; auto.
 Qed.
 
 Lemma nonzero_exponents_lt_tailFramesScore_le :
-  forall frs b e1 e2,
+  forall locs b e1 e2,
     0 < e1 < e2
-    -> tailFramesScore frs b e1 <= tailFramesScore frs b e2.
+    -> tailFramesScore locs b e1 <= tailFramesScore locs b e2.
 Proof.
-  intros frs.
-  induction frs as [| fr frs' IH]; intros b e1 e2 Hlt; simpl; auto.
+  intros locs.
+  induction locs as [| loc locs' IH]; intros b e1 e2 Hlt; simpl; auto.
   apply plus_le_compat.
   - apply nonzero_exponents_lt_tailFrameScore_le; auto.
   - apply IH; omega.
 Qed.
 
 Lemma nonzero_exponents_lt_stackScore_le :
-  forall v b e1 e2 e3 e4 frs,
+  forall v b e1 e2 e3 e4 locs,
     0 < e1 < e2
     -> 0 < e3 < e4
-    -> v * (b ^ e1) + tailFramesScore frs b e3 <= 
-       v * (b ^ e2) + tailFramesScore frs b e4.
+    -> v * (b ^ e1) + tailFramesScore locs b e3 <= 
+       v * (b ^ e2) + tailFramesScore locs b e4.
 Proof.
-  intros v b e1 e2 e3 e4 frs [H0e1 He1e2] [H0e3 He3e4].
+  intros v b e1 e2 e3 e4 locs [H0e1 He1e2] [H0e3 He3e4].
   apply plus_le_compat.
   - apply Nat.mul_le_mono_l. 
     apply nonzero_exponents_lt_powers_le; auto.
@@ -139,15 +117,17 @@ Proof.
 Qed.
 
 Lemma stackScore_le_after_return :
-    forall callee caller caller' x av frs b,
-      callee = []
-      -> caller = NT x :: caller'
-      -> stackScore (caller', frs) b (NtSet.cardinal (NtSet.add x av))
-         <= stackScore (callee, caller :: frs) b (NtSet.cardinal av).
+    forall callee caller caller' x suf' av locs b,
+      callee.(rsuf) = []
+      -> caller.(rsuf) = NT x :: suf'
+      -> caller'.(rsuf) = suf'
+      -> stackScore (caller', locs) b (NtSet.cardinal (NtSet.add x av))
+         <= stackScore (callee, caller :: locs) b (NtSet.cardinal av).
 Proof.
-  intros callee caller caller' x av frs b Hcallee Hcaller; subst.
+  intros callee caller caller' x suf' av locs b Hcallee Hcaller Hcaller'; subst.
   unfold stackScore; simpl.
-  unfold headFrameScore; unfold tailFrameScore; unfold tailFrameSize.
+  unfold headFrameScore; unfold headFrameSize; rewrite Hcallee; simpl.
+  unfold tailFrameScore; unfold tailFrameSize; rewrite Hcaller.
   destruct (NtSet.mem x av) eqn:Hm.
   - rewrite add_cardinal_1; auto.
     eapply nonzero_exponents_lt_stackScore_le.
@@ -226,7 +206,7 @@ Proof.
   simpl in *; inv Hin; auto.
 Qed.
 
-Lemma in_rhssForNT_in_rhss :
+Lemma in_rhssForNt_in_rhss :
   forall g x rhs,
     In rhs (rhssForNt g x) -> In rhs (rhss g).
 Proof.
@@ -243,7 +223,7 @@ Proof.
   intros; unfold maxRhsLength.
   apply list_elt_le_listmax.
   apply rhs_in_grammar_length_in_rhsLengths.
-  eapply in_rhssForNT_in_rhss; eauto.
+  eapply in_rhssForNt_in_rhss; eauto.
 Qed.
 
 Lemma grammar_rhs_length_lt_max_plus_1 :
@@ -255,21 +235,24 @@ Proof.
 Qed.
 
 Lemma stackScore_lt_after_push :
-  forall g caller x caller_tl av rhs frs,
-    caller = NT x :: caller_tl
+  forall g callee caller x suf' av rhs locs,
+    callee.(rsuf) = rhs
+    -> caller.(rsuf) = NT x :: suf'
     -> NtSet.mem x av = true
     -> In rhs (rhssForNt g x)
-    -> stackScore (rhs, caller :: frs)
+    -> stackScore (callee, caller :: locs)
                   (1 + maxRhsLength g)
                   (NtSet.cardinal (NtSet.remove x av))
        <
-       stackScore (caller, frs)
+       stackScore (caller, locs)
                   (1 + maxRhsLength g)
                   (NtSet.cardinal av).
 Proof.
-  intros g caller x caller_tl av rhs frs Hcaller Hmem Hin; subst; simpl.
+  intros g callee caller x suf' av rhs locs
+         Hcallee Hcaller Hmem Hin; subst; simpl.
   rewrite remove_cardinal_1; auto.
-  unfold headFrameScore; unfold tailFrameScore; unfold tailFrameSize; simpl.
+  unfold headFrameScore; unfold headFrameSize.
+  unfold tailFrameScore; unfold tailFrameSize; rewrite Hcaller; simpl.
   rewrite plus_assoc; repeat apply plus_lt_compat_r.
   rewrite remove_cardinal_minus_1; auto.
   apply less_significant_value_lt_more_significant_digit.

@@ -129,7 +129,7 @@ Definition maxEntryLength (tbl : parse_table) : nat :=
   listMax (entryLengths tbl).
 
 (* Grammar locations *)
-Record location := Loc { l_nt : nonterminal
+Record location := Loc { lnt  : nonterminal
                        ; rpre : list symbol
                        ; rsuf : list symbol
                        }.

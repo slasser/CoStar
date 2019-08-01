@@ -67,116 +67,78 @@ Definition move (tok : token) (sps : list subparser) :
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
-  | Sp av _ (loc, locs) =>
-    let sym_stk := (rsuf loc, map rsuf locs) in
-    let m := maxRhsLength g                  in
+  | Sp av _ stk =>
+    let m := maxRhsLength g in
     let e := NtSet.cardinal av               
-    in  (stackScore sym_stk (1 + m) e, stackHeight sym_stk)
+    in  (stackScore stk (1 + m) e, stackHeight stk)
   end.
 
 Lemma subparser_lt_after_return :
-  forall g sp sp' av pred callee caller caller' frs x gamma,
-    sp = Sp av pred (callee, caller :: frs)
-    -> sp' = Sp (NtSet.add x av) pred (caller', frs)
-    -> rsuf callee  = []
-    -> rsuf caller  = NT x :: gamma
-    -> rsuf caller' = gamma
+  forall g sp sp' av pred callee caller caller' locs x suf',
+    sp = Sp av pred (callee, caller :: locs)
+    -> sp' = Sp (NtSet.add x av) pred (caller', locs)
+    -> callee.(rsuf)  = []
+    -> caller.(rsuf)  = NT x :: suf'
+    -> caller'.(rsuf) = suf'
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g sp sp' av pred callee caller caller' frs x gamma
-         Hsp Hsp' Hcallee Hcaller Hcaller'; subst.
+  intros g sp sp' av pred ce cr cr' locs x suf' Hsp Hsp' Hce Hcr Hr'; subst.
   unfold meas.
-  pose proof (stackScore_le_after_return
-                (rsuf callee) (rsuf caller) (rsuf caller')
-                x av (map rsuf frs) (1 + maxRhsLength g)) as Hle.
+  pose proof (stackScore_le_after_return ce cr cr' x cr'.(rsuf)
+                                         av locs (1 + maxRhsLength g)) as Hle.
   apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
   - apply pair_fst_lt; auto.
-  - simpl in *; rewrite Heq; apply pair_snd_lt; auto.
+  - rewrite Heq; apply pair_snd_lt; auto.
 Defined.
 
 Lemma acc_after_return :
-  forall (g  : grammar)
-         (sp : subparser)
-         (av : NtSet.t)
-         (pred pre pre' suf_tl : list symbol)
-         (callee : location)
-         (frs frs_tl : list location)
-         (x y y' : nonterminal)
-         (stk' : location_stack),
+  forall g sp sp' callee caller caller' av pred pre_ce pre_cr suf_tl locs locs_tl x y z,
     Acc lex_nat_pair (meas g sp)
-    -> sp = Sp av pred (callee, frs)
-    -> callee = Loc y' pre' []
-    -> frs  = (Loc x pre (NT y :: suf_tl)) :: frs_tl
-    -> stk' = (Loc x (pre ++ [NT y]) suf_tl, frs_tl)
-    -> Acc lex_nat_pair (meas g (Sp (NtSet.add y av) pred stk')).
+    -> sp = Sp av pred (callee, locs)
+    -> callee = Loc z pre_ce []
+    -> locs = caller :: locs_tl
+    -> caller = Loc x pre_cr (NT y :: suf_tl)
+    -> caller' = Loc x (pre_cr ++ [NT y]) suf_tl
+    -> sp' = Sp (NtSet.add y av) pred (caller', locs_tl)
+    -> Acc lex_nat_pair (meas g sp').
 Proof.
-  intros g sp av pred pre pre' suf_tl callee frs fr_tl x y y' stk'
-         Hac Hsp hce Hfrs Hstk'; subst.
-  eapply Acc_inv; eauto.
-  eapply subparser_lt_after_return; eauto.
-  simpl; auto.
-Defined.
-
-Lemma acc_after_return :
-  forall (g  : grammar)
-         (sp : subparser)
-         (av : NtSet.t)
-         (pred pre pre' suf_tl : list symbol)
-         (callee : location)
-         (frs frs_tl : list location)
-         (x y y' : nonterminal)
-         (stk' : location_stack),
-    Acc lex_nat_pair (meas g sp)
-    -> sp = Sp av pred (callee, frs)
-    -> callee = Loc y' pre' []
-    -> frs  = (Loc x pre (NT y :: suf_tl) :: frs_tl
-    -> stk' = ((x, pre ++ [NT y], suf_tl), frs_tl)
-    -> Acc lex_nat_pair (meas g (Sp (NtSet.add y av) pred stk')).
-Proof.
-  intros g sp av pred pre pre' suf_tl callee frs fr_tl x y y' stk'
-         Hac Hsp hce Hfrs Hstk'; subst.
+  intros g sp sp' callee caller caller' av pred pre_ce pre_cr suf_tl
+         locs locs_tl x y z Hac Hsp Hce Hl Hcr Hcr' Hsp'; subst.
   eapply Acc_inv; eauto.
   eapply subparser_lt_after_return; eauto.
   simpl; auto.
 Defined.
 
 Lemma subparser_lt_after_push :
-  forall g sp sp' av pred caller callee frs x y pre suf' rhs,
-    sp = Sp av pred (caller, frs)
-    -> sp' = Sp (NtSet.remove y av) pred (callee, caller :: frs)
-    -> caller = (x, pre, NT y :: suf')
-    -> callee = (y, [], rhs)
+  forall g sp sp' av pred caller callee locs x y pre suf' rhs,
+    sp = Sp av pred (caller, locs)
+    -> sp' = Sp (NtSet.remove y av) pred (callee, caller :: locs)
+    -> caller = Loc x pre (NT y :: suf')
+    -> callee = Loc y [] rhs
     ->  NtSet.mem y av = true
     -> In rhs (rhssForNt g y)
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g sp sp' av pred caller callee frs x y pre suf' rhs
-         Hsp Hsp' Hcaller Hcallee Hmem Hin; subst.
+  intros g sp sp' av pred cr ce locs x y pre suf' rhs
+         Hsp Hsp' Hcr Hce Hmem Hin; subst.
   unfold meas.
   apply pair_fst_lt.
   eapply stackScore_lt_after_push; simpl; eauto.
 Defined.
 
 Lemma acc_after_push :
-  forall (g : grammar)
-         (sp sp' : subparser)
-         (av : NtSet.t)
-         (pred pre suf_tl : list symbol)
-         (fr : l_frame)
-         (frs : list l_frame)
-         (x y : nonterminal),
+  forall g sp sp' av pred pre suf_tl loc locs x y,
     Acc lex_nat_pair (meas g sp)
-    -> sp = Sp av pred (fr, frs)
-    -> fr = (x, pre, NT y :: suf_tl)
+    -> sp  = Sp av pred (loc, locs)
+    -> loc = Loc x pre (NT y :: suf_tl)
     -> NtSet.mem y av = true
     -> In sp' (map (fun rhs => Sp (NtSet.remove y av)
                                   pred
-                                  ((y, [], rhs), fr :: frs))
+                                  (Loc y [] rhs, loc :: locs))
                    (rhssForNt g y))
     -> Acc lex_nat_pair (meas g sp').
 Proof.
-  intros g sp sp' av pred pre suf_tl fr frs x y
-         Ha Hsp Hfr Hm Hin; subst.
+  intros g sp sp' av pred pre suf_tl loc locs x y Ha Hs Hl Hm Hin; subst.
   eapply Acc_inv; eauto.
   apply in_map_iff in Hin.
   destruct Hin as [rhs [Heq Hin]]; subst.
@@ -188,35 +150,35 @@ Fixpoint spc (g : grammar) (sp : subparser)
              (a : Acc lex_nat_pair (meas g sp)) {struct a} :
              list (sum err_msg subparser) :=
   match sp as s return sp = s -> _ with
-  | Sp av pred (fr, frs) =>
+  | Sp av pred (loc, locs) =>
     fun Hs =>
-      match fr as hd return fr = hd -> _ with
-      | (_, _, []) =>
-        fun Hf =>
-          match frs as tl return frs = tl -> _ with
-          | []                    => fun _ => [inr sp]
-          | (_, _, []) :: _       => fun _ => [inl clRetErr]
-          | (_, _, T _ :: _) :: _ => fun _ => [inl clRetErr]
-          | (x, pre, NT y :: suf') :: frs' =>
-            fun Hfrs =>
-              let stk':= ((x, pre ++ [NT y], suf'), frs') in
+      match loc as l return loc = l -> _ with
+      | Loc _ _ [] =>
+        fun Hl =>
+          match locs as ls return locs = ls -> _ with
+          | []                        => fun _  => [inr sp]
+          | (Loc _ _ []) :: _         => fun _  => [inl clRetErr]
+          | (Loc _ _ (T _ :: _)) :: _ => fun _  => [inl clRetErr]
+          | (Loc x pre (NT y :: suf')) :: locs' =>
+            fun Hls =>
+              let stk':= (Loc x (pre ++ [NT y]) suf', locs') in
               spc g (Sp (NtSet.add y av) pred stk')
-                  (acc_after_return _ a Hs Hf Hfrs eq_refl)
+                  (acc_after_return _ a Hs Hl Hls eq_refl eq_refl eq_refl)
           end eq_refl
-      | (_, _, T _ :: _)       => fun _ => [inr sp]
-      | (x, pre, NT y :: suf') =>
-        fun Hf =>
+      | Loc _ _ (T _ :: _)       => fun _ => [inr sp]
+      | Loc x pre (NT y :: suf') =>
+        fun Hl =>
           match NtSet.mem y av as b return NtSet.mem y av = b -> _ with
           | true =>
             fun Hm =>
               let sps' :=
                   map (fun rhs =>
-                         Sp (NtSet.remove y av) pred ((y, [], rhs), fr :: frs))
+                         Sp (NtSet.remove y av) pred (Loc y [] rhs, loc :: locs))
                       (rhssForNt g y)
               in  dflat_map sps'
                             (fun sp' Hi =>
-                               spc g sp' (acc_after_push _ _ a Hs Hf Hm Hi))
-                        
+                               spc g sp' (acc_after_push _ _ a Hs Hl Hm Hi))
+                            
           | false => fun _ => [inl clRecErr]
           end eq_refl
       end eq_refl
@@ -237,7 +199,7 @@ Inductive prediction_result :=
 
 Definition finalConfig (sp : subparser) : bool :=
   match sp with
-  | Sp _ _ ((_, _, []), []) => true
+  | Sp _ _ (Loc _ _ [], []) => true
   | _                       => false
   end.
 
@@ -276,16 +238,16 @@ Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : pre
     end
   end.
 
-Definition startState (g : grammar) (x : nonterminal)
-                      (stk : l_stack) : sum err_msg (list subparser) :=
+Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
+  sum err_msg (list subparser) :=
   match stk with
-  | (fr, frs) =>
-    let init := map (fun rhs => Sp (allNts g) rhs ((x, [], rhs), fr :: frs))
+  | (loc, locs) =>
+    let init := map (fun rhs => Sp (allNts g) rhs (Loc x [] rhs, loc :: locs))
                     (rhssForNt g x)
     in  closure g init
   end.
 
-Definition llPredict (g : grammar) (x : nonterminal) (stk : l_stack)
+Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
                      (ts : list token) : prediction_result :=
   match startState g x stk with
   | inl msg => PredError msg
