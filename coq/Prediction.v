@@ -254,3 +254,85 @@ Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
   | inr sps => llPredict' g ts sps
   end.
 
+(* LEMMAS *)
+
+Lemma allEqual_opt_Some_eq_head :
+  forall A beq x x' xs,
+    allEqual_opt A beq x xs = Some x'
+    -> x' = x.
+Proof.
+  intros A beq x x' xs Ha; unfold allEqual_opt in Ha; dm; tc.
+Defined.
+
+Lemma allPredictionsEqual_Some_eq_head :
+  forall hd_sp tl_sps gamma,
+    allPredictionsEqual hd_sp tl_sps = Some gamma
+    -> (prediction hd_sp) = gamma.
+Proof.
+  intros h t gamma Ha; unfold allPredictionsEqual in Ha.
+  eapply allEqual_opt_Some_eq_head in Ha; eauto.
+Defined.
+
+Lemma Forall_In_P_elt :
+  forall (A : Type) (P : A -> Prop) (x : A) (xs : list A),
+    Forall P xs -> In x xs -> P x.
+Proof.
+  intros A P x xs Hf Hi.
+  eapply Forall_forall in Hf; eauto.
+Defined.
+
+Lemma handleFinalSubparsers_preserves_sp_pred_invariant :
+  forall P sps gamma,
+    handleFinalSubparsers sps = PredSucc gamma
+    -> Forall (fun sp => P (prediction sp)) sps
+    -> P gamma.
+Proof.
+  intros P sps gamma Hh Hf.
+  unfold handleFinalSubparsers in Hh.
+  destruct (filter finalConfig sps) as [| sp sps_tl] eqn:Hfi; tc.
+  (* lemma *)
+  assert (Hin : In sp (filter finalConfig sps)).
+  { rewrite Hfi; apply in_eq; auto. }
+  apply filter_In in Hin; destruct Hin as [Hin _].
+  eapply Forall_In_P_elt in Hf; eauto.
+  destruct (allPredictionsEqual sp sps_tl) as [gamma' |] eqn:Ha; tc.
+  inv Hh.
+  apply allPredictionsEqual_Some_eq_head in Ha; subst; auto.
+Defined.
+
+Lemma llPredict'_preserves_sp_pred_invariant :
+  forall P g ts gamma sps,
+    llPredict' g ts sps = PredSucc gamma
+    -> Forall (fun sp => P (prediction sp)) sps
+    -> P gamma.
+Proof.
+  intros P g ts gamma.
+  induction ts as [| t ts']; intros sps Hl Ha; simpl in Hl.
+  - eapply handleFinalSubparsers_preserves_sp_pred_invariant; eauto.
+  - simpl in Hl.
+    destruct sps as [| sp sps_tl] eqn:Hsps; tc; subst.
+    destruct (allPredictionsEqual sp sps_tl) as [gamma' |] eqn:Hape.
+    + inv Hl.
+      admit.
+    + dmeq Hm; tc.
+      dmeq Hc; tc.
+      apply IHts' in Hl; auto.
+Abort.
+
+Lemma PredSucc_result_in_rhssForNt :
+  forall g x stk ts gamma,
+    llPredict g x stk ts = PredSucc gamma
+    -> In gamma (rhssForNt g x).
+Proof.
+  intros g x stk ts gamma Hp.
+  unfold llPredict in Hp.
+  dmeq Hss; tc.
+Admitted.
+
+Lemma PredAmbig_result_in_rhssForNt :
+  forall g x stk ts gamma,
+    llPredict g x stk ts = PredAmbig gamma
+    -> In gamma (rhssForNt g x).
+Admitted.
+
+ 
