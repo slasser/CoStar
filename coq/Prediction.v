@@ -203,17 +203,17 @@ Definition finalConfig (sp : subparser) : bool :=
   | _                       => false
   end.
 
-Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : option (list symbol) :=
-  allEqual_opt _ beqGamma sp.(prediction) (map prediction sps).
+Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
+  allEqual _ beqGamma sp.(prediction) (map prediction sps).
 
 Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
   match filter finalConfig sps with
   | []         => PredReject
   | sp :: sps' => 
-    match allPredictionsEqual sp sps' with
-    | Some gamma => PredSucc gamma
-    | None       => PredAmbig sp.(prediction)
-    end
+    if allPredictionsEqual sp sps' then
+      PredSucc sp.(prediction)
+    else
+      PredAmbig sp.(prediction)
   end.
 
 Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : prediction_result :=
@@ -223,9 +223,9 @@ Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : pre
     match sps with 
     | []         => PredReject
     | sp :: sps' =>
-      match allPredictionsEqual sp sps' with
-      | Some gamma => PredSucc gamma
-      | None       => 
+      if allPredictionsEqual sp sps' then
+        PredSucc sp.(prediction)
+      else
         match move t sps with
         | inl msg => PredError msg
         | inr mv  =>
@@ -234,7 +234,6 @@ Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : pre
           | inr cl  => llPredict' g ts' cl
           end
         end
-      end
     end
   end.
 
@@ -256,23 +255,6 @@ Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
 
 (* LEMMAS *)
 
-Lemma allEqual_opt_Some_eq_head :
-  forall A beq x x' xs,
-    allEqual_opt A beq x xs = Some x'
-    -> x' = x.
-Proof.
-  intros A beq x x' xs Ha; unfold allEqual_opt in Ha; dm; tc.
-Defined.
-
-Lemma allPredictionsEqual_Some_eq_head :
-  forall hd_sp tl_sps gamma,
-    allPredictionsEqual hd_sp tl_sps = Some gamma
-    -> (prediction hd_sp) = gamma.
-Proof.
-  intros h t gamma Ha; unfold allPredictionsEqual in Ha.
-  eapply allEqual_opt_Some_eq_head in Ha; eauto.
-Defined.
-
 Lemma Forall_In_P_elt :
   forall (A : Type) (P : A -> Prop) (x : A) (xs : list A),
     Forall P xs -> In x xs -> P x.
@@ -281,43 +263,97 @@ Proof.
   eapply Forall_forall in Hf; eauto.
 Defined.
 
-Lemma handleFinalSubparsers_preserves_sp_pred_invariant :
-  forall P sps gamma,
-    handleFinalSubparsers sps = PredSucc gamma
-    -> Forall (fun sp => P (prediction sp)) sps
-    -> P gamma.
+Lemma filter_eq_cons_in :
+  forall (A : Type) (f : A -> bool) (l : list A) (hd : A) (tl : list A),
+    filter f l = hd :: tl
+    -> In hd l.
 Proof.
-  intros P sps gamma Hh Hf.
-  unfold handleFinalSubparsers in Hh.
-  destruct (filter finalConfig sps) as [| sp sps_tl] eqn:Hfi; tc.
-  (* lemma *)
-  assert (Hin : In sp (filter finalConfig sps)).
-  { rewrite Hfi; apply in_eq; auto. }
-  apply filter_In in Hin; destruct Hin as [Hin _].
-  eapply Forall_In_P_elt in Hf; eauto.
-  destruct (allPredictionsEqual sp sps_tl) as [gamma' |] eqn:Ha; tc.
-  inv Hh.
-  apply allPredictionsEqual_Some_eq_head in Ha; subst; auto.
+  intros A f l hd tl Hf.
+  assert (Hin : In hd (hd :: tl)) by apply in_eq.
+  rewrite <- Hf in Hin.
+  apply filter_In in Hin; destruct Hin as [Hp _]; auto.
 Defined.
 
-Lemma llPredict'_preserves_sp_pred_invariant :
-  forall P g ts gamma sps,
-    llPredict' g ts sps = PredSucc gamma
-    -> Forall (fun sp => P (prediction sp)) sps
-    -> P gamma.
+Lemma handleFinalSubparsers_success_from_subparsers :
+  forall sps gamma,
+    handleFinalSubparsers sps = PredSucc gamma
+    -> exists sp, In sp sps /\ sp.(prediction) = gamma.
 Proof.
-  intros P g ts gamma.
-  induction ts as [| t ts']; intros sps Hl Ha; simpl in Hl.
-  - eapply handleFinalSubparsers_preserves_sp_pred_invariant; eauto.
-  - simpl in Hl.
-    destruct sps as [| sp sps_tl] eqn:Hsps; tc; subst.
-    destruct (allPredictionsEqual sp sps_tl) as [gamma' |] eqn:Hape.
+  intros sps gamma Hh.
+  unfold handleFinalSubparsers in Hh.
+  dmeq Hf; tc.
+  dm; tc.
+  inv Hh.
+  eexists; split; eauto.
+  eapply filter_eq_cons_in; eauto.
+Defined.
+
+Lemma move_unfold :
+  forall t sps,
+    move t sps = 
+    let os := map (moveSp t) sps in
+    let es := extractSomes os      
+    in  sumOfListSum es.
+Proof. 
+  auto. 
+Defined.
+
+Lemma move_preserves_prediction :
+  forall t sp' sps sps',
+    move t sps = inr sps'
+    -> In sp' sps'
+    -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
+Proof.
+  intros s sp' sps sps' Hm Hin.
+  rewrite move_unfold in Hm.
+  simpl in Hm.
+  induction sps as [| sp sps IH]; simpl in *.
+  - inv Hm. inv Hin.
+  - destruct (moveSp s sp) eqn:Hmsp.
+    + simpl in *.
+  unfold move in Hm.
+  induction 
+  unfold sumOfListSum in Hm.
+Admitted.
+
+Lemma closure_preserves_prediction :
+  forall g sp' sps sps',
+    closure g sps = inr sps'
+    -> In sp' sps'
+    -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
+Admitted.
+
+Lemma llPredict'_success_result_in_original_subparsers :
+  forall g ts gamma sps,
+    llPredict' g ts sps = PredSucc gamma
+    -> exists sp, In sp sps /\ (prediction sp) = gamma.
+Proof.
+  intros g ts gamma.
+  induction ts as [| t ts_tl IH]; intros sps Hl; simpl in Hl.
+  - eapply handleFinalSubparsers_success_from_subparsers; eauto.
+  - destruct sps as [| sp_hd sps_tl] eqn:Hs; tc.
+    destruct (allPredictionsEqual sp_hd sps_tl) eqn:Ha.
     + inv Hl.
-      admit.
-    + dmeq Hm; tc.
-      dmeq Hc; tc.
-      apply IHts' in Hl; auto.
-Abort.
+      eexists; split; eauto.
+      apply in_eq.
+    + rewrite <- Hs in *; clear Hs. 
+      destruct (move t _) as [msg | sps'] eqn:Hm; tc.
+      destruct (closure g sps') as [msg | sps''] eqn:Hc; tc. 
+      apply IH in Hl; clear IH.
+      destruct Hl as [sp'' [Hin'' Heq]]; subst.
+      eapply closure_preserves_prediction in Hc; eauto.
+      destruct Hc as [sp' [Hin' Heq]]; rewrite Heq; clear Heq.
+      eapply move_preserves_prediction in Hm; eauto.
+      destruct Hm as [sp [Hin Heq]]; eauto.
+Defined.
+
+Lemma startState_sp_prediction_in_rhssForNt :
+  forall g x stk sp sps,
+    startState g x stk = inr sps
+    -> In sp sps
+    -> In sp.(prediction) (rhssForNt g x).
+Proof.
+Admitted.
 
 Lemma PredSucc_result_in_rhssForNt :
   forall g x stk ts gamma,
@@ -327,7 +363,10 @@ Proof.
   intros g x stk ts gamma Hp.
   unfold llPredict in Hp.
   dmeq Hss; tc.
-Admitted.
+  apply llPredict'_success_result_in_original_subparsers in Hp.
+  destruct Hp as [sp [Hin Heq]]; subst.
+  eapply startState_sp_prediction_in_rhssForNt; eauto.
+Defined.
 
 Lemma PredAmbig_result_in_rhssForNt :
   forall g x stk ts gamma,

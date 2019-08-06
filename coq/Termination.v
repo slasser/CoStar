@@ -234,7 +234,6 @@ Proof.
   apply grammar_rhs_length_le_max in Hin; omega.
 Qed.
 
-(* to do: this can probably be "In rhs (rhss g)" instead of "In rhs (rhssForNt *)
 Lemma stackScore_lt_after_push :
   forall g callee caller x suf' av rhs locs,
     callee.(rsuf) = rhs
