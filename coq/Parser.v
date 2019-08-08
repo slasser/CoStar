@@ -364,7 +364,7 @@ Lemma state_lt_after_push :
     -> caller.(loc).(rsuf) = NT x :: suf_tl
     -> callee.(loc).(rsuf) = gamma
     -> In gamma (rhssForNt g x)
-    -> NtSet.mem x av = true
+    -> NtSet.In x av
     -> lex_nat_triple (meas g st') (meas g st).
 Proof.
   intros g st st' ts ce cr frs x suf_tl gamma av
@@ -377,13 +377,19 @@ Lemma PredSucc_result_in_rhssForNt :
   forall g x stk ts gamma,
     llPredict g x stk ts = PredSucc gamma
     -> In gamma (rhssForNt g x).
-Admitted.
+Proof.
+  intros g x stk ts gamma Hf.
+  eapply PredSucc_result_in_rhssForNt; eauto.
+Defined.
 
 Lemma PredAmbig_result_in_rhssForNt :
   forall g x stk ts gamma,
     llPredict g x stk ts = PredAmbig gamma
     -> In gamma (rhssForNt g x).
-Admitted.
+Proof.
+  intros g x stk ts gamma.
+  eapply PredAmbig_result_in_rhssForNt; eauto.
+Defined.
 
 Lemma step_meas_lt :
   forall g st st',
@@ -409,6 +415,7 @@ Proof.
     apply triple_fst_lt; simpl; auto.
   - (* nonterminal case -- push a new frame onto the stack *)
     destruct (NtSet.mem y av) eqn:Hm; tc.
+    apply NtSet.mem_spec in Hm.
     destruct (llPredict g y _ ts) as [gamma|gamma| |msg] eqn:Hp; tc.
     + inv Hs.
       apply PredSucc_result_in_rhssForNt in Hp.
@@ -439,3 +446,4 @@ Next Obligation.
 apply measure_wf.
 apply lex_nat_triple_wf.
 Defined.
+
