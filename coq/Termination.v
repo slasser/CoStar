@@ -238,7 +238,7 @@ Lemma stackScore_lt_after_push :
   forall g callee caller x suf' av rhs locs,
     callee.(rsuf) = rhs
     -> caller.(rsuf) = NT x :: suf'
-    -> NtSet.mem x av = true
+    -> NtSet.In x av
     -> In rhs (rhssForNt g x)
     -> stackScore (callee, caller :: locs)
                   (1 + maxRhsLength g)
@@ -249,7 +249,8 @@ Lemma stackScore_lt_after_push :
                   (NtSet.cardinal av).
 Proof.
   intros g callee caller x suf' av rhs locs
-         Hcallee Hcaller Hmem Hin; subst; simpl.
+         Hcallee Hcaller Hin Hin'; subst; simpl.
+  apply NtSet.mem_spec in Hin.
   rewrite remove_cardinal_1; auto.
   unfold headFrameScore; unfold headFrameSize.
   unfold tailFrameScore; unfold tailFrameSize; rewrite Hcaller; simpl.
