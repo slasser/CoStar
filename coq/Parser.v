@@ -427,23 +427,22 @@ Proof.
       simpl; auto.
 Defined.
 
-Require Import Program.Wf.
-
-Program Fixpoint multistep (g  : grammar) 
-                           (st : parser_state) 
-                           { measure (meas g st) (lex_nat_triple) } :
-                           parse_result :=
-  match step g st with
-  | StepAccept sv ts => Accept sv ts
-  | StepReject s     => Reject s
-  | StepError s      => Error s
-  | StepK st'        => multistep g st'
-  end. 
-Next Obligation.
+Lemma StepK_st_acc :
+  forall g st st' (a : Acc lex_nat_triple (meas g st)),
+    step g st = StepK st' -> Acc lex_nat_triple (meas g st').
+Proof.
+  intros g st st' a Hs.
+  eapply Acc_inv; eauto.
   apply step_meas_lt; auto.
 Defined.
-Next Obligation.
-apply measure_wf.
-apply lex_nat_triple_wf.
-Defined.
 
+Fixpoint multistep (g  : grammar) 
+                   (st : parser_state)
+                   (a  : Acc lex_nat_triple (meas g st)) :
+                   parse_result :=
+  match step g st as res return step g st = res -> _ with
+  | StepAccept sv ts => fun _  => Accept sv ts
+  | StepReject s     => fun _  => Reject s
+  | StepError s      => fun _  => Error s
+  | StepK st'        => fun Hs => multistep g st' (StepK_st_acc _ _ _ a Hs)
+  end eq_refl.
