@@ -34,40 +34,44 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
   match st with
   | Pst av (fr, frs) ts =>
     match fr with
-    | Fr (Loc x pre suf) sv =>
+    | Fr (Loc xo pre suf) sv =>
       match suf with
       | [] => 
         match frs with
+        (* empty stack --> accept *)
         | [] => StepAccept sv ts
-        | (Fr (Loc x_cr pre_cr suf_cr) sv_cr) :: frs_tl =>
+        (* nonempty stack --> return to caller frame *)
+        | (Fr (Loc xo_cr pre_cr suf_cr) sv_cr) :: frs_tl =>
           match suf_cr with
           | []                 => StepError "impossible"
           | T _ :: _           => StepError "impossible"
-          | NT x' :: suf_cr_tl => 
-            let cr' := Fr (Loc x_cr (pre_cr ++ [NT x]) suf_cr_tl)
+          | NT x :: suf_cr_tl => 
+            let cr' := Fr (Loc xo_cr (pre_cr ++ [NT x]) suf_cr_tl)
                           (sv_cr ++ [Node x sv])
             in  StepK (Pst (NtSet.add x av) (cr', frs_tl) ts)
           end
         end
+      (* terminal case --> consume a token *)
       | T a :: suf_tl =>
         match ts with
         | []               => StepReject "input exhausted"
         | (a', l) :: ts_tl =>
           if t_eq_dec a' a then 
-            let fr' := Fr (Loc x (pre ++ [T a]) suf_tl) (sv ++ [Leaf l])
+            let fr' := Fr (Loc xo (pre ++ [T a]) suf_tl) (sv ++ [Leaf l])
             in  StepK (Pst (allNts g) (fr', frs) ts_tl)
           else
             StepReject "token mismatch"
         end
+      (* nonterminal case --> push a frame onto the stack *)
       | NT x :: suf_tl => 
         if NtSet.mem x av then
           match llPredict g x (locStackOf (fr, frs)) ts with
           | PredSucc rhs =>
-            let callee := Fr (Loc x [] rhs) []
+            let callee := Fr (Loc (Some x) [] rhs) []
             in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
           (* maybe flip a bit indicating ambiguity? *)
           | PredAmbig rhs =>
-            let callee := Fr (Loc x [] rhs) []
+            let callee := Fr (Loc (Some x) [] rhs) []
             in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
           | PredReject    => StepReject "prediction found no viable right-hand sides"
           | PredError msg => StepError msg
@@ -399,14 +403,14 @@ Proof.
   intros g st st' Hs.
   unfold step in Hs.
   destruct st as [av [fr frs] ts].
-  destruct fr as [[x pre suf] sv].
+  destruct fr as [[xo pre suf] sv].
   destruct suf as [| [a | y] suf_tl].
   - (* return from the current frame *)
     destruct frs as [| caller frs_tl]; tc.
-    destruct caller as [[x_cr pre_cr suf_cr] sv_cr].
-    destruct suf_cr as [| [a | x'] suf_cr_tl]; tc.
+    destruct caller as [[xo_cr pre_cr suf_cr] sv_cr].
+    destruct suf_cr as [| [a | x] suf_cr_tl]; tc.
     inv Hs.
-    eapply state_lt_after_return with (x' := x'); simpl; eauto.
+    eapply state_lt_after_return; simpl; eauto.
     simpl; auto.
   - (* terminal case *) 
     destruct ts as [| (a', l) ts_tl]; tc.
@@ -446,3 +450,7 @@ Fixpoint multistep (g  : grammar)
   | StepError s      => fun _  => Error s
   | StepK st'        => fun Hs => multistep g st' (StepK_st_acc _ _ _ a Hs)
   end eq_refl.
+
+Definition parse (g : grammar) (s : symbol) (ts : list token) : parse_result :=
+  let initState := Pst (allNts g) (Fr (Loc None [] [s]) [], []) ts
+  in  multistep g initState (lex_nat_triple_wf (meas g initState)).

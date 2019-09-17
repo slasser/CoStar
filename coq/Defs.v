@@ -31,7 +31,7 @@ Module NT_as_DT   := Make_UDT(MDT_NT).
 Module NtSet      := MSetWeakList.Make NT_as_DT.
 Module Export NF  := WFactsOn NT_as_DT NtSet.
 Module Export NP  := MSetProperties.Properties NtSet.
-Module Export NEP := EqProperties NtSet.
+Module Export NE  := EqProperties NtSet.
 Module Export ND  := WDecideOn NT_as_DT NtSet.
 
 (* Grammar-related definitions *)               
@@ -129,7 +129,7 @@ Definition maxEntryLength (tbl : parse_table) : nat :=
   listMax (entryLengths tbl).
 
 (* Grammar locations *)
-Record location := Loc { lnt  : nonterminal
+Record location := Loc { lopt : option nonterminal
                        ; rpre : list symbol
                        ; rsuf : list symbol
                        }.
