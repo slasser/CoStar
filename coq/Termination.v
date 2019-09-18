@@ -1,6 +1,6 @@
 Require Import Arith List Omega.
-Require Import Defs.
-Require Import Tactics.
+Require Import GallStar.Defs.
+Require Import GallStar.Tactics.
 Import ListNotations.
 
 (* Definitions related to well-founded measures *)

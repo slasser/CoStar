@@ -21,12 +21,12 @@ Record parser_state    := Pst { avail  : NtSet.t
                               ; tokens : list token
                               }.
 
-Inductive step_result := StepAccept : forest -> list token -> step_result
+Inductive step_result := StepAccept : forest -> step_result
                        | StepReject : string -> step_result
                        | StepK      : parser_state -> step_result
                        | StepError  : string -> step_result.
 
-Inductive parse_result := Accept : forest -> list token -> parse_result
+Inductive parse_result := Accept : forest -> parse_result
                         | Reject : string -> parse_result
                         | Error  : string -> parse_result.
 
@@ -39,7 +39,11 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
       | [] => 
         match frs with
         (* empty stack --> accept *)
-        | [] => StepAccept sv ts
+        | [] => 
+          match ts with
+          | []     => StepAccept sv
+          | _ :: _ => StepReject "stack exhausted, tokens remain"
+          end
         (* nonempty stack --> return to caller frame *)
         | (Fr (Loc xo_cr pre_cr suf_cr) sv_cr) :: frs_tl =>
           match suf_cr with
@@ -406,12 +410,13 @@ Proof.
   destruct fr as [[xo pre suf] sv].
   destruct suf as [| [a | y] suf_tl].
   - (* return from the current frame *)
-    destruct frs as [| caller frs_tl]; tc.
-    destruct caller as [[xo_cr pre_cr suf_cr] sv_cr].
-    destruct suf_cr as [| [a | x] suf_cr_tl]; tc.
-    inv Hs.
-    eapply state_lt_after_return; simpl; eauto.
-    simpl; auto.
+    destruct frs as [| caller frs_tl].
+    + destruct ts; tc.
+    + destruct caller as [[xo_cr pre_cr suf_cr] sv_cr].
+      destruct suf_cr as [| [a | x] suf_cr_tl]; tc.
+      inv Hs.
+      eapply state_lt_after_return; simpl; eauto.
+      simpl; auto.
   - (* terminal case *) 
     destruct ts as [| (a', l) ts_tl]; tc.
     destruct (t_eq_dec a' a); tc; subst.
@@ -445,12 +450,14 @@ Fixpoint multistep (g  : grammar)
                    (a  : Acc lex_nat_triple (meas g st)) :
                    parse_result :=
   match step g st as res return step g st = res -> _ with
-  | StepAccept sv ts => fun _  => Accept sv ts
+  | StepAccept sv    => fun _  => Accept sv
   | StepReject s     => fun _  => Reject s
   | StepError s      => fun _  => Error s
   | StepK st'        => fun Hs => multistep g st' (StepK_st_acc _ _ _ a Hs)
   end eq_refl.
 
+Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) : parser_state :=
+  Pst (allNts g) (Fr (Loc None [] gamma) [], []) ts.
+
 Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-  let initState := Pst (allNts g) (Fr (Loc None [] gamma) [], []) ts
-  in  multistep g initState (lex_nat_triple_wf (meas g initState)).
+  multistep g (mkInitState g gamma ts) (lex_nat_triple_wf _).

@@ -1,5 +1,5 @@
 Require Import Arith Relation_Definitions.
-Require Import Tactics.
+Require Import GallStar.Tactics.
 
 Section PairLT.
     
