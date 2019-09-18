@@ -136,3 +136,34 @@ Record location := Loc { lopt : option nonterminal
 
 (* Semantic value stacks *)
 Definition sem_stack  := (forest * list forest)%type.
+
+Inductive sym_derivation (g : grammar) : symbol -> list token -> tree -> Prop :=
+| T_der : forall (s : symbol)
+                 (a : terminal)
+                 (l : literal),
+    sym_derivation g (T a) [(a, l)] (Leaf l).
+    sym_derives_prefix g (T a) [existT _ a v] v r
+| NT_sdp : forall (x     : nonterminal) 
+                  (gamma : list symbol)
+                  (w r   : list token) 
+                  (vs    : rhs_semty gamma)
+                  (f     : action_ty (x, gamma)),
+    In (existT _ (x, gamma) f) g.(prods)
+    -> lookahead_for (peek (w ++ r)) x gamma g
+    -> gamma_derives_prefix g gamma w vs r
+    -> sym_derives_prefix g (NT x) w (f vs) r
+with gamma_derives_prefix (g : grammar) :
+       forall (gamma : list symbol)
+              (w     : list token)
+              (vs    : rhs_semty gamma)
+              (r     : list token), Prop :=
+     | Nil_gdp : forall r,
+         gamma_derives_prefix g [] [] tt r
+     | Cons_gdp : forall (s           : symbol)
+                         (wpre wsuf r : list token)
+                         (v           : symbol_semty s)
+                         (ss          : list symbol)
+                         (vs          : rhs_semty ss),
+         sym_derives_prefix g s wpre v (wsuf ++ r)
+         -> gamma_derives_prefix g ss wsuf vs r
+         -> gamma_derives_prefix g (s :: ss) (wpre ++ wsuf) (v, vs) r.

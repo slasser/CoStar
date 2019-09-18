@@ -451,6 +451,6 @@ Fixpoint multistep (g  : grammar)
   | StepK st'        => fun Hs => multistep g st' (StepK_st_acc _ _ _ a Hs)
   end eq_refl.
 
-Definition parse (g : grammar) (s : symbol) (ts : list token) : parse_result :=
-  let initState := Pst (allNts g) (Fr (Loc None [] [s]) [], []) ts
+Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
+  let initState := Pst (allNts g) (Fr (Loc None [] gamma) [], []) ts
   in  multistep g initState (lex_nat_triple_wf (meas g initState)).
