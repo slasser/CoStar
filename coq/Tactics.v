@@ -14,6 +14,8 @@ Ltac dmg := match goal with
 
 Ltac dm  := (first [dmh | dmg]); auto.
 
+Ltac dms := repeat dm.
+
 (* destruct a match in a hypothesis, and save the equality in the context *)
 Ltac dmheq s := let Heq := fresh s in
                 match goal with
