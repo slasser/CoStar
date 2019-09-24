@@ -173,37 +173,36 @@ Proof.
   inv hs; repeat eexists; eauto.
 Qed.
 
-
-(* I should be able to get the wsuf out of this definition *)
-Inductive stack_derives_prefix (g : grammar) : p_stack -> list token -> list token -> Prop :=
-| Nil_sdp :
-    forall xo gpre gsuf wpre wsuf v,
-    gamma_derivation g gpre wpre v
-    -> stack_derives_prefix g (Fr (Loc xo gpre gsuf) v, []) wpre wsuf
-| Cons_sdp :
-    forall xo gpre gsuf wpre wpre' wsuf v fr frs,
-    gamma_derivation g gpre wpre' v
-    -> stack_derives_prefix g (fr, frs) wpre (wpre' ++ wsuf)
-    -> stack_derives_prefix g (Fr (Loc xo gpre gsuf) v, fr :: frs) (wpre ++ wpre') wsuf.
+Inductive stack_derivation (g : grammar) : p_stack -> list token -> forest -> Prop :=
+| SD_nil :
+    forall xo pre suf w v,
+    gamma_derivation g pre w v
+    -> stack_derivation g (Fr (Loc xo pre suf) v, []) w v
+| SD_cons :
+    forall xo pre suf w w' v v' fr frs,
+      gamma_derivation g pre w' v'
+      -> stack_derivation g (fr, frs) w v
+      -> stack_derivation g (Fr (Loc xo pre suf) v', fr :: frs) (w ++ w') (v ++ v').
 
 Inductive stack_wf (g : grammar) : p_stack -> Prop :=
-| Nil_wf :
+| WF_nil :
     forall pre suf v,
       stack_wf g (Fr (Loc None pre suf) v, [])
-| Cons_wf :
-    forall x xo pre pre' suf suf' v v' frs,
-      In (x, pre' ++ suf') g
-      -> stack_wf g (Fr (Loc (Some x) pre' suf') v',
-                     (Fr (Loc xo pre (NT x :: suf)) v) :: frs).
+| WF_cons :
+    forall x pre suf suf' v fr frs,
+      In (x, pre ++ suf) g
+      -> fr.(loc).(rsuf) = NT x :: suf'
+      -> stack_wf g (fr, frs) 
+      -> stack_wf g (Fr (Loc (Some x) pre suf) v, fr :: frs).
 
-Lemma stack_invariant_accept_implies_bottom_frame_rpre_derives_result :
-  forall fr stk g wpre wsuf av ts v,
+Lemma stack_derivation_accept_impl_gamma_derivation :
+  forall fr stk g wpre av ts v,
   bottom_frame fr stk
-  -> stack_derives_prefix g stk wpre wsuf
+  -> stack_derivation g stk wpre v
   -> step g (Pst av stk ts) = StepAccept v
   -> gamma_derivation g fr.(loc).(rpre) wpre v.
 Proof.
-  intros fr stk g wpre wsuf av ts v hb hsdp hf.
+  intros fr stk g wpre av ts v hb hsdp hf.
   apply step_StepAccept_facts in hf.
   destruct hf as [[xo [rpre [v' [heq heq']]]] hnil].
   subst.
@@ -212,7 +211,135 @@ Proof.
   simpl; auto.
 Qed.
 
-Lemma bar :
+Inductive stack_derivation_invar (g : grammar) (stk : p_stack) (wsuf w : list token) : Prop :=
+| SD_invar :
+    forall wpre vpre,
+      stack_derivation g stk wpre vpre
+      -> wpre ++ wsuf = w
+      -> stack_derivation_invar g stk wsuf w.
+
+Lemma step_preserves_stack_derivation_invar :
+  forall g av av' stk stk' wsuf wsuf' w,
+    stack_wf g stk
+    -> stack_derivation_invar g stk wsuf w
+    -> step g (Pst av stk wsuf) = StepK (Pst av' stk' wsuf')
+    -> stack_derivation_invar g stk' wsuf' w.
+Proof.
+  intros g av av' stk stk' wsuf wsuf' w hw hi hs.
+  unfold step in hs.
+  destruct stk as (fr, frs).
+  destruct fr as [(xo, rpre, rsuf) v].
+  destruct rsuf.
+  - destruct frs as [| fr_cr frs].
+    + destruct wsuf; tc.
+    + destruct fr_cr as [(xo_cr, pre_cr, suf_cr) v_cr].
+      destruct suf_cr as [| [a | x] suf_cr]; tc.
+      inv hs.
+      (* return to caller frame preserves invariant *)
+      admit.
+  - destruct s as [a | x].
+    + destruct wsuf as [| (a', l) wsuf]; tc.
+      destruct (t_eq_dec a' a); tc; subst.
+      inv hs.
+      (* consuming a token preserves invariant *)
+      admit.
+    + destruct (NtSet.mem x av); tc.
+      dmeq hpred; tc.
+      * inv hs.
+        (* push preserves invariant *)
+        admit.
+      * inv hs.
+        (* push preserves invariant *)
+        admit.
+Admitted.
+
+Lemma multistep_sound :
+  forall (g    : grammar)
+         (w wsuf : list token)
+         (av   : NtSet.t)
+         (stk  : p_stack)
+         (a    : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf)))
+         (v    : forest)
+         (fr   : frame),
+    bottom_frame fr stk
+    -> stack_wf g stk
+    -> stack_derivation_invar g stk wsuf w
+    -> multistep g (Pst av stk wsuf) a = Accept v
+    -> gamma_derivation g (fr.(loc).(rpre) ++ fr.(loc).(rsuf)) w v.
+Proof.
+  intros g w wsuf.
+  induct_list_length wsuf.
+  intros av stk a v fr hb hw hsd hm.
+  apply multistep_accept_cases in hm.
+  destruct hm as [hs | he].
+  - (* the parser state is in a "final configuration" *)
+    apply step_StepAccept_facts in hs.
+    destruct hs as [[xo [rpre [v' [heq]]]] heq']; subst.
+    inv hb.
+    inv hsd.
+    simpl in *.
+    inv H.
+    repeat rewrite app_nil_r; auto.
+  - (* parser is in a non-final configuration *)
+    destruct he as [st' [a' [hs hm]]].
+    destruct st' as [av' stk' wsuf'].
+    assert (hl : length wsuf' < length wsuf) by admit.
+    assert (hex : exists fr', bottom_frame fr' stk') by admit.
+    apply step_preserves_stack_derivation_invar with (w := w) in hs; auto.
+    destruct hex as [fr' hb'].
+    eapply IHl with (m := length wsuf')
+                    (wsuf := wsuf')
+                    (av := av')
+                    (stk := stk')
+                    (fr  := fr') in hl; eauto; clear IHl.
+    + assert (fr.(loc).(rpre) ++ fr.(loc).(rsuf) =
+              fr'.(loc).(rpre) ++ fr'.(loc).(rsuf)) by admit.
+      rewrite H; auto.
+    + (* step preserves stack well-formedness *)
+      admit.
+Admitted.
+
+Theorem parser_sound :
+  forall (g : grammar)
+         (ss : list symbol)
+         (ts : list token)
+         (v : forest),
+    parse g ss ts = Accept v
+    -> gamma_derivation g ss ts v.
+Proof.
+  intros g ss ts v hp.
+  unfold parse in hp.
+  eapply multistep_sound with (w := ts)
+                              (fr := Fr (Loc None [] ss) []) in hp; try (constructor; eauto).
+  - simpl in *; auto.
+  - apply SD_invar with (wpre := []) (vpre := []); auto.
+    repeat constructor.
+Qed.
+
+(*
+Lemma return_preserves_stack_derivation_invar :
+  forall g xo rpre rpre2 x rsuf v1 v2 frs w1 w2 w3,
+    stack_derivation_invar g (Fr (Loc xo rpre (NT x :: rsuf
+    stack_derivation g (Fr (Loc xo rpre (NT x :: rsuf)) v, frs) w1 (w2 ++ w3)
+    -> In (x, rpre2) g
+    -> gamma_derivation g rpre2 w2 v2
+    -> stack_derives_prefix g (Fr (Loc xo (rpre ++ [NT x]) rsuf) (v1 ++ [Node x v2]), frs) (w1 ++ w2) w3.
+Proof.
+  intros g xo rpre rpre2 x rsuf v1 v2 frs w1 w2 w3 hi hin hg.
+  inv hi.
+  - constructor.
+    apply bar; auto.
+    assert (happ : w2 = w2 ++ []) by (apply app_nil_r'); rewrite happ.
+    repeat econstructor; eauto.
+  - rewrite <- app_assoc; constructor.
+    + apply bar; auto.
+      assert (happ : w2 = w2 ++ []) by (apply app_nil_r').
+      rewrite happ; repeat econstructor; eauto.
+    + rewrite <- app_assoc; auto.
+Qed.
+ *)
+
+Lemma gamma_derivation_app :
   forall g ys1 w1 v1,
     gamma_derivation g ys1 w1 v1
     -> forall ys2 w2 v2,
@@ -230,6 +357,9 @@ Proof.
   intros; rewrite app_nil_r; auto.
 Qed.
 
+Ltac rew_nilr xs := replace xs with (xs ++ []) by apply app_nil_r'.
+
+(*
 Lemma foo :
   forall g xo rpre rpre2 x rsuf v1 v2 frs w1 w2 w3,
     stack_derives_prefix g (Fr (Loc xo rpre (NT x :: rsuf)) v1, frs) w1 (w2 ++ w3)
@@ -249,7 +379,9 @@ Proof.
       rewrite happ; repeat econstructor; eauto.
     + rewrite <- app_assoc; auto.
 Qed.
+ *)
 
+(*
 Lemma foo' :
   forall g xo pre a suf v frs wpre l wsuf',
     stack_derives_prefix g
@@ -281,7 +413,8 @@ Proof.
       constructor.
     + rewrite <- app_assoc; auto.
 Qed.
-
+*)
+  
 Lemma step_preserves_inv :
   forall g av av' stk stk' wpre wsuf wsuf',
     stack_wf g stk
