@@ -146,6 +146,8 @@ Inductive stack_wf (g : grammar) : p_stack -> Prop :=
       -> stack_wf g (Fr (Loc (Some x) pre suf) v, 
                      Fr (Loc xo' pre' (NT x :: suf')) v' :: frs).
 
+Hint Constructors stack_wf.
+
 Inductive stack_derivation (g : grammar) : p_stack -> list token -> Prop :=
 | SD_nil :
     forall xo pre suf v w,
@@ -342,48 +344,109 @@ Proof.
   - eapply push_preserves_stack_derivation_invar;    eauto.
 Qed.
 
+Lemma step_preserves_bottomFrameSyms_invar :
+  forall g av av' stk stk' ts ts',
+    step g (Pst av stk ts) = StepK (Pst av' stk' ts')
+    -> bottomFrameSyms stk = bottomFrameSyms stk'.
+Proof.
+  intros g av av' stk stk' ts ts' hs.
+  unfold step in hs.
+  dms; inv hs; tc; unfold bottomFrameSyms.
+  - destruct l; sis; auto.
+    rewrite <- app_assoc; auto.
+  - destruct l; sis; auto.
+    rewrite <- app_assoc; auto.
+  - destruct l; sis; auto.
+  - destruct l; sis; auto.
+Qed.
+
+Lemma in_rhssForNt_production_in_grammar :
+  forall g x ys,
+    In ys (rhssForNt g x)
+    -> In (x, ys) g.
+Proof.
+  intros g x ys hin.
+  induction g as [| (x', ys') g]; sis; tc.
+  destruct (nt_eq_dec x' x); subst; auto.
+  inv hin; auto.
+Qed.
+
+Lemma llPredict_succ_arg_result_in_grammar :
+  forall g x stk ts ys,
+    llPredict g x stk ts = PredSucc ys
+    -> In (x, ys) g.
+Proof.
+  intros g x stk ts ys hp.
+  apply PredSucc_result_in_rhssForNt in hp.
+  apply in_rhssForNt_production_in_grammar; auto.
+Qed.
+
+Lemma llPredict_ambig_arg_result_in_grammar :
+  forall g x stk ts ys,
+    llPredict g x stk ts = PredAmbig ys
+    -> In (x, ys) g.
+Proof.
+  intros g x stk ts ys hp.
+  apply in_rhssForNt_production_in_grammar.
+  eapply PredAmbig_result_in_rhssForNt; eauto.
+Qed.
+
+Lemma step_preserves_stack_wf_invar :
+  forall g av av' stk stk' ts ts',
+    step g (Pst av stk ts) = StepK (Pst av' stk' ts')
+    -> stack_wf g stk 
+    -> stack_wf g stk'.
+Proof.
+  intros g av av' stk stk' ts ts' hs hw.
+  unfold step in hs.
+  repeat (dmeq h); inv hs; tc.
+  - (* return *)
+    inv hw.
+    inv H10; constructor; auto.
+    rewrite <- app_assoc; auto.
+  - inv hw; auto.
+    constructor; auto.
+    rewrite <- app_assoc; auto.
+  - constructor; simpl; auto.
+    eapply llPredict_succ_arg_result_in_grammar; eauto.
+  - constructor; simpl; auto. 
+    eapply llPredict_ambig_arg_result_in_grammar; eauto.
+Qed.    
 
 Lemma multistep_sound :
-  forall (g    : grammar)
+  forall (g      : grammar)
+         (tri    : nat * nat * nat)
+         (a      : Acc lex_nat_triple tri)
          (w wsuf : list token)
-         (av   : NtSet.t)
-         (stk  : p_stack)
-         (a    : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf)))
-         (v    : forest),
-    stack_wf g stk
+         (av     : NtSet.t)
+         (stk    : p_stack)
+         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf)))
+         (v      : forest),
+    tri = Parser.meas g (Pst av stk wsuf)
+    -> stack_wf g stk
     -> stack_derivation_invar g stk wsuf w
-    -> multistep g (Pst av stk wsuf) a = Accept v
+    -> multistep g (Pst av stk wsuf) a' = Accept v
     -> gamma_derivation g (bottomFrameSyms stk) w v.
 Proof.
-  intros g w wsuf.
-  induct_list_length wsuf.
-  intros av stk a v hw hs hm.
+  intros g tri a.
+  induction a as [tri hlt IH].
+  intros w wsuf av stk a' v heq hw hi hm; subst.
   apply multistep_accept_cases in hm.
   destruct hm as [hf | he].
-  - (* the parser state is in a "final configuration" *)
-    apply step_StepAccept_facts in hf.
+  - apply step_StepAccept_facts in hf.
     destruct hf as [[xo [rpre [v' [heq]]]] heq']; subst.
-    inv hs.
-    simpl in *.
+    inv hi. 
+    inv H; sis.
     unfold bottomFrameSyms; simpl.
-    inv H.
     repeat rewrite app_nil_r; auto.
-  - (* parser is in a non-final configuration *)
-    destruct he as [st' [a' [hf hm]]].
+  - destruct he as [st' [a'' [hf hm]]].
     destruct st' as [av' stk' wsuf'].
-    assert (hl : length wsuf' < length wsuf) by admit.
-    assert (hex : exists fr', bottom_frame fr' stk') by admit.
-    apply step_preserves_stack_derivation_invar with (w := w) in hf; auto.
-    destruct hex as [fr' hb'].
-    eapply IHl with (m := length wsuf')
-                    (wsuf := wsuf')
-                    (av := av')
-                    (stk := stk') in hl; eauto; clear IHl.
-    + assert (bottomFrameSyms stk = bottomFrameSyms stk') by admit. 
-      rewrite H; auto.
-    + (* step preserves stack well-formedness *)
-      admit.
-Admitted.
+    eapply IH with (w := w) in hm; eauto. 
+    + erewrite step_preserves_bottomFrameSyms_invar; eauto.
+    + apply step_meas_lt; auto.
+    + eapply step_preserves_stack_wf_invar; eauto.
+    + eapply step_preserves_stack_derivation_invar; eauto.
+Qed.
 
 Theorem parser_sound :
   forall (g : grammar)
@@ -396,8 +459,9 @@ Proof.
   intros g ss ts v hp.
   unfold parse in hp.
   eapply multistep_sound with (w := ts) in hp; try (constructor; auto).
-  - unfold bottomFrameSyms; auto.
+  - unfold bottomFrameSyms in hp; sis; auto. 
+  - intros; apply lex_nat_triple_wf.
   - eapply SD_invar with (wpre := []); auto.
-    repeat constructor.
 Qed.
+Print Assumptions parser_sound.
   
