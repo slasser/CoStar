@@ -1,4 +1,4 @@
- Require Import Arith List.
+Require Import Arith List.
 Require Import GallStar.Defs. 
 Require Import GallStar.Lex.
 Require Import GallStar.Parser.
@@ -135,27 +135,31 @@ Proof.
   inv hs; repeat eexists; eauto.
 Qed.
 
-Inductive stack_derivation (g : grammar) : p_stack -> list token -> forest -> Prop :=
-| SD_nil :
-    forall xo pre suf w v,
-    gamma_derivation g pre w v
-    -> stack_derivation g (Fr (Loc xo pre suf) v, []) w v
-| SD_cons :
-    forall xo pre suf w w' v v' fr frs,
-      gamma_derivation g pre w' v'
-      -> stack_derivation g (fr, frs) w v
-      -> stack_derivation g (Fr (Loc xo pre suf) v', fr :: frs) (w ++ w') (v ++ v').
-
 Inductive stack_wf (g : grammar) : p_stack -> Prop :=
 | WF_nil :
     forall pre suf v,
       stack_wf g (Fr (Loc None pre suf) v, [])
 | WF_cons :
-    forall x pre suf suf' v fr frs,
+    forall x xo' pre pre' suf suf' v v' frs,
       In (x, pre ++ suf) g
-      -> fr.(loc).(rsuf) = NT x :: suf'
-      -> stack_wf g (fr, frs) 
-      -> stack_wf g (Fr (Loc (Some x) pre suf) v, fr :: frs).
+      -> stack_wf g (Fr (Loc xo' pre' (NT x :: suf')) v', frs) 
+      -> stack_wf g (Fr (Loc (Some x) pre suf) v, 
+                     Fr (Loc xo' pre' (NT x :: suf')) v' :: frs).
+
+Inductive stack_derivation (g : grammar) : p_stack -> list token -> Prop :=
+| SD_nil :
+    forall xo pre suf v w,
+      gamma_derivation g pre w v
+      -> stack_derivation g (Fr (Loc xo pre suf) v, []) w
+| SD_cons :
+    forall xo pre suf v fr' frs wpre wsuf,
+      gamma_derivation g pre wsuf v
+      -> stack_derivation g (fr', frs) wpre
+      -> stack_derivation g (Fr (Loc xo pre suf) v, fr' :: frs) (wpre ++ wsuf).
+
+Hint Constructors stack_derivation.
+
+Ltac inv_sd hsd wpre wsuf hgd hsd' := inversion hsd as [? ? ? ? wpre hgd | ? ? ? ? ? ? wpre wsuf hgd hsd']; subst; clear hsd.
 
 (* MAYBE NOT NECESSARY 
 Lemma stack_derivation_accept_impl_gamma_derivation :
@@ -177,10 +181,15 @@ Qed.
 
 Inductive stack_derivation_invar (g : grammar) (stk : p_stack) (wsuf w : list token) : Prop :=
 | SD_invar :
-    forall wpre vpre,
-      stack_derivation g stk wpre vpre
+    forall wpre,
+      stack_derivation g stk wpre
       -> wpre ++ wsuf = w
       -> stack_derivation_invar g stk wsuf w.
+
+Ltac inv_sdi wpre hsd := match goal with
+                         | H : stack_derivation_invar _ _ _ _ |- _ =>
+                           inversion H as [wpre hsd ?]; subst; clear H
+                         end.
 
 Lemma gamma_derivation_app :
   forall g ys1 w1 v1,
@@ -202,6 +211,62 @@ Qed.
 
 Ltac rew_nilr xs := replace xs with (xs ++ []) by apply app_nil_r'.
 
+Lemma stack_derivation_cases :
+  forall g fr frs w,
+    stack_derivation g (fr, frs) w
+    -> match frs with
+       | []          => gamma_derivation g fr.(loc).(rpre) w fr.(sem)
+       | fr' :: frs' =>
+         exists wpre wsuf,
+         wpre ++ wsuf = w
+         /\ stack_derivation g (fr', frs') wpre
+         /\ gamma_derivation g fr.(loc).(rpre) wsuf fr.(sem)
+       end.
+Proof.
+  intros g fr frs w hsd.
+  destruct frs as [| fr' frs]; inv hsd; auto.
+  repeat eexists; repeat split; auto.
+Qed.
+
+Lemma derivation_app_nil_r :
+  forall g ys w v,
+    gamma_derivation g ys w [v] = gamma_derivation g (ys ++ []) (w ++ []) [v].
+Proof.
+  intros g ys w v.
+  assert (happ : w = w ++ []) by (rewrite <- app_nil_r'; auto); rewrite happ; clear happ.
+Abort.
+
+Lemma forest_app_singleton_node : 
+  forall g x ys ys' w w' v v',
+    In (x, ys') g
+    -> gamma_derivation g ys w v
+    -> gamma_derivation g ys' w' v'
+    -> gamma_derivation g (ys ++ [NT x]) (w ++ w') (v ++ [Node x v']).
+Proof.
+  intros g x ys ys' w w' v v' hi hg hg'.
+  apply gamma_derivation_app; auto.
+  assert (happ : w' = w' ++ []) by (rewrite <- app_nil_r'; auto); rewrite happ; clear happ.
+  repeat (econstructor; eauto).
+Qed.
+
+Lemma cons_app_singleton :
+  forall A (x : A) (ys : list A),
+    x :: ys = [x] ++ ys.
+Proof.
+  auto.
+Qed.
+
+Lemma terminal_head_gamma_derivation :
+  forall g a l ys w v,
+    gamma_derivation g ys w v
+    -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf l :: v).
+Proof.
+  intros g a l ys w v hg.
+  assert (happ : (a, l) :: w = [(a, l)] ++ w) by (rewrite cons_app_singleton; auto).
+  rewrite happ; clear happ.
+  constructor; auto.
+Qed.
+
 Lemma return_preserves_stack_derivation_invar :
   forall g callee caller caller' frs x xo xo_cr pre pre_cr suf_cr v v_cr wsuf w,
     stack_wf g (callee, caller :: frs)
@@ -211,31 +276,20 @@ Lemma return_preserves_stack_derivation_invar :
     -> stack_derivation_invar g (callee, caller :: frs) wsuf w
     -> stack_derivation_invar g (caller', frs) wsuf w.
 Proof.
-  intros g ce cr cr' frs x xo xo_cr pre pre_cr suf_cr v v_cr wsuf w hwf hce hcr hcr' hi; subst.
-  inversion hi as [wpre vpre hsd happ]; subst; clear hi.
-  inversion hsd as [xo' pre' suf' w v' hgd | xo' pre' suf' w w' v' v'' fr frs' hgd hsd']; subst; clear hsd.
-  inversion hsd' as [xo' pre' suf w'' v'' hgd' | xo' pre' suf w'' w''' v'' v''' fr frs' hgd' hsd]; subst; clear hsd'.
-  - eapply SD_invar with (vpre := v' ++ [Node x v]); eauto.
-    eapply SD_nil.
-    apply gamma_derivation_app; auto.
-    assert (happ : w' = w' ++ []).
-    { rewrite app_nil_r; auto. }
-    rewrite happ; clear happ.
-    inversion hwf as [pre' suf v'' | x' pre' suf suf' v'' fr frs hin heq hwf']; subst; clear hwf; simpl in *.
-    rewrite app_nil_r in hin.
-    inv heq.
-    repeat econstructor; eauto.
-  - eapply SD_invar with (vpre := v'' ++ (v_cr ++ [Node x v])); eauto.
-    rewrite <- app_assoc.
-    econstructor; eauto.
-    apply gamma_derivation_app; auto.
-    assert (happ : w' = w' ++ []).
-    { rewrite app_nil_r; auto. }
-    rewrite happ; clear happ.
-    inversion hwf as [pre' suf v''' | x' pre' suf suf' v''' fr' frs hin heq hwf']; subst; clear hwf; simpl in *.
-    rewrite app_nil_r in hin.
-    inv heq.
-    repeat econstructor; eauto.
+  intros g ce cr cr' frs x xo xo_cr pre pre_cr suf_cr v v_cr wsuf w 
+         hwf hce hcr hcr' hi; subst.
+  inv hwf; rewrite app_nil_r in *.
+  inv_sdi wpre hsd.
+  inv_sd  hsd wpre' wsuf' hgd hsd'.
+  eapply stack_derivation_cases in hsd'.
+  destruct frs as [| fr' frs]; sis.
+  - repeat (econstructor; auto).
+    eapply forest_app_singleton_node; eauto.
+  - destruct hsd' as [w [w' [happ [hsd hgd']]]]; subst. 
+    apply SD_invar with (wpre := w ++ w' ++ wsuf'); auto.
+    + constructor; auto.
+      eapply forest_app_singleton_node; eauto.
+    + rewrite app_assoc; auto.
 Qed.
 
 Lemma consume_preserves_stack_derivation_invar :
@@ -246,40 +300,30 @@ Lemma consume_preserves_stack_derivation_invar :
     -> stack_derivation_invar g (fr', frs) wsuf w.
 Proof.
   intros g fr fr' frs xo pre suf a l v w wsuf heq heq' hsd; subst.
-  inv hsd.
-  inv H.
-  - econstructor; eauto.
-    + eapply SD_nil with (w := wpre ++ [(a,l)]).
+  inv_sdi wpre hsd'.
+  apply stack_derivation_cases in hsd'; destruct frs as [| fr' frs]; sis.
+  - apply SD_invar with (wpre := wpre ++ [(a, l)]).
+    + constructor.
       apply gamma_derivation_app; auto.
-      assert (happ : [(a,l)] = [(a,l)] ++ []).
-      { rewrite app_nil_r; auto. }
-      rewrite happ; clear happ.
-      repeat constructor; auto.
+      apply terminal_head_gamma_derivation; auto.
     + rewrite <- app_assoc; auto.
-  - eapply SD_invar with (wpre := w ++ w' ++ [(a, l)])
-                         (vpre := v0 ++ v ++ [Leaf l]); eauto.
+  - destruct hsd' as [w [w' [happ [hsd hgd]]]]; subst.
+    apply SD_invar with (wpre := w ++ w' ++ [(a, l)]).
     + constructor; auto.
       apply gamma_derivation_app; auto.
-      assert (happ : [(a,l)] = [(a,l)] ++ []).
-      { rewrite app_nil_r; auto. }
-      rewrite happ; clear happ.
-      repeat constructor; auto.
+      apply terminal_head_gamma_derivation; auto.
     + repeat rewrite <- app_assoc; auto.
 Qed.
 
 Lemma push_preserves_stack_derivation_invar :
-  forall g fr frs x xo gamma suf wpre w,
+  forall g fr frs xo gamma wpre w,
     stack_derivation_invar g (fr, frs) wpre w
-    -> fr.(loc).(rsuf) = NT x :: suf
-    -> In (x, gamma) g
     -> stack_derivation_invar g (Fr (Loc xo [] gamma) [], fr :: frs) wpre w.
 Proof.
-  intros g fr frs x xo gamma suf wpre w hi heq hin.
-  inv hi.
-  eapply SD_invar.
-  - eapply SD_cons with (w' := []); eauto.
-    constructor.
-  - rewrite app_nil_r; auto.
+  intros g fr frs xo gamma wpre w hi.
+  inv_sdi w' hsd.
+  eapply SD_invar; eauto.
+  rewrite app_nil_r; auto.
 Qed.
 
 Lemma step_preserves_stack_derivation_invar :
@@ -291,31 +335,13 @@ Lemma step_preserves_stack_derivation_invar :
 Proof.
   intros g av av' stk stk' wsuf wsuf' w hw hi hs.
   unfold step in hs.
-  destruct stk as (fr, frs).
-  destruct fr as [(xo, rpre, rsuf) v].
-  destruct rsuf.
-  - destruct frs as [| fr_cr frs].
-    + destruct wsuf; tc.
-    + destruct fr_cr as [(xo_cr, pre_cr, suf_cr) v_cr].
-      destruct suf_cr as [| [a | x] suf_cr]; tc.
-      inv hs.
-      eapply return_preserves_stack_derivation_invar; eauto.
-  - destruct s as [a | x].
-    + destruct wsuf as [| (a', l) wsuf]; tc.
-      destruct (t_eq_dec a' a); tc; subst.
-      inv hs.
-      (* consuming a token preserves invariant *)
-      eapply consume_preserves_stack_derivation_invar; eauto.
-    + destruct (NtSet.mem x av); tc.
-      dmeq hpred; tc.
-      * inv hs.
-        eapply push_preserves_stack_derivation_invar; simpl; eauto.
-        
-        admit.
-      * inv hs.
-        eapply push_preserves_stack_derivation_invar; simpl; eauto.
-        admit.
-Admitted.
+  dms; inv hs; tc.
+  - eapply return_preserves_stack_derivation_invar;  eauto.
+  - eapply consume_preserves_stack_derivation_invar; eauto.
+  - eapply push_preserves_stack_derivation_invar;    eauto.
+  - eapply push_preserves_stack_derivation_invar;    eauto.
+Qed.
+
 
 Lemma multistep_sound :
   forall (g    : grammar)

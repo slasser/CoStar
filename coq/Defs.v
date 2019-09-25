@@ -155,3 +155,5 @@ with gamma_derivation (g : grammar) : list symbol -> list token-> forest-> Prop 
            sym_derivation g s wpre tr
            -> gamma_derivation g ss wsuf trs
            -> gamma_derivation g (s :: ss) (wpre ++ wsuf) (tr :: trs).
+
+Hint Constructors sym_derivation gamma_derivation.

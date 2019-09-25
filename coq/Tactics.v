@@ -1,3 +1,5 @@
+Ltac sis := simpl in *.
+
 Ltac inv H := inversion H; subst; clear H.
 
 Ltac tc := try congruence.
