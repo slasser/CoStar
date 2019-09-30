@@ -1,6 +1,7 @@
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Parser.
+Require Import GallStar.ParserLemmas.
 Require Import GallStar.Tactics.
 Require Import Parser_sound.
 

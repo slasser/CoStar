@@ -1,6 +1,6 @@
 Require Import Arith List Omega PeanoNat Program.Wf String.
 Require Import GallStar.Defs.
-Require Import GallStar.Lemmas.
+Require Import GallStar.GeneralLemmas.
 Require Import GallStar.Lex.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
@@ -608,4 +608,23 @@ Proof.
   destruct Hf as [sp [Hin Heq]]; subst.
   eapply startState_sp_prediction_in_rhssForNt; eauto.
 Defined.
- 
+
+Lemma llPredict_succ_arg_result_in_grammar :
+  forall g x stk ts ys,
+    llPredict g x stk ts = PredSucc ys
+    -> In (x, ys) g.
+Proof.
+  intros g x stk ts ys hp.
+  apply PredSucc_result_in_rhssForNt in hp.
+  apply in_rhssForNt_production_in_grammar; auto.
+Qed.
+
+Lemma llPredict_ambig_arg_result_in_grammar :
+  forall g x stk ts ys,
+    llPredict g x stk ts = PredAmbig ys
+    -> In (x, ys) g.
+Proof.
+  intros g x stk ts ys hp.
+  apply in_rhssForNt_production_in_grammar.
+  eapply PredAmbig_result_in_rhssForNt; eauto.
+Qed.

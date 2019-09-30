@@ -1,4 +1,5 @@
 Require Import FMaps List MSets PeanoNat String.
+Require Import GallStar.Tactics.
 Import ListNotations.
 
 (* Representations of grammar symbols *)
@@ -157,3 +158,16 @@ with gamma_derivation (g : grammar) : list symbol -> list token-> forest-> Prop 
            -> gamma_derivation g (s :: ss) (wpre ++ wsuf) (tr :: trs).
 
 Hint Constructors sym_derivation gamma_derivation.
+
+(* LEMMAS *)
+
+Lemma in_rhssForNt_production_in_grammar :
+  forall g x ys,
+    In ys (rhssForNt g x)
+    -> In (x, ys) g.
+Proof.
+  intros g x ys hin.
+  induction g as [| (x', ys') g]; sis; tc.
+  destruct (nt_eq_dec x' x); subst; auto.
+  inv hin; auto.
+Qed.
