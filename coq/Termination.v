@@ -1,9 +1,12 @@
 Require Import Arith List Omega.
 Require Import GallStar.Defs.
 Require Import GallStar.Tactics.
+Require Import GallStar.Utils.
 Import ListNotations.
 
 (* Definitions related to well-founded measures *)
+
+Definition location_stack := (location * list location)%type.
 
 Definition headFrameSize (loc : location) : nat :=
   length loc.(rsuf).
@@ -26,17 +29,9 @@ Fixpoint tailFramesScore (locs : list location) (b : nat) (e : nat) : nat :=
   | loc :: locs' => tailFrameScore loc b e + tailFramesScore locs' b (1 + e)
   end.
 
-Definition location_stack := (location * list location)%type.
-
 Definition stackScore (stk : location_stack) (b : nat) (e : nat) : nat :=
   let (loc, locs) := stk
   in  headFrameScore loc b e + tailFramesScore locs b (1 + e).
-
-Definition rhsLengths (g : grammar) : list nat :=
-  map (fun rhs => List.length rhs) (rhss g).
-
-Definition maxRhsLength (g : grammar) : nat :=
-  listMax (rhsLengths g).
 
 Definition stackHeight {A} (stk : A * list A) : nat :=
   let (_, frs) := stk in length frs.
@@ -183,55 +178,6 @@ Proof.
     apply mult_lt_compat_l; try omega.
     rewrite Nat.mul_comm.
     apply IHe2; omega. 
-Qed.
-
-Lemma list_elt_le_listmax :
-  forall (x : nat) (ys : list nat),
-    In x ys -> x <= listMax ys.
-Proof.
-  intros x ys Hin; induction ys as [| y ys IH]; simpl in *.
-  - inv Hin.
-  - destruct Hin as [Heq | Hin]; subst.
-    + apply Max.le_max_l.
-    + apply IH in Hin.
-      eapply le_trans; eauto.
-      apply Max.le_max_r.
-Qed.
-
-Lemma rhs_in_grammar_length_in_rhsLengths :
-  forall g rhs,
-    In rhs (rhss g) -> In (List.length rhs) (rhsLengths g).
-Proof.
-  intros g rhs Hin; induction g as [| (x, rhs') ps IH];
-  simpl in *; inv Hin; auto.
-Qed.
-
-Lemma in_rhssForNt_in_rhss :
-  forall g x rhs,
-    In rhs (rhssForNt g x) -> In rhs (rhss g).
-Proof.
-  intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
-  - inv Hin.
-  - destruct (nt_eq_dec x' x); subst; auto.
-    destruct Hin as [Heq | Hin]; subst; auto.
-Qed.
-  
-Lemma grammar_rhs_length_le_max :
-  forall g x rhs,
-    In rhs (rhssForNt g x) -> List.length rhs <= maxRhsLength g.
-Proof.
-  intros; unfold maxRhsLength.
-  apply list_elt_le_listmax.
-  apply rhs_in_grammar_length_in_rhsLengths.
-  eapply in_rhssForNt_in_rhss; eauto.
-Qed.
-
-Lemma grammar_rhs_length_lt_max_plus_1 :
-  forall g x rhs,
-    In rhs (rhssForNt g x) -> List.length rhs < 1 + maxRhsLength g.
-Proof.
-  intros g x rhs Hin.
-  apply grammar_rhs_length_le_max in Hin; omega.
 Qed.
 
 Lemma stackScore_lt_after_push :

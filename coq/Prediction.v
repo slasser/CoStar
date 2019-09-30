@@ -1,6 +1,5 @@
 Require Import Arith List Omega PeanoNat Program.Wf String.
 Require Import GallStar.Defs.
-Require Import GallStar.GeneralLemmas.
 Require Import GallStar.Lex.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
@@ -263,25 +262,6 @@ Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
   end.
 
 (* LEMMAS *)
-
-Lemma Forall_In_P_elt :
-  forall (A : Type) (P : A -> Prop) (x : A) (xs : list A),
-    Forall P xs -> In x xs -> P x.
-Proof.
-  intros A P x xs Hf Hi.
-  eapply Forall_forall in Hf; eauto.
-Defined.
-
-Lemma filter_cons_in :
-  forall (A : Type) (f : A -> bool) (l : list A) (hd : A) (tl : list A),
-    filter f l = hd :: tl
-    -> In hd l.
-Proof.
-  intros A f l hd tl Hf.
-  assert (Hin : In hd (hd :: tl)) by apply in_eq.
-  rewrite <- Hf in Hin.
-  apply filter_In in Hin; destruct Hin as [Hp _]; auto.
-Defined.
 
 Lemma handleFinalSubparsers_success_from_subparsers :
   forall sps gamma,

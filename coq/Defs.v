@@ -1,6 +1,9 @@
-Require Import FMaps List MSets PeanoNat String.
+Require Import FMaps List MSets Omega PeanoNat String.
 Require Import GallStar.Tactics.
+Require Import GallStar.Utils.
 Import ListNotations.
+
+(* CORE DEFINITIONS *)
 
 (* Representations of grammar symbols *)
 Definition terminal    := string.
@@ -28,15 +31,16 @@ Module MDT_NT.
   Definition t      := nonterminal.
   Definition eq_dec := Nat.eq_dec.
 End MDT_NT.
-Module NT_as_DT   := Make_UDT(MDT_NT).
-Module NtSet      := MSetWeakList.Make NT_as_DT.
-Module Export NF  := WFactsOn NT_as_DT NtSet.
-Module Export NP  := MSetProperties.Properties NtSet.
-Module Export NE  := EqProperties NtSet.
-Module Export ND  := WDecideOn NT_as_DT NtSet.
+Module NT_as_DT     := Make_UDT(MDT_NT).
+Module NtSet        := MSetWeakList.Make NT_as_DT.
+Module Export NF    := WFactsOn NT_as_DT NtSet.
+Module Export NP    := MSetProperties.Properties NtSet.
+Module Export NE    := EqProperties NtSet.
+Module Export ND    := WDecideOn NT_as_DT NtSet.
 
 (* Grammar-related definitions *)               
-Definition production := (nonterminal * list symbol)%type.            
+Definition production := (nonterminal * list symbol)%type.
+
 Definition grammar    := list production.
 
 Definition lhs (p : production) : nonterminal :=
@@ -50,6 +54,12 @@ Definition rhs (p : production) : list symbol :=
 
 Definition rhss (g : grammar) : list (list symbol) :=
   map rhs g.
+
+Definition rhsLengths (g : grammar) : list nat :=
+  map (fun rhs => List.length rhs) (rhss g).
+
+Definition maxRhsLength (g : grammar) : nat :=
+  listMax (rhsLengths g).
 
 Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
   match ps with
@@ -69,6 +79,7 @@ Definition allNts (g : grammar) : NtSet.t :=
 
 (* Definitions related to input that the parser consumes. *)
 Definition literal := string.
+
 Definition token   := (terminal * literal)% type.
 
 (* Parser return values *)
@@ -77,67 +88,13 @@ Inductive tree    := Leaf : literal -> tree
 
 Definition forest := list tree.
 
-(* LL(1)-related definitions -- THESE WILL GET DELETED *)
-Inductive lookahead := LA : terminal -> lookahead 
-                     | EOF : lookahead.
-
-Definition pt_key := (nonterminal * lookahead)%type.
-
-Definition pt_key_eq_dec :
-  forall k k2 : pt_key,
-    {k = k2} + {k <> k2}.
-Proof. repeat decide equality. Defined.
-
-Module MDT_PtKey.
-  Definition t := pt_key.
-  Definition eq_dec := pt_key_eq_dec.
-End MDT_PtKey.
-
-Module PtKey_as_DT := Make_UDT(MDT_PtKey).
-
-Module ParseTable := FMapWeakList.Make PtKey_as_DT.
-
-Definition parse_table := ParseTable.t (list symbol).
-
-Definition peek (input : list token) : lookahead :=
-  match input with
-  | nil => EOF
-  | (a, lit) :: _ => LA a
-  end.
-
-Definition ntKeys (tbl : parse_table) : list nonterminal :=
-  List.map (fun pr => match pr with 
-                      | ((x, _), _) => x
-                      end)
-           (ParseTable.elements tbl).
-
-Definition fromNtList' (ls : list nonterminal) : NtSet.t :=
-  fold_right NtSet.add NtSet.empty ls.
-
-Definition allNts' (tbl : parse_table) : NtSet.t := 
-  fromNtList (ntKeys tbl).
-
-Definition entryLengths (tbl : parse_table) : list nat :=
-  List.map (fun pr => match pr with
-                      | (_, gamma) => List.length gamma
-                      end)
-           (ParseTable.elements tbl).
-
-Definition listMax (xs : list nat) : nat := 
-  fold_right max 0 xs.
-
-Definition maxEntryLength (tbl : parse_table) : nat :=
-  listMax (entryLengths tbl).
-
 (* Grammar locations *)
 Record location := Loc { lopt : option nonterminal
                        ; rpre : list symbol
                        ; rsuf : list symbol
                        }.
 
-(* Semantic value stacks *)
-Definition sem_stack  := (forest * list forest)%type.
-
+(* Grammatical derivation relation *)
 Inductive sym_derivation (g : grammar) : symbol -> list token -> tree -> Prop :=
 | T_der  : 
     forall (a : terminal) (l : literal),
@@ -161,6 +118,43 @@ Hint Constructors sym_derivation gamma_derivation.
 
 (* LEMMAS *)
 
+Lemma gamma_derivation_app :
+  forall g ys1 w1 v1,
+    gamma_derivation g ys1 w1 v1
+    -> forall ys2 w2 v2,
+      gamma_derivation g ys2 w2 v2
+      -> gamma_derivation g (ys1 ++ ys2) (w1 ++ w2) (v1 ++ v2).
+Proof.
+  intros g ys1 w1 v1 hg.
+  induction hg; intros ys2 w2 v2 hg2; simpl in *; auto.
+  rewrite <- app_assoc.
+  constructor; auto.
+Qed.
+
+Lemma forest_app_singleton_node : 
+  forall g x ys ys' w w' v v',
+    In (x, ys') g
+    -> gamma_derivation g ys w v
+    -> gamma_derivation g ys' w' v'
+    -> gamma_derivation g (ys ++ [NT x]) (w ++ w') (v ++ [Node x v']).
+Proof.
+  intros g x ys ys' w w' v v' hi hg hg'.
+  apply gamma_derivation_app; auto.
+  assert (happ : w' = w' ++ []) by (rewrite <- app_nil_r'; auto); rewrite happ; clear happ.
+  repeat (econstructor; eauto).
+Qed.
+
+Lemma terminal_head_gamma_derivation :
+  forall g a l ys w v,
+    gamma_derivation g ys w v
+    -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf l :: v).
+Proof.
+  intros g a l ys w v hg.
+  assert (happ : (a, l) :: w = [(a, l)] ++ w) by (rewrite cons_app_singleton; auto).
+  rewrite happ; clear happ.
+  constructor; auto.
+Qed.
+
 Lemma in_rhssForNt_production_in_grammar :
   forall g x ys,
     In ys (rhssForNt g x)
@@ -170,4 +164,40 @@ Proof.
   induction g as [| (x', ys') g]; sis; tc.
   destruct (nt_eq_dec x' x); subst; auto.
   inv hin; auto.
+Qed.
+
+Lemma rhs_in_grammar_length_in_rhsLengths :
+  forall g rhs,
+    In rhs (rhss g) -> In (List.length rhs) (rhsLengths g).
+Proof.
+  intros g rhs Hin; induction g as [| (x, rhs') ps IH];
+  simpl in *; inv Hin; auto.
+Qed.
+
+Lemma in_rhssForNt_in_rhss :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> In rhs (rhss g).
+Proof.
+  intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
+  - inv Hin.
+  - destruct (nt_eq_dec x' x); subst; auto.
+    destruct Hin as [Heq | Hin]; subst; auto.
+Qed.
+  
+Lemma grammar_rhs_length_le_max :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> List.length rhs <= maxRhsLength g.
+Proof.
+  intros; unfold maxRhsLength.
+  apply list_elt_le_listmax.
+  apply rhs_in_grammar_length_in_rhsLengths.
+  eapply in_rhssForNt_in_rhss; eauto.
+Qed.
+
+Lemma grammar_rhs_length_lt_max_plus_1 :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> List.length rhs < 1 + maxRhsLength g.
+Proof.
+  intros g x rhs Hin.
+  apply grammar_rhs_length_le_max in Hin; omega.
 Qed.

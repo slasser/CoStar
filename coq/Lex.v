@@ -11,14 +11,14 @@ Section PairLT.
     
     Hint Constructors pair_lex.
     
-    Theorem pair_lex_trans :
+    Lemma pair_lex_trans :
       transitive _ ltA -> transitive _ ltB -> transitive _ pair_lex.
     Proof.
       intros tA tB [x1 y1] [x2 y2] [x3 y3] H12 H23.
       inv H12; inv H23; eauto.
     Defined.
     
-    Theorem pair_lex_wf :
+    Lemma pair_lex_wf :
       well_founded ltA -> well_founded ltB -> well_founded pair_lex.
     Proof.
       intros wfA wfB [x y].
@@ -44,14 +44,14 @@ Section TripleLT.
     
     Hint Constructors triple_lex.
     
-    Theorem triple_lex_trans :
+    Lemma triple_lex_trans :
       transitive _ ltA -> transitive _ ltB -> transitive _ ltC -> transitive _ triple_lex.
     Proof.
       intros tA tB tC [[x1 y1] z1] [[x2 y2] z2] [[x3 y3] z3] H12 H23.
       inv H12; inv H23; eauto.
     Defined.
     
-    Theorem triple_lex_wf :
+    Lemma triple_lex_wf :
       well_founded ltA -> well_founded ltB -> well_founded ltC -> well_founded triple_lex.
     Proof.
       intros wfA wfB wfC [[x y] z].

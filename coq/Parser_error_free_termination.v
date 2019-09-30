@@ -1,22 +1,10 @@
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Parser.
-Require Import GallStar.ParserLemmas.
 Require Import GallStar.Tactics.
-Require Import Parser_sound.
 
-Lemma multistep_invalid_state_cases :
-  forall (g : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (Parser.meas g st)),
-    multistep g st a = Error InvalidState
-    -> step g st = StepError InvalidState
-       \/ exists st' a', step g st = StepK st' 
-                         /\ multistep g st' a' = Error InvalidState.
-Proof.
-  intros g st a hm; subst.
-  destruct (multistep_cases g st a (Error InvalidState)); auto.
-Qed.
+(* The parser never reaches an invalid state;
+   i.e., impossible states really are impossible *)
 
 Lemma stack_wf_no_invalid_state :
   forall (g : grammar)
@@ -67,6 +55,11 @@ Proof.
     with (tri := Parser.meas g (mkInitState g ss ts)) in hp; auto.
   apply lex_nat_triple_wf.
 Qed.
+
+
+(* TODO -- The parser only returns a LeftRecursion error
+   if the grammar is left-recursive *)
+
 
 Theorem parser_terminates_without_error :
   forall (g  : grammar)

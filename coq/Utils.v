@@ -1,5 +1,8 @@
-Require Import List.
+Require Import List Omega.
+Require Import GallStar.Tactics.
 Import ListNotations.
+
+(* DEFINITIONS BUILT FROM STANDARD LIBRARY CONCEPTS *)
 
 (* unwrap a list of options, returning a list of the values wrapped by Some *)
 Definition extractSomes {A} (os : list (option A)) : list A :=
@@ -7,6 +10,9 @@ Definition extractSomes {A} (os : list (option A)) : list A :=
                          | None   => l
                          | Some a => a :: l
                          end) [] os.
+
+Definition listMax (xs : list nat) : nat := 
+  fold_right max 0 xs.
 
 (* A single (inl a) element of es causes the entire result to be (inl a) *)
 Fixpoint sumOfListSum {A B} (es : list (sum A B)) : sum A (list B) :=
@@ -37,3 +43,49 @@ Defined.
 
 Definition allEqual (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : bool :=
   forallb (beq x) xs.
+
+(* LEMMAS ABOUT STANDARD LIBRARY DEFINITIONS *)
+
+Lemma app_nil_r' : forall A (xs : list A), xs = xs ++ [].
+Proof.
+  intros; rewrite app_nil_r; auto.
+Qed.
+
+Lemma cons_app_singleton :
+  forall A (x : A) (ys : list A),
+    x :: ys = [x] ++ ys.
+Proof.
+  auto.
+Qed.
+
+Lemma filter_cons_in :
+  forall (A : Type) (f : A -> bool) (l : list A) (hd : A) (tl : list A),
+    filter f l = hd :: tl
+    -> In hd l.
+Proof.
+  intros A f l hd tl Hf.
+  assert (Hin : In hd (hd :: tl)) by apply in_eq.
+  rewrite <- Hf in Hin.
+  apply filter_In in Hin; destruct Hin as [Hp _]; auto.
+Defined.
+
+Lemma in_singleton_eq :
+  forall A (x x' : A), In x' [x] -> x' = x.
+Proof.
+  intros A x x' Hin.
+  destruct Hin as [Hhd | Htl]; auto.
+  inv Htl.
+Qed.
+
+Lemma list_elt_le_listmax :
+  forall (x : nat) (ys : list nat),
+    In x ys -> x <= listMax ys.
+Proof.
+  intros x ys Hin; induction ys as [| y ys IH]; simpl in *.
+  - inv Hin.
+  - destruct Hin as [Heq | Hin]; subst.
+    + apply Max.le_max_l.
+    + apply IH in Hin.
+      eapply le_trans; eauto.
+      apply Max.le_max_r.
+Qed.

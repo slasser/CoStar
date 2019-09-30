@@ -1,94 +1,12 @@
 Require Import Arith List.
 Require Import GallStar.Defs.
-Require Import GallStar.GeneralLemmas.
 Require Import GallStar.Lex.
 Require Import GallStar.Parser.
-Require Import GallStar.ParserLemmas.
 Require Import GallStar.Prediction.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
+Require Import GallStar.Utils.
 Import ListNotations.
-
-Fixpoint bottomFrame' (h : frame) (t : list frame) : frame :=
-  match t with
-  | []        => h
-  | fr :: frs => bottomFrame' fr frs
-  end.
-
-Definition bottomFrame (stk : parser_stack) : frame :=
-  let (h, t) := stk in bottomFrame' h t.
-
-Definition bottomFrameSyms (stk : parser_stack) : list symbol :=
-  let fr := bottomFrame stk
-  in  fr.(loc).(rpre) ++ fr.(loc).(rsuf).
-
-Ltac inv_sd hsd wpre wsuf hgd hsd' := inversion hsd as [? ? ? ? wpre hgd | ? ? ? ? ? ? wpre wsuf hgd hsd']; subst; clear hsd.
-
-Inductive stack_derivation_invar (g : grammar) (stk : parser_stack) (wsuf w : list token) : Prop :=
-| SD_invar :
-    forall wpre,
-      stack_derivation g stk wpre
-      -> wpre ++ wsuf = w
-      -> stack_derivation_invar g stk wsuf w.
-
-Ltac inv_sdi wpre hsd := match goal with
-                         | H : stack_derivation_invar _ _ _ _ |- _ =>
-                           inversion H as [wpre hsd ?]; subst; clear H
-                         end.
-
-Lemma gamma_derivation_app :
-  forall g ys1 w1 v1,
-    gamma_derivation g ys1 w1 v1
-    -> forall ys2 w2 v2,
-      gamma_derivation g ys2 w2 v2
-      -> gamma_derivation g (ys1 ++ ys2) (w1 ++ w2) (v1 ++ v2).
-Proof.
-  intros g ys1 w1 v1 hg.
-  induction hg; intros ys2 w2 v2 hg2; simpl in *; auto.
-  rewrite <- app_assoc.
-  constructor; auto.
-Qed.
-
-Lemma stack_derivation_cases :
-  forall g fr frs w,
-    stack_derivation g (fr, frs) w
-    -> match frs with
-       | []          => gamma_derivation g fr.(loc).(rpre) w fr.(sem)
-       | fr' :: frs' =>
-         exists wpre wsuf,
-         wpre ++ wsuf = w
-         /\ stack_derivation g (fr', frs') wpre
-         /\ gamma_derivation g fr.(loc).(rpre) wsuf fr.(sem)
-       end.
-Proof.
-  intros g fr frs w hsd.
-  destruct frs as [| fr' frs]; inv hsd; auto.
-  repeat eexists; repeat split; auto.
-Qed.
-
-Lemma forest_app_singleton_node : 
-  forall g x ys ys' w w' v v',
-    In (x, ys') g
-    -> gamma_derivation g ys w v
-    -> gamma_derivation g ys' w' v'
-    -> gamma_derivation g (ys ++ [NT x]) (w ++ w') (v ++ [Node x v']).
-Proof.
-  intros g x ys ys' w w' v v' hi hg hg'.
-  apply gamma_derivation_app; auto.
-  assert (happ : w' = w' ++ []) by (rewrite <- app_nil_r'; auto); rewrite happ; clear happ.
-  repeat (econstructor; eauto).
-Qed.
-
-Lemma terminal_head_gamma_derivation :
-  forall g a l ys w v,
-    gamma_derivation g ys w v
-    -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf l :: v).
-Proof.
-  intros g a l ys w v hg.
-  assert (happ : (a, l) :: w = [(a, l)] ++ w) by (rewrite cons_app_singleton; auto).
-  rewrite happ; clear happ.
-  constructor; auto.
-Qed.
 
 Lemma return_preserves_stack_derivation_invar :
   forall g callee caller caller' frs x xo xo_cr pre pre_cr suf_cr v v_cr wsuf w,
