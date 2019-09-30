@@ -20,27 +20,6 @@ Definition bottomFrameSyms (stk : parser_stack) : list symbol :=
   let fr := bottomFrame stk
   in  fr.(loc).(rpre) ++ fr.(loc).(rsuf).
 
-Ltac induct_list_length xs := 
-  remember (List.length xs) as l;
-  generalize dependent xs;
-  induction l as [l IHl] using lt_wf_ind;
-  intros xs Hl; subst.
-
-Ltac induct_stackScore g av stk :=
-  remember (stackScore (locStackOf stk) 
-                       (1 + (maxRhsLength g))
-                       (NtSet.cardinal av)) 
-    as sc;
-  generalize dependent stk;
-  generalize dependent av;
-  induction sc as [sc IHsc] using lt_wf_ind;
-  intros av stk Hsc; subst.
-
-Ltac induct_stackHeight stk :=
-  remember (stackHeight stk) as ht;
-  induction ht as [ht IHht] using lt_wf_ind;
-  intros stk Hht; subst.
-
 Lemma multistep_unfold :
   forall g st a,
     multistep g st a = 
