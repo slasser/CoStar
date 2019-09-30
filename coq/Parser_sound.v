@@ -13,10 +13,10 @@ Fixpoint bottomFrame' (h : frame) (t : list frame) : frame :=
   | fr :: frs => bottomFrame' fr frs
   end.
 
-Definition bottomFrame (stk : p_stack) : frame :=
+Definition bottomFrame (stk : parser_stack) : frame :=
   let (h, t) := stk in bottomFrame' h t.
 
-Definition bottomFrameSyms (stk : p_stack) : list symbol :=
+Definition bottomFrameSyms (stk : parser_stack) : list symbol :=
   let fr := bottomFrame stk
   in  fr.(loc).(rpre) ++ fr.(loc).(rsuf).
 
@@ -135,7 +135,7 @@ Proof.
   inv hs; repeat eexists; eauto.
 Qed.
 
-Inductive stack_wf (g : grammar) : p_stack -> Prop :=
+Inductive stack_wf (g : grammar) : parser_stack -> Prop :=
 | WF_nil :
     forall pre suf v,
       stack_wf g (Fr (Loc None pre suf) v, [])
@@ -148,7 +148,7 @@ Inductive stack_wf (g : grammar) : p_stack -> Prop :=
 
 Hint Constructors stack_wf.
 
-Inductive stack_derivation (g : grammar) : p_stack -> list token -> Prop :=
+Inductive stack_derivation (g : grammar) : parser_stack -> list token -> Prop :=
 | SD_nil :
     forall xo pre suf v w,
       gamma_derivation g pre w v
@@ -181,7 +181,7 @@ Proof.
 Qed.
  *)
 
-Inductive stack_derivation_invar (g : grammar) (stk : p_stack) (wsuf w : list token) : Prop :=
+Inductive stack_derivation_invar (g : grammar) (stk : parser_stack) (wsuf w : list token) : Prop :=
 | SD_invar :
     forall wpre,
       stack_derivation g stk wpre
@@ -419,7 +419,7 @@ Lemma multistep_sound :
          (a      : Acc lex_nat_triple tri)
          (w wsuf : list token)
          (av     : NtSet.t)
-         (stk    : p_stack)
+         (stk    : parser_stack)
          (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf)))
          (v      : forest),
     tri = Parser.meas g (Pst av stk wsuf)
