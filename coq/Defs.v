@@ -155,6 +155,27 @@ Proof.
   constructor; auto.
 Qed.
 
+Lemma in_list_iff_in_fromNtList :
+  forall (x : nonterminal)
+         (l : list nonterminal), 
+    In x l <-> NtSet.In x (fromNtList l).
+Proof.
+  intros x l; split; intro hi; induction l as [| x' l IH]; sis; try ND.fsetdec.
+  - destruct hi as [hh | ht]; subst; auto.
+    + ND.fsetdec.
+    + apply IH in ht; ND.fsetdec.
+  - destruct (NF.eq_dec x' x); subst; auto.
+    right; apply IH; ND.fsetdec.
+Qed.
+
+Lemma in_lhss_in_allNts :
+  forall (g : grammar) (x : nonterminal),
+    In x (lhss g)
+    -> NtSet.In x (allNts g).
+Proof.
+  intros g x hi; apply in_list_iff_in_fromNtList; auto.
+Qed.
+
 Lemma in_rhssForNt_production_in_grammar :
   forall g x ys,
     In ys (rhssForNt g x)

@@ -329,6 +329,20 @@ Proof.
   destruct (multistep_cases g st a (Error InvalidState)); auto.
 Qed.
 
+Lemma multistep_left_recursion_cases :
+  forall (g  : grammar)
+         (st : parser_state)
+         (a  : Acc lex_nat_triple (meas g st))
+         (x  : nonterminal),
+    multistep g st a = Error (LeftRecursion x)
+    -> step g st = StepError (LeftRecursion x)
+       \/ exists st' a', step g st = StepK st' 
+                         /\ multistep g st' a' = Error (LeftRecursion x).
+Proof.
+  intros g st a x hm; subst.
+  destruct (multistep_cases g st a (Error (LeftRecursion x))); auto.
+Qed.
+
 Lemma step_StepAccept_facts :
   forall g av stk ts v,
     step g (Pst av stk ts) = StepAccept v
