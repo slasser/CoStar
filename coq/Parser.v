@@ -443,3 +443,180 @@ Proof.
   destruct frs as [| fr' frs]; inv hsd; auto.
   repeat eexists; repeat split; auto.
 Qed.
+
+(* another invariant *)
+
+Definition nt_unavailable (g : grammar) (x : nonterminal) (av : NtSet.t) : Prop :=
+  In x (lhss g) /\ ~ NtSet.In x av.
+
+Definition processed_symbols_all_nullable (g : grammar) (frs : list frame) : Prop :=
+  Forall (fun fr => nullable_gamma g fr.(loc).(rpre)) frs.
+
+Hint Constructors Forall.
+
+Definition unavailable_nts_are_open_calls_invar g st : Prop :=
+  match st with
+  | Pst av (fr, frs) _ =>
+    forall (x : nonterminal),
+      nt_unavailable g x av
+      -> nullable_gamma g fr.(loc).(rpre)
+         /\ exists frs_pre fr_cr frs_suf suf,
+          frs = frs_pre ++ fr_cr :: frs_suf
+          /\ processed_symbols_all_nullable g frs_pre
+          /\ fr_cr.(loc).(rsuf) = NT x :: suf
+  end.
+(*  
+Definition unavailable_nts_are_open_calls_invar
+           (g : grammar) (av : NtSet.t) (frs : list frame) : Prop :=
+  forall (x : nonterminal),
+    nt_unavailable g x av
+    -> exists frs_pre fr_cr frs_suf suf,
+        frs = frs_pre ++ fr_cr :: frs_suf
+        /\ processed_symbols_all_nullable g frs_pre
+        /\ fr_cr.(loc).(rsuf) = NT x :: suf.
+ *)
+
+Lemma all_nts_available_no_nt_unavailable :
+  forall g x,
+    ~ nt_unavailable g x (allNts g).
+Proof.
+  unfold not; unfold nt_unavailable; intros g x [hi hn].
+  apply in_lhss_in_allNts in hi; auto.
+Qed.
+
+Lemma unavailable_nts_invar_starts_true :
+  forall g ys ts,
+    unavailable_nts_are_open_calls_invar g (mkInitState g ys ts).
+Proof.
+  intros g ys ts; unfold mkInitState; unfold unavailable_nts_are_open_calls_invar.
+  intros x hn.
+  apply all_nts_available_no_nt_unavailable in hn; inv hn.
+Qed.
+
+Lemma nt_unavailable_add :
+  forall g x x' av,
+    nt_unavailable g x' (NtSet.add x av)
+    -> x' <> x /\ nt_unavailable g x' av.
+Proof.
+  intros g x x' av hn.
+  destruct (NF.eq_dec x' x); subst.
+  - unfold nt_unavailable in hn; ND.fsetdec.
+  - unfold nt_unavailable in *; destruct hn as [hi hn].
+    repeat split; auto.
+    ND.fsetdec.
+Qed.
+
+Lemma nt_unavailable_remove :
+  forall g x x' av,
+    nt_unavailable g x' (NtSet.remove x av)
+    -> x' <> x
+    -> nt_unavailable g x' av.
+Proof.
+  intros g x x' av hn hneq.
+  destruct hn as [hi hn].
+  split; auto.
+  ND.fsetdec.
+Qed.
+
+Lemma nullable_split :
+  forall g xs ys,
+    nullable_gamma g (xs ++ ys)
+    -> nullable_gamma g ys.
+Proof.
+  induction xs; intros.
+  - auto.
+  - inv H.
+    eapply IHxs; eauto.
+Qed.
+
+Lemma nullable_app :
+  forall g xs ys,
+    nullable_gamma g xs
+    -> nullable_gamma g ys
+    -> nullable_gamma g (xs ++ ys).
+Proof.
+  intros g xs ys Hng Hng'.
+  induction xs as [| x xs]; simpl in *; auto.
+  inv Hng.
+  constructor; auto.
+Qed.
+
+Lemma step_preserves_unavailable_nts_invar :
+  forall g st st',
+    step g st = StepK st'
+    -> stack_wf g st.(stack)
+    -> unavailable_nts_are_open_calls_invar g st
+    -> unavailable_nts_are_open_calls_invar g st'.
+Proof.
+  intros g st st' hs hw hu.
+  destruct st as [av (fr, frs) ts].
+  destruct fr as [[xo pre suf] v]; sis.
+  destruct suf as [| [a | x] suf].
+  - destruct frs as [| [[xo_prev pre_prev suf_prev] v_prev] frs].
+    + destruct ts; tc.
+    + destruct suf_prev as [| [a | x] suf_prev]; tc; inv hs.
+      unfold unavailable_nts_are_open_calls_invar; sis.
+      intros x' hn.
+      apply nt_unavailable_add in hn; destruct hn as [hneq hn].
+      apply hu in hn; clear hu.
+      destruct hn as [hng [frs_pre [fr_cr [frs_suf [suf [heq [hall heq']]]]]]].
+      destruct frs_pre as [| fr_pre frs_pre]; sis.
+      * inv heq; sis.
+        inv heq'; tc.
+      * inv heq. 
+        inv hall; sis.
+        split.
+        -- apply nullable_app; auto.
+           constructor; auto.
+           inv hw; rewrite app_nil_r in *.
+           econstructor; eauto.
+        -- repeat eexists; repeat split; eauto.
+  - destruct ts as [| (a', l) ts]; tc.
+    destruct (t_eq_dec a' a); tc; subst; inv hs.
+    (* lemma *)
+    unfold unavailable_nts_are_open_calls_invar; sis.
+    intros x hn.
+    apply all_nts_available_no_nt_unavailable in hn; inv hn.
+  - destruct (NtSet.mem x av) eqn:hm; tc.
+    destruct (llPredict g x _) as [rhs | rhs | | m] eqn:hl; inv hs.
+    + unfold unavailable_nts_are_open_calls_invar; sis.
+      intros x' hn.
+      split; auto.
+      destruct (NF.eq_dec x' x); subst.
+      * exists [].
+        exists (Fr (Loc xo pre (NT x :: suf)) v).
+        exists frs.
+        exists suf.
+        sis.
+        repeat split; auto.
+        constructor.
+      * apply nt_unavailable_remove in hn; auto. 
+        apply hu in hn.
+        destruct hn as [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hall heq']]]]]]]; subst.
+        exists ((Fr (Loc xo pre (NT x :: suf)) v) :: frs_pre).
+        exists fr_cr.
+        exists frs_suf.
+        exists suf'.
+        repeat split; auto.
+        constructor; auto.
+    +  unfold unavailable_nts_are_open_calls_invar; sis.
+      intros x' hn.
+      split; auto.
+      destruct (NF.eq_dec x' x); subst.
+      * exists [].
+        exists (Fr (Loc xo pre (NT x :: suf)) v).
+        exists frs.
+        exists suf.
+        sis.
+        repeat split; auto.
+        constructor.
+      * apply nt_unavailable_remove in hn; auto. 
+        apply hu in hn.
+        destruct hn as [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hall heq']]]]]]]; subst.
+        exists ((Fr (Loc xo pre (NT x :: suf)) v) :: frs_pre).
+        exists fr_cr.
+        exists frs_suf.
+        exists suf'.
+        repeat split; auto.
+        constructor; auto.
+Qed.

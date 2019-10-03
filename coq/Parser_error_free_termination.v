@@ -62,18 +62,6 @@ Qed.
 (* TODO -- The parser only returns a LeftRecursion error
    if the grammar is left-recursive *)
 
-Inductive nullable_sym (g : grammar) : symbol -> Prop :=
-| NullableSym : forall x ys,
-    In (x, ys) g
-    -> nullable_gamma g ys
-    -> nullable_sym g (NT x)
-with nullable_gamma (g : grammar) : list symbol -> Prop :=
-     | NullableNil  : nullable_gamma g []
-     | NullableCons : forall hd tl,
-         nullable_sym g hd
-         -> nullable_gamma g tl
-         -> nullable_gamma g (hd :: tl).
-
 Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
 | NullableNil'  : 
     nullable_gamma' g []

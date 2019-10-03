@@ -116,6 +116,21 @@ with gamma_derivation (g : grammar) : list symbol -> list token-> forest-> Prop 
 
 Hint Constructors sym_derivation gamma_derivation.
 
+(* Inductive definition of a nullable grammar symbol *)
+Inductive nullable_sym (g : grammar) : symbol -> Prop :=
+| NullableSym : forall x ys,
+    In (x, ys) g
+    -> nullable_gamma g ys
+    -> nullable_sym g (NT x)
+with nullable_gamma (g : grammar) : list symbol -> Prop :=
+     | NullableNil  : nullable_gamma g []
+     | NullableCons : forall hd tl,
+         nullable_sym g hd
+         -> nullable_gamma g tl
+         -> nullable_gamma g (hd :: tl).
+
+Hint Constructors nullable_sym nullable_gamma.
+
 (* LEMMAS *)
 
 Lemma gamma_derivation_app :
