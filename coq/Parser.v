@@ -356,6 +356,20 @@ Proof.
   inv hs; repeat eexists; eauto.
 Qed.
 
+Lemma step_LeftRecursion_facts :
+  forall g av fr frs ts x,
+    step g (Pst av (fr, frs) ts) = StepError (LeftRecursion x)
+    -> ~ NtSet.In x av
+       /\ exists suf,
+        fr.(loc).(rsuf) = NT x :: suf.
+Proof.
+  intros g av fr frs ts x hs.
+  unfold step in hs; repeat dmeq heq; tc; inv hs; sis.
+  split; eauto.
+  unfold not; intros hi.
+  apply NtSet.mem_spec in hi; tc.
+Qed.
+
 (* A well-formedness invariant for the parser stack *)
 Inductive stack_wf (g : grammar) : parser_stack -> Prop :=
 | WF_nil :
@@ -460,21 +474,11 @@ Definition unavailable_nts_are_open_calls_invar g st : Prop :=
     forall (x : nonterminal),
       nt_unavailable g x av
       -> nullable_gamma g fr.(loc).(rpre)
-         /\ exists frs_pre fr_cr frs_suf suf,
-          frs = frs_pre ++ fr_cr :: frs_suf
-          /\ processed_symbols_all_nullable g frs_pre
-          /\ fr_cr.(loc).(rsuf) = NT x :: suf
+         /\ (exists frs_pre fr_cr frs_suf suf,
+                frs = frs_pre ++ fr_cr :: frs_suf
+                /\ processed_symbols_all_nullable g frs_pre
+                /\ fr_cr.(loc).(rsuf) = NT x :: suf)
   end.
-(*  
-Definition unavailable_nts_are_open_calls_invar
-           (g : grammar) (av : NtSet.t) (frs : list frame) : Prop :=
-  forall (x : nonterminal),
-    nt_unavailable g x av
-    -> exists frs_pre fr_cr frs_suf suf,
-        frs = frs_pre ++ fr_cr :: frs_suf
-        /\ processed_symbols_all_nullable g frs_pre
-        /\ fr_cr.(loc).(rsuf) = NT x :: suf.
- *)
 
 Lemma all_nts_available_no_nt_unavailable :
   forall g x,

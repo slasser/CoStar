@@ -115,7 +115,7 @@ Inductive nullable_frames_path (g : grammar) : nonterminal -> nonterminal -> lis
       -> nullable_gamma g top_fr.(loc).(rpre)
       -> top_fr.(loc).(rsuf) = NT y :: suf'
       -> nullable_frames_path g x y (top_fr :: mid_frs ++ [bot_fr]).
-
+(*
 Lemma multistep_left_recursion_detection_sound :
   forall (g : grammar)
          (tri : nat * nat * nat)
@@ -191,11 +191,58 @@ Proof.
       * destruct hin as [hh | ht]; subst.
 Abort.
 
+
 Lemma multistep_left_recursion_detection_sound :
   forall g av stk ts a x,
     multistep g (Pst av stk ts) a = Error (LeftRecursion x)
     -> (In x (lhss g) /\ ~ NtSet.In x av)
        \/ left_recursive g (NT x).
+Admitted.
+ *)
+
+
+
+Lemma multistep_left_recursion_detection_sound :
+  forall (g      : grammar)
+         (tri    : nat * nat * nat)
+         (a      : Acc lex_nat_triple tri)
+         (st     : parser_state)
+         (a'     : Acc lex_nat_triple (meas g st))
+         (x      : nonterminal),
+    tri = meas g st
+    -> stack_wf g st.(stack)
+    -> unavailable_nts_are_open_calls_invar g st
+    -> multistep g st a' = Error (LeftRecursion x)
+    -> left_recursive g (NT x).
+Proof.
+  intros g tri a.
+  induction a as [tri hlt IH].
+  intros st a' x heq hw hu hm; subst.
+  apply multistep_left_recursion_cases in hm.
+  destruct hm as [hs | [st' [a'' [hs hm]]]].
+  - clear IH.
+    destruct st as [av (fr, frs) ts].
+    apply step_LeftRecursion_facts in hs.
+    destruct hs as [hnin [suf heq]]; subst.
+    unfold unavailable_nts_are_open_calls_invar in hu.
+    unfold nt_unavailable in hu.
+    (* I'll need to change the definition of allNts
+       so that it includes right-hand nonterminals *)
+    assert (hand : In x (lhss g) /\ ~ NtSet.In x av) by admit.
+    apply hu in hand; clear hu.
+    destruct hand as [hng [frs_pre [fr_cr [frs_suf [suf_cr [heq' [hp heq'']]]]]]]; subst.
+    simpl in hw.
+    (* Next prove that fr :: frs_pre ++ fr_cr is well-formed
+       Then prove that there's a nullable path from x to x. 
+       Change the wf definition so it's over lists.
+       That will let you prove that it holds of sublists. *)
+    admit.
+  - eapply IH with (y := meas g st'); eauto.
+    + eapply step_meas_lt; eauto.
+    + (* redefine invariants to get rid of these destructs *)
+      destruct st; destruct st'.
+      eapply step_preserves_stack_wf_invar; eauto.
+    + eapply step_preserves_unavailable_nts_invar; eauto.
 Admitted.
 
 Lemma parse_left_recursion_detection_sound :
@@ -204,12 +251,19 @@ Lemma parse_left_recursion_detection_sound :
     -> left_recursive g (NT x).
 Proof.
   intros g ss ts x hp; unfold parse in hp.
-  apply multistep_left_recursion_detection_sound in hp.
-  destruct hp as [[hi hn] | hlr]; auto.
-  apply in_lhss_in_allNts in hi; firstorder.
+  eapply multistep_left_recursion_detection_sound in hp; eauto.
+  - apply lex_nat_triple_wf.
+  - (* lemma? *)
+    constructor.
+  - (* lemma *)
+    unfold mkInitState.
+    unfold unavailable_nts_are_open_calls_invar; simpl.
+    intros x' hu.
+    exfalso.
+    eapply all_nts_available_no_nt_unavailable; eauto.
 Qed.
   
-Lemma parser_doesn't_report_nonexistent_left_recursion :
+Lemma parser_doesn't_find_left_recursion_in_non_left_recursive_grammar :
   forall (g  : grammar)
          (ss : list symbol)
          (ts : list token)
@@ -236,5 +290,5 @@ Proof.
   - (* prediction error case *)
     admit.
   - (* left recursion case *)
-    apply parser_doesn't_report_nonexistent_left_recursion; auto.
+    apply parser_doesn't_find_left_recursion_in_non_left_recursive_grammar; auto.
 Admitted.
