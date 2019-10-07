@@ -4,6 +4,7 @@ Require Import GallStar.Lex.
 Require Import GallStar.Prediction.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
+Require Import GallStar.Utils.
 Import ListNotations.
 Open Scope list_scope.
 
@@ -371,6 +372,30 @@ Proof.
 Qed.
 
 (* A well-formedness invariant for the parser stack *)
+
+Inductive frames_wf (g : grammar) : list frame -> Prop :=
+| WF_nil :
+    frames_wf g []
+| WF_bottom :
+    forall xo pre suf v,
+      frames_wf g [Fr (Loc xo pre suf) v]
+| WF_upper :
+    forall x xo pre pre' suf suf' v v' frs,
+      In (x, pre' ++ suf') g
+      -> frames_wf g (Fr (Loc xo pre (NT x :: suf)) v ::
+                      frs)
+      -> frames_wf g (Fr (Loc (Some x) pre' suf') v'  ::
+                      Fr (Loc xo pre (NT x :: suf)) v ::
+                      frs).
+
+Hint Constructors frames_wf.
+
+Definition stack_wf (g : grammar) (stk : parser_stack) : Prop :=
+  match stk with
+  | (fr, frs) => frames_wf g (fr :: frs)
+  end.
+
+(*
 Inductive stack_wf (g : grammar) : parser_stack -> Prop :=
 | WF_nil :
     forall pre suf v,
@@ -383,6 +408,7 @@ Inductive stack_wf (g : grammar) : parser_stack -> Prop :=
                      Fr (Loc xo' pre' (NT x :: suf')) v' :: frs).
 
 Hint Constructors stack_wf.
+ *)
 
 Lemma step_preserves_stack_wf_invar :
   forall g av av' stk stk' ts ts',
@@ -398,13 +424,54 @@ Proof.
     inv H10; constructor; auto.
     rewrite <- app_assoc; auto.
   - inv hw; auto.
-    constructor; auto.
-    rewrite <- app_assoc; auto.
+    + constructor; auto.
+    + constructor; auto.
+      rewrite <- app_assoc; auto.
   - constructor; simpl; auto.
     eapply llPredict_succ_arg_result_in_grammar; eauto.
   - constructor; simpl; auto. 
     eapply llPredict_ambig_arg_result_in_grammar; eauto.
-Qed.    
+Qed.
+
+Lemma inv_hd_tl :
+  forall A (x x' : A) (xs xs' : list A),
+    x :: xs = x' :: xs'
+    -> x' = x /\ xs' = xs.
+Proof.
+  intros A x x' xs xs' heq.
+  inv heq; auto.
+Qed.
+
+Lemma frames_wf_app :
+  forall g l,
+    frames_wf g l
+    -> forall p s,
+      l = p ++ s
+      -> frames_wf g p /\ frames_wf g s.
+Proof.
+  intros g l hw.
+  induction hw; intros p s heq.
+  - symmetry in heq; apply app_eq_nil in heq.
+    destruct heq; subst; auto.
+  - destruct p as [| fr p]; sis; subst; auto.
+    apply inv_hd_tl in heq.
+    destruct heq as [hh ht].
+    apply app_eq_nil in ht; destruct ht; subst; auto.
+  - destruct p as [| fr  p]; sis; subst; auto.
+    destruct p as [| fr' p]; sis; subst; inv heq; auto.
+    specialize (IHhw (Fr (Loc xo pre (NT x :: suf)) v :: p) s).
+    destruct IHhw as [hs hp]; auto.
+Qed.
+
+Lemma frames_wf_app_l :
+  forall g pre suf,
+    frames_wf g (pre ++ suf)
+    -> frames_wf g pre.
+Proof.
+  intros g pre suf hw.
+  eapply frames_wf_app in hw; eauto.
+  firstorder.
+Qed.
 
 (* The stack symbols that have already been processed represent
    a (partial) derivation; this predicate relates those symbols

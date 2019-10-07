@@ -55,9 +55,10 @@ Proof.
   unfold parse in hp.
   apply multistep_never_reaches_error_state
     with (tri := Parser.meas g (mkInitState g ss ts)) in hp; auto.
-  apply lex_nat_triple_wf.
+  - apply lex_nat_triple_wf.
+  - (* lemma *)
+    constructor.
 Qed.
-
 
 (* TODO -- The parser only returns a LeftRecursion error
    if the grammar is left-recursive *)
@@ -115,93 +116,61 @@ Inductive nullable_frames_path (g : grammar) : nonterminal -> nonterminal -> lis
       -> nullable_gamma g top_fr.(loc).(rpre)
       -> top_fr.(loc).(rsuf) = NT y :: suf'
       -> nullable_frames_path g x y (top_fr :: mid_frs ++ [bot_fr]).
-(*
-Lemma multistep_left_recursion_detection_sound :
-  forall (g : grammar)
-         (tri : nat * nat * nat)
-         (a : Acc lex_nat_triple tri)
-         (av : NtSet.t) 
-         fr frs
-         (ts : list token)
-         (a' : Acc lex_nat_triple (meas g (Pst av (fr, frs) ts)))
-         (x : nonterminal),
-    stack_wf g (fr, frs)
-    -> tri = meas g (Pst av (fr, frs) ts)
-    -> multistep g (Pst av (fr, frs) ts) a' = Error (LeftRecursion x)
-    -> (~ NtSet.In x av
-        /\ (exists pre s suf,
-               fr.(loc).(rpre) ++ fr.(loc).(rsuf) = pre ++ s :: suf
-               /\ nullable_gamma g pre
-               /\ (s = NT x \/ nullable_path g s (NT x))))
-       \/ left_recursive g (NT x).
+
+Lemma nullable_path_trans :
+  forall g x y z,
+    nullable_path g x y
+    -> nullable_path g y z
+    -> nullable_path g x z.
 Proof.
-  intros g tri a'.
-  induction a' as [tri hlt IH].
-  intros av fr frs ts a x hw heq hm; subst.
-  apply multistep_left_recursion_cases in hm.
-  destruct hm as [hs | hm].
-  - admit.
-  - destruct hm as [[av' (fr', frs') ts'] [a'' [hs hm]]].
-    eapply IH in hm; clear IH; clear hlt; auto.
-    + destruct hm as [hnin | hlr]; auto.
-      clear a a''.
-      destruct hnin as [hnin [pre [s [suf [heq [hng hor]]]]]]; subst.
-      destruct hor as [heq' | hnp]; subst.
-      * unfold step in hs; repeat dmeq heq; tc; inv hs; subst; sis.
-        -- rewrite <- app_assoc in heq.
-           simpl in *.
-           inv hw.
-           destruct (NF.eq_dec x n); subst.
-           ++ ND.fsetdec.
-           ++ left. split.
-              ** ND.fsetdec.
-              ** rewrite app_nil_r in *.
-Abort.           
+  intros g x y z hxy hyz.
+  induction hxy; sis; subst.
+  - destruct z as [a | z]; eauto.
+    inv hyz.
+  - destruct z as [a | z]; eauto.
+    inv hyz.
+Qed.  
 
-Lemma multistep_left_recursion_detection_sound :
-  forall (g : grammar)
-         (tri : nat * nat * nat)
-         (a : Acc lex_nat_triple tri)
-         (av : NtSet.t) 
-         fr frs
-         (ts : list token)
-         (a' : Acc lex_nat_triple (meas g (Pst av (fr, frs) ts)))
-         (x : nonterminal),
-    tri = meas g (Pst av (fr, frs) ts)
-    -> multistep g (Pst av (fr, frs) ts) a' = Error (LeftRecursion x)
-    -> (exists fr' pre s suf,
-           In fr' (fr :: frs)
-           /\ fr'.(loc).(rsuf) = pre ++ s :: suf
-           /\ ~ NtSet.In x av
-           /\ (s = NT x
-               \/ nullable_path g s (NT x)))
-       \/ left_recursive g (NT x).
+Lemma nullable_path_two_head_frames :
+  forall g fr fr' frs y suf,
+    frames_wf g (fr :: fr' :: frs)
+    -> nullable_gamma g fr.(loc).(rpre)
+    -> fr.(loc).(rsuf) = NT y :: suf
+    -> exists x suf',
+        fr'.(loc).(rsuf) = NT x :: suf'
+        /\ nullable_path g (NT x) (NT y).
 Proof.
-  intros g tri a'.
-  induction a' as [tri hlt IH].
-  intros av fr frs ts a x heq hm; subst.
-  apply multistep_left_recursion_cases in hm.
-  destruct hm as [hs | hm].
-  - admit.
-  - destruct hm as [[av' (fr', frs') ts'] [a'' [hs hm]]].
-    eapply IH in hm; clear IH; clear hlt; eauto.
-    + destruct hm as [hex | hlr]; auto.
-      destruct hex as [fr'' [pre [s [suf [hin [heq [hnin hor]]]]]]].
-      destruct hor as [heq' | hnp]; subst.
-      * destruct hin as [hh | ht]; subst.
-Abort.
+  intros g fr fr' frs y suf hw hn heq.
+  inv hw; sis; subst; eauto.
+Qed.
 
+(* CLEAN THIS UP *)
+Lemma stack_configuration_repr_nullable_path :
+  forall g frs fr fr_cr x y suf suf',
+    frames_wf g (fr :: frs ++ [fr_cr])
+    -> nullable_gamma g fr.(loc).(rpre)
+    -> fr.(loc).(rsuf) = NT y :: suf
+    -> processed_symbols_all_nullable g frs
+    -> fr_cr.(loc).(rsuf) = NT x :: suf'
+    -> nullable_path g (NT x) (NT y).
+Proof.
+  intros g frs.
+  induction frs as [| fr' frs IH]; intros fr fr_cr x y suf suf' hw hn heq hp heq'; sis.
+  - inv hw; sis.
+    inv heq'.
+    eapply DirectPath; eauto.
+  - rename y into z.
+    pose proof hw as hw'.
+    eapply nullable_path_two_head_frames in hw'; eauto.
+    destruct hw' as [y [suf'' [heq'' hnp]]].
+    apply nullable_path_trans with (y := (NT y)); auto.
+    assert (hw' : frames_wf g (fr' :: frs ++ [fr_cr])).
+    { inv hw; auto. }
+    inv hp.
+    eapply IH in hw'; eauto.
+Qed.
 
-Lemma multistep_left_recursion_detection_sound :
-  forall g av stk ts a x,
-    multistep g (Pst av stk ts) a = Error (LeftRecursion x)
-    -> (In x (lhss g) /\ ~ NtSet.In x av)
-       \/ left_recursive g (NT x).
-Admitted.
- *)
-
-
-
+(* CLEAN UP *)
 Lemma multistep_left_recursion_detection_sound :
   forall (g      : grammar)
          (tri    : nat * nat * nat)
@@ -236,7 +205,13 @@ Proof.
        Then prove that there's a nullable path from x to x. 
        Change the wf definition so it's over lists.
        That will let you prove that it holds of sublists. *)
-    admit.
+    assert (happ : fr :: frs_pre ++ fr_cr :: frs_suf =
+                   (fr :: frs_pre ++ [fr_cr]) ++ frs_suf).
+    (* lemma *)
+    { simpl. rewrite <- app_assoc. simpl. auto. }
+    rewrite happ in hw; clear happ.
+    apply frames_wf_app_l in hw.
+    eapply stack_configuration_repr_nullable_path in hw; eauto.
   - eapply IH with (y := meas g st'); eauto.
     + eapply step_meas_lt; eauto.
     + (* redefine invariants to get rid of these destructs *)
