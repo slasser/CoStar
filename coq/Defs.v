@@ -183,12 +183,12 @@ Proof.
     right; apply IH; ND.fsetdec.
 Qed.
 
-Lemma in_lhss_in_allNts :
+Lemma in_lhss_iff_in_allNts :
   forall (g : grammar) (x : nonterminal),
     In x (lhss g)
-    -> NtSet.In x (allNts g).
+    <-> NtSet.In x (allNts g).
 Proof.
-  intros g x hi; apply in_list_iff_in_fromNtList; auto.
+  intros g x; split; intros hi; apply in_list_iff_in_fromNtList; auto.
 Qed.
 
 Lemma in_rhssForNt_production_in_grammar :

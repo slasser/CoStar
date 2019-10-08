@@ -101,8 +101,10 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
           | PredReject    => StepReject "prediction found no viable right-hand sides"
           | PredError msg => StepError (PredictionError msg)
           end
-        else
-          StepError (LeftRecursion x)
+        else if NtSet.mem x (allNts g) then
+               StepError (LeftRecursion x)
+             else
+               StepReject "nonterminal not in grammar"
       end
     end
   end.
@@ -204,6 +206,7 @@ Proof.
       apply PredAmbig_result_in_rhssForNt in Hp.
       eapply state_lt_after_push; eauto.
       simpl; auto.
+    + destruct (NtSet.mem y (allNts g)); tc.
 Defined.
 
 Lemma StepK_st_acc :
@@ -361,14 +364,16 @@ Lemma step_LeftRecursion_facts :
   forall g av fr frs ts x,
     step g (Pst av (fr, frs) ts) = StepError (LeftRecursion x)
     -> ~ NtSet.In x av
+       /\ NtSet.In x (allNts g)
        /\ exists suf,
-        fr.(loc).(rsuf) = NT x :: suf.
+           fr.(loc).(rsuf) = NT x :: suf.
 Proof.
   intros g av fr frs ts x hs.
-  unfold step in hs; repeat dmeq heq; tc; inv hs; sis.
-  split; eauto.
-  unfold not; intros hi.
-  apply NtSet.mem_spec in hi; tc.
+  unfold step in hs; repeat dmeq h; tc; inv hs; sis.
+  repeat split; eauto.
+  - unfold not; intros hi.
+    apply NtSet.mem_spec in hi; tc.
+  - apply NtSet.mem_spec; auto.
 Qed.
 
 (* A well-formedness invariant for the parser stack *)
@@ -552,7 +557,7 @@ Lemma all_nts_available_no_nt_unavailable :
     ~ nt_unavailable g x (allNts g).
 Proof.
   unfold not; unfold nt_unavailable; intros g x [hi hn].
-  apply in_lhss_in_allNts in hi; auto.
+  apply in_lhss_iff_in_allNts in hi; auto.
 Qed.
 
 Lemma unavailable_nts_invar_starts_true :
@@ -690,4 +695,5 @@ Proof.
         exists suf'.
         repeat split; auto.
         constructor; auto.
+    + destruct (NtSet.mem x (allNts g)); tc.
 Qed.

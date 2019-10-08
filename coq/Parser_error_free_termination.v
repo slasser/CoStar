@@ -192,19 +192,15 @@ Proof.
   - clear IH.
     destruct st as [av (fr, frs) ts].
     apply step_LeftRecursion_facts in hs.
-    destruct hs as [hnin [suf heq]]; subst.
+    destruct hs as [hnin [hin [suf heq]]]; subst.
     unfold unavailable_nts_are_open_calls_invar in hu.
     unfold nt_unavailable in hu.
-    (* I'll need to change the definition of allNts
-       so that it includes right-hand nonterminals *)
-    assert (hand : In x (lhss g) /\ ~ NtSet.In x av) by admit.
+    assert (hand : In x (lhss g) /\ ~ NtSet.In x av).
+    { split; auto.
+      apply in_lhss_iff_in_allNts; auto. }
     apply hu in hand; clear hu.
     destruct hand as [hng [frs_pre [fr_cr [frs_suf [suf_cr [heq' [hp heq'']]]]]]]; subst.
     simpl in hw.
-    (* Next prove that fr :: frs_pre ++ fr_cr is well-formed
-       Then prove that there's a nullable path from x to x. 
-       Change the wf definition so it's over lists.
-       That will let you prove that it holds of sublists. *)
     assert (happ : fr :: frs_pre ++ fr_cr :: frs_suf =
                    (fr :: frs_pre ++ [fr_cr]) ++ frs_suf).
     (* lemma *)
@@ -218,7 +214,7 @@ Proof.
       destruct st; destruct st'.
       eapply step_preserves_stack_wf_invar; eauto.
     + eapply step_preserves_unavailable_nts_invar; eauto.
-Admitted.
+Qed.
 
 Lemma parse_left_recursion_detection_sound :
   forall g ss ts x,
