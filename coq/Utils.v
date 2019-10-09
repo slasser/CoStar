@@ -89,3 +89,15 @@ Proof.
       eapply le_trans; eauto.
       apply Max.le_max_r.
 Qed.
+
+Lemma sumOfListSum_failure_in_input :
+  forall A B (es : list (sum A B)) (a : A),
+    sumOfListSum es = inl a
+    -> In (inl a) es.
+Proof.
+  intros A B es a hs.
+  induction es as [| e es IH]; sis; tc.
+  destruct e as [a' | b].
+  - inv hs; auto.
+  - dmeq hs; tc.
+Qed.

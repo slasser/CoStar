@@ -37,19 +37,19 @@ Record parser_state    := Pst { avail  : NtSet.t
                               ; tokens : list token
                               }.
 
-Inductive error_type :=
-| InvalidState    : error_type
-| PredictionError : string -> error_type
-| LeftRecursion   : nonterminal -> error_type.
+Inductive parse_error :=
+| InvalidState    : parse_error
+| LeftRecursion   : nonterminal -> parse_error
+| PredictionError : prediction_error -> parse_error.
 
 Inductive step_result := StepAccept : forest -> step_result
                        | StepReject : string -> step_result
                        | StepK      : parser_state -> step_result
-                       | StepError  : error_type -> step_result.
+                       | StepError  : parse_error -> step_result.
 
 Inductive parse_result := Accept : forest -> parse_result
                         | Reject : string -> parse_result
-                        | Error  : error_type -> parse_result.
+                        | Error  : parse_error -> parse_result.
 
 Definition step (g : grammar) (st : parser_state) : step_result :=
   match st with
@@ -68,8 +68,8 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
         (* nonempty stack --> return to caller frame *)
         | (Fr (Loc xo_cr pre_cr suf_cr) sv_cr) :: frs_tl =>
           match suf_cr with
-          | []                 => StepError InvalidState
-          | T _ :: _           => StepError InvalidState
+          | []                => StepError InvalidState
+          | T _ :: _          => StepError InvalidState
           | NT x :: suf_cr_tl => 
             let cr' := Fr (Loc xo_cr (pre_cr ++ [NT x]) suf_cr_tl)
                           (sv_cr ++ [Node x sv])
@@ -99,7 +99,7 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
             let callee := Fr (Loc (Some x) [] rhs) []
             in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
           | PredReject    => StepReject "prediction found no viable right-hand sides"
-          | PredError msg => StepError (PredictionError msg)
+          | PredError e => StepError (PredictionError e)
           end
         else if NtSet.mem x (allNts g) then
                StepError (LeftRecursion x)
@@ -345,6 +345,20 @@ Lemma multistep_left_recursion_cases :
 Proof.
   intros g st a x hm; subst.
   destruct (multistep_cases g st a (Error (LeftRecursion x))); auto.
+Qed.
+
+Lemma multistep_prediction_error_cases :
+  forall (g  : grammar)
+         (st : parser_state)
+         (a  : Acc lex_nat_triple (meas g st))
+         (e  : prediction_error),
+    multistep g st a = Error (PredictionError e)
+    -> step g st = StepError (PredictionError e)
+       \/ exists st' a', step g st = StepK st' 
+                         /\ multistep g st' a' = Error (PredictionError e).
+Proof.
+  intros g st a e hm; subst.
+  destruct (multistep_cases g st a (Error (PredictionError e))); auto.
 Qed.
 
 Lemma step_StepAccept_facts :

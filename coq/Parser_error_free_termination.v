@@ -3,6 +3,7 @@ Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Parser.
 Require Import GallStar.Tactics.
+Require Import GallStar.Utils.
 Import ListNotations.
 
 (* The parser never reaches an invalid state;
@@ -28,8 +29,8 @@ Lemma multistep_never_reaches_error_state :
          (ts     : list token)
          (av     : NtSet.t)
          (stk    : parser_stack)
-         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk ts))),
-    tri = Parser.meas g (Pst av stk ts)
+         (a'     : Acc lex_nat_triple (meas g (Pst av stk ts))),
+    tri = meas g (Pst av stk ts)
     -> stack_wf g stk
     -> ~ multistep g (Pst av stk ts) a' = Error InvalidState.
 Proof.
@@ -56,8 +57,7 @@ Proof.
   apply multistep_never_reaches_error_state
     with (tri := Parser.meas g (mkInitState g ss ts)) in hp; auto.
   - apply lex_nat_triple_wf.
-  - (* lemma *)
-    constructor.
+  - constructor.
 Qed.
 
 (* TODO -- The parser only returns a LeftRecursion error
@@ -246,11 +246,107 @@ Proof.
   apply parse_left_recursion_detection_sound in hp; firstorder.
 Qed.
 
+(* Stuff about prediction *)
+
+Require Import GallStar.Prediction.
+
+Lemma spc_result_doesn't_include_errors :
+  forall g sp a e,
+    ~ In (inl e) (spc g sp a).
+Proof.
+  intros g sp a e; unfold not; intros hin.
+Admitted.  
+
+Lemma closure_never_returns_prediction_error :
+  forall g sps e,
+    ~ closure g sps = inl e.
+Proof.
+  intros g sps e; unfold not; intros hc.
+  unfold closure in hc.
+  apply sumOfListSum_failure_in_input in hc.
+  apply in_flat_map in hc.
+  destruct hc as [sp [hin hc]].
+  eapply spc_result_doesn't_include_errors; eauto.
+Qed.
+
+Lemma startState_never_returns_prediction_error :
+  forall g x fr frs e,
+    ~ startState g x (fr, frs) = inl e.
+Proof.
+  intros g x fr frs e; unfold not; intros hss.
+  unfold startState in hss. 
+  eapply closure_never_returns_prediction_error; eauto.
+Qed.
+
+Lemma llPredict_never_returns_prediction_error :
+  forall g x fr frs ts e,
+    ~ llPredict g x (fr, frs) ts = PredError e.
+Proof.
+  intros g x fr frs ts e; unfold not; intros hl.
+  unfold llPredict in hl.
+  dmeq hss; inv hl.
+  - eapply startState_never_returns_prediction_error; eauto.
+  - admit.
+Admitted.
+
+(* you'll need more assumptions *)
+Lemma step_never_returns_prediction_error :
+  forall g st e,
+    ~ step g st = StepError (PredictionError e).
+Proof.
+  intros g st e; unfold not; intros hs.
+  unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
+  eapply llPredict_never_returns_prediction_error; eauto.
+Qed.
+  
+Lemma multistep_never_returns_prediction_error :
+  forall (g      : grammar)
+         (tri    : nat * nat * nat)
+         (a      : Acc lex_nat_triple tri)
+         (ts     : list token)
+         (av     : NtSet.t)
+         (stk    : parser_stack)
+         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk ts)))
+         (e      : prediction_error),
+    tri = Parser.meas g (Pst av stk ts)
+    -> stack_wf g stk
+    -> ~ multistep g (Pst av stk ts) a' = Error (PredictionError e).
+Proof.
+  intros g tri a.
+  induction a as [tri hlt IH].
+  intros ts av stk a' e heq hw; unfold not; intros hm; subst.
+  apply multistep_prediction_error_cases in hm.
+  destruct hm as [hs | hm].
+  - destruct e as [ | x]. 
+    + admit.
+    + admit
+  - destruct hm as [[av' stk' ts'] [a'' [hs hm]]].
+    eapply IH in hm; eauto.
+    + apply step_meas_lt; auto.
+    + eapply step_preserves_stack_wf_invar; eauto.
+Qed.
+
+Lemma parser_never_returns_prediction_error :
+  forall (g : grammar)
+         (ss : list symbol)
+         (ts : list token)
+         (e  : prediction_error),
+    no_left_recursion g
+    -> ~ parse g ss ts = Error (PredictionError e).
+Proof.
+  intros g ss ts e hn; unfold not; intros hp.
+  unfold parse in hp.
+  apply multistep_never_returns_prediction_error
+    with (tri := Parser.meas g (mkInitState g ss ts)) in hp; auto.
+  - apply lex_nat_triple_wf.
+  - constructor.
+Qed.
+
 Theorem parser_terminates_without_error :
   forall (g  : grammar)
          (ss : list symbol)
          (ts : list token)
-         (e  : error_type),
+         (e  : parse_error),
     no_left_recursion g
     -> ~ parse g ss ts = Error e.
 Proof.
@@ -258,8 +354,8 @@ Proof.
   destruct e.
   - (* invalid state case *)
     eapply parser_never_reaches_invalid_state; eauto.
-  - (* prediction error case *)
-    admit.
   - (* left recursion case *)
     apply parser_doesn't_find_left_recursion_in_non_left_recursive_grammar; auto.
-Admitted.
+  - (* prediction error case *)
+    apply parser_never_returns_prediction_error; auto.
+Qed.

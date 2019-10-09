@@ -26,6 +26,11 @@ Definition mvNtErr  := "subparser in NT state during move operation".
 Definition clRetErr := "no nonterminal to return to".
 Definition clRecErr := "left recursion detected".
 
+(* Error values that the prediction mechanism can return *)
+Inductive prediction_error :=
+| SpInvalidState  : prediction_error
+| SpLeftRecursion : nonterminal -> prediction_error.
+
 Open Scope list_scope.
 
 (* "move" operation *)
@@ -36,13 +41,13 @@ Open Scope list_scope.
    Some (inr sp')     -- successfully consume a token 
 *)
 Definition moveSp (tok : token) (sp : subparser) :
-  option (sum err_msg subparser) :=
+  option (sum prediction_error subparser) :=
   match sp with
   | Sp _ pred stk =>
     match stk with
     | (Loc _ _ [], [])               => None
-    | (Loc _ _ [], _ :: _)           => Some (inl mvRetErr)
-    | (Loc _ _ (NT _ :: _), _)       => Some (inl mvNtErr)
+    | (Loc _ _ [], _ :: _)           => Some (inl SpInvalidState)
+    | (Loc _ _ (NT _ :: _), _)       => Some (inl SpInvalidState)
     | (Loc xo pre (T a :: suf), locs) =>
       match tok with
       | (a', _) =>
@@ -57,7 +62,7 @@ Definition moveSp (tok : token) (sp : subparser) :
 (* Return a list of the subparsers that successfully stepped to a new state,
    or an error message if any subparsers reached an error state *)
 Definition move (tok : token) (sps : list subparser) :
-  sum err_msg (list subparser) :=
+  sum prediction_error (list subparser) :=
   let os := map (moveSp tok) sps in
   let es := extractSomes os      
   in  sumOfListSum es.
@@ -158,7 +163,7 @@ Defined.
 (* subparser closure *)
 Fixpoint spc (g : grammar) (sp : subparser)
              (a : Acc lex_nat_pair (meas g sp)) {struct a} :
-             list (sum err_msg subparser) :=
+             list (sum prediction_error subparser) :=
   match sp as s return sp = s -> _ with
   | Sp av pred (loc, locs) =>
     fun Hs =>
@@ -167,8 +172,8 @@ Fixpoint spc (g : grammar) (sp : subparser)
         fun Hl =>
           match locs as ls return locs = ls -> _ with
           | []                        => fun _  => [inr sp]
-          | (Loc _ _ []) :: _         => fun _  => [inl clRetErr]
-          | (Loc _ _ (T _ :: _)) :: _ => fun _  => [inl clRetErr]
+          | (Loc _ _ []) :: _         => fun _  => [inl SpInvalidState]
+          | (Loc _ _ (T _ :: _)) :: _ => fun _  => [inl SpInvalidState]
           | (Loc xo pre (NT y :: suf')) :: locs' =>
             fun Hls =>
               let stk':= (Loc xo (pre ++ [NT y]) suf', locs') in
@@ -179,7 +184,7 @@ Fixpoint spc (g : grammar) (sp : subparser)
       | Loc xo pre (NT y :: suf') =>
         fun Hl =>
           match mem_dec y av with
-          | left _   => [inl clRecErr]
+          | left _   => [inl (SpLeftRecursion y)]
           | right Hm =>
             let sps' :=
                 map (fun rhs =>
@@ -193,17 +198,17 @@ Fixpoint spc (g : grammar) (sp : subparser)
   end eq_refl.
 
 Definition closure (g : grammar) (sps : list subparser) :
-  sum err_msg (list subparser) :=
+  sum prediction_error (list subparser) :=
   let es := flat_map (fun sp => spc g sp (lex_nat_pair_wf _)) sps
   in  sumOfListSum es.
 
 (* LL prediction *)
 
 Inductive prediction_result :=
-| PredSucc   : list symbol -> prediction_result
-| PredAmbig  : list symbol -> prediction_result
-| PredReject :                prediction_result
-| PredError  : err_msg     -> prediction_result.
+| PredSucc   : list symbol      -> prediction_result
+| PredAmbig  : list symbol      -> prediction_result
+| PredReject :                     prediction_result
+| PredError  : prediction_error -> prediction_result.
 
 Definition finalConfig (sp : subparser) : bool :=
   match sp with
@@ -246,7 +251,7 @@ Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : pre
   end.
 
 Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
-  sum err_msg (list subparser) :=
+  sum prediction_error (list subparser) :=
   match stk with
   | (loc, locs) =>
     let init := map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, loc :: locs))
