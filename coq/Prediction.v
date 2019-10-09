@@ -17,15 +17,6 @@ Record subparser := Sp { avail      : NtSet.t
                        ; stack      : location_stack
                        }.
 
-Open Scope string_scope.
-
-(* error messages for move and closure operations *)
-Definition err_msg  := string.
-Definition mvRetErr := "subparser in return state during move operation".
-Definition mvNtErr  := "subparser in NT state during move operation".
-Definition clRetErr := "no nonterminal to return to".
-Definition clRecErr := "left recursion detected".
-
 (* Error values that the prediction mechanism can return *)
 Inductive prediction_error :=
 | SpInvalidState  : prediction_error
@@ -35,39 +26,117 @@ Open Scope list_scope.
 
 (* "move" operation *)
 
-(* Step from a subparser to...
-   None -- token mismatch
-   Some (inl err_msg) -- unreachable/error state
-   Some (inr sp')     -- successfully consume a token 
-*)
-Definition moveSp (tok : token) (sp : subparser) :
-  option (sum prediction_error subparser) :=
+Inductive subparser_move_result :=
+| SpMoveAccept : subparser -> subparser_move_result
+| SpMoveReject : subparser_move_result
+| SpMoveError  : prediction_error -> subparser_move_result.
+
+Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
   match sp with
   | Sp _ pred stk =>
     match stk with
-    | (Loc _ _ [], [])               => None
-    | (Loc _ _ [], _ :: _)           => Some (inl SpInvalidState)
-    | (Loc _ _ (NT _ :: _), _)       => Some (inl SpInvalidState)
+    | (Loc _ _ [], [])                => SpMoveReject
+    | (Loc _ _ [], _ :: _)            => SpMoveError SpInvalidState
+    | (Loc _ _ (NT _ :: _), _)        => SpMoveError SpInvalidState
     | (Loc xo pre (T a :: suf), locs) =>
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          Some (inr (Sp NtSet.empty pred (Loc xo (pre ++ [T a]) suf, locs)))
+          SpMoveAccept (Sp NtSet.empty pred (Loc xo (pre ++ [T a]) suf, locs))
         else
-          None
+          SpMoveReject
       end
     end
   end.
 
-(* Return a list of the subparsers that successfully stepped to a new state,
-   or an error message if any subparsers reached an error state *)
-Definition move (tok : token) (sps : list subparser) :
-  sum prediction_error (list subparser) :=
-  let os := map (moveSp tok) sps in
-  let es := extractSomes os      
-  in  sumOfListSum es.
+Inductive move_result :=
+| MoveAccept : list subparser -> move_result
+| MoveError  : prediction_error -> move_result.
+
+Fixpoint aggregateMoveResults (smrs : list subparser_move_result) : 
+  move_result :=
+  match smrs with
+  | []           => MoveAccept []
+  | smr :: smrs' =>
+    match (smr, aggregateMoveResults smrs') with
+    | (SpMoveError e, _)                => MoveError e
+    | (_, MoveError e)                  => MoveError e
+    | (SpMoveAccept sp, MoveAccept sps) => MoveAccept (sp :: sps)
+    | (SpMoveReject, MoveAccept sps)    => MoveAccept sps
+    end
+  end.
+
+Definition move (tok : token) (sps : list subparser) : move_result :=
+  aggregateMoveResults (map (moveSp tok) sps).
 
 (* "closure" operation *)
+
+Inductive subparser_closure_step_result :=
+| SpClosureStepDone  : subparser -> subparser_closure_step_result
+| SpClosureStepK     : list subparser -> subparser_closure_step_result
+| SpClosureStepError : prediction_error -> subparser_closure_step_result.
+
+Definition spClosureStep (g : grammar) (sp : subparser) : 
+  subparser_closure_step_result :=
+  match sp with
+  | Sp av pred (loc, locs) =>
+    match loc with
+    | Loc _ _ [] =>
+      match locs with
+      | []                        => SpClosureStepDone sp
+      | (Loc _ _ []) :: _         => SpClosureStepError SpInvalidState
+      | (Loc _ _ (T _ :: _)) :: _ => SpClosureStepError SpInvalidState
+      | (Loc xo_cr pre_cr (NT x :: suf_cr)) :: locs_tl =>
+        let stk':= (Loc xo_cr (pre_cr ++ [NT x]) suf_cr, locs_tl) 
+        in  SpClosureStepK [Sp (NtSet.add x av) pred stk']
+      end
+    | Loc _ _ (T _ :: _)       => SpClosureStepDone sp
+    | Loc xo pre (NT x :: suf) =>
+      if NtSet.mem x av then
+        let sps' := map (fun rhs => Sp (NtSet.remove x av) 
+                                       pred 
+                                       (Loc (Some x) [] rhs, loc :: locs))
+                        (rhssForNt g x)
+        in  SpClosureStepK sps'
+      else
+        SpClosureStepError (SpLeftRecursion x)
+    end
+  end.
+
+Inductive closure_result :=
+| ClosureAccept : list subparser -> closure_result
+| ClosureError  : prediction_error -> closure_result.
+
+Fixpoint aggregateClosureResults (crs : list closure_result) : closure_result :=
+  match crs with
+  | [] => ClosureAccept []
+  | scr :: scrs' =>
+    match (scr, aggregateClosureResults scrs') with
+    | (ClosureError e, _)                     => ClosureError e
+    | (_, ClosureError e)                     => ClosureError e
+    | (ClosureAccept sps, ClosureAccept sps') => ClosureAccept (sps ++ sps')
+    end
+  end.
+
+Definition spcMeas (g : grammar) (sp : subparser) : nat * nat :=
+  match sp with
+  | Sp av _ stk =>
+    let m := maxRhsLength g in
+    let e := NtSet.cardinal av               
+    in  (stackScore stk (1 + m) e, stackHeight stk)
+  end.
+
+(* FOR NEXT TIME -- PROVE THAT AN SP' IN SPS' HAS A SMALLER MEASURE *)
+Program Fixpoint spClosure (g : grammar) (sp : subparser) (a : Acc lex_nat_pair (spcMeas g sp)) : closure_result :=
+  match spClosureStep g sp with
+  | SpClosureStepDone sp'   => ClosureAccept [sp']
+  | SpClosureStepError e    => ClosureError e
+  | SpClosureStepK sps'     =>
+    let scrs := dmap sps' (fun sp' _ => spClosure g sp' _)
+    in  aggregateClosureResults scrs
+  end.
+Next Obligation.
+Abort.
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with

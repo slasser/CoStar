@@ -29,16 +29,30 @@ Fixpoint sumOfListSum {A B} (es : list (sum A B)) : sum A (list B) :=
 Definition dflat_map {A B : Type} :
   forall (l : list A) (f : forall x, In x l -> list B), list B.
   refine(fix dfm (l : list A) (f : forall x, In x l -> list B) :=
-         match l as l' return l = l' -> _ with
-         | []     => fun _ => []
-         | h :: t => fun Heq => (f h _) ++ (dfm t _)
-         end eq_refl).
+           match l as l' return l = l' -> _ with
+           | []     => fun _ => []
+           | h :: t => fun Heq => (f h _) ++ (dfm t _)
+           end eq_refl).
   - subst.
     apply in_eq.
   - subst; intros x Hin.
     assert (Ht : In x (h :: t)).
     { apply in_cons; auto. }
     eapply f; eauto.
+Defined.
+
+Definition dmap {A B : Type} :
+  forall (l : list A) (f : forall (x : A), In x l -> B), list B.
+  refine(fix dmap (l : list A) (f : forall x, In x l -> B) :=
+           match l as l' return l = l' -> _ with
+           | []     => fun _ => []
+           | h :: t => fun Heq => (f h _) :: (dmap t _)
+           end eq_refl).
+  - subst.
+    apply in_eq.
+  - subst; intros x Hin.
+    apply f with (x := x).
+    apply in_cons; auto.
 Defined.
 
 Definition allEqual (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : bool :=
