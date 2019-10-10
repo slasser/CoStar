@@ -27,7 +27,7 @@ Open Scope list_scope.
 (* "move" operation *)
 
 Inductive subparser_move_result :=
-| SpMoveAccept : subparser -> subparser_move_result
+| SpMoveSucc   : subparser -> subparser_move_result
 | SpMoveReject : subparser_move_result
 | SpMoveError  : prediction_error -> subparser_move_result.
 
@@ -42,37 +42,35 @@ Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          SpMoveAccept (Sp NtSet.empty pred (Loc xo (pre ++ [T a]) suf, locs))
+          SpMoveSucc (Sp NtSet.empty pred (Loc xo (pre ++ [T a]) suf, locs))
         else
           SpMoveReject
       end
     end
   end.
 
-Inductive move_result :=
-| MoveAccept : list subparser -> move_result
-| MoveError  : prediction_error -> move_result.
+Definition move_result := sum prediction_error (list subparser).
 
-Fixpoint aggregateMoveResults (smrs : list subparser_move_result) : 
+Fixpoint aggrMoveResults (smrs : list subparser_move_result) : 
   move_result :=
   match smrs with
-  | []           => MoveAccept []
+  | []           => inr []
   | smr :: smrs' =>
-    match (smr, aggregateMoveResults smrs') with
-    | (SpMoveError e, _)                => MoveError e
-    | (_, MoveError e)                  => MoveError e
-    | (SpMoveAccept sp, MoveAccept sps) => MoveAccept (sp :: sps)
-    | (SpMoveReject, MoveAccept sps)    => MoveAccept sps
+    match (smr, aggrMoveResults smrs') with
+    | (SpMoveError e, _)       => inl e
+    | (_, inl e)               => inl e
+    | (SpMoveSucc sp, inr sps) => inr (sp :: sps)
+    | (SpMoveReject, inr sps)  => inr sps
     end
   end.
 
 Definition move (tok : token) (sps : list subparser) : move_result :=
-  aggregateMoveResults (map (moveSp tok) sps).
+  aggrMoveResults (map (moveSp tok) sps).
 
 (* "closure" operation *)
 
 Inductive subparser_closure_step_result :=
-| SpClosureStepDone  : subparser -> subparser_closure_step_result
+| SpClosureStepDone  : subparser_closure_step_result
 | SpClosureStepK     : list subparser -> subparser_closure_step_result
 | SpClosureStepError : prediction_error -> subparser_closure_step_result.
 
@@ -83,14 +81,14 @@ Definition spClosureStep (g : grammar) (sp : subparser) :
     match loc with
     | Loc _ _ [] =>
       match locs with
-      | []                        => SpClosureStepDone sp
+      | []                        => SpClosureStepDone
       | (Loc _ _ []) :: _         => SpClosureStepError SpInvalidState
       | (Loc _ _ (T _ :: _)) :: _ => SpClosureStepError SpInvalidState
       | (Loc xo_cr pre_cr (NT x :: suf_cr)) :: locs_tl =>
         let stk':= (Loc xo_cr (pre_cr ++ [NT x]) suf_cr, locs_tl) 
         in  SpClosureStepK [Sp (NtSet.add x av) pred stk']
       end
-    | Loc _ _ (T _ :: _)       => SpClosureStepDone sp
+    | Loc _ _ (T _ :: _)       => SpClosureStepDone
     | Loc xo pre (NT x :: suf) =>
       if NtSet.mem x av then
         let sps' := map (fun rhs => Sp (NtSet.remove x av) 
@@ -103,22 +101,20 @@ Definition spClosureStep (g : grammar) (sp : subparser) :
     end
   end.
 
-Inductive closure_result :=
-| ClosureAccept : list subparser -> closure_result
-| ClosureError  : prediction_error -> closure_result.
+Definition closure_result := sum prediction_error (list subparser).
 
-Fixpoint aggregateClosureResults (crs : list closure_result) : closure_result :=
+Fixpoint aggrClosureResults (crs : list closure_result) : closure_result :=
   match crs with
-  | [] => ClosureAccept []
-  | scr :: scrs' =>
-    match (scr, aggregateClosureResults scrs') with
-    | (ClosureError e, _)                     => ClosureError e
-    | (_, ClosureError e)                     => ClosureError e
-    | (ClosureAccept sps, ClosureAccept sps') => ClosureAccept (sps ++ sps')
+  | [] => inr []
+  | cr :: crs' =>
+    match (cr, aggrClosureResults crs') with
+    | (inl e, _)          => inl e
+    | (inr _, inl e)      => inl e
+    | (inr sps, inr sps') => inr (sps ++ sps')
     end
   end.
 
-Definition spcMeas (g : grammar) (sp : subparser) : nat * nat :=
+Definition spMeas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
   | Sp av _ stk =>
     let m := maxRhsLength g in
@@ -126,26 +122,70 @@ Definition spcMeas (g : grammar) (sp : subparser) : nat * nat :=
     in  (stackScore stk (1 + m) e, stackHeight stk)
   end.
 
-(* FOR NEXT TIME -- PROVE THAT AN SP' IN SPS' HAS A SMALLER MEASURE *)
-Program Fixpoint spClosure (g : grammar) (sp : subparser) (a : Acc lex_nat_pair (spcMeas g sp)) : closure_result :=
-  match spClosureStep g sp with
-  | SpClosureStepDone sp'   => ClosureAccept [sp']
-  | SpClosureStepError e    => ClosureError e
-  | SpClosureStepK sps'     =>
-    let scrs := dmap sps' (fun sp' _ => spClosure g sp' _)
-    in  aggregateClosureResults scrs
-  end.
-Next Obligation.
-Abort.
+Lemma spClosureStep_meas_lt :
+  forall (g : grammar)
+         (sp sp' : subparser)
+         (sps'   : list subparser),
+    spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> lex_nat_pair (spMeas g sp') (spMeas g sp).
+Proof.
+  intros g sp sp' sps' hs hi; unfold spClosureStep in hs; repeat dmeq h; tc; inv hs.
+  - (* lemma *)
+    apply in_singleton_eq in hi; subst.
+    unfold spMeas.
+    pose proof stackScore_le_after_return as hle.
+    specialize hle with (callee  := Loc lopt rpre [])
+                        (caller  := Loc lopt0 rpre0 (NT n :: l3))
+                        (caller' := Loc lopt0 (rpre0 ++ [NT n]) l3)
+                        (x := n)
+                        (x' := n)
+                        (suf' := l3)
+                        (av := avail0)
+                        (locs := l2)
+                        (b := 1 + maxRhsLength g).
+    eapply le_lt_or_eq in hle; auto. 
+    destruct hle as [hlt | heq]; auto.
+    + apply pair_fst_lt; auto.
+    + rewrite heq; apply pair_snd_lt; auto.
+  - apply in_map_iff in hi.
+    destruct hi as [rhs [heq hi]]; subst.
+    unfold spMeas.
+    apply pair_fst_lt.
+    eapply stackScore_lt_after_push; simpl; eauto.
+    apply NtSet.mem_spec; auto.
+Defined.
 
-Definition meas (g : grammar) (sp : subparser) : nat * nat :=
-  match sp with
-  | Sp av _ stk =>
-    let m := maxRhsLength g in
-    let e := NtSet.cardinal av               
-    in  (stackScore stk (1 + m) e, stackHeight stk)
-  end.
+Lemma acc_after_step :
+  forall g sp sp' sps',
+    spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> Acc lex_nat_pair (spMeas g sp)
+    -> Acc lex_nat_pair (spMeas g sp').
+Proof.
+  intros g so sp' sps' heq hi ha.
+  eapply Acc_inv; eauto.
+  eapply spClosureStep_meas_lt; eauto.
+Defined.
 
+Fixpoint spClosure (g  : grammar) 
+                   (sp : subparser) 
+                   (a  : Acc lex_nat_pair (spMeas g sp)) : closure_result :=
+  match spClosureStep g sp as r return spClosureStep g sp = r -> _ with
+  | SpClosureStepDone     => fun _  => inr [sp]
+  | SpClosureStepError e  => fun _  => inl e
+  | SpClosureStepK sps'   => 
+    fun hs => 
+      let crs := 
+          dmap sps' (fun sp' hin => spClosure g sp' (acc_after_step _ _ _ hs hin a))
+      in  aggrClosureResults crs
+  end eq_refl.
+
+Definition closure (g : grammar) (sps : list subparser) :
+  sum prediction_error (list subparser) :=
+  aggrClosureResults (map (fun sp => spClosure g sp (lex_nat_pair_wf _)) sps).
+
+(*
 Lemma subparser_lt_after_return :
   forall g sp sp' av pred callee caller caller' locs x x' suf',
     sp = Sp av pred (callee, caller :: locs)
@@ -270,6 +310,7 @@ Definition closure (g : grammar) (sps : list subparser) :
   sum prediction_error (list subparser) :=
   let es := flat_map (fun sp => spc g sp (lex_nat_pair_wf _)) sps
   in  sumOfListSum es.
+*)
 
 (* LL prediction *)
 
@@ -368,9 +409,7 @@ Defined.
 Lemma move_unfold :
   forall t sps,
     move t sps = 
-    let os := map (moveSp t) sps in
-    let es := extractSomes os      
-    in  sumOfListSum es.
+    aggrMoveResults (map (moveSp t) sps).
 Proof. 
   auto. 
 Defined.
@@ -393,6 +432,23 @@ Proof.
     + apply in_cons; eauto.
 Defined.
 
+Lemma in_aggrMoveResults_result_in_input :
+  forall (smrs : list subparser_move_result)
+         (sp   : subparser)
+         (sps  : list subparser),
+    aggrMoveResults smrs = inr sps
+    -> In sp sps
+    -> In (SpMoveSucc sp) smrs.
+Proof.
+  intros smrs sp.
+  induction smrs as [| smr smrs' IH]; intros sps ha hi; sis.
+  - inv ha; inv hi.
+  - destruct smr as [sp' | | e]; destruct (aggrMoveResults smrs') as [e' | sps']; 
+      tc; inv ha.
+    + inv hi; firstorder.
+    + firstorder.
+Qed.
+    
 Lemma in_extractSomes_result_in_input :
   forall A (a : A) (os : list (option A)),
     In a (extractSomes os)
@@ -409,6 +465,23 @@ Defined.
 
 Lemma moveSp_preserves_prediction :
   forall t sp sp',
+    moveSp t sp = SpMoveSucc sp'
+    -> sp'.(prediction) = sp.(prediction).
+Proof.
+  intros t sp sp' hm.
+  unfold moveSp in hm.
+  destruct sp as [av pred (loc, locs)].
+  destruct loc as [x pre suf].
+  destruct suf as [| [a | x'] suf_tl]; tc.
+  - destruct locs; tc.
+  - destruct t as (a', _).
+    destruct (t_eq_dec a' a); subst; tc.
+    inv hm; auto.
+Defined.
+
+(*
+Lemma moveSp_preserves_prediction :
+  forall t sp sp',
     moveSp t sp = Some (inr sp')
     -> sp'.(prediction) = sp.(prediction).
 Proof.
@@ -422,6 +495,7 @@ Proof.
     destruct (t_eq_dec a' a); subst; tc.
     inv Hm; auto.
 Defined.
+*)
 
 Lemma move_preserves_prediction :
   forall t sp' sps sps',
@@ -429,16 +503,16 @@ Lemma move_preserves_prediction :
     -> In sp' sps'
     -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
 Proof.
-  intros s sp' sps sps' Hm Hin.
-  unfold move in Hm.
-  eapply in_sumOfListSum_result_in_input in Hm; eauto.
-  apply in_extractSomes_result_in_input in Hm.
-  eapply in_map_iff in Hm.
-  destruct Hm as [sp [Hmsp Hin']].
+  intros s sp' sps sps' hm hi.
+  unfold move in hm.
+  eapply in_aggrMoveResults_result_in_input in hm; eauto.
+  eapply in_map_iff in hm.
+  destruct hm as [sp [hmsp hi']].
   eexists; split; eauto.
   eapply moveSp_preserves_prediction; eauto.
 Defined.
 
+(*
 Lemma spc_unfold_return :
   forall g sp a es av pred stk loc locs x pre caller locs_tl x_cr pre_cr suf_cr y suf_tl_cr,
     spc g sp a = es
@@ -461,7 +535,9 @@ Proof.
   simpl.
   eexists; eauto.
 Defined.
+*)
 
+(*
 Lemma in_dflat_map :
   forall (A B : Type) (l : list A) (f : forall x, In x l -> list B) (y : B) (ys : list B),
     dflat_map l f = ys
@@ -481,6 +557,114 @@ Proof.
       -- apply in_cons; auto.
       -- apply Hin''.
 Defined.
+*)
+
+(* need a lemma that lets us unfold spClosure *)
+
+Lemma spClosure_unfold :
+  forall g sp a,
+    spClosure g sp a =
+    match spClosureStep g sp as r return spClosureStep g sp = r -> _ with
+    | SpClosureStepDone     => fun _  => inr [sp]
+    | SpClosureStepError e  => fun _  => inl e
+    | SpClosureStepK sps'   => 
+      fun hs => 
+        let crs := 
+            dmap sps' (fun sp' hin => spClosure g sp' (acc_after_step _ _ _ hs hin a))
+        in  aggrClosureResults crs
+    end eq_refl.
+Proof.
+  intros g sp a; destruct a; auto.
+Qed.
+
+Lemma spClosure_cases' :
+  forall (g : grammar)
+         (sp : subparser)
+         (a : Acc lex_nat_pair (spMeas g sp))
+         (sr : subparser_closure_step_result)
+         (cr : closure_result)
+         (heq : spClosureStep g sp = sr),
+    match sr as r return spClosureStep g sp = r -> closure_result with
+    | SpClosureStepDone     => fun _  => inr [sp]
+    | SpClosureStepError e  => fun _  => inl e
+    | SpClosureStepK sps'   => 
+      fun hs => 
+        let crs := 
+            dmap sps' (fun sp' hin => spClosure g sp' (acc_after_step _ _ _ hs hin a))
+        in  aggrClosureResults crs
+    end heq = cr
+    -> match cr with
+       | inl e => 
+         sr = SpClosureStepError e
+         \/ exists (sps : list subparser)
+                   (hs  : spClosureStep g sp = SpClosureStepK sps)
+                   (crs : list closure_result),
+             crs = dmap sps (fun sp' hi => 
+                               spClosure g sp' (acc_after_step _ _ _ hs hi a))
+             /\ aggrClosureResults crs = inl e
+       | inr sps => 
+         sr = SpClosureStepDone
+         \/ exists (sps' : list subparser)
+                   (hs   : spClosureStep g sp = SpClosureStepK sps')
+                   (crs  : list closure_result),
+             crs = dmap sps' (fun sp' hi => 
+                                spClosure g sp' (acc_after_step _ _ _ hs hi a))
+             /\ aggrClosureResults crs = inr sps
+       end.
+Proof.
+  intros g sp a sr cr heq.
+  destruct sr as [ | sps | e]; destruct cr as [e' | sps']; intros heq'; tc; auto.
+  - right; eauto.
+  - right; eauto.
+  - inv heq'; auto.
+Qed.
+
+Lemma spClosure_cases :
+  forall g sp a cr,
+    spClosure g sp a = cr
+    -> match cr with
+       | inl e => 
+         spClosureStep g sp = SpClosureStepError e
+         \/ exists (sps : list subparser)
+                   (hs  : spClosureStep g sp = SpClosureStepK sps)
+                   (crs : list closure_result),
+             crs = dmap sps (fun sp' hi => 
+                               spClosure g sp' (acc_after_step _ _ _ hs hi a))
+             /\ aggrClosureResults crs = inl e
+       | inr sps => 
+         spClosureStep g sp = SpClosureStepDone
+         \/ exists (sps' : list subparser)
+                   (hs   : spClosureStep g sp = SpClosureStepK sps')
+                   (crs  : list closure_result),
+             crs = dmap sps' (fun sp' hi => 
+                                spClosure g sp' (acc_after_step _ _ _ hs hi a))
+             /\ aggrClosureResults crs = inr sps
+       end.
+Proof.
+  intros g sp a cr hs; subst.
+  rewrite spClosure_unfold.
+  eapply spClosure_cases'; eauto.
+Qed.
+
+(* next -- use the cases lemma *)
+Lemma spClosure_preserves_prediction :
+  forall g pair (a : Acc lex_nat_pair pair) sp a' sp' sps',
+    pair = spMeas g sp
+    -> spClosure g sp a' = inr sps'
+    -> In sp' sps'
+    -> sp'.(prediction) = sp.(prediction).
+Proof.
+  intros g pair a.
+  induction a as [pair hlt IH].
+  intros sp a' sp' sps' heq hs hi; subst.
+  destruct a'.
+  sis.
+  destruct (spClosureStep g sp); sis.
+  forall g sp Ha sp' es,
+    spc g sp Ha = es
+    -> In (inr sp') es
+    -> sp'.(prediction) = sp.(prediction).
+Proof.
 
 (* CLEAN THIS UP! *)
 Lemma sp_closure_preserves_prediction :
