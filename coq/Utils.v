@@ -115,3 +115,25 @@ Proof.
   - inv hs; auto.
   - dmeq hs; tc.
 Qed.
+
+Lemma in_dmap :
+  forall (A B : Type) 
+         (l   : list A) 
+         (f   : forall a, In a l -> B) 
+         (b   : B) 
+         (bs  : list B),
+    dmap l f = bs
+    -> In b bs
+    -> (exists a hi, In a l /\ f a hi = b).
+Proof.
+  intros A B l f b bs hd hi; subst.
+  induction l as [| a l IH].
+  - inv hi.
+  - destruct hi as [hh | ht].
+    + exists a; eexists; split; eauto.
+      apply in_eq.
+    + apply IH in ht; destruct ht as [a' [hi [hi' heq]]].
+      exists a'; eexists; split.
+      * apply in_cons; auto.
+      * apply heq.
+Qed.

@@ -603,7 +603,8 @@ Lemma spClosure_cases' :
                                spClosure g sp' (acc_after_step _ _ _ hs hi a))
              /\ aggrClosureResults crs = inl e
        | inr sps => 
-         sr = SpClosureStepDone
+         (sr = SpClosureStepDone
+          /\ sps = [sp])
          \/ exists (sps' : list subparser)
                    (hs   : spClosureStep g sp = SpClosureStepK sps')
                    (crs  : list closure_result),
@@ -614,6 +615,7 @@ Lemma spClosure_cases' :
 Proof.
   intros g sp a sr cr heq.
   destruct sr as [ | sps | e]; destruct cr as [e' | sps']; intros heq'; tc; auto.
+  - inv heq'; auto.
   - right; eauto.
   - right; eauto.
   - inv heq'; auto.
@@ -632,7 +634,8 @@ Lemma spClosure_cases :
                                spClosure g sp' (acc_after_step _ _ _ hs hi a))
              /\ aggrClosureResults crs = inl e
        | inr sps => 
-         spClosureStep g sp = SpClosureStepDone
+         (spClosureStep g sp = SpClosureStepDone
+          /\ sps = [sp])
          \/ exists (sps' : list subparser)
                    (hs   : spClosureStep g sp = SpClosureStepK sps')
                    (crs  : list closure_result),
@@ -646,7 +649,60 @@ Proof.
   eapply spClosure_cases'; eauto.
 Qed.
 
-(* next -- use the cases lemma *)
+Lemma spClosure_success_cases :
+  forall g sp a sps,
+    spClosure g sp a = inr sps
+    -> (spClosureStep g sp = SpClosureStepDone
+        /\ sps = [sp])
+       \/ exists (sps' : list subparser)
+                 (hs   : spClosureStep g sp = SpClosureStepK sps')
+                 (crs  : list closure_result),
+        crs = dmap sps' (fun sp' hi => 
+                           spClosure g sp' (acc_after_step _ _ _ hs hi a))
+        /\ aggrClosureResults crs = inr sps.
+Proof.
+  intros g sp a sps hs.
+  apply spClosure_cases with (cr := inr sps); auto.
+Qed.
+                   
+Lemma in_aggrClosureResults_result_in_input:
+  forall (crs : list closure_result) 
+         (sp  : subparser)
+         (sps : list subparser),
+    aggrClosureResults crs = inr sps 
+    -> In sp sps 
+    -> exists sps',
+        In (inr sps') crs
+        /\ In sp sps'.
+Proof.
+  intros crs; induction crs as [| cr crs IH]; intros sp sps ha hi.
+  - inv ha; inv hi.
+  - simpl in ha; destruct cr as [e | sps']; destruct (aggrClosureResults crs) as [e' | sps''];
+      tc; inv ha.
+    apply in_app_or in hi.
+    destruct hi as [hi' | hi''].
+    + eexists; split; eauto.
+      apply in_eq.
+    + apply IH in hi''; auto.
+      destruct hi'' as [sps [hi hi']].
+      eexists; split; eauto.
+      apply in_cons; auto.
+Qed.
+
+Lemma spClosureStep_preserves_prediction :
+  forall g sp sp' sps',
+    spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> sp.(prediction) = sp'.(prediction).
+Proof.
+  intros g sp sp' sps' hs hi.
+  unfold spClosureStep in hs; dms; tc; inv hs.
+  - apply in_singleton_eq in hi; subst; auto.
+  - apply in_map_iff in hi.
+    destruct hi as [rhs [heq hi]]; subst; auto.
+Qed.
+
+(* clean this up *)
 Lemma spClosure_preserves_prediction :
   forall g pair (a : Acc lex_nat_pair pair) sp a' sp' sps',
     pair = spMeas g sp
@@ -657,15 +713,21 @@ Proof.
   intros g pair a.
   induction a as [pair hlt IH].
   intros sp a' sp' sps' heq hs hi; subst.
-  destruct a'.
-  sis.
-  destruct (spClosureStep g sp); sis.
-  forall g sp Ha sp' es,
-    spc g sp Ha = es
-    -> In (inr sp') es
-    -> sp'.(prediction) = sp.(prediction).
-Proof.
+  pose proof hs as hs'.
+  apply spClosure_success_cases in hs'.
+  destruct hs' as [[ hd heq] | [sps'' [hs' [crs [heq heq']]]]]; subst.
+  - apply in_singleton_eq in hi; subst; auto.
+  - eapply in_aggrClosureResults_result_in_input in heq'; eauto.
+    destruct heq' as [sps [hi' hi'']].
+    eapply in_dmap in hi'; eauto.
+    destruct hi' as [sp'' [hi''' [_ heq]]].
+    eapply IH in heq; subst; eauto.
+    + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs'; auto.
+      rewrite hs'; auto.
+    + eapply spClosureStep_meas_lt; eauto.
+Qed.
 
+(*
 (* CLEAN THIS UP! *)
 Lemma sp_closure_preserves_prediction :
   forall g sp Ha sp' es,
@@ -745,20 +807,22 @@ Proof.
       simpl in *; auto.
 Defined.
   
+*)
 Lemma closure_preserves_prediction :
   forall g sp' sps sps',
     closure g sps = inr sps'
     -> In sp' sps'
     -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
 Proof.
-  intros g sp' sps sps' Hc Hi'.
-  unfold closure in Hc.
-  eapply in_sumOfListSum_result_in_input in Hc; eauto.
-  apply in_flat_map in Hc.
-  destruct Hc as [sp [Hi Hspc]].
+  intros g sp' sps sps' hc hi.
+  eapply in_aggrClosureResults_result_in_input in hc; eauto.
+  destruct hc as [sps'' [hi' hi'']].
+  apply in_map_iff in hi'.
+  destruct hi' as [sp [hspc hi''']].
   eexists; split; eauto.
-  eapply sp_closure_preserves_prediction; eauto.
-Defined.
+  eapply spClosure_preserves_prediction; eauto.
+  apply lex_nat_pair_wf.
+Qed.
 
 Lemma llPredict'_success_result_in_original_subparsers :
   forall g ts gamma sps,
