@@ -257,13 +257,12 @@ Require Import GallStar.Prediction.
 
 Lemma spClosureStep_never_returns_SpInvalidState :
   forall g sp,
-    spClosureStep g sp <> SpClosureStepError SpInvalidState.
+    lstack_wf g sp.(stack)
+    -> spClosureStep g sp <> SpClosureStepError SpInvalidState.
 Proof.
-  intros g sp; unfold not; intros hs.
-  unfold spClosureStep in hs; dms; tc.
-  - admit.
-  - admit.
-Admitted.
+  intros g sp hw; unfold not; intros hs.
+  unfold spClosureStep in hs; dms; tc; inv hw.
+Qed.
 
 Lemma spClosure_never_returns_SpInvalidState :
   forall (g    : grammar)
@@ -272,11 +271,12 @@ Lemma spClosure_never_returns_SpInvalidState :
          (sp   : subparser)
          (a'   : Acc lex_nat_pair (spMeas g sp)),
     pair = spMeas g sp
+    -> lstack_wf g sp.(stack)
     -> spClosure g sp a' <> inl SpInvalidState.
 Proof.
   intros g pair a'.
   induction a' as [pair hlt IH].
-  intros sp a heq; unfold not; intros hs; subst.
+  intros sp a heq hw; unfold not; intros hs; subst.
   apply spClosure_error_cases in hs.
   destruct hs as [hs | [sps [hs [crs [heq heq']]]]]; subst.
   - eapply spClosureStep_never_returns_SpInvalidState; eauto.
@@ -284,35 +284,50 @@ Proof.
     eapply in_dmap in heq'; eauto.
     destruct heq' as [sp' [hi [hi' heq]]].
     eapply IH with (sp := sp'); eauto.
-    eapply spClosureStep_meas_lt; eauto.
-Qed.
+    + eapply spClosureStep_meas_lt; eauto.
+    + admit.
+Admitted.
     
 Lemma closure_never_returns_SpInvalidState :
   forall g sps,
-    closure g sps <> inl SpInvalidState.
+    (forall sp, In sp sps -> lstack_wf g sp.(stack))
+    -> closure g sps <> inl SpInvalidState.
 Proof.
-  intros g sps; unfold not; intros hc.
+  intros g sps hw; unfold not; intros hc.
   unfold closure in hc.
   apply error_in_aggrClosureResults_result_in_input in hc.
-  apply in_map_iff in hc; destruct hc as [sp [hs _]].
+  apply in_map_iff in hc; destruct hc as [sp [hs hi]].
   eapply spClosure_never_returns_SpInvalidState; eauto.
   apply lex_nat_pair_wf.
 Qed.
 
 Lemma startState_never_returns_SpInvalidState :
-  forall g x fr frs,
-    startState g x (fr, frs) <> inl SpInvalidState.
+  forall g loc locs x suf,
+    lstack_wf g (loc, locs)
+    -> loc.(rsuf) = NT x :: suf
+    -> startState g x (loc, locs) <> inl SpInvalidState.
 Proof.
-  intros g x fr frs; unfold not; intros hss.
-  unfold startState in hss. 
+  intros g loc locs x suf hw heq; unfold not; intros hss.
   eapply closure_never_returns_SpInvalidState; eauto.
+  intros sp hi.
+  apply in_map_iff in hi.
+  destruct hi as [rhs [heq' hi]]; subst; simpl.
+  (* LEMMA *)
+  clear hss.
+  inv hw; sis; subst.
+  - constructor; auto.
+    apply in_rhssForNt_production_in_grammar; auto.
+  - constructor; auto.
+    apply in_rhssForNt_production_in_grammar; auto.
 Qed.
 
 Lemma llPredict_never_returns_SpInvalidState :
-  forall g x fr frs ts,
-    llPredict g x (fr, frs) ts <> PredError SpInvalidState.
+  forall g fr frs x suf ts,
+    lstack_wf g (fr, frs)
+    -> fr.(rsuf) = NT x :: suf
+    -> llPredict g x (fr, frs) ts <> PredError SpInvalidState.
 Proof.
-  intros g x fr frs ts; unfold not; intros hl.
+  intros g fr frs x suf ts hw heq; unfold not; intros hl.
   unfold llPredict in hl.
   dmeq hss.
   - inv hl.
@@ -322,13 +337,15 @@ Admitted.
 
 (* you'll need more assumptions *)
 Lemma step_never_returns_SpInvalidState :
-  forall g st,
+  forall g (st : parser_state),
     step g st <> StepError (PredictionError SpInvalidState).
 Proof.
   intros g st; unfold not; intros hs.
   unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
   eapply llPredict_never_returns_SpInvalidState; eauto.
-Qed.
+  - admit.
+  - sis; eauto.
+Admitted.
   
 Lemma multistep_never_returns_prediction_error :
   forall (g      : grammar)

@@ -137,3 +137,15 @@ Proof.
       * apply in_cons; auto.
       * apply heq.
 Qed.
+
+Lemma Forall_In :
+  forall (A : Type) (P : A -> Prop) (x : A) (xs : list A),
+    Forall P xs
+    -> In x xs
+    -> P x.
+Proof.
+  intros A P x xs hf hi.
+  eapply Forall_forall; eauto.
+Qed.
+    
+         

@@ -957,3 +957,27 @@ Proof.
   apply in_rhssForNt_production_in_grammar.
   eapply PredAmbig_result_in_rhssForNt; eauto.
 Qed.
+
+(* A well-formedness predicate over a location stack *)
+
+(* EVENTUALLY, I SHOULD DEFINE THE PARSER STACK WELL-FORMEDNESS PREDICATE
+   IN TERMS OF THIS ONE *)
+Inductive locations_wf (g : grammar) : list location -> Prop :=
+| WF_nil :
+    locations_wf g []
+| WF_bottom :
+    forall xo pre suf,
+      locations_wf g [Loc xo pre suf]
+| WF_upper :
+    forall x xo pre pre' suf suf' locs,
+      In (x, pre' ++ suf') g
+      -> locations_wf g (Loc xo pre (NT x :: suf) :: locs)
+      -> locations_wf g (Loc (Some x) pre' suf'   ::
+                         Loc xo pre (NT x :: suf) :: locs).
+
+Hint Constructors locations_wf.
+
+Definition lstack_wf (g : grammar) (stk : location_stack) : Prop :=
+  match stk with
+  | (loc, locs) => locations_wf g (loc :: locs)
+  end.
