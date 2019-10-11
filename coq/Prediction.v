@@ -664,8 +664,23 @@ Proof.
   intros g sp a sps hs.
   apply spClosure_cases with (cr := inr sps); auto.
 Qed.
+
+Lemma spClosure_error_cases :
+  forall g sp a e,
+    spClosure g sp a = inl e
+    -> spClosureStep g sp = SpClosureStepError e
+       \/ exists (sps : list subparser)
+                 (hs  : spClosureStep g sp = SpClosureStepK sps)
+                 (crs : list closure_result),
+        crs = dmap sps (fun sp' hi => 
+                          spClosure g sp' (acc_after_step _ _ _ hs hi a))
+        /\ aggrClosureResults crs = inl e.
+Proof.
+  intros g sp a e hs.
+  apply spClosure_cases with (cr := inl e); auto.
+Qed.
                    
-Lemma in_aggrClosureResults_result_in_input:
+Lemma sp_in_aggrClosureResults_result_in_input:
   forall (crs : list closure_result) 
          (sp  : subparser)
          (sps : list subparser),
@@ -687,6 +702,18 @@ Proof.
       destruct hi'' as [sps [hi hi']].
       eexists; split; eauto.
       apply in_cons; auto.
+Qed.
+
+Lemma error_in_aggrClosureResults_result_in_input:
+  forall (crs : list closure_result) 
+         (e   : prediction_error),
+    aggrClosureResults crs = inl e
+    -> In (inl e) crs.
+Proof.
+  intros crs e ha; induction crs as [| cr crs IH]; sis; tc.
+  destruct cr as [e' | sps].
+  - inv ha; auto.
+  - destruct (aggrClosureResults crs) as [e' | sps']; tc; auto.
 Qed.
 
 Lemma spClosureStep_preserves_prediction :
@@ -717,7 +744,7 @@ Proof.
   apply spClosure_success_cases in hs'.
   destruct hs' as [[ hd heq] | [sps'' [hs' [crs [heq heq']]]]]; subst.
   - apply in_singleton_eq in hi; subst; auto.
-  - eapply in_aggrClosureResults_result_in_input in heq'; eauto.
+  - eapply sp_in_aggrClosureResults_result_in_input in heq'; eauto.
     destruct heq' as [sps [hi' hi'']].
     eapply in_dmap in hi'; eauto.
     destruct hi' as [sp'' [hi''' [_ heq]]].
@@ -815,7 +842,7 @@ Lemma closure_preserves_prediction :
     -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
 Proof.
   intros g sp' sps sps' hc hi.
-  eapply in_aggrClosureResults_result_in_input in hc; eauto.
+  eapply sp_in_aggrClosureResults_result_in_input in hc; eauto.
   destruct hc as [sps'' [hi' hi'']].
   apply in_map_iff in hi'.
   destruct hi' as [sp [hspc hi''']].

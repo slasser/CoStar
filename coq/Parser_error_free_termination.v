@@ -250,53 +250,84 @@ Qed.
 
 Require Import GallStar.Prediction.
 
-Lemma spc_result_doesn't_include_errors :
-  forall g sp a e,
-    ~ In (inl e) (spc g sp a).
-Proof.
-  intros g sp a e; unfold not; intros hin.
-Admitted.  
+(* BREAKING THIS INTO TWO GROUPS OF LEMMAS
+   FOR THE TWO TYPES OF PREDICTION ERRORS *)
 
-Lemma closure_never_returns_prediction_error :
-  forall g sps e,
-    ~ closure g sps = inl e.
+(* SP INVALID STATE CASE *)
+
+Lemma spClosureStep_never_returns_SpInvalidState :
+  forall g sp,
+    spClosureStep g sp <> SpClosureStepError SpInvalidState.
 Proof.
-  intros g sps e; unfold not; intros hc.
+  intros g sp; unfold not; intros hs.
+  unfold spClosureStep in hs; dms; tc.
+  - admit.
+  - admit.
+Admitted.
+
+Lemma spClosure_never_returns_SpInvalidState :
+  forall (g    : grammar)
+         (pair : nat * nat)
+         (a    : Acc lex_nat_pair pair)
+         (sp   : subparser)
+         (a'   : Acc lex_nat_pair (spMeas g sp)),
+    pair = spMeas g sp
+    -> spClosure g sp a' <> inl SpInvalidState.
+Proof.
+  intros g pair a'.
+  induction a' as [pair hlt IH].
+  intros sp a heq; unfold not; intros hs; subst.
+  apply spClosure_error_cases in hs.
+  destruct hs as [hs | [sps [hs [crs [heq heq']]]]]; subst.
+  - eapply spClosureStep_never_returns_SpInvalidState; eauto.
+  - apply error_in_aggrClosureResults_result_in_input in heq'.
+    eapply in_dmap in heq'; eauto.
+    destruct heq' as [sp' [hi [hi' heq]]].
+    eapply IH with (sp := sp'); eauto.
+    eapply spClosureStep_meas_lt; eauto.
+Qed.
+    
+Lemma closure_never_returns_SpInvalidState :
+  forall g sps,
+    closure g sps <> inl SpInvalidState.
+Proof.
+  intros g sps; unfold not; intros hc.
   unfold closure in hc.
-  apply sumOfListSum_failure_in_input in hc.
-  apply in_flat_map in hc.
-  destruct hc as [sp [hin hc]].
-  eapply spc_result_doesn't_include_errors; eauto.
+  apply error_in_aggrClosureResults_result_in_input in hc.
+  apply in_map_iff in hc; destruct hc as [sp [hs _]].
+  eapply spClosure_never_returns_SpInvalidState; eauto.
+  apply lex_nat_pair_wf.
 Qed.
 
-Lemma startState_never_returns_prediction_error :
-  forall g x fr frs e,
-    ~ startState g x (fr, frs) = inl e.
+Lemma startState_never_returns_SpInvalidState :
+  forall g x fr frs,
+    startState g x (fr, frs) <> inl SpInvalidState.
 Proof.
-  intros g x fr frs e; unfold not; intros hss.
+  intros g x fr frs; unfold not; intros hss.
   unfold startState in hss. 
-  eapply closure_never_returns_prediction_error; eauto.
+  eapply closure_never_returns_SpInvalidState; eauto.
 Qed.
 
-Lemma llPredict_never_returns_prediction_error :
-  forall g x fr frs ts e,
-    ~ llPredict g x (fr, frs) ts = PredError e.
+Lemma llPredict_never_returns_SpInvalidState :
+  forall g x fr frs ts,
+    llPredict g x (fr, frs) ts <> PredError SpInvalidState.
 Proof.
-  intros g x fr frs ts e; unfold not; intros hl.
+  intros g x fr frs ts; unfold not; intros hl.
   unfold llPredict in hl.
-  dmeq hss; inv hl.
-  - eapply startState_never_returns_prediction_error; eauto.
+  dmeq hss.
+  - inv hl.
+    eapply startState_never_returns_SpInvalidState; eauto.
   - admit.
 Admitted.
 
 (* you'll need more assumptions *)
-Lemma step_never_returns_prediction_error :
-  forall g st e,
-    ~ step g st = StepError (PredictionError e).
+Lemma step_never_returns_SpInvalidState :
+  forall g st,
+    step g st <> StepError (PredictionError SpInvalidState).
 Proof.
-  intros g st e; unfold not; intros hs.
+  intros g st; unfold not; intros hs.
   unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
-  eapply llPredict_never_returns_prediction_error; eauto.
+  eapply llPredict_never_returns_SpInvalidState; eauto.
 Qed.
   
 Lemma multistep_never_returns_prediction_error :
@@ -318,15 +349,17 @@ Proof.
   apply multistep_prediction_error_cases in hm.
   destruct hm as [hs | hm].
   - destruct e as [ | x]. 
-    + admit.
-    + admit
+    + (* InvalidState case -- should be easy *)
+      eapply step_never_returns_SpInvalidState; eauto.
+    + (* LeftRecursion case *)
+      admit.
   - destruct hm as [[av' stk' ts'] [a'' [hs hm]]].
     eapply IH in hm; eauto.
     + apply step_meas_lt; auto.
     + eapply step_preserves_stack_wf_invar; eauto.
-Qed.
+Admitted.
 
-Lemma parser_never_returns_prediction_error :
+Lemma parse_never_returns_prediction_error :
   forall (g : grammar)
          (ss : list symbol)
          (ts : list token)
@@ -357,5 +390,5 @@ Proof.
   - (* left recursion case *)
     apply parser_doesn't_find_left_recursion_in_non_left_recursive_grammar; auto.
   - (* prediction error case *)
-    apply parser_never_returns_prediction_error; auto.
+    apply parse_never_returns_prediction_error; auto.
 Qed.
