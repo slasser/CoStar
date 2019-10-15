@@ -298,9 +298,70 @@ Proof.
       eapply sps_ready_for_move_after_closure; eauto.
 Qed.
 
+(* LEFT RECURSION CASE *)
+
+Lemma spClosureStep_never_finds_left_recursion :
+  forall g sp x,
+    spClosureStep g sp <> SpClosureStepError (SpLeftRecursion x).
+Proof.
+  intros g sp x; unfold not; intros hs.
+  unfold spClosureStep in hs; repeat dmeq h; tc; inv hs; subst.
+Admitted.
+
+Lemma spClosure_never_finds_left_recursion :
+  forall g pr (a : Acc lex_nat_pair pr) sp a' x,
+    pr = spMeas g sp
+    -> spClosure g sp a' <> inl (SpLeftRecursion x).
+Proof.
+  intros g pr a'; induction a' as [pr hlt IH]; intros sp a x heq; unfold not; intros hs; subst.
+  apply spClosure_error_cases in hs.
+  destruct hs as [hs | [sps [hs [crs [hc ha]]]]]; subst.
+  - eapply spClosureStep_never_finds_left_recursion; eauto.
+  - apply error_in_aggrClosureResults_result_in_input in ha.
+    eapply in_dmap in ha; eauto.
+    destruct ha as [sp' [hi [hi' hs']]].
+    eapply IH with (sp := sp'); eauto.
+    eapply spClosureStep_meas_lt; eauto.
+Qed.
+
+Lemma closure_never_finds_left_recursion :
+  forall g x sps,
+    closure g sps <> inl (SpLeftRecursion x).
+Proof.
+  intros g x sps; unfold not; intros hc.
+  unfold closure in hc.
+  apply error_in_aggrClosureResults_result_in_input in hc.
+  apply in_map_iff in hc.
+  destruct hc as [sp [hs hi]].
+  eapply spClosure_never_finds_left_recursion; eauto.
+  apply lex_nat_pair_wf.
+Qed.        
+
+Lemma startState_never_finds_left_recursion :
+  forall g x x' stk,
+    startState g x stk <> inl (SpLeftRecursion x').
+Proof.
+  intros g x x' (fr, frs); unfold not; intros hs.
+  unfold startState in hs.
+  eapply closure_never_finds_left_recursion; eauto.
+Qed.
+
+Lemma llPredict_never_returns_SpLeftRecursion :
+  forall g x x' stk ts,
+    llPredict g x stk ts <> PredError (SpLeftRecursion x').
+Proof.
+  intros g x x' stk ts; unfold not; intros hl.
+  unfold llPredict in hl.
+  dmeq hss.
+  - inv hl.
+    eapply startState_never_finds_left_recursion; eauto.
+  - admit.
+Admitted.
+
+(* PARSER STUFF *)
+
 Require Import GallStar.Parser.
 
-(* you'll need more assumptions *)
 Lemma step_never_returns_SpInvalidState :
   forall g (st : parser_state),
     stack_wf g st.(stack)
@@ -310,6 +371,15 @@ Proof.
   unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
   eapply llPredict_never_returns_SpInvalidState; eauto.
   simpl; eauto.
+Qed.
+
+Lemma step_never_returns_SpLeftRecursion :
+  forall g (st : parser_state) x,
+    step g st <> StepError (PredictionError (SpLeftRecursion x)).
+Proof.
+  intros g st x; unfold not; intros hs.
+  unfold step in hs; repeat dmeq h; tc; inv hs; sis.
+  eapply llPredict_never_returns_SpLeftRecursion; eauto.
 Qed.
 
 Lemma multistep_never_returns_prediction_error :
@@ -335,9 +405,9 @@ Proof.
       destruct stk as (fr, frs).
       eapply step_never_returns_SpInvalidState in hs; eauto.
     + (* LeftRecursion case *)
-      admit.
+      eapply step_never_returns_SpLeftRecursion; eauto.
   - destruct hm as [[av' stk' ts'] [a'' [hs hm]]].
     eapply IH in hm; eauto.
     + apply step_meas_lt; auto.
     + eapply step_preserves_stack_wf_invar; eauto.
-Admitted.
+Qed.
