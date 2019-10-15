@@ -31,7 +31,7 @@ Inductive subparser_move_result :=
 | SpMoveReject : subparser_move_result
 | SpMoveError  : prediction_error -> subparser_move_result.
 
-Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
+Definition moveSp (g : grammar) (tok : token) (sp : subparser) : subparser_move_result :=
   match sp with
   | Sp _ pred stk =>
     match stk with
@@ -42,7 +42,7 @@ Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          SpMoveSucc (Sp NtSet.empty pred (Loc xo (pre ++ [T a]) suf, locs))
+          SpMoveSucc (Sp (allNts g) pred (Loc xo (pre ++ [T a]) suf, locs))
         else
           SpMoveReject
       end
@@ -64,8 +64,8 @@ Fixpoint aggrMoveResults (smrs : list subparser_move_result) :
     end
   end.
 
-Definition move (tok : token) (sps : list subparser) : move_result :=
-  aggrMoveResults (map (moveSp tok) sps).
+Definition move (g : grammar) (tok : token) (sps : list subparser) : move_result :=
+  aggrMoveResults (map (moveSp g tok) sps).
 
 (* "closure" operation *)
 
@@ -96,8 +96,10 @@ Definition spClosureStep (g : grammar) (sp : subparser) :
                                        (Loc (Some x) [] rhs, loc :: locs))
                         (rhssForNt g x)
         in  SpClosureStepK sps'
-      else
-        SpClosureStepError (SpLeftRecursion x)
+      else if NtSet.mem x (allNts g) then
+             SpClosureStepError (SpLeftRecursion x)
+           else
+             SpClosureStepK []
     end
   end.
 
@@ -154,6 +156,7 @@ Proof.
     apply pair_fst_lt.
     eapply stackScore_lt_after_push; simpl; eauto.
     apply NtSet.mem_spec; auto.
+  - inv hi.
 Defined.
 
 Lemma acc_after_step :
@@ -349,7 +352,7 @@ Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : pre
       if allPredictionsEqual sp sps' then
         PredSucc sp.(prediction)
       else
-        match move t sps with
+        match move g t sps with
         | inl msg => PredError msg
         | inr mv  =>
           match closure g mv with
@@ -407,9 +410,9 @@ Proof.
 Defined.
 
 Lemma move_unfold :
-  forall t sps,
-    move t sps = 
-    aggrMoveResults (map (moveSp t) sps).
+  forall g t sps,
+    move g t sps = 
+    aggrMoveResults (map (moveSp g t) sps).
 Proof. 
   auto. 
 Defined.
@@ -476,11 +479,11 @@ Proof.
 Defined.
 
 Lemma moveSp_preserves_prediction :
-  forall t sp sp',
-    moveSp t sp = SpMoveSucc sp'
+  forall g t sp sp',
+    moveSp g t sp = SpMoveSucc sp'
     -> sp'.(prediction) = sp.(prediction).
 Proof.
-  intros t sp sp' hm.
+  intros g t sp sp' hm.
   unfold moveSp in hm.
   destruct sp as [av pred (loc, locs)].
   destruct loc as [x pre suf].
@@ -510,12 +513,12 @@ Defined.
 *)
 
 Lemma move_preserves_prediction :
-  forall t sp' sps sps',
-    move t sps = inr sps'
+  forall g t sp' sps sps',
+    move g t sps = inr sps'
     -> In sp' sps'
     -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
 Proof.
-  intros s sp' sps sps' hm hi.
+  intros g t sp' sps sps' hm hi.
   unfold move in hm.
   eapply in_aggrMoveResults_result_in_input in hm; eauto.
   eapply in_map_iff in hm.
@@ -739,6 +742,7 @@ Proof.
   - apply in_singleton_eq in hi; subst; auto.
   - apply in_map_iff in hi.
     destruct hi as [rhs [heq hi]]; subst; auto.
+  - inv hi.
 Qed.
 
 (* clean this up *)
@@ -877,7 +881,7 @@ Proof.
       eexists; split; eauto.
       apply in_eq.
     + rewrite <- Hs in *; clear Hs. 
-      destruct (move t _) as [msg | sps'] eqn:Hm; tc.
+      destruct (move g t _) as [msg | sps'] eqn:Hm; tc.
       destruct (closure g sps') as [msg | sps''] eqn:Hc; tc. 
       apply IH in Hl; clear IH.
       destruct Hl as [sp'' [Hin'' Heq]]; subst.
@@ -898,7 +902,7 @@ Proof.
   - destruct sps as [| sp_hd sps_tl] eqn:Hs; tc.
     destruct (allPredictionsEqual sp_hd sps_tl) eqn:Ha; tc.
     rewrite <- Hs in *; clear Hs. 
-    destruct (move t _) as [msg | sps'] eqn:Hm; tc.
+    destruct (move g t _) as [msg | sps'] eqn:Hm; tc.
     destruct (closure g sps') as [msg | sps''] eqn:Hc; tc. 
     apply IH in Hl; clear IH.
     destruct Hl as [sp'' [Hin'' Heq]]; subst.
@@ -1015,6 +1019,16 @@ Proof.
     destruct IHhw as [hs hp]; auto.
 Qed.
 
+Lemma locations_wf_app_l :
+  forall g p s,
+    locations_wf g (p ++ s)
+    -> locations_wf g p.
+Proof.
+  intros g p s hw.
+  eapply locations_wf_app in hw; eauto.
+  firstorder.
+Qed.
+
 Lemma locations_wf_tl :
   forall g h t,
     locations_wf g (h :: t)
@@ -1044,4 +1058,79 @@ Proof.
     destruct hi as [rhs [heq hi]]; subst; sis.
     constructor; sis; auto.
     apply in_rhssForNt_production_in_grammar; auto.
+  - inv hi.
 Qed.
+
+(* an invariant that relates the visited set to the stack *)
+
+Definition processed_symbols_all_nullable (g : grammar) (frs : list location) : Prop :=
+  Forall (fun fr => nullable_gamma g fr.(rpre)) frs.
+
+Hint Constructors Forall.
+
+Definition unavailable_nts_are_open_calls_invar g sp : Prop :=
+  match sp with
+  | Sp av _ (fr, frs) =>
+    forall (x : nonterminal),
+      NtSet.In x (allNts g)
+      -> ~ NtSet.In x av
+      -> nullable_gamma g fr.(rpre)
+         /\ (exists frs_pre fr_cr frs_suf suf,
+                frs = frs_pre ++ fr_cr :: frs_suf
+                /\ processed_symbols_all_nullable g frs_pre
+                /\ fr_cr.(rsuf) = NT x :: suf)
+  end.
+
+Definition sps_unavailable_nts_invar g sps : Prop :=
+  forall sp, In sp sps -> unavailable_nts_are_open_calls_invar g sp.
+
+Lemma spClosureStep_preserves_unavailable_nts_invar :
+  forall g sp sp' sps',
+    lstack_wf g sp.(stack)
+    -> unavailable_nts_are_open_calls_invar g sp
+    -> spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> unavailable_nts_are_open_calls_invar g sp'.
+Proof.
+  intros g sp sp' sps' hw hu hs hi.
+  unfold spClosureStep in hs.
+  destruct sp as [av pred ([xo pre suf], frs)]; sis.
+  destruct suf as [| [a | x] suf]; tc.
+  - (* return case *)
+    destruct frs as [| [xo_cr pre_cr suf_cr] frs]; tc.
+    destruct suf_cr as [| [a | x'] suf_cr]; tc.
+    inv hs.
+    apply in_singleton_eq in hi; subst.
+    unfold unavailable_nts_are_open_calls_invar.
+    intros x hi hn; simpl.
+    assert (hn' : ~ NtSet.In x av) by ND.fsetdec.
+    apply hu in hn'; clear hu; auto.
+    destruct hn' as [hng [frs_pre [fr_cr [frs_suf [suf [heq [hp heq']]]]]]].
+    destruct frs_pre as [| fr' frs_pre]; sis.
+    + inv heq; inv heq'.
+      ND.fsetdec.
+    + inv heq; inv hp; sis; split.
+      * apply nullable_app; auto.
+        constructor; auto.
+        inv hw.
+        rewrite app_nil_r in *.
+        econstructor; eauto.
+      * repeat eexists; eauto.
+  - destruct (NtSet.mem x av) eqn:hm.
+    + inv hs.
+      apply in_map_iff in hi.
+      destruct hi as [rhs [heq hi]]; subst.
+      unfold unavailable_nts_are_open_calls_invar.
+      intros x' hi' hn; simpl; split; auto.
+      destruct (NF.eq_dec x' x); subst.
+      * exists []; repeat eexists; eauto.
+        constructor.
+      * assert (hn' : ~ NtSet.In x' av) by ND.fsetdec.
+        apply hu in hn'; clear hu; auto.
+        destruct hn' as
+            [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
+        exists (Loc xo pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
+        constructor; auto.
+    + dm; tc.
+      inv hs; inv hi.
+Qed.       

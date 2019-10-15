@@ -60,54 +60,6 @@ Proof.
   - constructor.
 Qed.
 
-(* TODO -- The parser only returns a LeftRecursion error
-   if the grammar is left-recursive *)
-
-Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
-| NullableNil'  : 
-    nullable_gamma' g []
-| NullableCons' : 
-    forall x ys tl,
-      In (x, ys) g
-      -> nullable_gamma' g ys
-      -> nullable_gamma' g tl
-      -> nullable_gamma' g (NT x :: tl).
-
-Inductive nullable_path (g : grammar) :
-  symbol -> symbol -> Prop :=
-| DirectPath : forall x z gamma pre suf,
-    In (x, gamma) g
-    -> gamma = pre ++ NT z :: suf
-    -> nullable_gamma g pre
-    -> nullable_path g (NT x) (NT z)
-| IndirectPath : forall x y z gamma pre suf,
-    In (x, gamma) g
-    -> gamma = pre ++ NT y :: suf
-    -> nullable_gamma g pre
-    -> nullable_path g (NT y) (NT z)
-    -> nullable_path g (NT x) (NT z).
-
-Inductive path (g : grammar) :
-  symbol -> symbol -> Prop :=
-| DirectPath' : forall x z gamma pre suf,
-    In (x, gamma) g
-    -> gamma = pre ++ NT z :: suf
-    -> path g (NT x) (NT z)
-| IndirectPath' : forall x y z gamma pre suf,
-    In (x, gamma) g
-    -> gamma = pre ++ NT y :: suf
-    -> path g (NT y) (NT z)
-    -> path g (NT x) (NT z).
-
-Hint Constructors nullable_path.
-
-Definition left_recursive g sym :=
-  nullable_path g sym sym.
-
-Definition no_left_recursion g :=
-  forall (x : nonterminal),
-    ~ left_recursive g (NT x).
-
 Inductive nullable_frames_path (g : grammar) : nonterminal -> nonterminal -> list frame -> Prop :=
 | NFP : 
     forall top_fr mid_frs bot_fr x y suf suf',
@@ -116,20 +68,6 @@ Inductive nullable_frames_path (g : grammar) : nonterminal -> nonterminal -> lis
       -> nullable_gamma g top_fr.(loc).(rpre)
       -> top_fr.(loc).(rsuf) = NT y :: suf'
       -> nullable_frames_path g x y (top_fr :: mid_frs ++ [bot_fr]).
-
-Lemma nullable_path_trans :
-  forall g x y z,
-    nullable_path g x y
-    -> nullable_path g y z
-    -> nullable_path g x z.
-Proof.
-  intros g x y z hxy hyz.
-  induction hxy; sis; subst.
-  - destruct z as [a | z]; eauto.
-    inv hyz.
-  - destruct z as [a | z]; eauto.
-    inv hyz.
-Qed.  
 
 Lemma nullable_path_two_head_frames :
   forall g l l' v v' frs y suf,

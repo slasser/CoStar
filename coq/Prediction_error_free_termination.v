@@ -99,11 +99,11 @@ Proof.
 Qed.
 
 Lemma moveSp_never_returns_SpInvalidState_for_ready_sp :
-  forall t sp,
+  forall g t sp,
     sp_ready_for_move sp
-    -> moveSp t sp <> SpMoveError SpInvalidState.
+    -> moveSp g t sp <> SpMoveError SpInvalidState.
 Proof.
-  intros t sp hr; unfold not; intros hm.
+  intros g t sp hr; unfold not; intros hm.
   unfold moveSp in hm.
   dms; tc; sis.
   - unfold sp_ready_for_move in hr; sis.
@@ -112,11 +112,11 @@ Proof.
 Qed.
 
 Lemma move_never_returns_SpInvalidState_for_ready_sps :
-  forall t sps,
+  forall g t sps,
     all_sps_ready_for_move sps
-    -> move t sps <> inl SpInvalidState.
+    -> move g t sps <> inl SpInvalidState.
 Proof.
-  intros t sps ha; unfold not; intros hm.
+  intros g t sps ha; unfold not; intros hm.
   unfold move in hm.
   apply aggrMoveResults_error_in_input in hm.
   apply in_map_iff in hm.
@@ -127,7 +127,7 @@ Qed.
 Lemma moveSp_preserves_lstack_wf_invar :
   forall g t sp sp',
     lstack_wf g sp.(stack)
-    -> moveSp t sp = SpMoveSucc sp'
+    -> moveSp g t sp = SpMoveSucc sp'
     -> lstack_wf g sp'.(stack).
 Proof.
   intros g t sp sp' hw hm.
@@ -140,7 +140,7 @@ Qed.
 Lemma move_preserves_lstack_wf_invar :
   forall g t sps sps',
     all_sp_stacks_wf g sps
-    -> move t sps = inr sps'
+    -> move g t sps = inr sps'
     -> all_sp_stacks_wf g sps'.
 Proof.
   intros g t sps sps' ha hm.
@@ -300,20 +300,93 @@ Qed.
 
 (* LEFT RECURSION CASE *)
 
+Lemma spClosureStep_LeftRecursion_facts :
+  forall g av pred fr frs x,
+    spClosureStep g (Sp av pred (fr, frs)) = SpClosureStepError (SpLeftRecursion x)
+    -> ~ NtSet.In x av
+       /\ NtSet.In x (allNts g)
+       /\ exists suf,
+           fr.(rsuf) = NT x :: suf.
+Proof.
+  intros g av pred fr frs x hs.
+  unfold spClosureStep in hs; repeat dmeq h; tc; inv hs; sis.
+  repeat split; eauto.
+  - unfold not; intros hi.
+    apply NtSet.mem_spec in hi; tc.
+  - apply NtSet.mem_spec; auto.
+Qed.
+
+Lemma nullable_path_two_head_frames :
+  forall g fr fr' frs y suf,
+    locations_wf g (fr :: fr' :: frs)
+    -> nullable_gamma g fr.(rpre)
+    -> fr.(rsuf) = NT y :: suf
+    -> exists x suf',
+        fr'.(rsuf) = NT x :: suf'
+        /\ nullable_path g (NT x) (NT y).
+Proof.
+  intros g fr fr' frs y suf hw hn heq.
+  inv hw; sis; subst; eauto.
+Qed.
+
+Lemma stack_configuration_repr_nullable_path :
+  forall g frs fr fr_cr x y suf suf',
+    locations_wf g (fr :: frs ++ [fr_cr])
+    -> nullable_gamma g fr.(rpre)
+    -> fr.(rsuf) = NT y :: suf
+    -> processed_symbols_all_nullable g frs
+    -> fr_cr.(rsuf) = NT x :: suf'
+    -> nullable_path g (NT x) (NT y).
+Proof.
+  intros g frs.
+  induction frs as [| fr' frs IH]; intros fr fr_cr x y suf suf' hw hn heq hp heq'.
+  - inv hw; sis.
+    inv heq'.
+    eapply DirectPath; eauto.
+  - rename y into z.
+    pose proof hw as hw'.
+    eapply nullable_path_two_head_frames in hw'; eauto.
+    destruct hw' as [y [suf'' [heq'' hnp]]].
+    apply nullable_path_trans with (y := (NT y)); auto.
+    apply locations_wf_tl in hw.
+    inv hp; eapply IH in hw; eauto.
+Qed.
+
 Lemma spClosureStep_never_finds_left_recursion :
   forall g sp x,
-    spClosureStep g sp <> SpClosureStepError (SpLeftRecursion x).
+    no_left_recursion g
+    -> lstack_wf g sp.(stack)
+    -> unavailable_nts_are_open_calls_invar g sp
+    -> spClosureStep g sp <> SpClosureStepError (SpLeftRecursion x).
 Proof.
-  intros g sp x; unfold not; intros hs.
-  unfold spClosureStep in hs; repeat dmeq h; tc; inv hs; subst.
-Admitted.
-
+  intros g sp x hn hw hu; unfold not; intros hs.
+  destruct sp as (av, pred, (fr, frs)); simpl in hw.
+  pose proof hs as hs'.
+  apply spClosureStep_LeftRecursion_facts in hs'.
+  destruct hs' as [hn' [hi [suf heq]]]; subst.
+  unfold spClosureStep in hs; dms; tc; sis; subst.
+  inv heq.
+  apply hu in hn'; clear hu; auto.
+  destruct hn' as [hn' [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
+   assert (happ : (Loc lopt rpre (NT x :: suf)) :: frs_pre ++ fr_cr :: frs_suf =
+                  (Loc lopt rpre (NT x :: suf) :: frs_pre ++ [fr_cr]) ++ frs_suf).
+    (* lemma *)
+    { simpl. rewrite <- app_assoc. simpl. auto. }
+    rewrite happ in hw.
+    apply locations_wf_app_l in hw.
+    eapply stack_configuration_repr_nullable_path with (y := x) in hw; sis; eauto.
+    eapply hn; eauto.
+Qed.
+  
 Lemma spClosure_never_finds_left_recursion :
   forall g pr (a : Acc lex_nat_pair pr) sp a' x,
-    pr = spMeas g sp
+    no_left_recursion g
+    -> lstack_wf g sp.(stack)
+    -> unavailable_nts_are_open_calls_invar g sp
+    -> pr = spMeas g sp
     -> spClosure g sp a' <> inl (SpLeftRecursion x).
 Proof.
-  intros g pr a'; induction a' as [pr hlt IH]; intros sp a x heq; unfold not; intros hs; subst.
+  intros g pr a'; induction a' as [pr hlt IH]; intros sp a x hn hw hu heq; unfold not; intros hs; subst.
   apply spClosure_error_cases in hs.
   destruct hs as [hs | [sps [hs [crs [hc ha]]]]]; subst.
   - eapply spClosureStep_never_finds_left_recursion; eauto.
@@ -321,14 +394,19 @@ Proof.
     eapply in_dmap in ha; eauto.
     destruct ha as [sp' [hi [hi' hs']]].
     eapply IH with (sp := sp'); eauto.
-    eapply spClosureStep_meas_lt; eauto.
+    + eapply spClosureStep_meas_lt; eauto.
+    + eapply spClosureStep_preserves_lstack_wf_invar; eauto.
+    + eapply spClosureStep_preserves_unavailable_nts_invar; eauto.
 Qed.
 
 Lemma closure_never_finds_left_recursion :
   forall g x sps,
-    closure g sps <> inl (SpLeftRecursion x).
+    no_left_recursion g
+    -> all_sp_stacks_wf g sps
+    -> sps_unavailable_nts_invar g sps
+    -> closure g sps <> inl (SpLeftRecursion x).
 Proof.
-  intros g x sps; unfold not; intros hc.
+  intros g x sps hn hw hu; unfold not; intros hc.
   unfold closure in hc.
   apply error_in_aggrClosureResults_result_in_input in hc.
   apply in_map_iff in hc.
@@ -338,25 +416,118 @@ Proof.
 Qed.        
 
 Lemma startState_never_finds_left_recursion :
-  forall g x x' stk,
-    startState g x stk <> inl (SpLeftRecursion x').
+  forall g x x' fr frs suf,
+    no_left_recursion g
+    -> lstack_wf g (fr, frs)
+    -> fr.(rsuf) = NT x :: suf
+    -> startState g x (fr, frs) <> inl (SpLeftRecursion x').
 Proof.
-  intros g x x' (fr, frs); unfold not; intros hs.
-  unfold startState in hs.
+  intros g x x' fr frs suf hn hw heq; unfold not; intros hs.
   eapply closure_never_finds_left_recursion; eauto.
+  - unfold all_sp_stacks_wf.
+    intros sp hi.
+    apply in_map_iff in hi.
+    destruct hi as [rhs [heq' hi]]; subst; simpl.
+    (* LEMMA *)
+    clear hs.
+    inv hw; sis; subst.
+    + constructor; auto.
+      apply in_rhssForNt_production_in_grammar; auto.
+    + constructor; auto.
+      apply in_rhssForNt_production_in_grammar; auto.
+  - unfold sps_unavailable_nts_invar.
+    intros sp hi.
+    apply in_map_iff in hi.
+    destruct hi as [rhs [heq' hi]]; subst.
+    unfold unavailable_nts_are_open_calls_invar.
+    intros; ND.fsetdec.
 Qed.
 
-Lemma llPredict_never_returns_SpLeftRecursion :
-  forall g x x' stk ts,
-    llPredict g x stk ts <> PredError (SpLeftRecursion x').
+Lemma moveSp_never_returns_SpLeftRecursion :
+  forall g t sp x,
+    moveSp g t sp <> SpMoveError (SpLeftRecursion x).
 Proof.
-  intros g x x' stk ts; unfold not; intros hl.
+  intros g t sp x; unfold not; intros hm.
+  unfold moveSp in hm; dms; tc.
+Qed.
+
+Lemma move_never_returns_SpLeftRecursion :
+  forall g t sps x,
+    move g t sps <> inl (SpLeftRecursion x).
+Proof.
+  intros g t sps x; unfold not; intros hm.
+  unfold move in hm.
+  apply aggrMoveResults_error_in_input in hm.
+  apply in_map_iff in hm.
+  destruct hm as [sp [hm hi]].
+  eapply moveSp_never_returns_SpLeftRecursion; eauto.
+Qed.
+
+Lemma unavailable_nts_holds_after_moveSp :
+  forall g t sp sp',
+    moveSp g t sp = SpMoveSucc sp'
+    -> unavailable_nts_are_open_calls_invar g sp'.
+Proof.
+  intros g t sp sp' hm.
+  unfold moveSp in hm; dms; tc; inv hm.
+  unfold unavailable_nts_are_open_calls_invar.
+  intros x hi hni; ND.fsetdec.
+Qed.
+
+Lemma unavailable_nts_holds_after_move :
+  forall g t sps sps',
+    move g t sps = inr sps'
+    -> sps_unavailable_nts_invar g sps'.
+Proof.
+  intros g t sps sps' hm.
+  unfold sps_unavailable_nts_invar.
+  intros sp' hi.
+  unfold move in hm.
+  eapply in_aggrMoveResults_result_in_input in hm; eauto.
+  apply in_map_iff in hm.
+  destruct hm as [sp [hm hi']].
+  eapply unavailable_nts_holds_after_moveSp; eauto.
+Qed.
+  
+Lemma llPredict'_never_returns_SpLeftRecursion :
+  forall g ts sps x,
+    no_left_recursion g
+    -> all_sp_stacks_wf g sps
+    -> llPredict' g ts sps <> PredError (SpLeftRecursion x).
+Proof.
+  intros g ts; induction ts as [| t ts IH]; intros sps x hn hw; unfold not; intros hl; sis.
+  - eapply handleFinalSubparsers_never_returns_error; eauto.
+  - destruct sps as [| sp sps']; tc.
+    dm; tc.
+    dmeq hm; tc.
+    + inv hl.
+      eapply move_never_returns_SpLeftRecursion; eauto.
+    + dmeq hc.
+      * inv hl.
+        pose proof hm as hm'.
+        eapply move_preserves_lstack_wf_invar in hm; eauto.
+        eapply unavailable_nts_holds_after_move in hm'.
+        eapply closure_never_finds_left_recursion in hc; eauto.
+      * eapply IH in hl; eauto.
+        eapply move_preserves_lstack_wf_invar in hm; eauto.
+        eapply closure_preserves_lstack_wf_invar; eauto.
+Qed.
+         
+Lemma llPredict_never_returns_SpLeftRecursion :
+  forall g x x' fr frs ts suf,
+    no_left_recursion g
+    -> lstack_wf g (fr, frs)
+    -> fr.(rsuf) = NT x :: suf
+    -> llPredict g x (fr, frs) ts <> PredError (SpLeftRecursion x').
+Proof.
+  intros g x x' fr frs ts suf hn hw heq; unfold not; intros hl.
   unfold llPredict in hl.
   dmeq hss.
   - inv hl.
     eapply startState_never_finds_left_recursion; eauto.
-  - admit.
-Admitted.
+  - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
+    eapply stacks_wf_in_startState_result; eauto.
+Qed.
 
 (* PARSER STUFF *)
 
@@ -375,11 +546,14 @@ Qed.
 
 Lemma step_never_returns_SpLeftRecursion :
   forall g (st : parser_state) x,
-    step g st <> StepError (PredictionError (SpLeftRecursion x)).
+    no_left_recursion g
+    -> stack_wf g st.(stack)
+    -> step g st <> StepError (PredictionError (SpLeftRecursion x)).
 Proof.
-  intros g st x; unfold not; intros hs.
+  intros g st x hn hw; unfold not; intros hs.
   unfold step in hs; repeat dmeq h; tc; inv hs; sis.
   eapply llPredict_never_returns_SpLeftRecursion; eauto.
+  simpl; eauto.
 Qed.
 
 Lemma multistep_never_returns_prediction_error :
@@ -391,21 +565,22 @@ Lemma multistep_never_returns_prediction_error :
          (stk    : parser_stack)
          (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk ts)))
          (e      : prediction_error),
-    tri = Parser.meas g (Pst av stk ts)
+    no_left_recursion g
+    -> tri = Parser.meas g (Pst av stk ts)
     -> stack_wf g stk
     -> ~ multistep g (Pst av stk ts) a' = Error (PredictionError e).
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros ts av stk a' e heq hw; unfold not; intros hm; subst.
+  intros ts av stk a' e hn heq hw; unfold not; intros hm; subst.
   apply multistep_prediction_error_cases in hm.
   destruct hm as [hs | hm].
-  - destruct e as [ | x]. 
-    + (* InvalidState case -- should be easy *)
-      destruct stk as (fr, frs).
+  - destruct stk as (fr, frs).
+    destruct e as [ | x].
+    + (* InvalidState case *)
       eapply step_never_returns_SpInvalidState in hs; eauto.
     + (* LeftRecursion case *)
-      eapply step_never_returns_SpLeftRecursion; eauto.
+      eapply step_never_returns_SpLeftRecursion in hs; eauto.
   - destruct hm as [[av' stk' ts'] [a'' [hs hm]]].
     eapply IH in hm; eauto.
     + apply step_meas_lt; auto.

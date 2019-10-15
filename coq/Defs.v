@@ -131,7 +131,77 @@ with nullable_gamma (g : grammar) : list symbol -> Prop :=
 
 Hint Constructors nullable_sym nullable_gamma.
 
+Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
+| NullableNil'  : 
+    nullable_gamma' g []
+| NullableCons' : 
+    forall x ys tl,
+      In (x, ys) g
+      -> nullable_gamma' g ys
+      -> nullable_gamma' g tl
+      -> nullable_gamma' g (NT x :: tl).
+
+Inductive nullable_path (g : grammar) :
+  symbol -> symbol -> Prop :=
+| DirectPath : forall x z gamma pre suf,
+    In (x, gamma) g
+    -> gamma = pre ++ NT z :: suf
+    -> nullable_gamma g pre
+    -> nullable_path g (NT x) (NT z)
+| IndirectPath : forall x y z gamma pre suf,
+    In (x, gamma) g
+    -> gamma = pre ++ NT y :: suf
+    -> nullable_gamma g pre
+    -> nullable_path g (NT y) (NT z)
+    -> nullable_path g (NT x) (NT z).
+
+Hint Constructors nullable_path.
+
+Definition left_recursive g sym :=
+  nullable_path g sym sym.
+
+Definition no_left_recursion g :=
+  forall (x : nonterminal),
+    ~ left_recursive g (NT x).
+
 (* LEMMAS *)
+
+Lemma nullable_split :
+  forall g xs ys,
+    nullable_gamma g (xs ++ ys)
+    -> nullable_gamma g ys.
+Proof.
+  induction xs; intros.
+  - auto.
+  - inv H.
+    eapply IHxs; eauto.
+Qed.
+
+Lemma nullable_app :
+  forall g xs ys,
+    nullable_gamma g xs
+    -> nullable_gamma g ys
+    -> nullable_gamma g (xs ++ ys).
+Proof.
+  intros g xs ys Hng Hng'.
+  induction xs as [| x xs]; simpl in *; auto.
+  inv Hng.
+  constructor; auto.
+Qed.
+
+Lemma nullable_path_trans :
+  forall g x y z,
+    nullable_path g x y
+    -> nullable_path g y z
+    -> nullable_path g x z.
+Proof.
+  intros g x y z hxy hyz.
+  induction hxy; sis; subst.
+  - destruct z as [a | z]; eauto.
+    inv hyz.
+  - destruct z as [a | z]; eauto.
+    inv hyz.
+Qed.  
 
 Lemma gamma_derivation_app :
   forall g ys1 w1 v1,
