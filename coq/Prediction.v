@@ -448,6 +448,18 @@ Proof.
     + inv hi; firstorder.
     + firstorder.
 Qed.
+
+Lemma aggrMoveResults_error_in_input :
+  forall (smrs : list subparser_move_result)
+         (e    : prediction_error),
+    aggrMoveResults smrs = inl e
+    -> In (SpMoveError e) smrs.
+Proof.
+  intros smrs e ha.
+  induction smrs as [| smr smrs' IH]; sis; tc.
+  destruct smr as [sp' | | e']; destruct (aggrMoveResults smrs') as [e'' | sps'];
+    tc; inv ha; eauto.
+Qed.
     
 Lemma in_extractSomes_result_in_input :
   forall A (a : A) (os : list (option A)),
@@ -981,3 +993,55 @@ Definition lstack_wf (g : grammar) (stk : location_stack) : Prop :=
   match stk with
   | (loc, locs) => locations_wf g (loc :: locs)
   end.
+
+Lemma locations_wf_app :
+  forall g l,
+    locations_wf g l
+    -> forall p s,
+      l = p ++ s
+      -> locations_wf g p /\ locations_wf g s.
+Proof.
+  intros g l hw.
+  induction hw; intros p s heq.
+  - symmetry in heq; apply app_eq_nil in heq.
+    destruct heq; subst; auto.
+  - destruct p as [| fr p]; sis; subst; auto.
+    apply inv_hd_tl in heq.
+    destruct heq as [hh ht].
+    apply app_eq_nil in ht; destruct ht; subst; auto.
+  - destruct p as [| fr  p]; sis; subst; auto.
+    destruct p as [| fr' p]; sis; subst; inv heq; auto.
+    specialize (IHhw (Loc xo pre (NT x :: suf):: p) s).
+    destruct IHhw as [hs hp]; auto.
+Qed.
+
+Lemma locations_wf_tl :
+  forall g h t,
+    locations_wf g (h :: t)
+    -> locations_wf g t.
+Proof.
+  intros g h t hw.
+  rewrite cons_app_singleton in hw.
+  eapply locations_wf_app in hw; eauto.
+  firstorder.
+Qed.
+
+(* CLEAN UP *)
+Lemma spClosureStep_preserves_lstack_wf_invar :
+  forall g sp sp' sps',
+    lstack_wf g sp.(stack)
+    -> spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> lstack_wf g sp'.(stack).
+Proof.
+  intros g sp sp' sps' hw hs hi.
+  unfold spClosureStep in hs; dms; tc; sis; inv hs.
+  - apply in_singleton_eq in hi; subst; simpl.
+    inv hw.
+    inv H8; constructor; auto.
+    rewrite <- app_assoc; auto.
+  - apply in_map_iff in hi.
+    destruct hi as [rhs [heq hi]]; subst; sis.
+    constructor; sis; auto.
+    apply in_rhssForNt_production_in_grammar; auto.
+Qed.

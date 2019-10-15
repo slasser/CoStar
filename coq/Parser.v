@@ -16,7 +16,7 @@ Record frame := Fr { loc : location
 
 Definition parser_stack := (frame * list frame)%type.
 
-Definition locStackOf (stk : parser_stack) : location_stack :=
+Definition lstackOf (stk : parser_stack) : location_stack :=
   let (fr, frs) := stk in (fr.(loc), map loc frs).
 
 Fixpoint bottomFrame' (h : frame) (t : list frame) : frame :=
@@ -90,7 +90,7 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
       (* nonterminal case --> push a frame onto the stack *)
       | NT x :: suf_tl => 
         if NtSet.mem x av then
-          match llPredict g x (locStackOf (fr, frs)) ts with
+          match llPredict g x (lstackOf (fr, frs)) ts with
           | PredSucc rhs =>
             let callee := Fr (Loc (Some x) [] rhs) []
             in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
@@ -114,7 +114,7 @@ Definition meas (g : grammar) (st : parser_state) : nat * nat * nat :=
   | Pst av stk ts =>
     let m := maxRhsLength g    in
     let e := NtSet.cardinal av in
-    (List.length ts, stackScore (locStackOf stk) (1 + m) e, stackHeight stk)
+    (List.length ts, stackScore (lstackOf stk) (1 + m) e, stackHeight stk)
   end.
 
 Lemma state_lt_after_return :
@@ -128,7 +128,7 @@ Lemma state_lt_after_return :
 Proof.
   intros g st st' ts ce cr cr' frs x x' suf_cr_tl av
          Hst hst' Hce Hcr Hcr'; subst.
-  unfold meas. unfold locStackOf.
+  unfold meas. unfold lstackOf.
   pose proof (stackScore_le_after_return (loc ce) (loc cr) (loc cr')
                                          x x' (rsuf (loc cr')) av (map loc frs)
                                          (1 + maxRhsLength g)) as Hle.
@@ -392,6 +392,15 @@ Qed.
 
 (* A well-formedness invariant for the parser stack *)
 
+Definition frames_wf (g : grammar) (frs : list frame) : Prop :=
+  locations_wf g (map loc frs).
+
+Definition stack_wf (g : grammar) (stk : parser_stack) : Prop :=
+  match stk with
+  | (fr, frs) => frames_wf g (fr :: frs)
+  end.
+                 
+(*
 Inductive frames_wf (g : grammar) : list frame -> Prop :=
 | WF_nil :
     frames_wf g []
@@ -413,7 +422,7 @@ Definition stack_wf (g : grammar) (stk : parser_stack) : Prop :=
   match stk with
   | (fr, frs) => frames_wf g (fr :: frs)
   end.
-
+*)
 (*
 Inductive stack_wf (g : grammar) : parser_stack -> Prop :=
 | WF_nil :
@@ -436,50 +445,33 @@ Lemma step_preserves_stack_wf_invar :
     -> stack_wf g stk'.
 Proof.
   intros g av av' stk stk' ts ts' hs hw.
+  unfold stack_wf in *.
+  destruct stk as (fr, frs).
+  destruct stk' as (fr', frs').
+  unfold frames_wf in *.
   unfold step in hs.
-  repeat (dmeq h); inv hs; tc.
+  repeat (dmeq h); inv hs; tc; sis.
   - (* return *)
     inv hw.
-    inv H10; constructor; auto.
+    inv H8; constructor; auto.
     rewrite <- app_assoc; auto.
   - inv hw; auto.
-    + constructor; auto.
-    + constructor; auto.
-      rewrite <- app_assoc; auto.
+    constructor; auto.
+    rewrite <- app_assoc; auto.
   - constructor; simpl; auto.
     eapply llPredict_succ_arg_result_in_grammar; eauto.
-  - constructor; simpl; auto. 
+  - constructor; simpl; auto.
     eapply llPredict_ambig_arg_result_in_grammar; eauto.
 Qed.
 
-Lemma inv_hd_tl :
-  forall A (x x' : A) (xs xs' : list A),
-    x :: xs = x' :: xs'
-    -> x' = x /\ xs' = xs.
-Proof.
-  intros A x x' xs xs' heq.
-  inv heq; auto.
-Qed.
-
 Lemma frames_wf_app :
-  forall g l,
-    frames_wf g l
-    -> forall p s,
-      l = p ++ s
-      -> frames_wf g p /\ frames_wf g s.
+  forall g p s,
+    frames_wf g (p ++ s)
+    -> frames_wf g p /\ frames_wf g s.
 Proof.
-  intros g l hw.
-  induction hw; intros p s heq.
-  - symmetry in heq; apply app_eq_nil in heq.
-    destruct heq; subst; auto.
-  - destruct p as [| fr p]; sis; subst; auto.
-    apply inv_hd_tl in heq.
-    destruct heq as [hh ht].
-    apply app_eq_nil in ht; destruct ht; subst; auto.
-  - destruct p as [| fr  p]; sis; subst; auto.
-    destruct p as [| fr' p]; sis; subst; inv heq; auto.
-    specialize (IHhw (Fr (Loc xo pre (NT x :: suf)) v :: p) s).
-    destruct IHhw as [hs hp]; auto.
+  intros g p s hw.
+  eapply locations_wf_app; eauto.
+  apply map_app.
 Qed.
 
 Lemma frames_wf_app_l :
@@ -488,6 +480,17 @@ Lemma frames_wf_app_l :
     -> frames_wf g pre.
 Proof.
   intros g pre suf hw.
+  eapply frames_wf_app in hw; eauto.
+  firstorder.
+Qed.
+
+Lemma frames_wf_tl :
+  forall g fr frs,
+    frames_wf g (fr :: frs)
+    -> frames_wf g frs.
+Proof.
+  intros g fr frs hw.
+  rewrite cons_app_singleton in hw.
   eapply frames_wf_app in hw; eauto.
   firstorder.
 Qed.

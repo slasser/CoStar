@@ -132,6 +132,19 @@ Proof.
 Qed.  
 
 Lemma nullable_path_two_head_frames :
+  forall g l l' v v' frs y suf,
+    frames_wf g (Fr l v :: Fr l' v' :: frs)
+    -> nullable_gamma g l.(rpre)
+    -> l.(rsuf) = NT y :: suf
+    -> exists x suf',
+        l'.(rsuf) = NT x :: suf'
+        /\ nullable_path g (NT x) (NT y).
+Proof.
+  intros g l l' v v' frs y suf hw hn heq.
+  inv hw; sis; subst; eauto.
+Qed.
+(*
+Lemma nullable_path_two_head_frames :
   forall g fr fr' frs y suf,
     frames_wf g (fr :: fr' :: frs)
     -> nullable_gamma g fr.(loc).(rpre)
@@ -141,10 +154,65 @@ Lemma nullable_path_two_head_frames :
         /\ nullable_path g (NT x) (NT y).
 Proof.
   intros g fr fr' frs y suf hw hn heq.
-  inv hw; sis; subst; eauto.
+  unfold frames_wf in hw.
+  sis.
+  inv hw; sis; subst.
+  assert (suf' = NT y :: suf).
+  { rewrite <- H in heq; sis; auto. }
+  subst.
+  exists x; exists suf0; split; eauto.
+  eapply DirectPath; eauto.
+  rewrite <- H in heq.
+  simpl in heq; subst.
+  eauto.
+  destruct fr as rewrit
+  destruct fr.
+  exists x; exists suf0; split; auto.
+  econstructor; eauto.
 Qed.
 
+Lemma nullable_path_two_head_frames :
+  forall g fr fr' frs y suf,
+    frames_wf g (fr :: fr' :: frs)
+    -> nullable_gamma g fr.(loc).(rpre)
+    -> fr.(loc).(rsuf) = NT y :: suf
+    -> exists x suf',
+        fr'.(loc).(rsuf) = NT x :: suf'
+        /\ nullable_path g (NT x) (NT y).
+Proof.
+  intros g fr fr' frs y suf hw hn heq.
+  unfold frames_wf in *; sis.
+  inv hw; sis; subst; eauto 20.  
+Qed.
+
+*)
+
 (* CLEAN THIS UP *)
+Lemma stack_configuration_repr_nullable_path :
+  forall g frs l l_cr v v_cr x y suf suf',
+    frames_wf g (Fr l v :: frs ++ [Fr l_cr v_cr])
+    -> nullable_gamma g l.(rpre)
+    -> l.(rsuf) = NT y :: suf
+    -> processed_symbols_all_nullable g frs
+    -> l_cr.(rsuf) = NT x :: suf'
+    -> nullable_path g (NT x) (NT y).
+Proof.
+  intros g frs.
+  induction frs as [| (l', v') frs IH]; intros l l_cr v v_cr x y suf suf' hw hn heq hp heq'; sis. 
+  - inv hw; sis.
+    inv heq'.
+    eapply DirectPath; eauto.
+  - rename y into z.
+    pose proof hw as hw'.
+    eapply nullable_path_two_head_frames in hw'; eauto.
+    destruct hw' as [y [suf'' [heq'' hnp]]].
+    apply nullable_path_trans with (y := (NT y)); auto.
+    apply frames_wf_tl in hw.
+    inv hp; sis.
+    eapply IH in hw; eauto.
+Qed.
+
+(*
 Lemma stack_configuration_repr_nullable_path :
   forall g frs fr fr_cr x y suf suf',
     frames_wf g (fr :: frs ++ [fr_cr])
@@ -169,6 +237,7 @@ Proof.
     inv hp.
     eapply IH in hw'; eauto.
 Qed.
+ *)
 
 (* CLEAN UP *)
 Lemma multistep_left_recursion_detection_sound :
@@ -207,6 +276,7 @@ Proof.
     { simpl. rewrite <- app_assoc. simpl. auto. }
     rewrite happ in hw; clear happ.
     apply frames_wf_app_l in hw.
+    destruct fr as (l, v); destruct fr_cr as (l', v').
     eapply stack_configuration_repr_nullable_path in hw; eauto.
   - eapply IH with (y := meas g st'); eauto.
     + eapply step_meas_lt; eauto.
@@ -246,135 +316,8 @@ Proof.
   apply parse_left_recursion_detection_sound in hp; firstorder.
 Qed.
 
-(* Stuff about prediction *)
-
 Require Import GallStar.Prediction.
-
-(* BREAKING THIS INTO TWO GROUPS OF LEMMAS
-   FOR THE TWO TYPES OF PREDICTION ERRORS *)
-
-(* SP INVALID STATE CASE *)
-
-Lemma spClosureStep_never_returns_SpInvalidState :
-  forall g sp,
-    lstack_wf g sp.(stack)
-    -> spClosureStep g sp <> SpClosureStepError SpInvalidState.
-Proof.
-  intros g sp hw; unfold not; intros hs.
-  unfold spClosureStep in hs; dms; tc; inv hw.
-Qed.
-
-Lemma spClosure_never_returns_SpInvalidState :
-  forall (g    : grammar)
-         (pair : nat * nat)
-         (a    : Acc lex_nat_pair pair)
-         (sp   : subparser)
-         (a'   : Acc lex_nat_pair (spMeas g sp)),
-    pair = spMeas g sp
-    -> lstack_wf g sp.(stack)
-    -> spClosure g sp a' <> inl SpInvalidState.
-Proof.
-  intros g pair a'.
-  induction a' as [pair hlt IH].
-  intros sp a heq hw; unfold not; intros hs; subst.
-  apply spClosure_error_cases in hs.
-  destruct hs as [hs | [sps [hs [crs [heq heq']]]]]; subst.
-  - eapply spClosureStep_never_returns_SpInvalidState; eauto.
-  - apply error_in_aggrClosureResults_result_in_input in heq'.
-    eapply in_dmap in heq'; eauto.
-    destruct heq' as [sp' [hi [hi' heq]]].
-    eapply IH with (sp := sp'); eauto.
-    + eapply spClosureStep_meas_lt; eauto.
-    + admit.
-Admitted.
-    
-Lemma closure_never_returns_SpInvalidState :
-  forall g sps,
-    (forall sp, In sp sps -> lstack_wf g sp.(stack))
-    -> closure g sps <> inl SpInvalidState.
-Proof.
-  intros g sps hw; unfold not; intros hc.
-  unfold closure in hc.
-  apply error_in_aggrClosureResults_result_in_input in hc.
-  apply in_map_iff in hc; destruct hc as [sp [hs hi]].
-  eapply spClosure_never_returns_SpInvalidState; eauto.
-  apply lex_nat_pair_wf.
-Qed.
-
-Lemma startState_never_returns_SpInvalidState :
-  forall g loc locs x suf,
-    lstack_wf g (loc, locs)
-    -> loc.(rsuf) = NT x :: suf
-    -> startState g x (loc, locs) <> inl SpInvalidState.
-Proof.
-  intros g loc locs x suf hw heq; unfold not; intros hss.
-  eapply closure_never_returns_SpInvalidState; eauto.
-  intros sp hi.
-  apply in_map_iff in hi.
-  destruct hi as [rhs [heq' hi]]; subst; simpl.
-  (* LEMMA *)
-  clear hss.
-  inv hw; sis; subst.
-  - constructor; auto.
-    apply in_rhssForNt_production_in_grammar; auto.
-  - constructor; auto.
-    apply in_rhssForNt_production_in_grammar; auto.
-Qed.
-
-Lemma llPredict_never_returns_SpInvalidState :
-  forall g fr frs x suf ts,
-    lstack_wf g (fr, frs)
-    -> fr.(rsuf) = NT x :: suf
-    -> llPredict g x (fr, frs) ts <> PredError SpInvalidState.
-Proof.
-  intros g fr frs x suf ts hw heq; unfold not; intros hl.
-  unfold llPredict in hl.
-  dmeq hss.
-  - inv hl.
-    eapply startState_never_returns_SpInvalidState; eauto.
-  - admit.
-Admitted.
-
-(* you'll need more assumptions *)
-Lemma step_never_returns_SpInvalidState :
-  forall g (st : parser_state),
-    step g st <> StepError (PredictionError SpInvalidState).
-Proof.
-  intros g st; unfold not; intros hs.
-  unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
-  eapply llPredict_never_returns_SpInvalidState; eauto.
-  - admit.
-  - sis; eauto.
-Admitted.
-  
-Lemma multistep_never_returns_prediction_error :
-  forall (g      : grammar)
-         (tri    : nat * nat * nat)
-         (a      : Acc lex_nat_triple tri)
-         (ts     : list token)
-         (av     : NtSet.t)
-         (stk    : parser_stack)
-         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk ts)))
-         (e      : prediction_error),
-    tri = Parser.meas g (Pst av stk ts)
-    -> stack_wf g stk
-    -> ~ multistep g (Pst av stk ts) a' = Error (PredictionError e).
-Proof.
-  intros g tri a.
-  induction a as [tri hlt IH].
-  intros ts av stk a' e heq hw; unfold not; intros hm; subst.
-  apply multistep_prediction_error_cases in hm.
-  destruct hm as [hs | hm].
-  - destruct e as [ | x]. 
-    + (* InvalidState case -- should be easy *)
-      eapply step_never_returns_SpInvalidState; eauto.
-    + (* LeftRecursion case *)
-      admit.
-  - destruct hm as [[av' stk' ts'] [a'' [hs hm]]].
-    eapply IH in hm; eauto.
-    + apply step_meas_lt; auto.
-    + eapply step_preserves_stack_wf_invar; eauto.
-Admitted.
+Require Import GallStar.Prediction_error_free_termination.
 
 Lemma parse_never_returns_prediction_error :
   forall (g : grammar)

@@ -72,6 +72,15 @@ Proof.
   auto.
 Qed.
 
+Lemma inv_hd_tl :
+  forall A (x x' : A) (xs xs' : list A),
+    x :: xs = x' :: xs'
+    -> x' = x /\ xs' = xs.
+Proof.
+  intros A x x' xs xs' heq.
+  inv heq; auto.
+Qed.
+
 Lemma filter_cons_in :
   forall (A : Type) (f : A -> bool) (l : list A) (hd : A) (tl : list A),
     filter f l = hd :: tl

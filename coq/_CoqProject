@@ -10,4 +10,5 @@ Prediction.v
 Parser.v
 
 Parser_sound.v
+Prediction_error_free_termination.v
 Parser_error_free_termination.v
