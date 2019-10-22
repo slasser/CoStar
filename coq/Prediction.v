@@ -4,7 +4,7 @@ Require Import GallStar.Lex.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
 Require Import GallStar.Utils.
-Import ListNotations.
+        Import ListNotations.
 Set Implicit Arguments.
 
 (* Hide an alternative definition of "sum" from NtSet *)
@@ -417,6 +417,7 @@ Proof.
   auto. 
 Defined.
 
+(*
 Lemma in_sumOfListSum_result_in_input :
   forall A B (es : list (sum A B)) (b : B) (bs : list B),
     sumOfListSum es = inr bs
@@ -434,6 +435,7 @@ Proof.
     + apply in_eq.
     + apply in_cons; eauto.
 Defined.
+*)
 
 Lemma in_aggrMoveResults_result_in_input :
   forall (smrs : list subparser_move_result)
@@ -464,6 +466,7 @@ Proof.
     tc; inv ha; eauto.
 Qed.
     
+(*
 Lemma in_extractSomes_result_in_input :
   forall A (a : A) (os : list (option A)),
     In a (extractSomes os)
@@ -477,6 +480,7 @@ Proof.
       * apply in_cons; auto.
     + apply in_cons; auto.
 Defined.
+*)
 
 Lemma moveSp_preserves_prediction :
   forall g t sp sp',
@@ -762,7 +766,7 @@ Proof.
   - apply in_singleton_eq in hi; subst; auto.
   - eapply sp_in_aggrClosureResults_result_in_input in heq'; eauto.
     destruct heq' as [sps [hi' hi'']].
-    eapply in_dmap in hi'; eauto.
+    eapply dmap_in in hi'; eauto.
     destruct hi' as [sp'' [hi''' [_ heq]]].
     eapply IH in heq; subst; eauto.
     + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs'; auto.
@@ -1010,7 +1014,7 @@ Proof.
   - symmetry in heq; apply app_eq_nil in heq.
     destruct heq; subst; auto.
   - destruct p as [| fr p]; sis; subst; auto.
-    apply inv_hd_tl in heq.
+    apply cons_inv_eq in heq.
     destruct heq as [hh ht].
     apply app_eq_nil in ht; destruct ht; subst; auto.
   - destruct p as [| fr  p]; sis; subst; auto.

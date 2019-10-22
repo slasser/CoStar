@@ -1,9 +1,9 @@
 Require Import FMaps List MSets Omega PeanoNat String.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
-Import ListNotations.
+        Import ListNotations.
 
-(* CORE DEFINITIONS *)
+(* CORE PROJECT DEFINITIONS *)
 
 (* Representations of grammar symbols *)
 Definition terminal    := string.
@@ -161,7 +161,7 @@ Definition left_recursive g sym :=
   nullable_path g sym sym.
 
 Definition no_left_recursion g :=
-  forall (x : nonterminal),
+  forall (x : nonterminal), 
     ~ left_recursive g (NT x).
 
 (* LEMMAS *)
@@ -169,12 +169,18 @@ Definition no_left_recursion g :=
 Lemma nullable_split :
   forall g xs ys,
     nullable_gamma g (xs ++ ys)
+    -> nullable_gamma g xs /\ nullable_gamma g ys.
+Proof.
+  intros g xs; induction xs as [| x xs IH]; intros ys hn; sis; auto.
+  inv hn; firstorder.
+Qed.
+
+Lemma nullable_split_l :
+  forall g xs ys,
+    nullable_gamma g (xs ++ ys)
     -> nullable_gamma g ys.
 Proof.
-  induction xs; intros.
-  - auto.
-  - inv H.
-    eapply IHxs; eauto.
+  intros g xs ys hn; apply nullable_split in hn; firstorder.
 Qed.
 
 Lemma nullable_app :
@@ -183,10 +189,8 @@ Lemma nullable_app :
     -> nullable_gamma g ys
     -> nullable_gamma g (xs ++ ys).
 Proof.
-  intros g xs ys Hng Hng'.
-  induction xs as [| x xs]; simpl in *; auto.
-  inv Hng.
-  constructor; auto.
+  intros g xs ys hng hng'.
+  induction xs as [| x xs]; sis; inv hng; auto.
 Qed.
 
 Lemma nullable_path_trans :
@@ -225,8 +229,7 @@ Lemma forest_app_singleton_node :
 Proof.
   intros g x ys ys' w w' v v' hi hg hg'.
   apply gamma_derivation_app; auto.
-  assert (happ : w' = w' ++ []) by (rewrite <- app_nil_r'; auto); rewrite happ; clear happ.
-  repeat (econstructor; eauto).
+  rew_nil_r w'; eauto.
 Qed.
 
 Lemma terminal_head_gamma_derivation :
@@ -235,9 +238,8 @@ Lemma terminal_head_gamma_derivation :
     -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf l :: v).
 Proof.
   intros g a l ys w v hg.
-  assert (happ : (a, l) :: w = [(a, l)] ++ w) by (rewrite cons_app_singleton; auto).
-  rewrite happ; clear happ.
-  constructor; auto.
+  assert (happ : (a, l) :: w = [(a, l)] ++ w) by apply cons_app_singleton.
+  rewrite happ; auto.
 Qed.
 
 Lemma in_list_iff_in_fromNtList :
@@ -295,7 +297,7 @@ Lemma grammar_rhs_length_le_max :
     In rhs (rhssForNt g x) -> List.length rhs <= maxRhsLength g.
 Proof.
   intros; unfold maxRhsLength.
-  apply list_elt_le_listmax.
+  apply listMax_in_le.
   apply rhs_in_grammar_length_in_rhsLengths.
   eapply in_rhssForNt_in_rhss; eauto.
 Qed.

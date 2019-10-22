@@ -50,7 +50,7 @@ Proof.
   destruct hs as [hs | [sps [hs [crs [heq heq']]]]]; subst.
   - eapply spClosureStep_never_returns_SpInvalidState; eauto.
   - apply error_in_aggrClosureResults_result_in_input in heq'.
-    eapply in_dmap in heq'; eauto.
+    eapply dmap_in in heq'; eauto.
     destruct heq' as [sp' [hi [hi' heq]]].
     eapply IH with (sp := sp'); eauto.
     + eapply spClosureStep_meas_lt; eauto.
@@ -168,7 +168,7 @@ Proof.
   - apply in_singleton_eq in hi; subst; auto.
   - eapply sp_in_aggrClosureResults_result_in_input in heq'; eauto.
     destruct heq' as [sps''' [hi' hi'']].
-    eapply in_dmap in hi'; eauto.
+    eapply dmap_in in hi'; eauto.
     destruct hi' as [sp'' [hi' [hi''' heq]]].
     eapply IH in heq; eauto.
     + eapply spClosureStep_meas_lt; eauto.
@@ -217,7 +217,7 @@ Proof.
     eapply spClosureStepDone_ready_for_move; eauto.
   - eapply sp_in_aggrClosureResults_result_in_input in heq'; eauto.
     destruct heq' as [sps''' [hi' hi'']].
-    eapply in_dmap in hi'; eauto.
+    eapply dmap_in in hi'; eauto.
     destruct hi' as [sp'' [hi' [hi''' heq]]].
     eapply IH in heq; eauto.
     eapply spClosureStep_meas_lt; eauto.
@@ -391,7 +391,7 @@ Proof.
   destruct hs as [hs | [sps [hs [crs [hc ha]]]]]; subst.
   - eapply spClosureStep_never_finds_left_recursion; eauto.
   - apply error_in_aggrClosureResults_result_in_input in ha.
-    eapply in_dmap in ha; eauto.
+    eapply dmap_in in ha; eauto.
     destruct ha as [sp' [hi [hi' hs']]].
     eapply IH with (sp := sp'); eauto.
     + eapply spClosureStep_meas_lt; eauto.

@@ -33,3 +33,5 @@ Ltac dmgeq s := let Heq := fresh s in
 
 Ltac dmeq s := (first [dmheq s | dmgeq s]); auto.
 
+Ltac dmeqs s := repeat dmeq s.
+

@@ -1,45 +1,11 @@
 Require Import List Omega.
 Require Import GallStar.Tactics.
-Import ListNotations.
+        Import ListNotations.
 
-(* DEFINITIONS BUILT FROM STANDARD LIBRARY CONCEPTS *)
+(* STANDARD LIBRARY-LIKE DEFINITIONS *)
 
-(* unwrap a list of options, returning a list of the values wrapped by Some *)
-Definition extractSomes {A} (os : list (option A)) : list A :=
-  fold_right (fun o l => match o with
-                         | None   => l
-                         | Some a => a :: l
-                         end) [] os.
-
-Definition listMax (xs : list nat) : nat := 
-  fold_right max 0 xs.
-
-(* A single (inl a) element of es causes the entire result to be (inl a) *)
-Fixpoint sumOfListSum {A B} (es : list (sum A B)) : sum A (list B) :=
-  match es with
-  | []         => inr []
-  | inl a :: _ => inl a
-  | inr b :: t =>
-    match sumOfListSum t with
-    | inl a  => inl a
-    | inr bs => inr (b :: bs)
-    end
-  end.
-
-Definition dflat_map {A B : Type} :
-  forall (l : list A) (f : forall x, In x l -> list B), list B.
-  refine(fix dfm (l : list A) (f : forall x, In x l -> list B) :=
-           match l as l' return l = l' -> _ with
-           | []     => fun _ => []
-           | h :: t => fun Heq => (f h _) ++ (dfm t _)
-           end eq_refl).
-  - subst.
-    apply in_eq.
-  - subst; intros x Hin.
-    assert (Ht : In x (h :: t)).
-    { apply in_cons; auto. }
-    eapply f; eauto.
-Defined.
+Definition allEqual (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : bool :=
+  forallb (beq x) xs.
 
 Definition dmap {A B : Type} :
   forall (l : list A) (f : forall (x : A), In x l -> B), list B.
@@ -55,8 +21,8 @@ Definition dmap {A B : Type} :
     apply in_cons; auto.
 Defined.
 
-Definition allEqual (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : bool :=
-  forallb (beq x) xs.
+Definition listMax (xs : list nat) : nat := 
+  fold_right max 0 xs.
 
 (* LEMMAS ABOUT STANDARD LIBRARY DEFINITIONS *)
 
@@ -65,6 +31,10 @@ Proof.
   intros; rewrite app_nil_r; auto.
 Qed.
 
+Ltac rew_nil_r xs :=
+  let heq := fresh "heq" in
+  assert (heq : xs = xs ++ []) by apply app_nil_r'; rewrite heq; clear heq.
+
 Lemma cons_app_singleton :
   forall A (x : A) (ys : list A),
     x :: ys = [x] ++ ys.
@@ -72,7 +42,7 @@ Proof.
   auto.
 Qed.
 
-Lemma inv_hd_tl :
+Lemma cons_inv_eq :
   forall A (x x' : A) (xs xs' : list A),
     x :: xs = x' :: xs'
     -> x' = x /\ xs' = xs.
@@ -90,7 +60,7 @@ Proof.
   assert (Hin : In hd (hd :: tl)) by apply in_eq.
   rewrite <- Hf in Hin.
   apply filter_In in Hin; destruct Hin as [Hp _]; auto.
-Defined.
+Qed.
 
 Lemma in_singleton_eq :
   forall A (x x' : A), In x' [x] -> x' = x.
@@ -100,7 +70,7 @@ Proof.
   inv Htl.
 Qed.
 
-Lemma list_elt_le_listmax :
+Lemma listMax_in_le :
   forall (x : nat) (ys : list nat),
     In x ys -> x <= listMax ys.
 Proof.
@@ -113,19 +83,7 @@ Proof.
       apply Max.le_max_r.
 Qed.
 
-Lemma sumOfListSum_failure_in_input :
-  forall A B (es : list (sum A B)) (a : A),
-    sumOfListSum es = inl a
-    -> In (inl a) es.
-Proof.
-  intros A B es a hs.
-  induction es as [| e es IH]; sis; tc.
-  destruct e as [a' | b].
-  - inv hs; auto.
-  - dmeq hs; tc.
-Qed.
-
-Lemma in_dmap :
+Lemma dmap_in :
   forall (A B : Type) 
          (l   : list A) 
          (f   : forall a, In a l -> B) 
@@ -149,12 +107,9 @@ Qed.
 
 Lemma Forall_In :
   forall (A : Type) (P : A -> Prop) (x : A) (xs : list A),
-    Forall P xs
-    -> In x xs
-    -> P x.
+    Forall P xs -> In x xs -> P x.
 Proof.
   intros A P x xs hf hi.
   eapply Forall_forall; eauto.
-Qed.
-    
+Qed.    
          
