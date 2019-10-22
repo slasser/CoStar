@@ -25,7 +25,7 @@ Definition tailFrameScore (loc : location) (b : nat) (e : nat) : nat :=
 
 Fixpoint tailFramesScore (locs : list location) (b : nat) (e : nat) : nat :=
   match locs with
-  | []         => 0
+  | []           => 0
   | loc :: locs' => tailFrameScore loc b e + tailFramesScore locs' b (1 + e)
   end.
 
@@ -119,17 +119,31 @@ Lemma stackScore_le_after_return :
       -> stackScore (caller', locs) b (NtSet.cardinal (NtSet.add x av))
          <= stackScore (callee, caller :: locs) b (NtSet.cardinal av).
 Proof.
-  intros callee caller caller' x x' suf' av locs b Hcallee Hcaller Hcaller'; subst.
+  intros ce cr cr' x x' suf' av locs b hce hcr hcr'; subst.
   unfold stackScore; simpl.
-  unfold headFrameScore; unfold headFrameSize; rewrite Hcallee; simpl.
-  unfold tailFrameScore; unfold tailFrameSize; rewrite Hcaller.
-  destruct (NtSet.mem x av) eqn:Hm.
+  unfold headFrameScore; unfold headFrameSize; rewrite hce; simpl.
+  unfold tailFrameScore; unfold tailFrameSize; rewrite hcr.
+  destruct (NtSet.mem x av) eqn:hm.
   - rewrite add_cardinal_1; auto.
     eapply nonzero_exponents_lt_stackScore_le.
     + split; auto.
       eapply mem_true_cardinality_gt_0; eauto.
     + split; omega.
   - rewrite add_cardinal_2; auto.
+Qed.
+
+(* this version might be easier to apply *)
+Lemma stackScore_le_after_return' :
+    forall o o_cr pre pre_cr suf_cr x b av locs,
+      stackScore (Loc o_cr (pre_cr ++ [NT x]) suf_cr, locs) 
+                 b 
+                 (NtSet.cardinal (NtSet.add x av))
+      <= 
+      stackScore (Loc o pre [], Loc o_cr pre_cr (NT x :: suf_cr) :: locs) 
+                 b 
+                 (NtSet.cardinal av).
+Proof.
+  intros; eapply stackScore_le_after_return; sis; eauto.
 Qed.
 
 Lemma remove_cardinal_minus_1 :
@@ -166,7 +180,7 @@ Lemma less_significant_value_lt_more_significant_digit :
     -> e1 < e2
     -> v * (b ^ e1) < b ^ e2.
 Proof.
-  intros e2; induction e2 as [| e2]; intros e1 v b Hvb Hee; simpl in *; try omega.
+  intros e2; induction e2 as [| e2 IH]; intros e1 v b Hvb Hee; sis; try omega.
   destruct b as [| b]; try omega.
   destruct e1 as [| e1].
   - rewrite Nat.mul_1_r.
@@ -177,7 +191,7 @@ Proof.
     rewrite <- Nat.mul_assoc.
     apply mult_lt_compat_l; try omega.
     rewrite Nat.mul_comm.
-    apply IHe2; omega. 
+    apply IH; omega. 
 Qed.
 
 Lemma stackScore_lt_after_push :
@@ -205,4 +219,19 @@ Proof.
   apply less_significant_value_lt_more_significant_digit.
   - eapply grammar_rhs_length_lt_max_plus_1; eauto.
   - erewrite <- remove_cardinal_1; eauto; omega.
+Qed.
+
+Lemma stackScore_lt_after_push' :
+  forall g o o_cr pre_cr suf_cr rhs x av locs,
+    NtSet.In x av
+    -> In rhs (rhssForNt g x)
+    -> stackScore (Loc o [] rhs, Loc o_cr pre_cr (NT x :: suf_cr) :: locs)
+                  (1 + maxRhsLength g)
+                  (NtSet.cardinal (NtSet.remove x av))
+       <
+       stackScore (Loc o_cr pre_cr (NT x :: suf_cr), locs)
+                  (1 + maxRhsLength g)
+                  (NtSet.cardinal av).
+Proof.
+  intros; eapply stackScore_lt_after_push; sis; eauto.
 Qed.
