@@ -263,7 +263,7 @@ Proof.
   intros g x; split; intros hi; apply in_list_iff_in_fromNtList; auto.
 Qed.
 
-Lemma in_rhssForNt_production_in_grammar :
+Lemma rhssForNt_in_grammar :
   forall g x ys,
     In ys (rhssForNt g x)
     -> In (x, ys) g.
@@ -282,7 +282,7 @@ Proof.
   simpl in *; inv Hin; auto.
 Qed.
 
-Lemma in_rhssForNt_in_rhss :
+Lemma rhssForNt_rhss :
   forall g x rhs,
     In rhs (rhssForNt g x) -> In rhs (rhss g).
 Proof.
@@ -299,7 +299,7 @@ Proof.
   intros; unfold maxRhsLength.
   apply listMax_in_le.
   apply rhs_in_grammar_length_in_rhsLengths.
-  eapply in_rhssForNt_in_rhss; eauto.
+  eapply rhssForNt_rhss; eauto.
 Qed.
 
 Lemma grammar_rhs_length_lt_max_plus_1 :

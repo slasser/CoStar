@@ -38,8 +38,8 @@ Lemma spClosure_never_returns_SpInvalidState :
          (pair : nat * nat)
          (a    : Acc lex_nat_pair pair)
          (sp   : subparser)
-         (a'   : Acc lex_nat_pair (spMeas g sp)),
-    pair = spMeas g sp
+         (a'   : Acc lex_nat_pair (meas g sp)),
+    pair = meas g sp
     -> lstack_wf g sp.(stack)
     -> spClosure g sp a' <> inl SpInvalidState.
 Proof.
@@ -49,7 +49,7 @@ Proof.
   apply spClosure_error_cases in hs.
   destruct hs as [hs | [sps [hs [crs [heq heq']]]]]; subst.
   - eapply spClosureStep_never_returns_SpInvalidState; eauto.
-  - apply error_in_aggrClosureResults_result_in_input in heq'.
+  - apply aggrClosureResults_error_in_input in heq'.
     eapply dmap_in in heq'; eauto.
     destruct heq' as [sp' [hi [hi' heq]]].
     eapply IH with (sp := sp'); eauto.
@@ -64,7 +64,7 @@ Lemma closure_never_returns_SpInvalidState :
 Proof.
   intros g sps hw; unfold not; intros hc.
   unfold closure in hc.
-  apply error_in_aggrClosureResults_result_in_input in hc.
+  apply aggrClosureResults_error_in_input in hc.
   apply in_map_iff in hc; destruct hc as [sp [hs hi]].
   eapply spClosure_never_returns_SpInvalidState; eauto.
   apply lex_nat_pair_wf.
@@ -85,9 +85,9 @@ Proof.
   clear hss.
   inv hw; sis; subst.
   - constructor; auto.
-    apply in_rhssForNt_production_in_grammar; auto.
+    apply rhssForNt_in_grammar; auto. 
   - constructor; auto.
-    apply in_rhssForNt_production_in_grammar; auto.
+    apply rhssForNt_in_grammar; auto.
 Qed.
 
 Lemma handleFinalSubparsers_never_returns_error :
@@ -147,7 +147,7 @@ Proof.
   unfold all_sp_stacks_wf.
   intros sp' hi.
   unfold move in hm.
-  eapply in_aggrMoveResults_result_in_input in hm; eauto.
+  eapply aggrMoveResults_succ_in_input in hm; eauto.
   apply in_map_iff in hm.
   destruct hm as [sp [hm hi']].
   eapply moveSp_preserves_lstack_wf_invar; eauto.
@@ -155,7 +155,7 @@ Qed.
 
 Lemma spClosure_preserves_lstack_wf_invar :
   forall g pr (a : Acc lex_nat_pair pr) sp sp' a' sps',
-    pr = spMeas g sp
+    pr = meas g sp
     -> lstack_wf g sp.(stack)
     -> spClosure g sp a' = inr sps'
     -> In sp' sps'
@@ -166,7 +166,7 @@ Proof.
   apply spClosure_success_cases in hs.
   destruct hs as [[hd heq] | [sps'' [hs [crs [heq heq']]]]]; subst.
   - apply in_singleton_eq in hi; subst; auto.
-  - eapply sp_in_aggrClosureResults_result_in_input in heq'; eauto.
+  - eapply aggrClosureResults_succ_in_input in heq'; eauto.
     destruct heq' as [sps''' [hi' hi'']].
     eapply dmap_in in hi'; eauto.
     destruct hi' as [sp'' [hi' [hi''' heq]]].
@@ -185,7 +185,7 @@ Proof.
   unfold closure in hc.
   unfold all_sp_stacks_wf.
   intros sp' hi.
-  eapply sp_in_aggrClosureResults_result_in_input in hc; eauto.
+  eapply aggrClosureResults_succ_in_input in hc; eauto.
   destruct hc as [sps'' [hi' hi'']].
   apply in_map_iff in hi'.
   destruct hi' as [sp [hs hi']]; subst.
@@ -204,7 +204,7 @@ Qed.
 
 Lemma sp_in_spClosure_result_ready_for_move :
   forall g pr (a : Acc lex_nat_pair pr) sp sp' a' sps',
-    pr = spMeas g sp
+    pr = meas g sp
     -> spClosure g sp a' = inr sps'
     -> In sp' sps'
     -> sp_ready_for_move sp'.
@@ -215,7 +215,7 @@ Proof.
   destruct hs as [[hd heq] | [sps'' [hs [crs [heq heq']]]]]; subst.
   - apply in_singleton_eq in hi; subst; auto.
     eapply spClosureStepDone_ready_for_move; eauto.
-  - eapply sp_in_aggrClosureResults_result_in_input in heq'; eauto.
+  - eapply aggrClosureResults_succ_in_input in heq'; eauto.
     destruct heq' as [sps''' [hi' hi'']].
     eapply dmap_in in hi'; eauto.
     destruct hi' as [sp'' [hi' [hi''' heq]]].
@@ -232,7 +232,7 @@ Proof.
   unfold closure in hc.
   unfold all_sps_ready_for_move.
   intros sp' hi.
-  eapply sp_in_aggrClosureResults_result_in_input in hc; eauto.
+  eapply aggrClosureResults_succ_in_input in hc; eauto.
   destruct hc as [sps'' [hi' hi'']].
   apply in_map_iff in hi'.
   destruct hi' as [sp [hs hi']].
@@ -277,7 +277,7 @@ Proof.
   intros sp hi.
   apply in_map_iff in hi.
   destruct hi as [rhs [heq' hi]]; subst; sis.
-  apply in_rhssForNt_production_in_grammar in hi.
+  apply rhssForNt_in_grammar in hi.
   inv hw; sis; subst; auto.
 Qed.
 
@@ -356,7 +356,7 @@ Lemma spClosureStep_never_finds_left_recursion :
   forall g sp x,
     no_left_recursion g
     -> lstack_wf g sp.(stack)
-    -> unavailable_nts_are_open_calls_invar g sp
+    -> unavailable_nts_are_open_calls g sp
     -> spClosureStep g sp <> SpClosureStepError (SpLeftRecursion x).
 Proof.
   intros g sp x hn hw hu; unfold not; intros hs.
@@ -382,15 +382,15 @@ Lemma spClosure_never_finds_left_recursion :
   forall g pr (a : Acc lex_nat_pair pr) sp a' x,
     no_left_recursion g
     -> lstack_wf g sp.(stack)
-    -> unavailable_nts_are_open_calls_invar g sp
-    -> pr = spMeas g sp
+    -> unavailable_nts_are_open_calls g sp
+    -> pr = meas g sp
     -> spClosure g sp a' <> inl (SpLeftRecursion x).
 Proof.
   intros g pr a'; induction a' as [pr hlt IH]; intros sp a x hn hw hu heq; unfold not; intros hs; subst.
   apply spClosure_error_cases in hs.
   destruct hs as [hs | [sps [hs [crs [hc ha]]]]]; subst.
   - eapply spClosureStep_never_finds_left_recursion; eauto.
-  - apply error_in_aggrClosureResults_result_in_input in ha.
+  - apply aggrClosureResults_error_in_input in ha.
     eapply dmap_in in ha; eauto.
     destruct ha as [sp' [hi [hi' hs']]].
     eapply IH with (sp := sp'); eauto.
@@ -408,7 +408,7 @@ Lemma closure_never_finds_left_recursion :
 Proof.
   intros g x sps hn hw hu; unfold not; intros hc.
   unfold closure in hc.
-  apply error_in_aggrClosureResults_result_in_input in hc.
+  apply aggrClosureResults_error_in_input in hc.
   apply in_map_iff in hc.
   destruct hc as [sp [hs hi]].
   eapply spClosure_never_finds_left_recursion; eauto.
@@ -432,14 +432,14 @@ Proof.
     clear hs.
     inv hw; sis; subst.
     + constructor; auto.
-      apply in_rhssForNt_production_in_grammar; auto.
+      apply rhssForNt_in_grammar; auto.
     + constructor; auto.
-      apply in_rhssForNt_production_in_grammar; auto.
+      apply rhssForNt_in_grammar; auto.
   - unfold sps_unavailable_nts_invar.
     intros sp hi.
     apply in_map_iff in hi.
     destruct hi as [rhs [heq' hi]]; subst.
-    unfold unavailable_nts_are_open_calls_invar.
+    unfold unavailable_nts_are_open_calls.
     intros; ND.fsetdec.
 Qed.
 
@@ -463,18 +463,18 @@ Proof.
   eapply moveSp_never_returns_SpLeftRecursion; eauto.
 Qed.
 
-Lemma unavailable_nts_holds_after_moveSp :
+Lemma unavailable_nts_invar_holds_after_moveSp :
   forall g t sp sp',
     moveSp g t sp = SpMoveSucc sp'
-    -> unavailable_nts_are_open_calls_invar g sp'.
+    -> unavailable_nts_are_open_calls g sp'.
 Proof.
   intros g t sp sp' hm.
   unfold moveSp in hm; dms; tc; inv hm.
-  unfold unavailable_nts_are_open_calls_invar.
+  unfold unavailable_nts_are_open_calls.
   intros x hi hni; ND.fsetdec.
 Qed.
 
-Lemma unavailable_nts_holds_after_move :
+Lemma unavailable_nts_invar_holds_after_move :
   forall g t sps sps',
     move g t sps = inr sps'
     -> sps_unavailable_nts_invar g sps'.
@@ -483,10 +483,10 @@ Proof.
   unfold sps_unavailable_nts_invar.
   intros sp' hi.
   unfold move in hm.
-  eapply in_aggrMoveResults_result_in_input in hm; eauto.
+  eapply aggrMoveResults_succ_in_input in hm; eauto.
   apply in_map_iff in hm.
   destruct hm as [sp [hm hi']].
-  eapply unavailable_nts_holds_after_moveSp; eauto.
+  eapply unavailable_nts_invar_holds_after_moveSp; eauto.
 Qed.
   
 Lemma llPredict'_never_returns_SpLeftRecursion :
@@ -506,7 +506,7 @@ Proof.
       * inv hl.
         pose proof hm as hm'.
         eapply move_preserves_lstack_wf_invar in hm; eauto.
-        eapply unavailable_nts_holds_after_move in hm'.
+        eapply unavailable_nts_invar_holds_after_move in hm'.
         eapply closure_never_finds_left_recursion in hc; eauto.
       * eapply IH in hl; eauto.
         eapply move_preserves_lstack_wf_invar in hm; eauto.

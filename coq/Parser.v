@@ -159,7 +159,7 @@ Lemma PredSucc_result_in_rhssForNt :
     -> In gamma (rhssForNt g x).
 Proof.
   intros g x stk ts gamma Hf.
-  eapply PredSucc_result_in_rhssForNt; eauto.
+  eapply llPredict_succ_in_rhssForNt; eauto. 
 Defined.
 
 Lemma PredAmbig_result_in_rhssForNt :
@@ -167,8 +167,8 @@ Lemma PredAmbig_result_in_rhssForNt :
     llPredict g x stk ts = PredAmbig gamma
     -> In gamma (rhssForNt g x).
 Proof.
-  intros g x stk ts gamma.
-  eapply PredAmbig_result_in_rhssForNt; eauto.
+  intros g x stk ts gamma hl.
+  eapply llPredict_ambig_in_rhssForNt; eauto.
 Defined.
 
 Lemma step_meas_lt :
@@ -459,9 +459,9 @@ Proof.
     constructor; auto.
     rewrite <- app_assoc; auto.
   - constructor; simpl; auto.
-    eapply llPredict_succ_arg_result_in_grammar; eauto.
+    eapply llPredict_succ_in_grammar; eauto.
   - constructor; simpl; auto.
-    eapply llPredict_ambig_arg_result_in_grammar; eauto.
+    eapply llPredict_ambig_in_grammar; eauto.
 Qed.
 
 Lemma frames_wf_app :

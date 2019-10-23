@@ -585,56 +585,55 @@ Proof.
   rewrite heq; auto.
 Qed.
 
-Lemma PredSucc_result_in_rhssForNt :
+Lemma llPredict_succ_in_rhssForNt :
   forall g x stk ts gamma,
     llPredict g x stk ts = PredSucc gamma
     -> In gamma (rhssForNt g x).
 Proof.
-  intros g x stk ts gamma Hp.
-  unfold llPredict in Hp.
-  dmeq Hss; tc.
-  apply llPredict'_success_result_in_original_subparsers in Hp.
-  destruct Hp as [sp [Hin Heq]]; subst.
+  intros g x stk ts gamma hp; unfold llPredict in hp.
+  dmeq hs; tc.
+  apply llPredict'_success_result_in_original_subparsers in hp.
+  destruct hp as [sp [hin heq]]; subst.
   eapply startState_sp_prediction_in_rhssForNt; eauto.
-Defined.
+Qed.
 
-Lemma PredAmbig_result_in_rhssForNt :
+Lemma llPredict_ambig_in_rhssForNt :
   forall g x stk ts gamma,
     llPredict g x stk ts = PredAmbig gamma
     -> In gamma (rhssForNt g x).
 Proof.
-  intros g x stk ts gamma Hf.
-  unfold llPredict in Hf.
-  dmeq Hss; tc.
-  apply llPredict'_ambig_result_in_original_subparsers in Hf.
-  destruct Hf as [sp [Hin Heq]]; subst.
+  intros g x stk ts gamma hf.
+  unfold llPredict in hf.
+  dmeq hs; tc.
+  apply llPredict'_ambig_result_in_original_subparsers in hf.
+  destruct hf as [sp [hin heq]]; subst.
   eapply startState_sp_prediction_in_rhssForNt; eauto.
-Defined.
+Qed.
 
-Lemma llPredict_succ_arg_result_in_grammar :
+Lemma llPredict_succ_in_grammar :
   forall g x stk ts ys,
     llPredict g x stk ts = PredSucc ys
     -> In (x, ys) g.
 Proof.
   intros g x stk ts ys hp.
-  apply PredSucc_result_in_rhssForNt in hp.
-  apply in_rhssForNt_production_in_grammar; auto.
+  apply rhssForNt_in_grammar.
+  eapply llPredict_succ_in_rhssForNt; eauto.
 Qed.
 
-Lemma llPredict_ambig_arg_result_in_grammar :
+Lemma llPredict_ambig_in_grammar :
   forall g x stk ts ys,
     llPredict g x stk ts = PredAmbig ys
     -> In (x, ys) g.
 Proof.
   intros g x stk ts ys hp.
-  apply in_rhssForNt_production_in_grammar.
-  eapply PredAmbig_result_in_rhssForNt; eauto.
+  apply rhssForNt_in_grammar.
+  eapply llPredict_ambig_in_rhssForNt; eauto.
 Qed.
 
-(* A well-formedness predicate over a location stack *)
+(* A WELL-FORMEDNESS PREDICATE OVER A LOCATION STACK *)
 
-(* EVENTUALLY, I SHOULD DEFINE THE PARSER STACK WELL-FORMEDNESS PREDICATE
-   IN TERMS OF THIS ONE *)
+(* The stack predicate is defined in terms of the following
+   predicate over a list of locations *)
 Inductive locations_wf (g : grammar) : list location -> Prop :=
 | WF_nil :
     locations_wf g []
@@ -650,10 +649,13 @@ Inductive locations_wf (g : grammar) : list location -> Prop :=
 
 Hint Constructors locations_wf.
 
+(* The stack well-formedness predicate *)
 Definition lstack_wf (g : grammar) (stk : location_stack) : Prop :=
   match stk with
   | (loc, locs) => locations_wf g (loc :: locs)
   end.
+
+(* Lemmas about the well-formedness predicate *)
 
 Lemma locations_wf_app :
   forall g l,
@@ -697,7 +699,27 @@ Proof.
   firstorder.
 Qed.
 
-(* CLEAN UP *)
+Lemma return_preserves_locations_wf_invar :
+  forall g o o_cr pre pre_cr suf_cr x locs,
+    locations_wf g (Loc o pre [] :: Loc o_cr pre_cr (NT x :: suf_cr) :: locs)
+    -> locations_wf g (Loc o_cr (pre_cr ++ [NT x]) suf_cr :: locs).
+Proof.
+  intros g o o_cr pre pre_cr suf_cr x locs hw.
+  inversion hw as [ | o' pre' suf' hw' | x' o' pre' pre'' suf suf' locs' hi hw']; subst; clear hw.
+  inv hw'; constructor; auto.
+  rewrite <- app_assoc; auto.
+Qed.
+
+Lemma push_preserves_locations_wf_invar :
+  forall g o pre suf x rhs locs,
+    In rhs (rhssForNt g x)
+    -> locations_wf g (Loc o pre (NT x :: suf) :: locs)
+    -> locations_wf g (Loc (Some x) [] rhs :: Loc o pre (NT x :: suf) :: locs).
+Proof.
+  intros; constructor; auto.
+  apply rhssForNt_in_grammar; auto.
+Qed.
+
 Lemma spClosureStep_preserves_lstack_wf_invar :
   forall g sp sp' sps',
     lstack_wf g sp.(stack)
@@ -707,25 +729,23 @@ Lemma spClosureStep_preserves_lstack_wf_invar :
 Proof.
   intros g sp sp' sps' hw hs hi.
   unfold spClosureStep in hs; dms; tc; sis; inv hs.
-  - apply in_singleton_eq in hi; subst; simpl.
-    inv hw.
-    inv H8; constructor; auto.
-    rewrite <- app_assoc; auto.
-  - apply in_map_iff in hi.
-    destruct hi as [rhs [heq hi]]; subst; sis.
-    constructor; sis; auto.
-    apply in_rhssForNt_production_in_grammar; auto.
+  - apply in_singleton_eq in hi; subst; sis.
+    eapply return_preserves_locations_wf_invar; eauto.
+  - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
+    apply push_preserves_locations_wf_invar; auto.
   - inv hi.
 Qed.
 
-(* an invariant that relates the visited set to the stack *)
+(* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
+   TO THE SHAPE OF THE STACK *)
 
 Definition processed_symbols_all_nullable (g : grammar) (frs : list location) : Prop :=
   Forall (fun fr => nullable_gamma g fr.(rpre)) frs.
 
 Hint Constructors Forall.
 
-Definition unavailable_nts_are_open_calls_invar g sp : Prop :=
+(* The invariant *)
+Definition unavailable_nts_are_open_calls g sp : Prop :=
   match sp with
   | Sp av _ (fr, frs) =>
     forall (x : nonterminal),
@@ -738,56 +758,64 @@ Definition unavailable_nts_are_open_calls_invar g sp : Prop :=
                 /\ fr_cr.(rsuf) = NT x :: suf)
   end.
 
+(* We lift the invariant to lists of subparsers *)
 Definition sps_unavailable_nts_invar g sps : Prop :=
-  forall sp, In sp sps -> unavailable_nts_are_open_calls_invar g sp.
+  forall sp, In sp sps -> unavailable_nts_are_open_calls g sp.
+
+Lemma return_preserves_unavailable_nts_invar :
+  forall g av pr o o' pre pre' suf' x fr cr cr' frs,
+    fr     = Loc o pre []
+    -> cr  = Loc o' pre' (NT x :: suf')
+    -> cr' = Loc o' (pre' ++ [NT x]) suf'
+    -> lstack_wf g (fr, cr :: frs)
+    -> unavailable_nts_are_open_calls g (Sp av pr (fr, cr :: frs))
+    -> unavailable_nts_are_open_calls g (Sp (NtSet.add x av) pr (cr', frs)). 
+Proof.
+  intros g av pr o o' pre pre' suf' x' fr cr cr' frs hfr hcr hcr' hw hu; subst.
+  unfold unavailable_nts_are_open_calls; intros x hi hn; simpl.
+  assert (hn' : ~ NtSet.In x av) by ND.fsetdec.
+  apply hu in hn'; clear hu; auto.
+  destruct hn' as [hng [frs_pre [fr_cr [frs_suf [suf [heq [hp heq']]]]]]].
+  destruct frs_pre as [| fr' frs_pre]; sis.
+  - inv heq; inv heq'; ND.fsetdec.
+  - inv heq; inv hp; sis; split; eauto 8.
+    apply nullable_app; auto.
+    inv hw; rewrite app_nil_r in *; eauto.
+Qed.
+
+Lemma push_preserves_unavailable_nts_invar :
+  forall g cr ce av pr o pre suf x rhs frs,
+    cr = Loc o pre (NT x :: suf)
+    -> ce = Loc (Some x) [] rhs
+    -> unavailable_nts_are_open_calls g (Sp av pr (cr, frs))
+    -> unavailable_nts_are_open_calls g (Sp (NtSet.remove x av) pr (ce, cr :: frs)).
+Proof.
+  intros g cr ce av pr o pre suf x rhs frs hcr hce hu; subst.
+  unfold unavailable_nts_are_open_calls.
+  intros x' hi hn; simpl; split; auto.
+  unfold processed_symbols_all_nullable.
+  destruct (NF.eq_dec x' x); subst.
+  - exists []; repeat eexists; eauto.
+  - assert (hn' : ~ NtSet.In x' av) by ND.fsetdec.
+    apply hu in hn'; simpl in hn'; clear hu; auto.
+    destruct hn' as
+        [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
+    exists (Loc o pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
+Qed.
 
 Lemma spClosureStep_preserves_unavailable_nts_invar :
   forall g sp sp' sps',
     lstack_wf g sp.(stack)
-    -> unavailable_nts_are_open_calls_invar g sp
+    -> unavailable_nts_are_open_calls g sp
     -> spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
-    -> unavailable_nts_are_open_calls_invar g sp'.
+    -> unavailable_nts_are_open_calls g sp'.
 Proof.
   intros g sp sp' sps' hw hu hs hi.
-  unfold spClosureStep in hs.
-  destruct sp as [av pred ([xo pre suf], frs)]; sis.
-  destruct suf as [| [a | x] suf]; tc.
-  - (* return case *)
-    destruct frs as [| [xo_cr pre_cr suf_cr] frs]; tc.
-    destruct suf_cr as [| [a | x'] suf_cr]; tc.
-    inv hs.
-    apply in_singleton_eq in hi; subst.
-    unfold unavailable_nts_are_open_calls_invar.
-    intros x hi hn; simpl.
-    assert (hn' : ~ NtSet.In x av) by ND.fsetdec.
-    apply hu in hn'; clear hu; auto.
-    destruct hn' as [hng [frs_pre [fr_cr [frs_suf [suf [heq [hp heq']]]]]]].
-    destruct frs_pre as [| fr' frs_pre]; sis.
-    + inv heq; inv heq'.
-      ND.fsetdec.
-    + inv heq; inv hp; sis; split.
-      * apply nullable_app; auto.
-        constructor; auto.
-        inv hw.
-        rewrite app_nil_r in *.
-        econstructor; eauto.
-      * repeat eexists; eauto.
-  - destruct (NtSet.mem x av) eqn:hm.
-    + inv hs.
-      apply in_map_iff in hi.
-      destruct hi as [rhs [heq hi]]; subst.
-      unfold unavailable_nts_are_open_calls_invar.
-      intros x' hi' hn; simpl; split; auto.
-      destruct (NF.eq_dec x' x); subst.
-      * exists []; repeat eexists; eauto.
-        constructor.
-      * assert (hn' : ~ NtSet.In x' av) by ND.fsetdec.
-        apply hu in hn'; clear hu; auto.
-        destruct hn' as
-            [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
-        exists (Loc xo pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
-        constructor; auto.
-    + dm; tc.
-      inv hs; inv hi.
-Qed.       
+  unfold spClosureStep in hs; dmeqs h; inv hs; tc; simpl in hw.
+  - apply in_singleton_eq in hi; subst.
+    eapply return_preserves_unavailable_nts_invar; eauto.
+  - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
+    eapply push_preserves_unavailable_nts_invar; eauto.
+  - inv hi.
+Qed.
