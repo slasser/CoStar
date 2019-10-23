@@ -4,7 +4,8 @@ Require Import GallStar.Lex.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
 Require Import GallStar.Utils.
-        Import ListNotations.
+Import ListNotations.
+Open Scope list_scope.
 Set Implicit Arguments.
 
 (* Hide an alternative definition of "sum" from NtSet *)
@@ -21,8 +22,6 @@ Record subparser := Sp { avail      : NtSet.t
 Inductive prediction_error :=
 | SpInvalidState  : prediction_error
 | SpLeftRecursion : nonterminal -> prediction_error.
-
-Open Scope list_scope.
 
 (* "move" operation *)
 
@@ -116,7 +115,7 @@ Fixpoint aggrClosureResults (crs : list closure_result) : closure_result :=
     end
   end.
 
-Definition spMeas (g : grammar) (sp : subparser) : nat * nat :=
+Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
   | Sp av _ stk =>
     let m := maxRhsLength g in
@@ -125,46 +124,33 @@ Definition spMeas (g : grammar) (sp : subparser) : nat * nat :=
   end.
 
 Lemma spClosureStep_meas_lt :
-  forall (g : grammar)
+  forall (g      : grammar)
          (sp sp' : subparser)
          (sps'   : list subparser),
     spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
-    -> lex_nat_pair (spMeas g sp') (spMeas g sp).
+    -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g sp sp' sps' hs hi; unfold spClosureStep in hs; repeat dmeq h; tc; inv hs.
-  - (* lemma *)
-    apply in_singleton_eq in hi; subst.
-    unfold spMeas.
-    pose proof stackScore_le_after_return as hle.
-    specialize hle with (callee  := Loc lopt rpre [])
-                        (caller  := Loc lopt0 rpre0 (NT n :: l3))
-                        (caller' := Loc lopt0 (rpre0 ++ [NT n]) l3)
-                        (x := n)
-                        (x' := n)
-                        (suf' := l3)
-                        (av := avail0)
-                        (locs := l2)
-                        (b := 1 + maxRhsLength g).
-    eapply le_lt_or_eq in hle; auto. 
-    destruct hle as [hlt | heq]; auto.
-    + apply pair_fst_lt; auto.
+  intros g sp sp' sps' hs hi; unfold spClosureStep in hs; dmeqs h; tc; inv hs; try solve [inv hi]; unfold meas.
+  - apply in_singleton_eq in hi; subst.
+    pose proof stackScore_le_after_return' as hle.
+    eapply le_lt_or_eq in hle; eauto.
+    destruct hle as [hlt | heq].
+    + apply pair_fst_lt; eauto.
     + rewrite heq; apply pair_snd_lt; auto.
   - apply in_map_iff in hi.
     destruct hi as [rhs [heq hi]]; subst.
-    unfold spMeas.
     apply pair_fst_lt.
     eapply stackScore_lt_after_push; simpl; eauto.
     apply NtSet.mem_spec; auto.
-  - inv hi.
 Defined.
 
 Lemma acc_after_step :
   forall g sp sp' sps',
     spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
-    -> Acc lex_nat_pair (spMeas g sp)
-    -> Acc lex_nat_pair (spMeas g sp').
+    -> Acc lex_nat_pair (meas g sp)
+    -> Acc lex_nat_pair (meas g sp').
 Proof.
   intros g so sp' sps' heq hi ha.
   eapply Acc_inv; eauto.
@@ -173,7 +159,7 @@ Defined.
 
 Fixpoint spClosure (g  : grammar) 
                    (sp : subparser) 
-                   (a  : Acc lex_nat_pair (spMeas g sp)) : closure_result :=
+                   (a  : Acc lex_nat_pair (meas g sp)) : closure_result :=
   match spClosureStep g sp as r return spClosureStep g sp = r -> _ with
   | SpClosureStepDone     => fun _  => inr [sp]
   | SpClosureStepError e  => fun _  => inl e
@@ -187,133 +173,6 @@ Fixpoint spClosure (g  : grammar)
 Definition closure (g : grammar) (sps : list subparser) :
   sum prediction_error (list subparser) :=
   aggrClosureResults (map (fun sp => spClosure g sp (lex_nat_pair_wf _)) sps).
-
-(*
-Lemma subparser_lt_after_return :
-  forall g sp sp' av pred callee caller caller' locs x x' suf',
-    sp = Sp av pred (callee, caller :: locs)
-    -> sp' = Sp (NtSet.add x av) pred (caller', locs)
-    -> callee.(rsuf)  = []
-    -> caller.(rsuf)  = NT x' :: suf'
-    -> caller'.(rsuf) = suf'
-    -> lex_nat_pair (meas g sp') (meas g sp).
-Proof.
-  intros g sp sp' av pred ce cr cr' locs x x' suf' Hsp Hsp' Hce Hcr Hr'; subst.
-  unfold meas.
-  pose proof (stackScore_le_after_return ce cr cr' x x' cr'.(rsuf)
-                                         av locs (1 + maxRhsLength g)) as Hle.
-  apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
-  - apply pair_fst_lt; auto.
-  - rewrite Heq; apply pair_snd_lt; auto.
-Defined.
-
-Lemma acc_after_return :
-  forall g sp sp' callee caller caller' av pred pre_ce pre_cr suf_tl locs locs_tl xo y zo,
-    Acc lex_nat_pair (meas g sp)
-    -> sp = Sp av pred (callee, locs)
-    -> callee = Loc zo pre_ce []
-    -> locs = caller :: locs_tl
-    -> caller = Loc xo pre_cr (NT y :: suf_tl)
-    -> caller' = Loc xo (pre_cr ++ [NT y]) suf_tl
-    -> sp' = Sp (NtSet.add y av) pred (caller', locs_tl)
-    -> Acc lex_nat_pair (meas g sp').
-Proof.
-  intros g sp sp' callee caller caller' av pred pre_ce pre_cr suf_tl
-         locs locs_tl xo y zo Hac Hsp Hce Hl Hcr Hcr' Hsp'; subst.
-  eapply Acc_inv; eauto.
-  eapply subparser_lt_after_return; eauto.
-  simpl; auto.
-Defined.
-
-Lemma subparser_lt_after_push :
-  forall g sp sp' av pred caller callee locs xo y pre suf' rhs,
-    sp = Sp av pred (caller, locs)
-    -> sp' = Sp (NtSet.remove y av) pred (callee, caller :: locs)
-    -> caller = Loc xo pre (NT y :: suf')
-    -> callee = Loc (Some y) [] rhs
-    ->  NtSet.In y av
-    -> In rhs (rhssForNt g y)
-    -> lex_nat_pair (meas g sp') (meas g sp).
-Proof.
-  intros g sp sp' av pred cr ce locs xo y pre suf' rhs
-         Hsp Hsp' Hcr Hce Hin Hin'; subst.
-  unfold meas.
-  apply pair_fst_lt.
-  eapply stackScore_lt_after_push; simpl; eauto.
-Defined.
-
-Lemma acc_after_push :
-  forall g sp sp' av pred pre suf_tl loc locs xo y,
-    Acc lex_nat_pair (meas g sp)
-    -> sp  = Sp av pred (loc, locs)
-    -> loc = Loc xo pre (NT y :: suf_tl)
-    -> NtSet.In y av
-    -> In sp' (map (fun rhs => Sp (NtSet.remove y av)
-                                  pred
-                                  (Loc (Some y) [] rhs, loc :: locs))
-                   (rhssForNt g y))
-    -> Acc lex_nat_pair (meas g sp').
-Proof.
-  intros g sp sp' av pred pre suf_tl loc locs xo y Ha Hs Hl Hin Hin'; subst.
-  eapply Acc_inv; eauto.
-  apply in_map_iff in Hin'.
-  destruct Hin' as [rhs [Heq Hin']]; subst.
-  eapply subparser_lt_after_push; eauto.
-Defined.
-
-Definition mem_dec (x : nonterminal) (s : NtSet.t) :
-  {~NtSet.In x s} + {NtSet.In x s}.
-  destruct (NtSet.mem x s) eqn:Hm.
-  - right.
-    apply NtSet.mem_spec; auto.
-  - left.
-    unfold not; intros H.
-    apply NtSet.mem_spec in H.
-    congruence.
-Defined.
-
-(* subparser closure *)
-Fixpoint spc (g : grammar) (sp : subparser)
-             (a : Acc lex_nat_pair (meas g sp)) {struct a} :
-             list (sum prediction_error subparser) :=
-  match sp as s return sp = s -> _ with
-  | Sp av pred (loc, locs) =>
-    fun Hs =>
-      match loc as l return loc = l -> _ with
-      | Loc _ _ [] =>
-        fun Hl =>
-          match locs as ls return locs = ls -> _ with
-          | []                        => fun _  => [inr sp]
-          | (Loc _ _ []) :: _         => fun _  => [inl SpInvalidState]
-          | (Loc _ _ (T _ :: _)) :: _ => fun _  => [inl SpInvalidState]
-          | (Loc xo pre (NT y :: suf')) :: locs' =>
-            fun Hls =>
-              let stk':= (Loc xo (pre ++ [NT y]) suf', locs') in
-              spc g (Sp (NtSet.add y av) pred stk')
-                  (acc_after_return _ a Hs Hl Hls eq_refl eq_refl eq_refl)
-          end eq_refl
-      | Loc _ _ (T _ :: _)       => fun _ => [inr sp]
-      | Loc xo pre (NT y :: suf') =>
-        fun Hl =>
-          match mem_dec y av with
-          | left _   => [inl (SpLeftRecursion y)]
-          | right Hm =>
-            let sps' :=
-                map (fun rhs =>
-                       Sp (NtSet.remove y av) pred (Loc (Some y) [] rhs, loc :: locs))
-                    (rhssForNt g y)
-            in  dflat_map sps'
-                          (fun sp' Hi =>
-                             spc g sp' (acc_after_push _ _ a Hs Hl Hm Hi))
-          end
-      end eq_refl
-  end eq_refl.
-
-Definition closure (g : grammar) (sps : list subparser) :
-  sum prediction_error (list subparser) :=
-  let es := flat_map (fun sp => spc g sp (lex_nat_pair_wf _)) sps
-  in  sumOfListSum es.
-*)
 
 (* LL prediction *)
 
@@ -386,58 +245,32 @@ Lemma handleFinalSubparsers_success_from_subparsers :
     handleFinalSubparsers sps = PredSucc gamma
     -> exists sp, In sp sps /\ sp.(prediction) = gamma.
 Proof.
-  intros sps gamma Hh.
-  unfold handleFinalSubparsers in Hh.
-  dmeq Hf; tc.
-  dm; tc.
-  inv Hh.
+  intros sps gamma hh; unfold handleFinalSubparsers in hh.
+  dmeqs h; tc; inv hh.
   eexists; split; eauto.
   eapply filter_cons_in; eauto.
-Defined.
+Qed.
 
 Lemma handleFinalSubparsers_ambig_from_subparsers :
   forall sps gamma,
     handleFinalSubparsers sps = PredAmbig gamma
     -> exists sp, In sp sps /\ sp.(prediction) = gamma.
 Proof.
-  intros sps gamma Hh.
-  unfold handleFinalSubparsers in Hh.
-  dmeq Hf; tc.
-  dm; tc.
-  inv Hh.
+  intros sps gamma hh.
+  unfold handleFinalSubparsers in hh.
+  dmeqs h; tc; inv hh.
   eexists; split; eauto.
   eapply filter_cons_in; eauto.
-Defined.
+Qed.
 
 Lemma move_unfold :
   forall g t sps,
-    move g t sps = 
-    aggrMoveResults (map (moveSp g t) sps).
+    move g t sps = aggrMoveResults (map (moveSp g t) sps).
 Proof. 
   auto. 
-Defined.
+Qed.
 
-(*
-Lemma in_sumOfListSum_result_in_input :
-  forall A B (es : list (sum A B)) (b : B) (bs : list B),
-    sumOfListSum es = inr bs
-    -> In b bs
-    -> In (inr b) es.
-Proof.
-  intros A B es b.
-  induction es as [| e es' IH]; intros bs Hs Hi.
-  - simpl in *. inv Hs. inv Hi.
-  - simpl in Hs.
-    destruct e as [a | b']; tc.
-    destruct (sumOfListSum es') eqn:Htl; tc.
-    inv Hs.
-    inv Hi.
-    + apply in_eq.
-    + apply in_cons; eauto.
-Defined.
-*)
-
-Lemma in_aggrMoveResults_result_in_input :
+Lemma aggrMoveResults_succ_in_input :
   forall (smrs : list subparser_move_result)
          (sp   : subparser)
          (sps  : list subparser),
@@ -448,8 +281,8 @@ Proof.
   intros smrs sp.
   induction smrs as [| smr smrs' IH]; intros sps ha hi; sis.
   - inv ha; inv hi.
-  - destruct smr as [sp' | | e]; destruct (aggrMoveResults smrs') as [e' | sps']; 
-      tc; inv ha.
+  - destruct smr as [sp' | | e];
+    destruct (aggrMoveResults smrs') as [e' | sps']; tc; inv ha.
     + inv hi; firstorder.
     + firstorder.
 Qed.
@@ -462,59 +295,18 @@ Lemma aggrMoveResults_error_in_input :
 Proof.
   intros smrs e ha.
   induction smrs as [| smr smrs' IH]; sis; tc.
-  destruct smr as [sp' | | e']; destruct (aggrMoveResults smrs') as [e'' | sps'];
-    tc; inv ha; eauto.
+  destruct smr as [sp' | | e'];
+  destruct (aggrMoveResults smrs') as [e'' | sps']; tc; inv ha; eauto.
 Qed.
-    
-(*
-Lemma in_extractSomes_result_in_input :
-  forall A (a : A) (os : list (option A)),
-    In a (extractSomes os)
-    -> In (Some a) os.
-Proof.
-  intros A a os Hi; induction os as [| o os' IH]; simpl in Hi.
-  - inv Hi.
-  - destruct o as [a' |].
-    + inv Hi.
-      * apply in_eq.
-      * apply in_cons; auto.
-    + apply in_cons; auto.
-Defined.
-*)
 
 Lemma moveSp_preserves_prediction :
   forall g t sp sp',
     moveSp g t sp = SpMoveSucc sp'
     -> sp'.(prediction) = sp.(prediction).
 Proof.
-  intros g t sp sp' hm.
-  unfold moveSp in hm.
-  destruct sp as [av pred (loc, locs)].
-  destruct loc as [x pre suf].
-  destruct suf as [| [a | x'] suf_tl]; tc.
-  - destruct locs; tc.
-  - destruct t as (a', _).
-    destruct (t_eq_dec a' a); subst; tc.
-    inv hm; auto.
-Defined.
-
-(*
-Lemma moveSp_preserves_prediction :
-  forall t sp sp',
-    moveSp t sp = Some (inr sp')
-    -> sp'.(prediction) = sp.(prediction).
-Proof.
-  intros t sp sp' Hm.
-  unfold moveSp in Hm.
-  destruct sp as [av pred (loc, locs)].
-  destruct loc as [x pre suf].
-  destruct suf as [| [a | x'] suf_tl]; tc.
-  - destruct locs; tc.
-  - destruct t as (a', _).
-    destruct (t_eq_dec a' a); subst; tc.
-    inv Hm; auto.
-Defined.
-*)
+  intros g t sp sp' hm; unfold moveSp in hm.
+  dms; tc; subst; inv hm; auto.
+Qed.
 
 Lemma move_preserves_prediction :
   forall g t sp' sps sps',
@@ -524,61 +316,11 @@ Lemma move_preserves_prediction :
 Proof.
   intros g t sp' sps sps' hm hi.
   unfold move in hm.
-  eapply in_aggrMoveResults_result_in_input in hm; eauto.
-  eapply in_map_iff in hm.
-  destruct hm as [sp [hmsp hi']].
+  eapply aggrMoveResults_succ_in_input in hm; eauto.
+  eapply in_map_iff in hm; destruct hm as [sp [hmsp hi']].
   eexists; split; eauto.
   eapply moveSp_preserves_prediction; eauto.
-Defined.
-
-(*
-Lemma spc_unfold_return :
-  forall g sp a es av pred stk loc locs x pre caller locs_tl x_cr pre_cr suf_cr y suf_tl_cr,
-    spc g sp a = es
-    -> sp = Sp av pred stk
-    -> stk = (loc, locs)
-    -> loc = Loc x pre []
-    -> locs = caller :: locs_tl
-    -> caller = Loc x_cr pre_cr suf_cr
-    -> suf_cr = NT y :: suf_tl_cr
-    -> exists a',
-        spc g
-            (Sp (NtSet.add y av)
-                pred
-                (Loc x_cr (pre_cr ++ [NT y]) suf_tl_cr, locs_tl))
-            a' = es.
-Proof.
-  intros.
-  subst.
-  destruct a.
-  simpl.
-  eexists; eauto.
-Defined.
-*)
-
-(*
-Lemma in_dflat_map :
-  forall (A B : Type) (l : list A) (f : forall x, In x l -> list B) (y : B) (ys : list B),
-    dflat_map l f = ys
-    -> In y ys
-    -> (exists x Hin, In x l /\ In y (f x Hin)).
-Proof.
-  intros A B l f y ys Heq Hin; subst.
-  induction l as [| x l' IH].
-  + inv Hin.
-  + simpl in Hin.
-    apply in_app_or in Hin; destruct Hin as [Hl | Hr].
-    * exists x; eexists; split; eauto.
-      apply in_eq.
-    * apply IH in Hr.
-      destruct Hr as [x' [Hin [Hin' Hin'']]].
-      exists x'; eexists; split; eauto.
-      -- apply in_cons; auto.
-      -- apply Hin''.
-Defined.
-*)
-
-(* need a lemma that lets us unfold spClosure *)
+Qed.
 
 Lemma spClosure_unfold :
   forall g sp a,
@@ -597,11 +339,11 @@ Proof.
 Qed.
 
 Lemma spClosure_cases' :
-  forall (g : grammar)
-         (sp : subparser)
-         (a : Acc lex_nat_pair (spMeas g sp))
-         (sr : subparser_closure_step_result)
-         (cr : closure_result)
+  forall (g   : grammar)
+         (sp  : subparser)
+         (a   : Acc lex_nat_pair (meas g sp))
+         (sr  : subparser_closure_step_result)
+         (cr  : closure_result)
          (heq : spClosureStep g sp = sr),
     match sr as r return spClosureStep g sp = r -> closure_result with
     | SpClosureStepDone     => fun _  => inr [sp]
@@ -633,15 +375,16 @@ Lemma spClosure_cases' :
        end.
 Proof.
   intros g sp a sr cr heq.
-  destruct sr as [ | sps | e]; destruct cr as [e' | sps']; intros heq'; tc; auto.
-  - inv heq'; auto.
-  - right; eauto.
-  - right; eauto.
-  - inv heq'; auto.
+  destruct sr as [ | sps | e];
+  destruct cr as [e' | sps']; intros heq'; tc;
+  try solve [inv heq'; auto | eauto 6].
 Qed.
 
 Lemma spClosure_cases :
-  forall g sp a cr,
+  forall (g  : grammar)
+         (sp : subparser)
+         (a  : Acc lex_nat_pair (meas g sp))
+         (cr : closure_result),
     spClosure g sp a = cr
     -> match cr with
        | inl e => 
@@ -680,8 +423,7 @@ Lemma spClosure_success_cases :
                            spClosure g sp' (acc_after_step _ _ _ hs hi a))
         /\ aggrClosureResults crs = inr sps.
 Proof.
-  intros g sp a sps hs.
-  apply spClosure_cases with (cr := inr sps); auto.
+  intros g sp a sps hs; apply spClosure_cases with (cr := inr sps); auto.
 Qed.
 
 Lemma spClosure_error_cases :
@@ -695,11 +437,10 @@ Lemma spClosure_error_cases :
                           spClosure g sp' (acc_after_step _ _ _ hs hi a))
         /\ aggrClosureResults crs = inl e.
 Proof.
-  intros g sp a e hs.
-  apply spClosure_cases with (cr := inl e); auto.
+  intros g sp a e hs; apply spClosure_cases with (cr := inl e); auto.
 Qed.
                    
-Lemma sp_in_aggrClosureResults_result_in_input:
+Lemma aggrClosureResults_succ_in_input:
   forall (crs : list closure_result) 
          (sp  : subparser)
          (sps : list subparser),
@@ -709,10 +450,10 @@ Lemma sp_in_aggrClosureResults_result_in_input:
         In (inr sps') crs
         /\ In sp sps'.
 Proof.
-  intros crs; induction crs as [| cr crs IH]; intros sp sps ha hi.
+  intros crs; induction crs as [| cr crs IH]; intros sp sps ha hi; simpl in ha.
   - inv ha; inv hi.
-  - simpl in ha; destruct cr as [e | sps']; destruct (aggrClosureResults crs) as [e' | sps''];
-      tc; inv ha.
+  - destruct cr as [e | sps'];
+    destruct (aggrClosureResults crs) as [e' | sps'']; tc; inv ha.
     apply in_app_or in hi.
     destruct hi as [hi' | hi''].
     + eexists; split; eauto.
@@ -723,7 +464,7 @@ Proof.
       apply in_cons; auto.
 Qed.
 
-Lemma error_in_aggrClosureResults_result_in_input:
+Lemma aggrClosureResults_error_in_input:
   forall (crs : list closure_result) 
          (e   : prediction_error),
     aggrClosureResults crs = inl e
@@ -749,10 +490,9 @@ Proof.
   - inv hi.
 Qed.
 
-(* clean this up *)
 Lemma spClosure_preserves_prediction :
   forall g pair (a : Acc lex_nat_pair pair) sp a' sp' sps',
-    pair = spMeas g sp
+    pair = meas g sp
     -> spClosure g sp a' = inr sps'
     -> In sp' sps'
     -> sp'.(prediction) = sp.(prediction).
@@ -760,101 +500,19 @@ Proof.
   intros g pair a.
   induction a as [pair hlt IH].
   intros sp a' sp' sps' heq hs hi; subst.
-  pose proof hs as hs'.
-  apply spClosure_success_cases in hs'.
-  destruct hs' as [[ hd heq] | [sps'' [hs' [crs [heq heq']]]]]; subst.
+  apply spClosure_success_cases in hs.
+  destruct hs as [[hd heq] | [sps'' [hs [crs [heq heq']]]]]; subst.
   - apply in_singleton_eq in hi; subst; auto.
-  - eapply sp_in_aggrClosureResults_result_in_input in heq'; eauto.
+  - eapply aggrClosureResults_succ_in_input in heq'; eauto.
     destruct heq' as [sps [hi' hi'']].
     eapply dmap_in in hi'; eauto.
     destruct hi' as [sp'' [hi''' [_ heq]]].
     eapply IH in heq; subst; eauto.
-    + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs'; auto.
-      rewrite hs'; auto.
+    + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs; auto.
+      rewrite hs; auto.
     + eapply spClosureStep_meas_lt; eauto.
 Qed.
 
-(*
-(* CLEAN THIS UP! *)
-Lemma sp_closure_preserves_prediction :
-  forall g sp Ha sp' es,
-    spc g sp Ha = es
-    -> In (inr sp') es
-    -> sp'.(prediction) = sp.(prediction).
-Proof.
-  intros g sp.
-  remember (stackScore (stack sp) (S (maxRhsLength g)) (NtSet.cardinal (avail sp))) as score.
-  generalize dependent sp.
-  induction score as [score IHscore] using lt_wf_ind.
-  intros sp.
-  remember (stackHeight (stack sp)) as height.
-  generalize dependent sp.
-  induction height as [height IHheight] using lt_wf_ind.
-  intros sp Hheight Hscore Ha sp' es Hf Hi.
-  destruct Ha as [Ha].
-  destruct sp as [av pred stk] eqn:Hsp.
-  destruct stk as (loc, locs) eqn:Hstk.
-  destruct loc as [x pre suf] eqn:Hloc.
-  destruct suf as [| [a | y] suf_tl] eqn:Hsuf.
-  - (* return case *)
-    destruct locs as [| caller locs_tl] eqn:Hlocs.
-    + (* return to final configuration *)
-      simpl in Hf; subst.
-      apply in_singleton_eq in Hi; inv Hi; auto.
-    + (* return to caller frame *)
-      destruct caller as [x_cr pre_cr suf_cr] eqn:Hcr.
-      destruct suf_cr as [| [a | x'] suf_tl_cr] eqn:Hsufcr.
-      * simpl in Hf; subst.
-        apply in_singleton_eq in Hi; tc.
-      * simpl in Hf; subst.
-        apply in_singleton_eq in Hi; tc.
-      * (*eapply spc_unfold_return in Hf; eauto.
-        destruct Hf as [a' Hf]. *)
-        pose proof stackScore_le_after_return as Hss.
-        specialize Hss with
-            (callee := Loc x pre [])
-            (caller := Loc x_cr pre_cr (NT x' :: suf_tl_cr))
-            (caller' := Loc x_cr (pre_cr ++ [NT x']) suf_tl_cr)
-            (x := x')
-            (x' := x')
-            (suf' := suf_tl_cr)
-            (av := av)
-            (locs := locs_tl)
-            (b := S (maxRhsLength g)).
-        eapply le_lt_or_eq in Hss; auto.
-        destruct Hss as [Hlt | Heq].
-        -- eapply IHscore with
-               (sp := Sp (NtSet.add x' av)
-                         pred
-                         (Loc x_cr (pre_cr ++ [NT x']) suf_tl_cr,
-                          locs_tl)); subst; eauto.
-        -- eapply IHheight with
-               (sp := Sp (NtSet.add x' av)
-                         pred
-                         (Loc x_cr (pre_cr ++ [NT x']) suf_tl_cr,
-                          locs_tl)); subst; eauto.
-           simpl; auto.
-  - (* next symbol is a terminal *)
-    simpl in Hf; subst.
-    apply in_singleton_eq in Hi; inv Hi; auto.
-  - (* next symbol is a nonterminal *)
-    simpl in Hf.
-    destruct (mem_dec y av).
-    + subst; apply in_singleton_eq in Hi; inv Hi.
-    + eapply in_dflat_map in Hf; eauto.
-      destruct Hf as [sp_mid [Hin [Hin' Hf]]].
-      eapply in_map_iff in Hin'.
-      destruct Hin' as [rhs [Heq Hin']].
-      assert (Hlt : stackScore (stack sp_mid) (S (maxRhsLength g)) (NtSet.cardinal (avail sp_mid)) < score).
-      { subst.
-        eapply stackScore_lt_after_push; simpl; eauto. }
-      subst.
-      eapply IHscore in Hlt; simpl in *; eauto.
-      simpl in *; auto.
-      simpl in *; auto.
-Defined.
-  
-*)
 Lemma closure_preserves_prediction :
   forall g sp' sps sps',
     closure g sps = inr sps'
@@ -862,10 +520,9 @@ Lemma closure_preserves_prediction :
     -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
 Proof.
   intros g sp' sps sps' hc hi.
-  eapply sp_in_aggrClosureResults_result_in_input in hc; eauto.
+  eapply aggrClosureResults_succ_in_input in hc; eauto.
   destruct hc as [sps'' [hi' hi'']].
-  apply in_map_iff in hi'.
-  destruct hi' as [sp [hspc hi''']].
+  apply in_map_iff in hi'; destruct hi' as [sp [hspc hi''']].
   eexists; split; eauto.
   eapply spClosure_preserves_prediction; eauto.
   apply lex_nat_pair_wf.
@@ -877,23 +534,21 @@ Lemma llPredict'_success_result_in_original_subparsers :
     -> exists sp, In sp sps /\ (prediction sp) = gamma.
 Proof.
   intros g ts gamma.
-  induction ts as [| t ts_tl IH]; intros sps Hl; simpl in Hl.
+  induction ts as [| t ts_tl IH]; intros sps hl; simpl in hl.
   - eapply handleFinalSubparsers_success_from_subparsers; eauto.
-  - destruct sps as [| sp_hd sps_tl] eqn:Hs; tc.
+  - destruct sps as [| sp_hd sps_tl] eqn:hs; tc.
     destruct (allPredictionsEqual sp_hd sps_tl) eqn:Ha.
-    + inv Hl.
-      eexists; split; eauto.
+    + inv hl; eexists; split; eauto.
       apply in_eq.
-    + rewrite <- Hs in *; clear Hs. 
-      destruct (move g t _) as [msg | sps'] eqn:Hm; tc.
-      destruct (closure g sps') as [msg | sps''] eqn:Hc; tc. 
-      apply IH in Hl; clear IH.
-      destruct Hl as [sp'' [Hin'' Heq]]; subst.
-      eapply closure_preserves_prediction in Hc; eauto.
-      destruct Hc as [sp' [Hin' Heq]]; rewrite Heq; clear Heq.
-      eapply move_preserves_prediction in Hm; eauto.
-      destruct Hm as [sp [Hin Heq]]; eauto.
-Defined.
+    + rewrite <- hs in *.
+      destruct (move g t _) as [msg | sps'] eqn:hm; tc.
+      destruct (closure g sps') as [msg | sps''] eqn:hc; tc. 
+      apply IH in hl; destruct hl as [sp'' [hin'' heq]]; subst.
+      eapply closure_preserves_prediction in hc; eauto.
+      destruct hc as [sp' [hin' heq]]; rewrite heq.
+      eapply move_preserves_prediction in hm; eauto.
+      destruct hm as [? [? ?]]; eauto.
+Qed.
 
 Lemma llPredict'_ambig_result_in_original_subparsers :
   forall g ts gamma sps,
@@ -901,20 +556,19 @@ Lemma llPredict'_ambig_result_in_original_subparsers :
     -> exists sp, In sp sps /\ (prediction sp) = gamma.
 Proof.
   intros g ts gamma.
-  induction ts as [| t ts_tl IH]; intros sps Hl; simpl in Hl.
+  induction ts as [| t ts_tl IH]; intros sps hl; simpl in hl.
   - eapply handleFinalSubparsers_ambig_from_subparsers; eauto.
-  - destruct sps as [| sp_hd sps_tl] eqn:Hs; tc.
-    destruct (allPredictionsEqual sp_hd sps_tl) eqn:Ha; tc.
-    rewrite <- Hs in *; clear Hs. 
-    destruct (move g t _) as [msg | sps'] eqn:Hm; tc.
-    destruct (closure g sps') as [msg | sps''] eqn:Hc; tc. 
-    apply IH in Hl; clear IH.
-    destruct Hl as [sp'' [Hin'' Heq]]; subst.
-    eapply closure_preserves_prediction in Hc; eauto.
-    destruct Hc as [sp' [Hin' Heq]]; rewrite Heq; clear Heq.
-    eapply move_preserves_prediction in Hm; eauto.
-    destruct Hm as [sp [Hin Heq]]; eauto.
-Defined.
+  - destruct sps as [| sp_hd sps_tl] eqn:hs; tc.
+    destruct (allPredictionsEqual sp_hd sps_tl) eqn:ha; tc.
+    rewrite <- hs in *.
+    destruct (move g t _) as [msg | sps'] eqn:hm; tc.
+    destruct (closure g sps') as [msg | sps''] eqn:hc; tc. 
+    apply IH in hl; destruct hl as [sp'' [hin'' heq]]; subst.
+    eapply closure_preserves_prediction in hc; eauto.
+    destruct hc as [sp' [hin' heq]]; rewrite heq.
+    eapply move_preserves_prediction in hm; eauto.
+    destruct hm as [sp [Hin Heq]]; eauto.
+Qed.
 
 Lemma startState_sp_prediction_in_rhssForNt :
   forall g x stk sp' sps',
@@ -922,15 +576,14 @@ Lemma startState_sp_prediction_in_rhssForNt :
     -> In sp' sps'
     -> In sp'.(prediction) (rhssForNt g x).
 Proof.
-  intros g x stk sp' sps' Hf Hi.
-  unfold startState in Hf.
-  destruct stk as (loc, locs).
-  eapply closure_preserves_prediction in Hf; eauto.
-  destruct Hf as [sp [Hin Heq]]; subst.
-  apply in_map_iff in Hin.
-  destruct Hin as [gamma [Hin Heq']]; subst.
-  rewrite Heq; auto.
-Defined.  
+  intros g x (fr, frs) sp' sps' hf hi.
+  unfold startState in hf.
+  eapply closure_preserves_prediction in hf; eauto.
+  destruct hf as [sp [hin heq]].
+  apply in_map_iff in hin.
+  destruct hin as [gamma [hin heq']]; subst.
+  rewrite heq; auto.
+Qed.
 
 Lemma PredSucc_result_in_rhssForNt :
   forall g x stk ts gamma,
