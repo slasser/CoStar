@@ -8,8 +8,6 @@ Require Import GallStar.Utils.
 Import ListNotations.
 Open Scope list_scope.
 
-(* PARSER IMPLEMENTATION *)
-
 Record frame := Fr { loc : location
                    ; sem : forest
                    }.                               
@@ -117,6 +115,9 @@ Definition meas (g : grammar) (st : parser_state) : nat * nat * nat :=
     (List.length ts, stackScore (lstackOf stk) (1 + m) e, stackHeight stk)
   end.
 
+(* It might be possible to delete this lemma and replace it
+   with the primed version, or at least remove the
+   specialization after pose proof by using stackScore_le_after_return' *)
 Lemma state_lt_after_return :
   forall g st st' ts callee caller caller' frs x x' suf_cr_tl av,
     st = Pst av (callee, caller :: frs) ts
@@ -137,6 +138,30 @@ Proof.
   - rewrite Heq; apply triple_thd_lt; auto.
 Defined.
 
+Lemma loc_proj_eq :
+  forall l v, loc (Fr l v) = l.
+Proof.
+  auto.
+Qed.
+
+Lemma state_lt_after_return' :
+  forall g st st' av ts fr cr cr' frs o o' pre pre' suf' x v v' v'',
+    st     = Pst av (fr, cr :: frs) ts
+    -> st' = Pst (NtSet.add x av) (cr', frs) ts
+    -> fr  = Fr (Loc o pre []) v
+    -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
+    -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') v''
+    -> lex_nat_triple (meas g st') (meas g st).
+Proof.
+  intros; subst; unfold meas; unfold lstackOf.
+  pose proof stackScore_le_after_return' as hs.
+  eapply le_lt_or_eq in hs; eauto.
+  destruct hs as [hlt | heq].
+  - apply triple_snd_lt; eauto.
+  - repeat rewrite loc_proj_eq; rewrite heq.
+    apply triple_thd_lt; auto.
+Defined.
+
 Lemma state_lt_after_push :
   forall g st st' ts callee caller frs x suf_tl gamma av,
     st = Pst av (caller, frs) ts
@@ -151,24 +176,6 @@ Proof.
          Hst Hst' Hcr Hce Hi Hm; subst.
   apply triple_snd_lt.
   eapply stackScore_lt_after_push; eauto.
-Defined.
-
-Lemma PredSucc_result_in_rhssForNt :
-  forall g x stk ts gamma,
-    llPredict g x stk ts = PredSucc gamma
-    -> In gamma (rhssForNt g x).
-Proof.
-  intros g x stk ts gamma Hf.
-  eapply llPredict_succ_in_rhssForNt; eauto. 
-Defined.
-
-Lemma PredAmbig_result_in_rhssForNt :
-  forall g x stk ts gamma,
-    llPredict g x stk ts = PredAmbig gamma
-    -> In gamma (rhssForNt g x).
-Proof.
-  intros g x stk ts gamma hl.
-  eapply llPredict_ambig_in_rhssForNt; eauto.
 Defined.
 
 Lemma step_meas_lt :
@@ -199,11 +206,11 @@ Proof.
     apply NtSet.mem_spec in Hm.
     destruct (llPredict g y _ ts) as [gamma|gamma| |msg] eqn:Hp; tc.
     + inv Hs.
-      apply PredSucc_result_in_rhssForNt in Hp.
+      apply llPredict_succ_in_rhssForNt in Hp.
       eapply state_lt_after_push; eauto.
       simpl; auto.
     + inv Hs.
-      apply PredAmbig_result_in_rhssForNt in Hp.
+      apply llPredict_ambig_in_rhssForNt in Hp.
       eapply state_lt_after_push; eauto.
       simpl; auto.
     + destruct (NtSet.mem y (allNts g)); tc.
@@ -383,14 +390,14 @@ Lemma step_LeftRecursion_facts :
            fr.(loc).(rsuf) = NT x :: suf.
 Proof.
   intros g av fr frs ts x hs.
-  unfold step in hs; repeat dmeq h; tc; inv hs; sis.
+  unfold step in hs; repeat dmeq h; tc; inv hs; sis;
   repeat split; eauto.
   - unfold not; intros hi.
     apply NtSet.mem_spec in hi; tc.
   - apply NtSet.mem_spec; auto.
 Qed.
 
-(* A well-formedness invariant for the parser stack *)
+(* A WELL-FORMEDNESS INVARIANT FOR THE PARSER STACK *)
 
 Definition frames_wf (g : grammar) (frs : list frame) : Prop :=
   locations_wf g (map loc frs).
@@ -399,44 +406,6 @@ Definition stack_wf (g : grammar) (stk : parser_stack) : Prop :=
   match stk with
   | (fr, frs) => frames_wf g (fr :: frs)
   end.
-                 
-(*
-Inductive frames_wf (g : grammar) : list frame -> Prop :=
-| WF_nil :
-    frames_wf g []
-| WF_bottom :
-    forall xo pre suf v,
-      frames_wf g [Fr (Loc xo pre suf) v]
-| WF_upper :
-    forall x xo pre pre' suf suf' v v' frs,
-      In (x, pre' ++ suf') g
-      -> frames_wf g (Fr (Loc xo pre (NT x :: suf)) v ::
-                      frs)
-      -> frames_wf g (Fr (Loc (Some x) pre' suf') v'  ::
-                      Fr (Loc xo pre (NT x :: suf)) v ::
-                      frs).
-
-Hint Constructors frames_wf.
-
-Definition stack_wf (g : grammar) (stk : parser_stack) : Prop :=
-  match stk with
-  | (fr, frs) => frames_wf g (fr :: frs)
-  end.
-*)
-(*
-Inductive stack_wf (g : grammar) : parser_stack -> Prop :=
-| WF_nil :
-    forall pre suf v,
-      stack_wf g (Fr (Loc None pre suf) v, [])
-| WF_cons :
-    forall x xo' pre pre' suf suf' v v' frs,
-      In (x, pre ++ suf) g
-      -> stack_wf g (Fr (Loc xo' pre' (NT x :: suf')) v', frs) 
-      -> stack_wf g (Fr (Loc (Some x) pre suf) v, 
-                     Fr (Loc xo' pre' (NT x :: suf')) v' :: frs).
-
-Hint Constructors stack_wf.
- *)
 
 Lemma step_preserves_stack_wf_invar :
   forall g av av' stk stk' ts ts',
@@ -444,24 +413,15 @@ Lemma step_preserves_stack_wf_invar :
     -> stack_wf g stk 
     -> stack_wf g stk'.
 Proof.
-  intros g av av' stk stk' ts ts' hs hw.
-  unfold stack_wf in *.
-  destruct stk as (fr, frs).
-  destruct stk' as (fr', frs').
-  unfold frames_wf in *.
-  unfold step in hs.
-  repeat (dmeq h); inv hs; tc; sis.
-  - (* return *)
-    inv hw.
-    inv H8; constructor; auto.
-    rewrite <- app_assoc; auto.
-  - inv hw; auto.
-    constructor; auto.
-    rewrite <- app_assoc; auto.
-  - constructor; simpl; auto.
-    eapply llPredict_succ_in_grammar; eauto.
-  - constructor; simpl; auto.
-    eapply llPredict_ambig_in_grammar; eauto.
+  intros g av av' (fr, frs) (fr', frs') ts ts' hs hw.
+  unfold step in hs; unfold stack_wf in *; unfold frames_wf in *.
+  dmeqs h; tc; inv hs; sis. 
+  - eapply return_preserves_locations_wf_invar; eauto.
+  - apply consume_preserves_locations_wf_invar; auto.
+  - apply push_preserves_locations_wf_invar; auto.
+    eapply llPredict_succ_in_rhssForNt; eauto.
+  - apply push_preserves_locations_wf_invar; auto.
+    eapply llPredict_ambig_in_rhssForNt; eauto.
 Qed.
 
 Lemma frames_wf_app :
@@ -543,8 +503,7 @@ Lemma stack_derivation_cases :
        end.
 Proof.
   intros g fr frs w hsd.
-  destruct frs as [| fr' frs]; inv hsd; auto.
-  repeat eexists; repeat split; auto.
+  destruct frs as [| fr' frs]; inv hsd; eauto.
 Qed.
 
 (* another invariant *)
@@ -609,29 +568,6 @@ Proof.
   destruct hn as [hi hn].
   split; auto.
   ND.fsetdec.
-Qed.
-
-Lemma nullable_split :
-  forall g xs ys,
-    nullable_gamma g (xs ++ ys)
-    -> nullable_gamma g ys.
-Proof.
-  induction xs; intros.
-  - auto.
-  - inv H.
-    eapply IHxs; eauto.
-Qed.
-
-Lemma nullable_app :
-  forall g xs ys,
-    nullable_gamma g xs
-    -> nullable_gamma g ys
-    -> nullable_gamma g (xs ++ ys).
-Proof.
-  intros g xs ys Hng Hng'.
-  induction xs as [| x xs]; simpl in *; auto.
-  inv Hng.
-  constructor; auto.
 Qed.
 
 Lemma step_preserves_unavailable_nts_invar :

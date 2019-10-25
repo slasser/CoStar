@@ -720,6 +720,17 @@ Proof.
   apply rhssForNt_in_grammar; auto.
 Qed.
 
+Lemma consume_preserves_locations_wf_invar :
+  forall g o pre suf a locs,
+    locations_wf g (Loc o pre (T a :: suf) :: locs)
+    -> locations_wf g (Loc o (pre ++ [T a]) suf :: locs).
+Proof.
+  intros g o pre suf a locs hw.
+  inversion hw as [ | o' pre' suf' hw' | x o' pre' pre'' suf' suf'' locs' hi hw']; subst; clear hw; auto.
+  rewrite cons_app_singleton in hi.
+  rewrite app_assoc in hi; auto.
+Qed.
+
 Lemma spClosureStep_preserves_lstack_wf_invar :
   forall g sp sp' sps',
     lstack_wf g sp.(stack)
