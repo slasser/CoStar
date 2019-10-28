@@ -750,15 +750,17 @@ Qed.
 (* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
    TO THE SHAPE OF THE STACK *)
 
+(* Auxiliary definition *)
 Definition processed_symbols_all_nullable (g : grammar) (frs : list location) : Prop :=
   Forall (fun fr => nullable_gamma g fr.(rpre)) frs.
 
+Hint Unfold processed_symbols_all_nullable.
 Hint Constructors Forall.
 
-(* The invariant *)
-Definition unavailable_nts_are_open_calls g sp : Prop :=
-  match sp with
-  | Sp av _ (fr, frs) =>
+(* The invariant itself *)
+Definition unavailable_nts_are_open_calls g av stk : Prop :=
+  match stk with
+  | (fr, frs) =>
     forall (x : nonterminal),
       NtSet.In x (allNts g)
       -> ~ NtSet.In x av
@@ -769,9 +771,15 @@ Definition unavailable_nts_are_open_calls g sp : Prop :=
                 /\ fr_cr.(rsuf) = NT x :: suf)
   end.
 
-(* We lift the invariant to lists of subparsers *)
+(* Lift the invariant to a subparser *)
+Definition unavailable_nts_invar g sp :=
+  match sp with
+  | Sp av _ stk => unavailable_nts_are_open_calls g av stk
+  end.
+
+(* Lift the invariant to a list of subparsers *)
 Definition sps_unavailable_nts_invar g sps : Prop :=
-  forall sp, In sp sps -> unavailable_nts_are_open_calls g sp.
+  forall sp, In sp sps -> unavailable_nts_invar g sp.
 
 Lemma return_preserves_unavailable_nts_invar :
   forall g av pr o o' pre pre' suf' x fr cr cr' frs,
@@ -779,11 +787,11 @@ Lemma return_preserves_unavailable_nts_invar :
     -> cr  = Loc o' pre' (NT x :: suf')
     -> cr' = Loc o' (pre' ++ [NT x]) suf'
     -> lstack_wf g (fr, cr :: frs)
-    -> unavailable_nts_are_open_calls g (Sp av pr (fr, cr :: frs))
-    -> unavailable_nts_are_open_calls g (Sp (NtSet.add x av) pr (cr', frs)). 
+    -> unavailable_nts_invar g (Sp av pr (fr, cr :: frs))
+    -> unavailable_nts_invar g (Sp (NtSet.add x av) pr (cr', frs)). 
 Proof.
   intros g av pr o o' pre pre' suf' x' fr cr cr' frs hfr hcr hcr' hw hu; subst.
-  unfold unavailable_nts_are_open_calls; intros x hi hn; simpl.
+  intros x hi hn; simpl.
   assert (hn' : ~ NtSet.In x av) by ND.fsetdec.
   apply hu in hn'; clear hu; auto.
   destruct hn' as [hng [frs_pre [fr_cr [frs_suf [suf [heq [hp heq']]]]]]].
@@ -798,11 +806,10 @@ Lemma push_preserves_unavailable_nts_invar :
   forall g cr ce av pr o pre suf x rhs frs,
     cr = Loc o pre (NT x :: suf)
     -> ce = Loc (Some x) [] rhs
-    -> unavailable_nts_are_open_calls g (Sp av pr (cr, frs))
-    -> unavailable_nts_are_open_calls g (Sp (NtSet.remove x av) pr (ce, cr :: frs)).
+    -> unavailable_nts_invar g (Sp av pr (cr, frs))
+    -> unavailable_nts_invar g (Sp (NtSet.remove x av) pr (ce, cr :: frs)).
 Proof.
   intros g cr ce av pr o pre suf x rhs frs hcr hce hu; subst.
-  unfold unavailable_nts_are_open_calls.
   intros x' hi hn; simpl; split; auto.
   unfold processed_symbols_all_nullable.
   destruct (NF.eq_dec x' x); subst.
@@ -817,10 +824,10 @@ Qed.
 Lemma spClosureStep_preserves_unavailable_nts_invar :
   forall g sp sp' sps',
     lstack_wf g sp.(stack)
-    -> unavailable_nts_are_open_calls g sp
+    -> unavailable_nts_invar g sp
     -> spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
-    -> unavailable_nts_are_open_calls g sp'.
+    -> unavailable_nts_invar g sp'.
 Proof.
   intros g sp sp' sps' hw hu hs hi.
   unfold spClosureStep in hs; dmeqs h; inv hs; tc; simpl in hw.

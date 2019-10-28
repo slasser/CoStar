@@ -356,7 +356,7 @@ Lemma spClosureStep_never_finds_left_recursion :
   forall g sp x,
     no_left_recursion g
     -> lstack_wf g sp.(stack)
-    -> unavailable_nts_are_open_calls g sp
+    -> unavailable_nts_invar g sp
     -> spClosureStep g sp <> SpClosureStepError (SpLeftRecursion x).
 Proof.
   intros g sp x hn hw hu; unfold not; intros hs.
@@ -382,7 +382,7 @@ Lemma spClosure_never_finds_left_recursion :
   forall g pr (a : Acc lex_nat_pair pr) sp a' x,
     no_left_recursion g
     -> lstack_wf g sp.(stack)
-    -> unavailable_nts_are_open_calls g sp
+    -> unavailable_nts_invar g sp
     -> pr = meas g sp
     -> spClosure g sp a' <> inl (SpLeftRecursion x).
 Proof.
@@ -439,7 +439,7 @@ Proof.
     intros sp hi.
     apply in_map_iff in hi.
     destruct hi as [rhs [heq' hi]]; subst.
-    unfold unavailable_nts_are_open_calls.
+    unfold unavailable_nts_invar; unfold unavailable_nts_are_open_calls.
     intros; ND.fsetdec.
 Qed.
 
@@ -466,7 +466,7 @@ Qed.
 Lemma unavailable_nts_invar_holds_after_moveSp :
   forall g t sp sp',
     moveSp g t sp = SpMoveSucc sp'
-    -> unavailable_nts_are_open_calls g sp'.
+    -> unavailable_nts_invar g sp'.
 Proof.
   intros g t sp sp' hm.
   unfold moveSp in hm; dms; tc; inv hm.
