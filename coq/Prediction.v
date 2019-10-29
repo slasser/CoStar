@@ -655,6 +655,10 @@ Definition lstack_wf (g : grammar) (stk : location_stack) : Prop :=
   | (loc, locs) => locations_wf g (loc :: locs)
   end.
 
+(* Lift the predicate to a list of subparsers *)
+Definition all_sp_stacks_wf (g : grammar) (sps : list subparser) : Prop :=
+  forall sp, In sp sps -> lstack_wf g sp.(stack).
+
 (* Lemmas about the well-formedness predicate *)
 
 Lemma locations_wf_app :
