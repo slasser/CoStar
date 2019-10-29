@@ -14,17 +14,18 @@ Lemma multistep_sound :
          (w wsuf : list token)
          (av     : NtSet.t)
          (stk    : parser_stack)
-         (a'     : Acc lex_nat_triple (meas g (Pst av stk wsuf)))
+         (u      : bool)
+         (a'     : Acc lex_nat_triple (meas g (Pst av stk wsuf u)))
          (v      : forest),
-    tri = meas g (Pst av stk wsuf)
+    tri = meas g (Pst av stk wsuf u)
     -> stack_wf g stk
     -> stack_derivation_invar g stk wsuf w
-    -> multistep g (Pst av stk wsuf) a' = Accept v
+    -> multistep g (Pst av stk wsuf u) a' = Accept v
     -> gamma_derivation g (bottomFrameSyms stk) w v.
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros w wsuf av stk a' v heq hw hi hm; subst.
+  intros w wsuf av stk u a' v heq hw hi hm; subst.
   apply multistep_accept_cases in hm.
   destruct hm as [hf | he].
   - apply step_StepAccept_facts in hf.

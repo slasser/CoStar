@@ -33,6 +33,7 @@ Definition bottomFrameSyms (stk : parser_stack) : list symbol :=
 Record parser_state    := Pst { avail  : NtSet.t
                               ; stack  : parser_stack     
                               ; tokens : list token
+                              ; unique : bool
                               }.
 
 Inductive parse_error :=
@@ -46,12 +47,13 @@ Inductive step_result := StepAccept : forest -> step_result
                        | StepError  : parse_error -> step_result.
 
 Inductive parse_result := Accept : forest -> parse_result
+                        | Ambig  : forest -> parse_result
                         | Reject : string -> parse_result
                         | Error  : parse_error -> parse_result.
 
 Definition step (g : grammar) (st : parser_state) : step_result :=
   match st with
-  | Pst av (fr, frs) ts =>
+  | Pst av (fr, frs) ts u =>
     match fr with
     | Fr (Loc xo pre suf) sv =>
       match suf with
@@ -71,7 +73,7 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
           | NT x :: suf_cr_tl => 
             let cr' := Fr (Loc xo_cr (pre_cr ++ [NT x]) suf_cr_tl)
                           (sv_cr ++ [Node x sv])
-            in  StepK (Pst (NtSet.add x av) (cr', frs_tl) ts)
+            in  StepK (Pst (NtSet.add x av) (cr', frs_tl) ts u)
           end
         end
       (* terminal case --> consume a token *)
@@ -81,7 +83,7 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
         | (a', l) :: ts_tl =>
           if t_eq_dec a' a then 
             let fr' := Fr (Loc xo (pre ++ [T a]) suf_tl) (sv ++ [Leaf l])
-            in  StepK (Pst (allNts g) (fr', frs) ts_tl)
+            in  StepK (Pst (allNts g) (fr', frs) ts_tl u)
           else
             StepReject "token mismatch"
         end
@@ -91,11 +93,10 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
           match llPredict g x (lstackOf (fr, frs)) ts with
           | PredSucc rhs =>
             let callee := Fr (Loc (Some x) [] rhs) []
-            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
-          (* maybe flip a bit indicating ambiguity? *)
+            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts u)
           | PredAmbig rhs =>
             let callee := Fr (Loc (Some x) [] rhs) []
-            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts)
+            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts false)
           | PredReject    => StepReject "prediction found no viable right-hand sides"
           | PredError e => StepError (PredictionError e)
           end
@@ -109,7 +110,7 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
 
 Definition meas (g : grammar) (st : parser_state) : nat * nat * nat :=
   match st with
-  | Pst av stk ts =>
+  | Pst av stk ts _ =>
     let m := maxRhsLength g    in
     let e := NtSet.cardinal av in
     (List.length ts, stackScore (lstackOf stk) (1 + m) e, stackHeight stk)
@@ -119,15 +120,15 @@ Definition meas (g : grammar) (st : parser_state) : nat * nat * nat :=
    with the primed version, or at least remove the
    specialization after pose proof by using stackScore_le_after_return' *)
 Lemma state_lt_after_return :
-  forall g st st' ts callee caller caller' frs x x' suf_cr_tl av,
-    st = Pst av (callee, caller :: frs) ts
-    -> st' = Pst (NtSet.add x av) (caller', frs) ts
+  forall g st st' ts callee caller caller' frs x x' suf_cr_tl av u,
+    st = Pst av (callee, caller :: frs) ts u
+    -> st' = Pst (NtSet.add x av) (caller', frs) ts u
     -> callee.(loc).(rsuf)  = []
     -> caller.(loc).(rsuf)  = NT x' :: suf_cr_tl
     -> caller'.(loc).(rsuf) = suf_cr_tl
     -> lex_nat_triple (meas g st') (meas g st).
 Proof.
-  intros g st st' ts ce cr cr' frs x x' suf_cr_tl av
+  intros g st st' ts ce cr cr' frs x x' suf_cr_tl av u
          Hst hst' Hce Hcr Hcr'; subst.
   unfold meas. unfold lstackOf.
   pose proof (stackScore_le_after_return (loc ce) (loc cr) (loc cr')
@@ -145,9 +146,9 @@ Proof.
 Qed.
 
 Lemma state_lt_after_return' :
-  forall g st st' av ts fr cr cr' frs o o' pre pre' suf' x v v' v'',
-    st = Pst av (fr, cr :: frs) ts
-    -> st' = Pst (NtSet.add x av) (cr', frs) ts
+  forall g st st' av u ts fr cr cr' frs o o' pre pre' suf' x v v' v'',
+    st = Pst av (fr, cr :: frs) ts u
+    -> st' = Pst (NtSet.add x av) (cr', frs) ts u
     -> fr  = Fr (Loc o pre []) v
     -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
     -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') v''
@@ -163,17 +164,16 @@ Proof.
 Defined.
 
 Lemma state_lt_after_push :
-  forall g st st' ts callee caller frs x suf_tl gamma av,
-    st = Pst av (caller, frs) ts
-    -> st' = Pst (NtSet.remove x av) (callee, caller :: frs) ts
+  forall g st st' ts callee caller frs x suf_tl gamma av u u',
+    st = Pst av (caller, frs) ts u
+    -> st' = Pst (NtSet.remove x av) (callee, caller :: frs) ts u'
     -> caller.(loc).(rsuf) = NT x :: suf_tl
     -> callee.(loc).(rsuf) = gamma
     -> In gamma (rhssForNt g x)
     -> NtSet.In x av
     -> lex_nat_triple (meas g st') (meas g st).
 Proof.
-  intros g st st' ts ce cr frs x suf_tl gamma av
-         Hst Hst' Hcr Hce Hi Hm; subst.
+  intros; subst.
   apply triple_snd_lt.
   eapply stackScore_lt_after_push; eauto.
 Defined.
@@ -185,7 +185,7 @@ Lemma step_meas_lt :
 Proof.
   intros g st st' Hs.
   unfold step in Hs.
-  destruct st as [av [fr frs] ts].
+  destruct st as [av [fr frs] ts u].
   destruct fr as [[xo pre suf] sv].
   destruct suf as [| [a | y] suf_tl].
   - (* return from the current frame *)
@@ -230,14 +230,14 @@ Fixpoint multistep (g  : grammar)
                    (a  : Acc lex_nat_triple (meas g st)) :
                    parse_result :=
   match step g st as res return step g st = res -> _ with
-  | StepAccept sv    => fun _  => Accept sv
+  | StepAccept sv    => fun _  => if st.(unique) then Accept sv else Ambig sv
   | StepReject s     => fun _  => Reject s
   | StepError e      => fun _  => Error e
-  | StepK st'        => fun Hs => multistep g st' (StepK_st_acc _ _ _ a Hs)
+  | StepK st'        => fun hs => multistep g st' (StepK_st_acc _ _ _ a hs)
   end eq_refl.
 
 Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) : parser_state :=
-  Pst (allNts g) (Fr (Loc None [] gamma) [], []) ts.
+  Pst (allNts g) (Fr (Loc None [] gamma) [], []) ts true.
 
 Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
   multistep g (mkInitState g gamma ts) (lex_nat_triple_wf _).
@@ -250,7 +250,7 @@ Lemma multistep_unfold :
   forall g st a,
     multistep g st a = 
     match step g st as res return (step g st = res -> parse_result) with
-    | StepAccept sv => fun _  => Accept sv
+    | StepAccept sv => fun _  => if st.(unique) then Accept sv else Ambig sv
     | StepReject s  => fun _  => Reject s
     | StepK st'     => fun hs =>
                          multistep g st' (StepK_st_acc g st st' a hs)
@@ -268,7 +268,7 @@ Lemma multistep_cases' :
          (pr  : parse_result)
          (heq : step g st = sr),
     match sr as res return (step g st = res -> parse_result) with
-    | StepAccept sv => fun _ => Accept sv
+    | StepAccept sv => fun _ => if st.(unique) then Accept sv else Ambig sv
     | StepReject s => fun _  => Reject s
     | StepK st' => fun hs => multistep g st' (StepK_st_acc g st st' a hs)
     | StepError s => fun _ => Error s
@@ -277,6 +277,9 @@ Lemma multistep_cases' :
        | Accept f => sr = StepAccept f
                      \/ exists st' a', sr = StepK st' 
                                        /\ multistep g st' a' = Accept f
+       | Ambig f  => sr = StepAccept f
+                     \/ exists st' a', sr = StepK st' 
+                                       /\ multistep g st' a' = Ambig f
        | Reject s => sr = StepReject s
                      \/ exists st' a', sr = StepK st'
                                        /\ multistep g st' a' = Reject s
@@ -286,7 +289,7 @@ Lemma multistep_cases' :
        end.
 Proof.
   intros g st a sr pr heq.
-  destruct pr; destruct sr; subst;
+  destruct pr; destruct sr; destruct (unique st);
     try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto ].
 Qed.
 
@@ -300,6 +303,9 @@ Lemma multistep_cases :
        | Accept f => step g st = StepAccept f
                      \/ exists st' a', step g st = StepK st' 
                                        /\ multistep g st' a' = Accept f
+       | Ambig f  => step g st = StepAccept f
+                     \/ exists st' a', step g st = StepK st' 
+                                       /\ multistep g st' a' = Ambig f
        | Reject s => step g st = StepReject s
                      \/ exists st' a', step g st = StepK st'
                                        /\ multistep g st' a' = Reject s
@@ -369,27 +375,27 @@ Proof.
 Qed.
 
 Lemma step_StepAccept_facts :
-  forall g av stk ts v,
-    step g (Pst av stk ts) = StepAccept v
+  forall g av stk ts u v,
+    step g (Pst av stk ts u) = StepAccept v
     -> (exists xo rpre v',
            stk = (Fr (Loc xo rpre []) v', [])
            /\ v' = v)
        /\ ts = [].
 Proof.
-  intros g av stk ts v hs.
+  intros g av stk ts u v hs.
   unfold step in hs; dms; tc.
   inv hs; repeat eexists; eauto.
 Qed.
 
 Lemma step_LeftRecursion_facts :
-  forall g av fr frs ts x,
-    step g (Pst av (fr, frs) ts) = StepError (LeftRecursion x)
+  forall g av fr frs ts u x,
+    step g (Pst av (fr, frs) ts u) = StepError (LeftRecursion x)
     -> ~ NtSet.In x av
        /\ NtSet.In x (allNts g)
        /\ exists suf,
            fr.(loc).(rsuf) = NT x :: suf.
 Proof.
-  intros g av fr frs ts x hs.
+  intros g av fr frs ts u x hs.
   unfold step in hs; repeat dmeq h; tc; inv hs; sis;
   repeat split; eauto.
   - unfold not; intros hi.
@@ -410,12 +416,12 @@ Definition stack_wf (g : grammar) (stk : parser_stack) : Prop :=
 Hint Unfold frames_wf stack_wf.
 
 Lemma step_preserves_stack_wf_invar :
-  forall g av av' stk stk' ts ts',
-    step g (Pst av stk ts) = StepK (Pst av' stk' ts')
+  forall g av av' stk stk' ts ts' u u',
+    step g (Pst av stk ts u) = StepK (Pst av' stk' ts' u')
     -> stack_wf g stk 
     -> stack_wf g stk'.
 Proof.
-  intros g av av' (fr, frs) (fr', frs') ts ts' hs hw.
+  intros g av av' (fr, frs) (fr', frs') ts ts' u u' hs hw.
   unfold step in hs; unfold stack_wf in *; unfold frames_wf in *.
   dmeqs h; tc; inv hs; sis. 
   - eapply return_preserves_locations_wf_invar; eauto.
@@ -462,7 +468,7 @@ Qed.
 
 Definition unavailable_nts_invar g st : Prop :=
   match st with
-  | Pst av stk _ =>
+  | Pst av stk _ _ =>
     unavailable_nts_are_open_calls g av (lstackOf stk)
   end.
 
@@ -636,13 +642,13 @@ Proof.
 Qed.
 
 Lemma step_preserves_stack_derivation_invar :
-  forall g av av' stk stk' wsuf wsuf' w,
+  forall g av av' stk stk' wsuf wsuf' w u u',
     stack_wf g stk
     -> stack_derivation_invar g stk wsuf w
-    -> step g (Pst av stk wsuf) = StepK (Pst av' stk' wsuf')
+    -> step g (Pst av stk wsuf u) = StepK (Pst av' stk' wsuf' u')
     -> stack_derivation_invar g stk' wsuf' w.
 Proof.
-  intros g av av' stk stk' wsuf wsuf' w hw hi hs.
+  intros g av av' stk stk' wsuf wsuf' w u u' hw hi hs.
   unfold step in hs.
   dms; inv hs; tc.
   - eapply return_preserves_stack_derivation_invar;  eauto.
@@ -662,11 +668,11 @@ Ltac destr_tl :=
   end.
 
 Lemma step_preserves_bottomFrameSyms_invar :
-  forall g av av' stk stk' ts ts',
-    step g (Pst av stk ts) = StepK (Pst av' stk' ts')
+  forall g av av' stk stk' ts ts' u u',
+    step g (Pst av stk ts u) = StepK (Pst av' stk' ts' u')
     -> bottomFrameSyms stk = bottomFrameSyms stk'.
 Proof.
-  intros g av av' stk stk' ts ts' hs.
+  intros g av av' stk stk' ts ts' u u' hs.
   unfold step in hs.
   dms; inv hs; tc; unfold bottomFrameSyms; destr_tl; sis; auto; apps.
 Qed.

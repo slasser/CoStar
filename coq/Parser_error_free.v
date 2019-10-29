@@ -20,11 +20,12 @@ Lemma stack_wf_no_invalid_state :
   forall (g : grammar)
          (av : NtSet.t)
          (stk : parser_stack)
-         (ts : list token),
+         (ts : list token)
+         (u  : bool),
     stack_wf g stk
-    -> ~ step g (Pst av stk ts) = StepError InvalidState.
+    -> ~ step g (Pst av stk ts u) = StepError InvalidState.
 Proof.
-  intros g av stk ts hwf; unfold not; intros hs.
+  intros g av stk ts u hwf; unfold not; intros hs.
   unfold step in hs.
   dms; tc; try inv hwf.
 Qed.
@@ -36,14 +37,15 @@ Lemma multistep_never_reaches_error_state :
          (ts     : list token)
          (av     : NtSet.t)
          (stk    : parser_stack)
-         (a'     : Acc lex_nat_triple (meas g (Pst av stk ts))),
-    tri = meas g (Pst av stk ts)
+         (u      : bool)
+         (a'     : Acc lex_nat_triple (meas g (Pst av stk ts u))),
+    tri = meas g (Pst av stk ts u)
     -> stack_wf g stk
-    -> ~ multistep g (Pst av stk ts) a' = Error InvalidState.
+    -> ~ multistep g (Pst av stk ts u) a' = Error InvalidState.
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros ts av stk a' heq hwf; unfold not; intros hm; subst.
+  intros ts av stk u a' heq hwf; unfold not; intros hm; subst.
   apply multistep_invalid_state_cases in hm.
   destruct hm as [hs | hm].
   - eapply stack_wf_no_invalid_state; eauto. 
@@ -179,16 +181,17 @@ Lemma multistep_never_returns_prediction_error :
          (ts     : list token)
          (av     : NtSet.t)
          (stk    : parser_stack)
-         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk ts)))
+         (u      : bool)
+         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk ts u)))
          (e      : prediction_error),
     no_left_recursion g
-    -> tri = Parser.meas g (Pst av stk ts)
+    -> tri = Parser.meas g (Pst av stk ts u)
     -> stack_wf g stk
-    -> multistep g (Pst av stk ts) a' <> Error (PredictionError e).
+    -> multistep g (Pst av stk ts u) a' <> Error (PredictionError e).
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros ts av (fr, frs) a' e hn heq hw; unfold not; intros hm; subst.
+  intros ts av (fr, frs) u a' e hn heq hw; unfold not; intros hm; subst.
   apply multistep_prediction_error_cases in hm.
   destruct hm as [hs | hm].
   - destruct e as [ | x].
