@@ -116,6 +116,10 @@ with gamma_derivation (g : grammar) : list symbol -> list token-> forest-> Prop 
 
 Hint Constructors sym_derivation gamma_derivation.
 
+Definition unique_gamma_derivation g ss w v :=
+  gamma_derivation g ss w v
+  /\ forall v', gamma_derivation g ss w v' -> v = v'.
+
 (* Inductive definition of a nullable grammar symbol *)
 Inductive nullable_sym (g : grammar) : symbol -> Prop :=
 | NullableSym : forall x ys,

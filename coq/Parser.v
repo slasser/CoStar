@@ -534,65 +534,140 @@ Proof.
   - eapply push_preserves_unavailable_nts_invar; eauto.
 Qed.
 
-(* THE STACK SYMBOLS THAT HAVE ALREADY BEEN PROCESSED REPRESENT
-   A (PARTIAL) DERIVATION; THIS PREDICATE RELATES THOSE SYMBOLS
-   TO THE WORD (PREFIX) INVOLVED IN THE DERIVATION. *)
-Inductive stack_derivation (g : grammar) : parser_stack -> list token -> Prop :=
+(* The stack symbols that have already been processed represent
+   a (partial) derivation; this predicate relates those symbols
+   to the word (prefix) involved in the derivation. *)
+(*Inductive stack_derivation (g : grammar) : 
+  parser_stack -> list token -> forest -> Prop :=
 | SD_nil :
-    forall xo pre suf v w,
+    forall xo pre suf w v,
       gamma_derivation g pre w v
-      -> stack_derivation g (Fr (Loc xo pre suf) v, []) w
+      -> stack_derivation g (Fr (Loc xo pre suf) v, []) w v
 | SD_cons :
-    forall xo pre suf v fr' frs wpre wsuf,
-      gamma_derivation g pre wsuf v
-      -> stack_derivation g (fr', frs) wpre
-      -> stack_derivation g (Fr (Loc xo pre suf) v, fr' :: frs) (wpre ++ wsuf).
+    forall xo pre suf cr frs w w' v v',
+      gamma_derivation g pre w' v'
+      -> stack_derivation g (cr, frs) w v
+      -> stack_derivation g (Fr (Loc xo pre suf) v', cr :: frs) (w ++ w') (v ++ v').
+*)
 
-Hint Constructors stack_derivation.
+Inductive frames_derivation (g : grammar) : 
+  list frame -> list token -> forest -> Prop :=
+| SD_nil : 
+    frames_derivation g [] [] []
+| SD_cons : 
+    forall xo pre suf tl w w' v v',
+      gamma_derivation g pre w' v'
+      -> frames_derivation g tl w v
+      -> frames_derivation g (Fr (Loc xo pre suf) v' :: tl) (w ++ w') (v ++ v').
+
+Hint Constructors frames_derivation.
+
+Definition stack_derivation (g : grammar) (stk : parser_stack) (w : list token) (v : forest) : Prop :=
+  match stk with
+  | (fr, frs) => frames_derivation g (fr :: frs) w v
+  end.
 
 (* Tactic for inverting a stack_derivation hypothesis *)
-Ltac inv_sd hsd wpre wsuf hgd hsd' := inversion hsd as [? ? ? ? wpre hgd | ? ? ? ? ? ? wpre wsuf hgd hsd']; subst; clear hsd.
+Ltac inv_sd hsd wpre wsuf hgd hsd' := 
+  inversion hsd as [ ? ? ? ? wpre ? hgd 
+                   | ? ? ? ? ? wpre wsuf ? ? hgd hsd']; subst; clear hsd.
 
 (* Parser invariant: the processed stack symbols represent a 
    partial derivation of a full word *)
-Inductive stack_derivation_invar (g : grammar) (stk : parser_stack) (wsuf w : list token) : Prop :=
+Inductive stack_derivation_invar (g : grammar) (stk : parser_stack) (v : forest) (wsuf w : list token) : Prop :=
 | SD_invar :
     forall wpre,
-      stack_derivation g stk wpre
+      stack_derivation g stk wpre v
       -> wpre ++ wsuf = w
-      -> stack_derivation_invar g stk wsuf w.
+      -> stack_derivation_invar g stk v wsuf w.
 
 (* Tactic for inverting a stack_derivation_invar hypothesis *)
 Ltac inv_sdi wpre hsd :=
   match goal with
-  | H : stack_derivation_invar _ _ _ _ |- _ =>
+  | H : stack_derivation_invar _ _ _ _ _ |- _ =>
     inversion H as [wpre hsd ?]; subst; clear H
   end.
 
 Lemma stack_derivation_cases :
-  forall g fr frs w,
-    stack_derivation g (fr, frs) w
+  forall g fr frs w''' v''',
+    stack_derivation g (fr, frs) w''' v'''
     -> match frs with
-       | []          => gamma_derivation g fr.(loc).(rpre) w fr.(sem)
-       | fr' :: frs' =>
-         exists wpre wsuf,
-         wpre ++ wsuf = w
-         /\ stack_derivation g (fr', frs') wpre
-         /\ gamma_derivation g fr.(loc).(rpre) wsuf fr.(sem)
+       | [] => gamma_derivation g fr.(loc).(rpre) w''' v'''
+       | cr :: frs' =>
+         exists w w' w'' v v' v'',
+         w ++ w' ++ w'' = w'''
+         /\ v ++ v' ++ v'' = v'''
+         /\ frames_derivation g frs' w v
+         /\ gamma_derivation g cr.(loc).(rpre) w' v'
+         /\ gamma_derivation g fr.(loc).(rpre) w'' v''
        end.
 Proof.
-  intros g fr frs w hsd.
-  destruct frs as [| fr' frs]; inv hsd; eauto.
+  intros g fr frs w''' v''' hs.
+  destruct frs as [| cr frs]; inv hs; eauto.
+  - inv H4; auto.
+  - inv H4; simpl; repeat eexists; eauto; apps.
+Qed.
+
+(*
+Lemma stack_derivation_cases :
+  forall g fr frs w'' v'',
+    stack_derivation g (fr, frs) w'' v''
+    -> match frs with
+       | []         => gamma_derivation g fr.(loc).(rpre) w'' v''
+       | cr :: frs' =>
+         exists w w' v v',
+         w ++ w' = w''
+         /\ v ++ v' = v''
+         /\ stack_derivation g (cr, frs') w v
+         /\ gamma_derivation g fr.(loc).(rpre) w' v'
+       end.
+Proof.
+  intros g fr frs w'' v'' hs.
+  destruct frs as [| cr frs]; inv hs; eauto 8.
+Qed. *)
+
+Lemma foo :
+  forall g o pre suf w'' v' v'' frs,
+    frames_derivation g (Fr (Loc o pre suf) v' :: frs) w'' v''
+    -> exists w w' v,
+      w ++ w' = w''
+      /\ v ++ v' = v''
+      /\ gamma_derivation g pre w' v' 
+      /\ frames_derivation g frs w v.
+Proof.
+  intros g o pre suf w'' v' v'' frs hf.
+  inv hf; eauto 8.
 Qed.
 
 Lemma return_preserves_stack_derivation_invar :
-  forall g callee caller caller' frs x xo xo_cr pre pre_cr suf_cr v v_cr wsuf w,
+  forall g callee caller caller' frs x xo xo_cr pre pre_cr suf_cr v v_cr v_tl w' w,
     stack_wf g (callee, caller :: frs)
     -> callee  = Fr (Loc xo pre []) v
     -> caller  = Fr (Loc xo_cr pre_cr (NT x :: suf_cr)) v_cr
     -> caller' = Fr (Loc xo_cr (pre_cr ++ [NT x]) suf_cr) (v_cr ++ [Node x v])
-    -> stack_derivation_invar g (callee, caller :: frs) wsuf w
-    -> stack_derivation_invar g (caller', frs) wsuf w.
+    -> stack_derivation_invar g (callee, caller :: frs) (v_tl ++ v_cr ++ v) w' w
+    -> stack_derivation_invar g (caller', frs) (v_tl ++ v_cr ++ [Node x v]) w' w.
+Proof.
+  intros g ce cr cr' frs x xo xo_cr pre pre_cr suf_cr v v_cr v_tl w' w 
+         hwf hce hcr hcr' hi; subst.
+  inv_sdi wpre''' hsd.
+  unfold stack_derivation in hsd.
+  apply stack_derivation_cases in hsd.
+  destruct hsd as [wpre [wpre' [wpre'' [vpre [vpre' [vpre'' [heq [heq' [hf [hg hg']]]]]]]]]]; sis; subst.
+  inv hwf.
+  rewrite app_nil_r in *.
+  repeat (econstructor; eauto).
+  - apply gamma_derivation_app; auto.
+Abort.
+
+Lemma return_preserves_stack_derivation_invar :
+  forall g callee caller caller' frs x xo xo_cr pre pre_cr suf_cr v v_cr wsuf w,
+    stack_wf g (callee, caller :: frs)
+    -> callee  = Fr (Loc xo pre []) v'
+    -> caller  = Fr (Loc xo_cr pre_cr (NT x :: suf_cr)) v
+    -> caller' = Fr (Loc xo_cr (pre_cr ++ [NT x]) suf_cr) (v ++ [Node x v'])
+    -> stack_derivation_invar g (callee, caller :: frs) wsuf w v''
+    -> stack_derivation_invar g (caller', frs) wsuf w v''.
 Proof.
   intros g ce cr cr' frs x xo xo_cr pre pre_cr suf_cr v v_cr wsuf w 
          hwf hce hcr hcr' hi; subst.
