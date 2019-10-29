@@ -1,3 +1,5 @@
+Require Import List.
+
 Ltac sis := simpl in *.
 
 Ltac inv H := inversion H; subst; clear H.
@@ -34,4 +36,8 @@ Ltac dmgeq s := let Heq := fresh s in
 Ltac dmeq s := (first [dmheq s | dmgeq s]); auto.
 
 Ltac dmeqs s := repeat dmeq s.
+
+Ltac apps := try solve [ repeat rewrite app_assoc; auto
+                       | repeat rewrite <- app_assoc; auto
+                       | repeat rewrite app_nil_r; auto].
 
