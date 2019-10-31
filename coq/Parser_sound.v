@@ -19,7 +19,7 @@ Lemma multistep_sound :
          (v      : forest),
     tri = meas g (Pst av stk wsuf u)
     -> stack_wf g stk
-    -> stack_derivation_invar g stk wsuf w
+    -> stack_prefix_derivation g stk wsuf w
     -> multistep g (Pst av stk wsuf u) a' = Accept v
     -> gamma_derivation g (bottomFrameSyms stk) w v.
 Proof.
@@ -30,16 +30,15 @@ Proof.
   destruct hm as [hf | he].
   - apply step_StepAccept_facts in hf.
     destruct hf as [[xo [rpre [v' [heq]]]] heq']; subst.
-    inv hi. 
-    inv H; sis.
-    unfold bottomFrameSyms; simpl; apps.
+    unfold bottomFrameSyms; simpl; rewrite app_nil_r.
+    eapply stack_prefix_derivation_final; eauto.
   - destruct he as [st' [a'' [hf hm]]].
     destruct st' as [av' stk' wsuf'].
     eapply IH with (w := w) in hm; eauto. 
     + erewrite step_preserves_bottomFrameSyms_invar; eauto.
     + apply step_meas_lt; auto.
     + eapply step_preserves_stack_wf_invar; eauto.
-    + eapply step_preserves_stack_derivation_invar; eauto.
+    + eapply step_preserves_stack_prefix_derivation; eauto.
 Qed.
 
 Theorem parser_sound :
@@ -55,6 +54,6 @@ Proof.
   eapply multistep_sound in hp; eauto.
   - apply lex_nat_triple_wf.
   - constructor. (* how do I get auto to take care of this? *)
-  - eapply SD_invar; eauto.
+  - apply stack_prefix_derivation_init. 
 Qed.
   
