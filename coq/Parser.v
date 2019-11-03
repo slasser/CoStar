@@ -258,6 +258,21 @@ Lemma multistep_unfold :
     end eq_refl.
 Proof.
   intros; destruct a; auto.
+Qed.
+
+Lemma multistep_unfold_ex :
+  forall g st a,
+  exists heq,
+    multistep g st a =
+    match step g st as res return (step g st = res -> parse_result) with
+    | StepAccept sv => fun _  => if st.(unique) then Accept sv else Ambig sv
+    | StepReject s  => fun _  => Reject s
+    | StepK st'     => fun hs =>
+                         multistep g st' (StepK_st_acc g st st' a hs)
+    | StepError s   => fun _  => Error s
+    end heq.
+Proof.
+  intros; eexists; apply multistep_unfold.
 Qed.              
 
 Lemma multistep_cases' :
