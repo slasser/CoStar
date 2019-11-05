@@ -841,3 +841,100 @@ Proof.
     eapply push_preserves_unavailable_nts_invar; eauto.
   - inv hi.
 Qed.
+
+(* Stuff about the unprocessed stack symbols recognize suffix invariant *)
+
+Inductive tail_frames_recognize (g : grammar) : list location -> list token -> Prop :=
+| TFR_nil :
+    tail_frames_recognize g [] []
+| TFR_cons :
+    forall o pre x suf w w' frs,
+      gamma_recognize g suf w
+      -> tail_frames_recognize g frs w'
+      -> tail_frames_recognize g (Loc o pre (NT x :: suf) :: frs) (w ++ w').
+
+Hint Constructors tail_frames_recognize.
+
+Inductive stack_recognize (g : grammar) : location_stack -> list token -> Prop :=
+| SR :
+    forall o pre suf w w' frs,
+      gamma_recognize g suf w
+      -> tail_frames_recognize g frs w'
+      -> stack_recognize g (Loc o pre suf, frs) (w ++ w').
+
+Hint Constructors stack_recognize.
+
+Lemma stack_recognize_inv :
+  forall g o pre suf frs w'',
+    stack_recognize g (Loc o pre suf, frs) w''
+    -> exists w w',
+      w'' = w ++ w'
+      /\ gamma_recognize g suf w
+      /\ tail_frames_recognize g frs w'.
+Proof.
+  intros g o pre suf frs w'' hs; inv hs; eauto.
+Qed.
+
+Lemma gamma_recognize_nonterminal_head :
+  forall g x suf w,
+    gamma_recognize g (NT x :: suf) w
+    -> exists rhs wpre wsuf,
+      w = wpre ++ wsuf
+      /\ In (x, rhs) g
+      /\ gamma_recognize g rhs wpre
+      /\ gamma_recognize g suf wsuf.
+Proof.
+  intros g x suf w hg.
+  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
+  inv hs; simpl; eauto 8.
+Qed.
+
+Lemma llPredict_succ_viable_prefix :
+  forall g fr o pre x suf frs w rhs,
+    fr = Loc o pre (NT x :: suf)
+    -> stack_recognize g (fr, frs) w
+    -> llPredict g x (fr, frs) w = PredSucc rhs
+    -> exists viable_prefix viable_suffix wpre wsuf,
+        viable_prefix ++ viable_suffix = rhs ++ suf ++ flat_map rsuf frs
+        /\ w = wpre ++ wsuf
+        /\ gamma_recognize g viable_prefix wpre
+        /\ gamma_recognize g viable_suffix wsuf
+        /\ forall viable_prefix' viable_suffix' wpre' wsuf',
+            viable_prefix ++ viable_suffix = viable_prefix' ++ viable_suffix'
+            ->w = wpre' ++ wsuf'
+            -> gamma_recognize g viable_prefix' wpre'
+            -> gamma_recognize g viable_suffix' wsuf'
+            -> viable_prefix = viable_prefix'
+               /\ viable_suffix = viable_suffix'
+               /\wpre = wpre' /\ wsuf = wsuf'.
+Proof.
+  intros g fr o pre x suf frs w rhs heq hs hl; subst.
+  unfold llPredict in hl.
+  destruct (startState g x _) as [| sps] eqn:hss; tc.
+Admitted.
+
+Lemma llPredict_succ_gamma_recognize :
+  forall g fr o pre x suf frs rhs rhs' wpre wmid wsuf,
+    fr = Loc o pre (NT x :: suf)
+    -> In (x, rhs) g
+    -> gamma_recognize g rhs wpre
+    -> gamma_recognize g suf wmid
+    -> tail_frames_recognize g frs wsuf
+    -> llPredict g x (fr, frs) (wpre ++ wmid ++ wsuf) = PredSucc rhs'
+    -> rhs' = rhs.
+Proof.
+  intros g fr o pre x suf frs rhs rhs' wpre wmid wsuf
+         heq hin hg hg' ht hl; subst.
+  unfold llPredict in hl.
+  destruct (startState g x _) as [| sps] eqn:hss; tc.
+  unfold llPredict' in hl.
+Abort.  
+
+Lemma llPredict_succ_gamma_recognize :
+  forall g fr frs o pre x suf w rhs,
+    fr = Loc o pre (NT x :: suf)
+    -> stack_recognize g (fr, frs) w
+    -> llPredict g x (fr, frs) w = PredSucc rhs
+    -> True.
+Proof. 
+Abort.  

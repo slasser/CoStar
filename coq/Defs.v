@@ -120,6 +120,24 @@ Definition unique_gamma_derivation g ss w v :=
   gamma_derivation g ss w v
   /\ forall v', gamma_derivation g ss w v' -> v = v'.
 
+Inductive sym_recognize (g : grammar) : symbol -> list token -> Prop :=
+| T_rec  : 
+    forall (a : terminal) (l : literal),
+      sym_recognize g (T a) [(a, l)]
+| NT_rec : 
+    forall (x  : nonterminal) (ys : list symbol) (w : list token),
+      In (x, ys) g
+      -> gamma_recognize g ys w
+      -> sym_recognize g (NT x) w
+with gamma_recognize (g : grammar) : list symbol -> list token -> Prop :=
+     | Nil_rec  : 
+         gamma_recognize g [] []
+     | Cons_rec : 
+         forall (s : symbol) (ss : list symbol) (wpre wsuf : list token),
+           sym_recognize g s wpre
+           -> gamma_recognize g ss wsuf
+           -> gamma_recognize g (s :: ss) (wpre ++ wsuf).
+
 (* Inductive definition of a nullable grammar symbol *)
 Inductive nullable_sym (g : grammar) : symbol -> Prop :=
 | NullableSym : forall x ys,
