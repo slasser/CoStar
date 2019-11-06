@@ -1,11 +1,269 @@
-Require Import List.
+Require Import List String.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
+Require Import Prediction.
 Require Import GallStar.Parser.
 Require Import GallStar.Parser_error_free.
-Require Import Prediction.
 Require Import GallStar.Tactics.
+Require Import GallStar.Utils.
 Import ListNotations.
+
+
+(* a thought: maybe replace this invariant with a function of
+   the stack, i.e., "unprocessed symbols" *)
+
+Inductive unproc_tail_syms_recognize (g : grammar) : list frame -> list token -> Prop :=
+| TR_nil :
+    unproc_tail_syms_recognize g [] []
+| TR_cons :
+    forall o pre x suf v w w' frs,
+      gamma_recognize g suf w
+      -> unproc_tail_syms_recognize g frs w'
+      -> unproc_tail_syms_recognize g (Fr (Loc o pre (NT x :: suf)) v :: frs) (w ++ w').
+
+Hint Constructors unproc_tail_syms_recognize.
+
+Inductive unproc_stack_syms_recognize (g : grammar) : parser_stack -> list token -> Prop :=
+| SR :
+    forall o pre suf v w w' frs,
+      gamma_recognize g suf w
+      -> unproc_tail_syms_recognize g frs w'
+      -> unproc_stack_syms_recognize g (Fr (Loc o pre suf) v, frs) (w ++ w').
+
+Hint Constructors unproc_stack_syms_recognize.
+
+Lemma ussr_inv :
+  forall g o pre suf v frs w'',
+    unproc_stack_syms_recognize g (Fr (Loc o pre suf) v, frs) w''
+    -> exists w w',
+      w'' = w ++ w'
+      /\ gamma_recognize g suf w
+      /\ unproc_tail_syms_recognize g frs w'.
+Proof.
+  intros g o pre suf v frs w'' hs; inv hs; eauto.
+Qed.
+
+Lemma return_preserves_ussr :
+  forall g ce cr cr' frs x o o' pre pre' suf' v v' w,
+    ce = Fr (Loc o pre []) v
+    -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
+    -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') (v' ++ [Node x v])
+    -> unproc_stack_syms_recognize g (ce, cr :: frs) w
+    -> unproc_stack_syms_recognize g (cr', frs) w.
+Proof.
+  intros g ce cr cr' frs x o o' pre pre' suf' v v' w
+         ? ? ? hs; subst.
+  apply ussr_inv in hs.
+  destruct hs as [wpre [wsuf [heq [hg ht]]]]; subst.
+  inv ht; inv hg; simpl; auto.
+Qed.
+
+Lemma consume_preserves_ussr :
+  forall g fr fr' frs o pre suf a l v w,
+    fr = Fr (Loc o pre (T a :: suf)) v
+    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf l])
+    -> unproc_stack_syms_recognize g (fr, frs) ((a, l) :: w)
+    -> unproc_stack_syms_recognize g (fr', frs) w.
+Proof.
+  intros g fr fr' frs o pre suf a l v w ? ? hs; subst.
+  apply ussr_inv in hs.
+  destruct hs as [wpre [wsuf [heq [hg ht]]]]; subst.
+  apply gamma_recognize_terminal_head in hg.
+  destruct hg as [l' [w' [? hg]]]; subst.
+  inv heq; auto.
+Qed.
+
+Fixpoint processedSyms' (frs : list location) : list symbol :=
+  match frs with 
+  | [] => []
+  | Loc o pre suf :: frs' => processedSyms' frs' ++ pre
+  end.
+
+Definition processedSyms stk : list symbol :=
+  match stk with
+  | (fr, frs) => processedSyms' (fr :: frs)
+  end.
+
+Fixpoint unprocTailSyms (frs : list location) : list symbol :=
+  match frs with 
+  | []                            => []
+  | Loc _ _ [] :: _               => [] (* impossible *)
+  | Loc _ _ (T _ :: _) :: _       => [] (* impossible *)
+  | Loc _ _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
+  end.
+
+Definition unprocStackSyms stk : list symbol :=
+  match stk with
+  | (Loc o pre suf, frs) => suf ++ unprocTailSyms frs
+  end.
+
+Inductive gamma_recognizes_prefix g gamma wpre w : Prop :=
+| GRP :
+    forall wsuf,
+      gamma_recognize g gamma wpre
+      -> w = wpre ++ wsuf
+      -> gamma_recognizes_prefix g gamma wpre w.
+
+Lemma llPredict'_succ_exists_unique_viable_unproc_prefix :
+  forall g orig_stk o pre x suf frs w'' w' sps rhs,
+    orig_stk = (Loc o pre (NT x :: suf), frs)
+    -> llPredict' g w'' sps = PredSucc rhs
+    -> (forall sp, 
+           In sp sps 
+           -> match sp with
+              | Sp av pred stk => 
+                exists orig_unproc_pre orig_unproc_suf new_proc_syms,
+                orig_unproc_pre ++ orig_unproc_suf = pred ++ suf ++ unprocTailSyms frs
+                /\ processedSyms stk = processedSyms orig_stk ++ new_proc_syms
+                /\ gamma_recognize g new_proc_syms w'
+                /\ (forall w, gamma_recognize g new_proc_syms w -> gamma_recognize g orig_unproc_pre w)
+              end)
+    -> exists upre usuf wpre wsuf,
+        upre ++ usuf = rhs ++ suf ++ unprocTailSyms frs
+        /\ wpre ++ wsuf = w' ++ w''
+        /\ gamma_recognize g upre wpre
+        /\ forall upre' usuf' wpre' wsuf',
+            upre ++ usuf = upre' ++ usuf'
+            -> wpre ++ wsuf = wpre' ++ wsuf'
+            -> gamma_recognize g upre' wpre'
+            -> upre = upre' /\ wpre = wpre'.
+Proof.
+  intros g orig_stk o pre x suf frs w''.
+  induction w'' as [| t w'' IH]; intros w' sps rhs ho hl ha; subst.
+  - unfold llPredict' in hl.
+    eapply handleFinalSubparsers_facts in hl.
+    destruct hl as [sp [o' [pre' [hin [heq heq']]]]]; subst.
+    apply ha in hin; clear ha.
+    destruct sp as [av pred stk]; sis; subst.
+    destruct hin as [orig_unproc_pre [orig_unproc_suf [new_proc_syms [heq [heq' [heq'' hequiv]]]]]]; sis; subst.
+    apply hequiv in heq''.
+    exists orig_unproc_pre.
+    exists orig_unproc_suf.
+    exists w'.
+    exists [].
+    split; auto.
+    split; auto.
+    split; auto.
+    intros upre' usuf' wpre' wsuf' ho heq''' hg.
+    rewrite app_nil_r in *; subst.
+    
+    
+
+Lemma llPredict_succ_exists_unique_viable_unproc_prefix :
+  forall g fr o pre x suf frs w rhs,
+    fr = Loc o pre (NT x :: suf)
+    -> llPredict g x (fr, frs) w = PredSucc rhs
+    -> exists upre usuf wpre wsuf,
+        upre ++ usuf = rhs ++ suf ++ unprocTailSyms frs
+        /\ wpre ++ wsuf = w
+        /\ gamma_recognize g upre wpre
+        /\ forall upre' usuf' wpre' wsuf',
+            upre ++ usuf = upre' ++ usuf'
+            -> wpre ++ wsuf = wpre' ++ wsuf'
+            -> gamma_recognize g upre' wpre'
+            -> upre = upre' /\ wpre = wpre'.
+Proof.
+  intros g fr o pre x suf frs w rhs heq hl; subst.
+  unfold llPredict in hl.
+  destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
+  
+Admitted.
+
+Lemma push_succ_preserves_ussr :
+  forall g fr o pre x suf v frs w rhs,
+    fr = Fr (Loc o pre (NT x :: suf)) v
+    -> llPredict g x (lstackOf (fr, frs)) w = PredSucc rhs
+    -> unproc_stack_syms_recognize g (fr, frs) w
+    -> unproc_stack_syms_recognize g (Fr (Loc (Some x) [] rhs) [], fr :: frs) w.
+Proof.
+  intros g fr o pre x suf v frs w rhs heq hl hs; subst; sis.
+  eapply ussr_inv in hs.
+  destruct hs as [wpremid [wsuf [heq [hg ht]]]]; subst.
+  apply gamma_recognize_nonterminal_head in hg.
+  destruct hg as [rhs' [wpre [wmid [heq [hin [hg hg']]]]]]; subst.
+  rewrite <- app_assoc; constructor; auto.
+  eapply llPredict_succ_exists_unique_viable_unproc_prefix in hl; eauto.
+  destruct hl as [upre [usuf [wpre' [wsuf' [heq [heq' [hg'' hall]]]]]]].
+Admitted.
+
+Lemma step_preserves_ussr :
+  forall g av av' stk stk' w w' u u',
+    unproc_stack_syms_recognize g stk w
+    -> step g (Pst av stk w u) = StepK (Pst av' stk' w' u')
+    -> unproc_stack_syms_recognize g stk' w'.
+Proof.
+  intros g av av' stk stk' w w' u u' hi hs.
+  unfold step in hs; dmeqs h; tc; inv hs; sis.
+  - eapply return_preserves_ussr; eauto.
+  - eapply consume_preserves_ussr; eauto.
+  - eapply push_succ_preserves_ussr; eauto.
+  - admit.
+Admitted.
+
+Lemma ussr_implies_multistep_doesn't_reject :
+  forall (g : grammar) 
+         (tri : nat * nat * nat)
+         (a   : Acc lex_nat_triple tri)
+         (av  : NtSet.t)
+         (stk : parser_stack)
+         (w   : list token)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g (Pst av stk w u)))
+         (s   : string),
+    tri = meas g (Pst av stk w u)
+    -> unproc_stack_syms_recognize g stk w
+    -> multistep g (Pst av stk w u) a <> Reject s.
+Proof.
+  intros g tri a.
+  induction a as [tri hlt IH].
+  intros av stk w u a s heq hu; unfold not; intros hm; subst.
+  apply multistep_reject_cases in hm.
+  destruct hm as [hs | [st' [a' [hs hm]]]]. 
+  - (* lemma *)
+    clear a hlt IH.
+    unfold step in hs; dmeqs h; tc; inv hs.
+    + inv hu.
+      inv H1; inv H6.
+      inv H5.
+    + inv hu.
+      inv H1.
+      inv H2.
+      inv H5.
+    + inv hu.
+      inv H1.
+      inv H2.
+      inv H5.
+      apply n; auto.
+    + inv hu.
+      inv H5.
+      inv H1.
+      admit.
+    + inv hu.
+      inv H5.
+      inv H1.
+      assert (In n (lhss g)) by admit.
+      apply in_lhss_iff_in_allNts in H.
+      apply NtSet.mem_spec in H.
+      rewrite H in h5; inv h5.
+  - destruct st' as [av' stk' w' u']. 
+    eapply IH with (y := meas g (Pst av' stk' w' u')); eauto.
+    + apply step_meas_lt; auto.
+    + eapply step_preserves_ussr; eauto.
+Admitted.
+
+Theorem valid_derivation_implies_parser_doesn't_reject :
+  forall g ys w s,
+    gamma_recognize g ys w
+    -> parse g ys w <> Reject s.
+Proof.
+  intros g ys w s hg; unfold not; intros hp.
+  unfold parse in hp.
+  unfold mkInitState in hp.
+  eapply ussr_implies_multistep_doesn't_reject; eauto.
+  - apply lex_nat_triple_wf.
+  - (* lemma *)
+    rew_nil_r w; auto.
+Qed.
 
 (* a thought: maybe replace this invariant with a function of
    the stack, i.e., "unprocessed symbols" *)

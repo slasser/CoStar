@@ -335,7 +335,7 @@ Proof.
 Qed.
 
 Lemma multistep_accept_cases :
-  forall (g : grammar)
+  forall (g  : grammar)
          (st : parser_state)
          (a  : Acc lex_nat_triple (meas g st))
          (f  : forest),
@@ -346,6 +346,20 @@ Lemma multistep_accept_cases :
 Proof.
   intros g st a f hm; subst.
   destruct (multistep_cases g st a (Accept f)); auto.
+Qed.
+
+Lemma multistep_reject_cases :
+  forall (g  : grammar)
+         (st : parser_state)
+         (a  : Acc lex_nat_triple (meas g st))
+         (s  : string),
+    multistep g st a = Reject s
+    -> step g st = StepReject s
+       \/ exists st' a', step g st = StepK st' 
+                         /\ multistep g st' a' = Reject s.
+Proof.
+  intros g st a s hm; subst.
+  destruct (multistep_cases g st a (Reject s)); auto.
 Qed.
 
 Lemma multistep_invalid_state_cases :
@@ -594,19 +608,6 @@ Proof.
   apply frames_derivation_inv_cons in hf.
   destruct hf as [wpre [wsuf [heq [hg hf]]]]; inv hf; auto.
 Qed.
-
-(*
-Lemma stack_derivation_inv_cons :
-  forall g o pre suf v frs w,
-    stack_derivation g (Fr (Loc o pre suf) v, frs) w
-    -> exists wpre wsuf,
-      w = wpre ++ wsuf
-      /\ gamma_derivation g pre wsuf v
-      /\ frames_derivation g frs wpre.
-Proof.
-  intros g o pre suf v frs w hf; inv hf; eauto.
-Qed.
-*)
 
 Lemma stack_derivation_inv_return :
   forall g o o' pre pre' suf suf' v v' frs w,

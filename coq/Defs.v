@@ -188,6 +188,32 @@ Definition no_left_recursion g :=
 
 (* LEMMAS *)
 
+Lemma gamma_recognize_terminal_head :
+  forall g a suf w,
+    gamma_recognize g (T a :: suf) w
+    -> exists l w',
+      w = (a, l) :: w'
+      /\ gamma_recognize g suf w'.
+Proof.
+  intros g a suf w hg.
+  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
+  inv hs; simpl; eauto.
+Qed.
+
+Lemma gamma_recognize_nonterminal_head :
+  forall g x suf w,
+    gamma_recognize g (NT x :: suf) w
+    -> exists rhs wpre wsuf,
+      w = wpre ++ wsuf
+      /\ In (x, rhs) g
+      /\ gamma_recognize g rhs wpre
+      /\ gamma_recognize g suf wsuf.
+Proof.
+  intros g x suf w hg.
+  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
+  inv hs; simpl; eauto 8.
+Qed.
+
 Lemma nullable_split :
   forall g xs ys,
     nullable_gamma g (xs ++ ys)
