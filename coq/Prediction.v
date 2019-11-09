@@ -1000,9 +1000,18 @@ Inductive list_move_closure_multistep (g : grammar) :
 
 Inductive move_closure_multistep (g : grammar) :
   subparser -> list token -> subparser -> list token -> Prop :=
-| MC_refl :
-    forall sp ts,
-      move_closure_multistep g sp ts sp ts
+| MC_empty :
+    forall av pred o pre,
+      move_closure_multistep g (Sp av pred (Loc o pre [], []))
+                               []
+                               (Sp av pred (Loc o pre [], []))
+                               []
+| MC_terminal :
+    forall av pred o pre suf frs a l ts,
+      move_closure_multistep g (Sp av pred (Loc o pre (T a :: suf), frs))
+                               ((a,l) :: ts)
+                               (Sp av pred (Loc o pre (T a :: suf), frs))
+                               ((a,l) :: ts)
 | MC_trans :
     forall sp sp' sp'' sp''' ts ts'' ts''',
       move_step g sp ts sp' ts''
@@ -1127,6 +1136,124 @@ Proof.
   apply in_map_iff in hin.
   destruct hin as [rhs [heq' hin]]; subst.
 Abort.
+
+Lemma mc_multistep_succ_final_config :
+  forall g sp sp' wpre wsuf,
+    move_closure_multistep g sp (wpre ++ wsuf) sp' wsuf
+    -> wsuf = []
+    -> finalConfig sp' = true.
+Proof.
+  intros g sp sp' wpre wsuf hm.
+  induction hm; intros heq; auto.
+  inv heq.
+Qed.
+
+Lemma move_step_preserves_label :
+  forall g sp sp' w w',
+    move_step g sp w sp' w'
+    -> sp.(prediction) = sp'.(prediction).
+Proof.
+  intros g sp sp' w w' hm; inv hm; auto.
+Qed.
+
+Lemma closure_step_preserves_label :
+  forall g sp sp',
+    closure_step g sp sp'
+    -> sp.(prediction) = sp'.(prediction).
+Proof.
+  intros g sp sp' hc; inv hc; auto.
+Qed.
+
+Lemma closure_multistep_preserves_label :
+  forall g sp sp',
+    closure_multistep g sp sp'
+    -> sp.(prediction) = sp'.(prediction).
+Proof.
+  intros g sp sp' hc.
+  induction hc as [ ? ? ? ?
+                  | ? ? ? ? ? ? ?
+                  | ? ? ? hs hms]; auto.
+  apply closure_step_preserves_label in hs; tc.
+Qed.
+
+Lemma mc_multistep_preserves_label :
+  forall g sp sp' w w',
+    move_closure_multistep g sp w sp' w'
+    -> sp.(prediction) = sp'.(prediction).
+Proof.
+  intros g sp sp' w w' hm.
+  induction hm as [ ? ? ? ?
+                  | ? ? ? ? ? ? ? ? ?
+                  | ? ? ? ? ? ? ? hm hc hmc]; auto.
+  apply move_step_preserves_label in hm.
+  apply closure_multistep_preserves_label in hc; tc.
+Qed.
+
+Lemma allPredictionEqual_in :
+  forall sp sp' sps,
+    allPredictionsEqual sp sps = true
+    -> In sp' (sp :: sps)
+    -> sp'.(prediction) = sp.(prediction).
+Admitted.
+
+Lemma llPredict'_succ_labels_eq :
+  forall g orig_sps wsuf wpre curr_sps rhs,
+    llPredict' g curr_sps wsuf = PredSucc rhs
+    -> (forall sp sp',
+           In sp orig_sps
+           -> move_closure_multistep g sp (wpre ++ wsuf) sp' wsuf
+           -> In sp' curr_sps)
+    -> exists wpre' wsuf',
+        wpre ++ wsuf = wpre' ++ wsuf'
+        /\ forall sp sp',
+          In sp orig_sps
+          -> move_closure_multistep g sp (wpre' ++ wsuf') sp' wsuf'
+          -> sp.(prediction) = rhs.
+Proof.
+  intros g orig_sps wsuf.
+  induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs hl hi; sis.
+  - destruct curr_sps as [| sp' sps']; tc.
+    dmeq hall.
+    + inv hl.
+      exists wpre; exists []; split; auto.
+      intros orig_sp curr_sp hin hm.
+      erewrite mc_multistep_preserves_label
+        with (sp := orig_sp) (sp' := curr_sp); eauto.
+      eapply hi in hin; eauto.
+      erewrite allPredictionEqual_in; eauto.
+    + unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp'' sps''] eqn:hf; tc.
+      destruct (allPredictionsEqual sp'' sps'') eqn:ha'; tc.
+      inv hl.
+      exists wpre; exists []; split; auto.
+      intros orig_sp curr_sp hin hm.
+      eapply hi in hin; eauto.
+      pose proof hm as hm'.
+      apply mc_multistep_succ_final_config in hm'; auto.
+      pose proof (filter_In) as hfi.
+      assert (hand : In curr_sp (sp' :: sps') /\ finalConfig curr_sp = true) by firstorder.
+      apply hfi in hand.
+      rewrite hf in hand.
+      erewrite mc_multistep_preserves_label with
+          (sp := orig_sp) (sp' := curr_sp); eauto.
+      erewrite allPredictionEqual_in; eauto.
+  - destruct curr_sps as [| sp' sps']; tc.
+    destruct (allPredictionsEqual sp' sps') eqn:ha.
+    + inv hl.
+      exists wpre; exists (t :: wsuf'); split; auto.
+      intros orig_sp curr_sp hin hm.
+      eapply hi in hin; eauto.
+      erewrite mc_multistep_preserves_label with
+          (sp := orig_sp) (sp' := curr_sp); eauto.
+      erewrite allPredictionEqual_in; eauto.
+    + destruct (move _ _ _) as [msg | sps_after_mv] eqn:hm; tc.
+      destruct (closure _ _) as [msg | sps_after_mv_cl_step] eqn:hc; tc.
+      eapply IH with (wpre := wpre ++ [t]) in hl; eauto.
+      * destruct hl as [wpre' [wsuf'' [heq hall]]].
+        exists wpre'; exists wsuf''; split; auto.
+        rewrite <- heq; apps.
+      * admit.
+Admitted.
 
 Lemma llPredict_succ_rhs_derives_at_most_one_prefix :
   forall g fr o pre x suf frs w rhs rhs',
