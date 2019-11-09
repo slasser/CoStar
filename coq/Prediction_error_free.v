@@ -239,15 +239,16 @@ Proof.
   eapply sp_in_spClosure_result_ready_for_move; eauto.
   apply lex_nat_pair_wf.
 Qed.
-    
+
 Lemma llPredict'_never_returns_SpInvalidState :
   forall g ts sps,
     all_sp_stacks_wf g sps
     -> all_sps_ready_for_move sps
-    -> llPredict' g ts sps <> PredError SpInvalidState.
+    -> llPredict' g sps ts <> PredError SpInvalidState.
 Proof.
   intros g ts; induction ts as [| t ts IH]; intros sps ha ha'; unfold not; intros hl; sis.
-  - eapply handleFinalSubparsers_never_returns_error; eauto.
+  - destruct sps as [| sp sps']; tc; dm; tc.
+    eapply handleFinalSubparsers_never_returns_error; eauto.
   - destruct sps as [| sp sps']; tc.
     dm; tc.
     dmeq hm; tc.
@@ -493,13 +494,12 @@ Lemma llPredict'_never_returns_SpLeftRecursion :
   forall g ts sps x,
     no_left_recursion g
     -> all_sp_stacks_wf g sps
-    -> llPredict' g ts sps <> PredError (SpLeftRecursion x).
+    -> llPredict' g sps ts <> PredError (SpLeftRecursion x).
 Proof.
   intros g ts; induction ts as [| t ts IH]; intros sps x hn hw; unfold not; intros hl; sis.
-  - eapply handleFinalSubparsers_never_returns_error; eauto.
-  - destruct sps as [| sp sps']; tc.
-    dm; tc.
-    dmeq hm; tc.
+  - dm; tc; dm; tc.
+    eapply handleFinalSubparsers_never_returns_error; eauto.
+  - destruct sps as [| sp sps']; tc; dm; tc; dmeq hm; tc.
     + inv hl.
       eapply move_never_returns_SpLeftRecursion; eauto.
     + dmeq hc.

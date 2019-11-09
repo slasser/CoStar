@@ -201,25 +201,25 @@ Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
       PredAmbig sp.(prediction)
   end.
 
-Fixpoint llPredict' (g : grammar) (ts : list token) (sps : list subparser) : prediction_result :=
-  match ts with
-  | []       => handleFinalSubparsers sps
-  | t :: ts' =>
-    match sps with 
-    | []         => PredReject
-    | sp :: sps' =>
-      if allPredictionsEqual sp sps' then
-        PredSucc sp.(prediction)
-      else
+Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
+  match sps with
+  | []         => PredReject
+  | sp :: sps' =>
+    if allPredictionsEqual sp sps' then
+      PredSucc sp.(prediction)
+    else
+      match ts with
+      | []       => handleFinalSubparsers sps
+      | t :: ts' =>
         match move g t sps with
         | inl msg => PredError msg
         | inr mv  =>
           match closure g mv with
           | inl msg => PredError msg
-          | inr cl  => llPredict' g ts' cl
+          | inr cl  => llPredict' g cl ts'
           end
         end
-    end
+      end
   end.
 
 Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
@@ -235,7 +235,7 @@ Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
                      (ts : list token) : prediction_result :=
   match startState g x stk with
   | inl msg => PredError msg
-  | inr sps => llPredict' g ts sps
+  | inr sps => llPredict' g sps ts
   end.
 
 (* LEMMAS *)
@@ -530,44 +530,45 @@ Qed.
 
 Lemma llPredict'_success_result_in_original_subparsers :
   forall g ts gamma sps,
-    llPredict' g ts sps = PredSucc gamma
+    llPredict' g sps ts = PredSucc gamma
     -> exists sp, In sp sps /\ (prediction sp) = gamma.
 Proof.
   intros g ts gamma.
-  induction ts as [| t ts_tl IH]; intros sps hl; simpl in hl.
-  - eapply handleFinalSubparsers_success_from_subparsers; eauto.
-  - destruct sps as [| sp_hd sps_tl] eqn:hs; tc.
-    destruct (allPredictionsEqual sp_hd sps_tl) eqn:Ha.
-    + inv hl; eexists; split; eauto.
+  induction ts as [| t ts IH]; intros sps hl; sis.
+  - destruct sps as [| sp sps']; tc; dmeq hall.
+    + inv hl; exists sp; split; auto.
       apply in_eq.
-    + rewrite <- hs in *.
-      destruct (move g t _) as [msg | sps'] eqn:hm; tc.
-      destruct (closure g sps') as [msg | sps''] eqn:hc; tc. 
-      apply IH in hl; destruct hl as [sp'' [hin'' heq]]; subst.
+    + apply handleFinalSubparsers_success_from_subparsers; auto.
+  - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
+    + inv hl; exists sp; split; auto.
+      apply in_eq.
+    + destruct (move g t _) as [m | sps''] eqn:hm; tc.
+      destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
+      apply IH in hl; destruct hl as [? [? ?]]; subst.
       eapply closure_preserves_prediction in hc; eauto.
-      destruct hc as [sp' [hin' heq]]; rewrite heq.
+      destruct hc as [? [? heq]]; rewrite heq.
       eapply move_preserves_prediction in hm; eauto.
       destruct hm as [? [? ?]]; eauto.
 Qed.
 
 Lemma llPredict'_ambig_result_in_original_subparsers :
   forall g ts gamma sps,
-    llPredict' g ts sps = PredAmbig gamma
+    llPredict' g sps ts = PredAmbig gamma
     -> exists sp, In sp sps /\ (prediction sp) = gamma.
 Proof.
   intros g ts gamma.
-  induction ts as [| t ts_tl IH]; intros sps hl; simpl in hl.
-  - eapply handleFinalSubparsers_ambig_from_subparsers; eauto.
-  - destruct sps as [| sp_hd sps_tl] eqn:hs; tc.
-    destruct (allPredictionsEqual sp_hd sps_tl) eqn:ha; tc.
-    rewrite <- hs in *.
-    destruct (move g t _) as [msg | sps'] eqn:hm; tc.
-    destruct (closure g sps') as [msg | sps''] eqn:hc; tc. 
-    apply IH in hl; destruct hl as [sp'' [hin'' heq]]; subst.
-    eapply closure_preserves_prediction in hc; eauto.
-    destruct hc as [sp' [hin' heq]]; rewrite heq.
-    eapply move_preserves_prediction in hm; eauto.
-    destruct hm as [sp [Hin Heq]]; eauto.
+  induction ts as [| t ts IH]; intros sps hl; sis.
+  - destruct sps as [| sp sps']; tc; dmeq hall; inv hl.
+    apply handleFinalSubparsers_ambig_from_subparsers; auto.
+  - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
+    + inv hl.
+    + destruct (move g t _) as [m | sps''] eqn:hm; tc.
+      destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
+      apply IH in hl; destruct hl as [? [? ?]]; subst.
+      eapply closure_preserves_prediction in hc; eauto.
+      destruct hc as [? [? heq]]; rewrite heq.
+      eapply move_preserves_prediction in hm; eauto.
+      destruct hm as [? [? ?]]; eauto.
 Qed.
 
 Lemma startState_sp_prediction_in_rhssForNt :
