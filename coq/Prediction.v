@@ -616,7 +616,7 @@ Lemma llPredict_succ_in_grammar :
     -> In (x, ys) g.
 Proof.
   intros g x stk ts ys hp.
-  apply rhssForNt_in_grammar.
+  apply rhssForNt_in_grammar_iff.
   eapply llPredict_succ_in_rhssForNt; eauto.
 Qed.
 
@@ -626,7 +626,7 @@ Lemma llPredict_ambig_in_grammar :
     -> In (x, ys) g.
 Proof.
   intros g x stk ts ys hp.
-  apply rhssForNt_in_grammar.
+  apply rhssForNt_in_grammar_iff.
   eapply llPredict_ambig_in_rhssForNt; eauto.
 Qed.
 
@@ -721,7 +721,7 @@ Lemma push_preserves_locations_wf_invar :
     -> locations_wf g (Loc (Some x) [] rhs :: Loc o pre (NT x :: suf) :: locs).
 Proof.
   intros; constructor; auto.
-  apply rhssForNt_in_grammar; auto.
+  apply rhssForNt_in_grammar_iff; auto.
 Qed.
 
 Lemma consume_preserves_locations_wf_invar :
@@ -844,21 +844,21 @@ Qed.
 
 (* Stuff about the unprocessed stack symbols recognize suffix invariant *)
 
-Fixpoint processedSyms' (frs : list location) : list symbol :=
+Fixpoint procSyms (frs : list location) : list symbol :=
   match frs with 
   | [] => []
-  | Loc o pre suf :: frs' => processedSyms' frs' ++ pre
+  | Loc o pre suf :: frs' => procSyms frs' ++ pre
   end.
 
-Definition processedSyms stk : list symbol :=
+Definition procStackSyms stk : list symbol :=
   match stk with
-  | (fr, frs) => processedSyms' (fr :: frs)
+  | (fr, frs) => procSyms (fr :: frs)
   end.
 
 Inductive processedSyms_recognize_prefix g stk wsuf w : Prop :=
 | SRP :
     forall wpre,
-      gamma_recognize g (processedSyms stk) wpre
+      gamma_recognize g (procSyms stk) wpre
       -> w = wpre ++ wsuf
       -> processedSyms_recognize_prefix g stk wsuf w.
 
@@ -878,91 +878,18 @@ Definition stack_processed_syms_recognize g stk w :=
   | (fr, frs) => processed_syms_recognize g (fr :: frs) w
   end.
 
-(*
-Inductive stack_processed_syms_recognize_prefix g stk wsuf w : Prop :=
-| SRP :
-    forall wpre,
-      stack_processed_syms_recognize g stk wpre
-      -> w = wpre ++ wsuf
-      -> stack_processed_syms_recognize_prefix g stk wsuf w.
-
-Hint Constructors stack_processed_syms_recognize_prefix.
-*)
-(*
-Inductive tail_frames_recognize (g : grammar) : list location -> list token -> Prop :=
-| TFR_nil :
-    tail_frames_recognize g [] []
-| TFR_cons :
-    forall o pre x suf w w' frs,
-      gamma_recognize g suf w
-      -> tail_frames_recognize g frs w'
-      -> tail_frames_recognize g (Loc o pre (NT x :: suf) :: frs) (w ++ w').
-
-Hint Constructors tail_frames_recognize.
-
-Inductive stack_recognize (g : grammar) : location_stack -> list token -> Prop :=
-| SR :
-    forall o pre suf w w' frs,
-      gamma_recognize g suf w
-      -> tail_frames_recognize g frs w'
-      -> stack_recognize g (Loc o pre suf, frs) (w ++ w').
-
-Hint Constructors stack_recognize.
-
-Lemma stack_recognize_inv :
-  forall g o pre suf frs w'',
-    stack_recognize g (Loc o pre suf, frs) w''
-    -> exists w w',
-      w'' = w ++ w'
-      /\ gamma_recognize g suf w
-      /\ tail_frames_recognize g frs w'.
-Proof.
-  intros g o pre suf frs w'' hs; inv hs; eauto.
-Qed.
-*)
-
-Lemma gamma_recognize_nonterminal_head :
-  forall g x suf w,
-    gamma_recognize g (NT x :: suf) w
-    -> exists rhs wpre wsuf,
-      w = wpre ++ wsuf
-      /\ In (x, rhs) g
-      /\ gamma_recognize g rhs wpre
-      /\ gamma_recognize g suf wsuf.
-Proof.
-  intros g x suf w hg.
-  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
-  inv hs; simpl; eauto 8.
-Qed.
-
-Fixpoint tail_unprocessed_symbols (frs : list location) : list symbol :=
+Fixpoint unprocTailSyms (frs : list location) : list symbol :=
   match frs with 
   | []                            => []
   | Loc _ _ [] :: _               => [] (* impossible *)
   | Loc _ _ (T _ :: _) :: _       => [] (* impossible *)
-  | Loc _ _ (NT x :: suf) :: frs' => suf ++ tail_unprocessed_symbols frs'
+  | Loc _ _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
   end.
 
-Definition unprocessed_symbols stk : list symbol :=
+Definition unprocStackSyms stk : list symbol :=
   match stk with
-  | (Loc o pre suf, frs) => suf ++ tail_unprocessed_symbols frs
+  | (Loc o pre suf, frs) => suf ++ unprocTailSyms frs
   end.
-
-(*
-Inductive tail_unprocessed_symbols : list location -> list symbol -> Prop :=
-| TU_nil :
-    tail_unprocessed_symbols [] []
-| TU_cons :
-    forall o pre x suf frs syms',
-      tail_unprocessed_symbols frs syms'
-      -> tail_unprocessed_symbols (Loc o pre (NT x :: suf) :: frs) (suf ++ syms').
-
-Inductive stack_unprocessed_symbols : location_stack -> list symbol -> Prop :=
-| SU :
-    forall o pre suf frs syms',
-      tail_unprocessed_symbols frs syms'
-      -> stack_unprocessed_symbols (Loc o pre suf, frs) (suf ++ syms').
-*)
 
 Lemma handleFinalSubparsers_facts :
   forall sps rhs,
@@ -988,192 +915,229 @@ Proof.
   eexists; eexists; repeat split; auto.
 Qed.
 
-Inductive gamma_recognizes_prefix g gamma wsuf w : Prop :=
-| GDP :
-    forall wpre,
-      gamma_recognize g gamma wpre
-      -> w = wpre ++ wsuf
-      -> gamma_recognizes_prefix g gamma wsuf w.
+Inductive closure_step (g : grammar) : subparser -> subparser -> Prop :=
+| CS_ret :
+    forall av av' pred x o' pre pre' suf' frs,
+      closure_step g
+                   (Sp av
+                       pred
+                       (Loc (Some x) pre [], Loc o' pre' (NT x :: suf') :: frs))
+                   (Sp av'
+                       pred
+                       (Loc o' (pre' ++ [NT x]) suf', frs))
+| CS_push :
+    forall av av' pred o pre x suf frs rhs,
+      NtSet.In x av
+      -> In (x, rhs) g
+      -> closure_step g
+                      (Sp av
+                          pred
+                          (Loc o pre (NT x :: suf), frs))
+                      (Sp av'
+                          pred
+                          (Loc (Some x) [] rhs,
+                           Loc o pre (NT x :: suf) :: frs)).
 
-Lemma llPredict'_succ_viable_prefix :
-  forall g wpre wmidsuf sps rhs orig_proc_syms,
-    gamma_recognizes_prefix g orig_proc_syms wmidsuf (wpre ++ wmidsuf)
-    -> llPredict' g wmidsuf sps = PredSucc rhs
-    -> (forall sp, 
-           In sp sps 
-           -> exists new_proc_syms wmid wsuf,
-             wmidsuf = wmid ++ wsuf
-             /\ processedSyms sp.(stack) = orig_proc_syms ++ new_proc_syms
-             /\ gamma_recognizes_prefix g new_proc_syms wsuf (wmid ++ wsuf))
-    -> exists sp gmid gsuf wmid wsuf,
+Hint Constructors closure_step.
+
+Inductive closure_multistep (g : grammar) : subparser -> subparser -> Prop :=
+| CMS_empty :
+    forall av pred o pre,
+      closure_multistep g (Sp av pred (Loc o pre [], []))
+                          (Sp av pred (Loc o pre [], []))
+| CMS_terminal :
+    forall av pred o pre a suf frs,
+      closure_multistep g (Sp av pred (Loc o pre (T a :: suf), frs))
+                          (Sp av pred (Loc o pre (T a :: suf), frs))
+| CMS_trans :
+    forall sp sp' sp'',
+      closure_step g sp sp'
+      -> closure_multistep g sp' sp''
+      -> closure_multistep g sp sp''.
+
+Inductive list_closure_multistep (g : grammar) : list subparser -> list subparser -> Prop :=
+| LCM :
+    forall sp sp' sps sps',
       In sp sps
-      /\ sp.(prediction) = rhs
-      /\ unprocessed_symbols sp.(stack) = (gmid ++ gsuf)
-      /\ wmidsuf = wmid ++ wsuf
-      /\ gamma_recognize g gmid wmid
-      /\ forall (gmid' gsuf' : list symbol) (wmid' wsuf' : list token),
-          gmid ++ gsuf = gmid' ++ gsuf' 
-          -> wmid ++ wsuf = wmid' ++ wsuf' 
-          -> gamma_recognize g gmid' wmid' 
-          -> gmid = gmid' /\ wmid = wmid'.
+      -> closure_multistep g sp sp'
+      -> In sp' sps'
+      -> list_closure_multistep g sps sps'.
+
+Inductive move_step (g : grammar) :
+  subparser -> list token -> subparser -> list token -> Prop :=
+| MV_consume :
+    forall av pred o pre suf a l ts frs,
+      move_step g
+                (Sp av
+                    pred
+                    (Loc o pre (T a :: suf), frs))
+                ((a, l) :: ts)
+                (Sp (allNts g)
+                    pred
+                    (Loc o (pre ++ [T a]) suf, frs))
+                ts.
+
+Inductive list_move_step (g : grammar) :
+  list subparser -> list token -> list subparser -> list token -> Prop :=
+| LMS :
+    forall sp sp' sps sps' ts ts',
+      In sp sps
+      -> move_step g sp ts sp' ts'
+      -> list_move_step g sps ts sps' ts'.
+
+Inductive list_move_closure_multistep (g : grammar) :
+  list subparser -> list token -> list subparser -> list token -> Prop :=
+| LMC_refl :
+    forall sps ts,
+      list_move_closure_multistep g sps ts sps ts
+| LMC_trans :
+    forall sps sps' sps'' sps''' ts ts'' ts''',
+      list_move_step g sps ts sps' ts''
+      -> list_closure_multistep g sps' sps''
+      -> list_move_closure_multistep g sps'' ts'' sps''' ts'''
+      -> list_move_closure_multistep g sps ts sps''' ts'''.
+
+Inductive move_closure_multistep (g : grammar) :
+  subparser -> list token -> subparser -> list token -> Prop :=
+| MC_refl :
+    forall sp ts,
+      move_closure_multistep g sp ts sp ts
+| MC_trans :
+    forall sp sp' sp'' sp''' ts ts'' ts''',
+      move_step g sp ts sp' ts''
+      -> closure_multistep g sp' sp''
+      -> move_closure_multistep g sp'' ts'' sp''' ts'''
+      -> move_closure_multistep g sp ts sp''' ts'''.
+
+Lemma spClosure_multistep_rel :
+  forall g pair (a : Acc lex_nat_pair pair) sp a' sp' sps',
+    pair = meas g sp
+    -> lstack_wf g sp.(stack)
+    -> spClosure g sp a' = inr sps'
+    -> In sp' sps'
+    -> closure_multistep g sp sp'.
 Proof.
-  intros g wpre wmidsuf.
-  induction wmidsuf as [| t wmidsuf' IH]; intros sps rhs orig_proc_syms hg hl hall.
-  - apply handleFinalSubparsers_facts in hl.
-    destruct hl as [sp [o [pre [hin [heq heq']]]]]; subst.
-    exists sp.
-    exists []; exists [].
-    exists []; exists [].
-    simpl.
-    repeat split; auto.
-    + rewrite heq'; auto.
-    + constructor.
-    + symmetry in H.
-      apply app_eq_nil in H; firstorder.
-    + symmetry in H0.
-      apply app_eq_nil in H0; firstorder.
-  - unfold llPredict' in hl.
-    destruct sps as [| sp sps']; tc.
-    destruct (allPredictionsEqual sp sps') eqn:hape.
-    + clear IH. 
-      inv hl.
-      exists sp.
-      assert (hin : In sp (sp :: sps')).
-      { apply in_eq. }
-      pose proof hin as hin'.
-      apply hall in hin'.
-      destruct hin' as [new_proc_syms [wmid [wsuf [happ [hp hg']]]]].
-      exists new_proc_syms.
-      eexists.
-      exists wmid; exists wsuf.
-      split; auto.
-      split; auto.
-      split; auto.
-      * admit.
-      * split; auto.
-        split; auto.
-        -- admit.
-        -- 
+  intros g pair a.
+  induction a as [pair hlt IH].
+  intros sp a' sp' sps' heq hw hs hi; subst.
+  apply spClosure_success_cases in hs.
+  destruct hs as [[hd heq] | [sps'' [hs [crs [heq heq']]]]]; subst.
+  - apply in_singleton_eq in hi; subst; auto.
+    unfold spClosureStep in hd; dms; tc.
+    constructor.
+    constructor.
+  - eapply aggrClosureResults_succ_in_input in heq'; eauto.
+    destruct heq' as [sps [hi' hi'']].
+    eapply dmap_in in hi'; eauto.
+    destruct hi' as [sp'' [hi''' [_ heq]]].
+    eapply IH in heq; subst; eauto.
+    + eapply CMS_trans; eauto.
+      unfold spClosureStep in hs; dmeqs h; tc; inv hs.
+      * apply in_singleton_eq in hi'''; subst.
+        inv hw.
+        constructor.
+      * apply in_map_iff in hi'''.
+        destruct hi''' as [rhs [heq' hin''']]; subst.
+        simpl in hw.
+        econstructor; eauto.
+        -- eapply NtSet.mem_spec; auto.
+        -- eapply rhssForNt_in_grammar_iff; eauto.
+      * inv hi'''.
+    + eapply spClosureStep_meas_lt; eauto.
+    + eapply spClosureStep_preserves_lstack_wf_invar; eauto.
+Qed.
+
+Lemma closure_func_rel :
+  forall g sps sps' sp',
+    closure g sps = inr sps'
+    -> In sp' sps'
+    -> exists sp,
+        In sp sps
+        /\ closure_multistep g sp sp'.
+Proof.
+  intros g sps sps' sp' hc hi.
+  eapply aggrClosureResults_succ_in_input in hc; eauto.
+  destruct hc as [sps'' [hin hin']].
+  apply in_map_iff in hin.
+  destruct hin as [sp [heq hin]].
+  exists sp; split; auto.
+  eapply spClosure_multistep_rel; eauto.
 Abort.
 
-
-(*
-Lemma llPredict'_succ_viable_prefix :
-  forall g wrem wfull sps rhs,
-    llPredict' g wrem sps = PredSucc rhs
-    -> (forall sp, In sp sps -> stack_processed_syms_recognize_prefix g sp.(stack) wrem wfull)
-    -> exists sp gpre gsuf wpre wsuf,
-      In sp sps
-      /\ sp.(prediction) = rhs
-      /\ stack_unprocessed_symbols sp.(stack) (gpre ++ gsuf)
-      /\ wrem = wpre ++ wsuf
-      /\ gamma_recognize g gpre wpre
-      /\ forall (gpre' gsuf' : list symbol) (wpre' wsuf' : list token),
-          gpre ++ gsuf = gpre' ++ gsuf' 
-          -> wpre ++ wsuf = wpre' ++ wsuf' 
-          -> gamma_recognize g gpre' wpre' 
-          -> gpre = gpre' /\ wpre = wpre'.
+Lemma start_state_init_all_rhss :
+  forall g fr o pre x suf frs rhs,
+    In (x, rhs) g
+    -> fr = Loc o pre (NT x :: suf)
+    -> In (Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs))
+          (map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs))
+               (rhssForNt g x)).
 Proof.
-  intros g wrem wfull.
-  induction wrem as [| t wrem' IH]; intros sps rhs hl hall.
-  - apply handleFinalSubparsers_facts in hl.
-    destruct hl as [sp [o [pre [hin [heq heq']]]]]; subst.
-    exists sp.
-    exists []; exists [].
-    exists []; exists [].
-    simpl.
-    repeat split; auto.
-    + apply hall in hin.
-      rewrite heq' in hin.
-      inv hin.
-      inv H.
-      inv H6.
-      rewrite heq'.
-      rew_nil_r ([] : list symbol).
-      constructor; auto.
-      constructor.
-    + constructor.
-    + symmetry in H.
-      apply app_eq_nil in H; firstorder.
-    + symmetry in H0.
-      apply app_eq_nil in H0; firstorder.
-  - unfold llPredict' in hl.
-    destruct sps as [| sp sps']; tc.
-    destruct (allPredictionsEqual sp sps') eqn:hape.
-    + inv hl.
-      exists sp.
-      
+  intros g fr o pre x suf frs rhs hi heq; subst.
+  apply in_map_iff.
+  exists rhs; split; auto.
+  apply rhssForNt_in_grammar_iff; auto.
+Qed.
 
-exists (gpre gsuf : list symbol) (wpre wsuf : list token),
-      gpre ++ gsuf = rhs ++ suf ++ flat_map rsuf frs /\
-      w = wpre ++ wsuf /\
-      gamma_recognize g gpre wpre /\
-      (forall (gpre' gsuf' : list symbol) (wpre' wsuf' : list token),
-          gpre ++ gsuf = gpre' ++ gsuf' ->
-          wpre ++ wsuf = wpre' ++ wsuf' ->
-          gamma_recognize g gpre' wpre' -> gpre = gpre' /\ wpre = wpre').
-        forall g fr o pre x suf frs w rhs,
-          fr = Loc o pre (NT x :: suf)
-          (* maybe something about a prefix/suffix here *)
-          -> llPredict g x (fr, frs) w = PredSucc rhs
-          -> exists gpre gsuf wpre wsuf,
-              gpre ++ gsuf = rhs ++ suf ++ flat_map rsuf frs
-        /\ w = wpre ++ wsuf
-        /\ gamma_recognize g gpre wpre
-        /\ forall gpre' gsuf' wpre' wsuf',
-            gpre ++ gsuf = gpre' ++ gsuf'
-            -> wpre ++ wsuf = wpre' ++ wsuf'
-            -> gamma_recognize g gpre' wpre'
-            -> gpre = gpre' /\ wpre = wpre'.
-Proof.
-Abort.
-
-
-Lemma llPredict_succ_viable_prefix :
-  forall g fr o pre x suf frs wrem wfull rhs,
+Lemma startState_multistep :
+  forall g fr o pre x suf frs sp sps av pred,
     fr = Loc o pre (NT x :: suf)
-    -> processed_syms_recognize_prefix g (fr, frs) wrem wfull
-    -> llPredict g x (fr, frs) wrem = PredSucc rhs
-    -> exists gpre gsuf wpre wsuf,
-        gpre ++ gsuf = rhs ++ suf ++ flat_map rsuf frs
-        /\ wrem = wpre ++ wsuf
-        /\ gamma_recognize g gpre wpre
-        /\ forall gpre' gsuf' wpre' wsuf',
-            gpre ++ gsuf = gpre' ++ gsuf'
-            -> wpre ++ wsuf = wpre' ++ wsuf'
-            -> gamma_recognize g gpre' wpre'
-            -> gpre = gpre' /\ wpre = wpre'.
+    -> startState g x (fr, frs) = inr sps
+    -> In sp sps
+    -> closure_multistep g (Sp av pred (fr, frs)) sp.
 Proof.
-  intros g fr o pre x suf frs wrem wfull rhs heq hp hl; subst.
-  unfold llPredict in hl.
-  destruct (startState g x _) as [| sps] eqn:hss; tc.
-  unfold llPredict' in hl.
+  intros g fr o pre x suf frs sp sps av pred heq hs hi; subst.
+  unfold startState in hs.
+Abort.  
+  
+
+Lemma start_state_init_invar :
+  forall g x rhs fr o pre suf frs wpre wsuf,
+    In (x, rhs) g
+    -> fr = Loc o pre (NT x :: suf)
+    -> gamma_recognize g rhs wpre
+    -> gamma_recognize g (suf ++ unprocTailSyms frs) wsuf
+    -> exists sp,
+        In sp (map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs))
+                   (rhssForNt g x))
+        /\ gamma_recognize g (unprocStackSyms sp.(stack)) (wpre ++ wsuf).
+Proof.
+  intros g x rhs fr o pre suf frs wpre wsuf hin heq hg hg'.
+  exists (Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs)); subst; sis.
+  split.
+  - apply in_map_iff.
+    exists rhs; split; auto.
+    admit.
+  - admit.
 Admitted.
 
-Lemma llPredict_succ_gamma_recognize :
-  forall g fr o pre x suf frs rhs rhs' wpre wmid wsuf,
+Lemma startState_invar :
+  forall g x fr o pre suf frs sp sps,
+    fr = Loc o pre (NT x :: suf)
+    -> startState g x (fr, frs) = inr sps
+    -> In sp sps
+    -> False.
+Proof.
+  intros g x fr o pre suf frs sp sps heq hs hi; subst.
+  unfold startState in hs.
+  eapply aggrClosureResults_succ_in_input in hs; eauto.
+  destruct hs as [orig_sps [hin hin']].
+  apply in_map_iff in hin.
+  destruct hin as [sp' [heq hin]].
+  apply in_map_iff in hin.
+  destruct hin as [rhs [heq' hin]]; subst.
+Abort.
+
+Lemma llPredict_succ_rhs_derives_at_most_one_prefix :
+  forall g fr o pre x suf frs w rhs rhs',
     fr = Loc o pre (NT x :: suf)
     -> In (x, rhs) g
-    -> gamma_recognize g rhs wpre
-    -> gamma_recognize g suf wmid
-    -> tail_frames_recognize g frs wsuf
-    -> llPredict g x (fr, frs) (wpre ++ wmid ++ wsuf) = PredSucc rhs'
+    -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w
+    -> llPredict g x (fr, frs) w = PredSucc rhs'
     -> rhs' = rhs.
 Proof.
-  intros g fr o pre x suf frs rhs rhs' wpre wmid wsuf
-         heq hin hg hg' ht hl; subst.
+  intros g fr o pre x suf frs w rhs rhs' heq hin hg hl; subst.
   unfold llPredict in hl.
-  destruct (startState g x _) as [| sps] eqn:hss; tc.
-  unfold llPredict' in hl.
-Abort.  
-
-Lemma llPredict_succ_gamma_recognize :
-  forall g fr frs o pre x suf w rhs,
-    fr = Loc o pre (NT x :: suf)
-    -> stack_recognize g (fr, frs) w
-    -> llPredict g x (fr, frs) w = PredSucc rhs
-    -> True.
-Proof. 
-Abort.  
-
-*)
+  destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
+  unfold startState in hs.
+  eapply aggrClosureResults_succ_in_input in hs; eauto.
+Abort.

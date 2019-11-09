@@ -85,9 +85,9 @@ Proof.
   clear hss.
   inv hw; sis; subst.
   - constructor; auto.
-    apply rhssForNt_in_grammar; auto. 
+    apply rhssForNt_in_grammar_iff; auto. 
   - constructor; auto.
-    apply rhssForNt_in_grammar; auto.
+    apply rhssForNt_in_grammar_iff; auto.
 Qed.
 
 Lemma handleFinalSubparsers_never_returns_error :
@@ -277,7 +277,7 @@ Proof.
   intros sp hi.
   apply in_map_iff in hi.
   destruct hi as [rhs [heq' hi]]; subst; sis.
-  apply rhssForNt_in_grammar in hi.
+  apply rhssForNt_in_grammar_iff in hi.
   inv hw; sis; subst; auto.
 Qed.
 
@@ -432,9 +432,9 @@ Proof.
     clear hs.
     inv hw; sis; subst.
     + constructor; auto.
-      apply rhssForNt_in_grammar; auto.
+      apply rhssForNt_in_grammar_iff; auto.
     + constructor; auto.
-      apply rhssForNt_in_grammar; auto.
+      apply rhssForNt_in_grammar_iff; auto.
   - unfold sps_unavailable_nts_invar.
     intros sp hi.
     apply in_map_iff in hi.

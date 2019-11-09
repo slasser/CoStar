@@ -311,15 +311,22 @@ Proof.
   intros g x; split; intros hi; apply in_list_iff_in_fromNtList; auto.
 Qed.
 
-Lemma rhssForNt_in_grammar :
+Lemma rhssForNt_in_grammar_iff :
   forall g x ys,
     In ys (rhssForNt g x)
-    -> In (x, ys) g.
+    <-> In (x, ys) g.
 Proof.
-  intros g x ys hin.
-  induction g as [| (x', ys') g]; sis; tc.
-  destruct (nt_eq_dec x' x); subst; auto.
-  inv hin; auto.
+  intros g x ys; split; intros hi.
+  - induction g as [| (x', ys') g]; sis; tc.
+    destruct (nt_eq_dec x' x); subst; auto.
+    inv hi; auto.
+  - induction g as [| (x', ys') g]; sis; tc.
+    destruct hi as [heq | hi].
+    + inv heq.
+      destruct (nt_eq_dec x x); tc.
+      apply in_eq.
+    + destruct (nt_eq_dec x' x); subst; auto.
+      apply in_cons; auto.
 Qed.
 
 Lemma rhs_in_grammar_length_in_rhsLengths :

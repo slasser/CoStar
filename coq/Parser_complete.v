@@ -2,7 +2,8 @@ Require Import List String.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import Prediction.
-Require Import GallStar.Parser.
+(*Require Import GallStar.Parser.*)
+Require Import GallStar.Prediction_error_free.
 Require Import GallStar.Parser_error_free.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
@@ -146,8 +147,85 @@ Proof.
     split; auto.
     intros upre' usuf' wpre' wsuf' ho heq''' hg.
     rewrite app_nil_r in *; subst.
-    
-    
+Abort.
+
+Definition gamma_recog_subset g ys ys' :=
+  forall w, gamma_recognize g ys w -> gamma_recognize g ys' w.
+
+Lemma start_state_init_invar :
+  forall g fr o pre x suf frs w sp,
+    fr = Loc o pre (NT x :: suf)
+    -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
+    -> exists sp,
+        In sp (map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs))
+                   (rhssForNt g x))
+        /\ gamma_recognize g (unprocStackSyms sp.(stack)) w.
+
+                     
+In sp'
+          (map
+             (fun rhs : list symbol =>
+              {|
+              Prediction.avail := allNts g;
+              prediction := rhs;
+              Prediction.stack := ({|
+                                   lopt := Some x;
+                                   rpre := [];
+                                   rsuf := rhs |},
+                                  {|
+                                  lopt := o;
+                                  rpre := pre;
+                                  rsuf := NT x :: suf |}
+                                  :: frs) |}) 
+             (rhssForNt g x))
+
+
+Lemma startState_invar :
+  forall g x fr o pre suf frs sp sps,
+    fr = Loc o pre (NT x :: suf)
+    -> startState g x (fr, frs) = inr sps
+    -> In sp sps
+    -> False.
+Proof.
+  intros g x fr o pre suf frs sp sps heq hs hi; subst.
+  unfold startState in hs.
+  eapply aggrClosureResults_succ_in_input in hs; eauto.
+  destruct hs as [orig_sps [hin hin']].
+  apply in_map_iff in hin.
+  destruct hin as [sp' [heq hin]].
+  apply in_map_iff in hin.
+  destruct hin as [rhs [heq' hin]]; subst.
+
+Lemma llPredict_succ_thing :
+  forall g fr o pre x suf frs w rhs,
+    fr = Loc o pre (NT x :: suf)
+    -> llPredict g x (fr, frs) w = PredSucc rhs
+    -> exists wpre,
+      forall rhs' wpre' wsuf',
+        In (x, rhs') g
+        -> w = wpre' ++ wsuf'
+        -> gamma_recognize g rhs' wpre'
+        -> gamma_recognize g (suf ++ unprocTailSyms frs) wsuf'
+        -> wpre' = wpre /\ rhs' = rhs.
+Proof.
+  intros g fr o pre x suf frs w rhs heq hl; subst.
+  unfold llPredict in hl.
+
+    exists upre usuf wpre wsuf,
+        upre ++ usuf = rhs ++ suf ++ unprocTailSyms frs
+        /\ wpre ++ wsuf = w
+        /\ gamma_recognize g upre wpre
+        /\ forall upre' usuf' wpre' wsuf',
+            upre ++ usuf = upre' ++ usuf'
+            -> wpre ++ wsuf = wpre' ++ wsuf'
+            -> gamma_recognize g upre' wpre'
+            -> upre = upre' /\ wpre = wpre'.
+Proof.
+  intros g fr o pre x suf frs w rhs heq hl; subst.
+  unfold llPredict in hl.
+  destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
+  
+Admitted.    
 
 Lemma llPredict_succ_exists_unique_viable_unproc_prefix :
   forall g fr o pre x suf frs w rhs,
@@ -279,7 +357,7 @@ Inductive tail_frames_recognize (g : grammar) : list frame -> list token -> Prop
 
 Hint Constructors tail_frames_recognize.
 
-Inductive stack_recognize (g : grammar) : parser_stack -> list token -> Prop :=
+(*Inductive stack_recognize (g : grammar) : parser_stack -> list token -> Prop :=
 | SR :
     forall o pre suf v w w' frs,
       gamma_recognize g suf w
