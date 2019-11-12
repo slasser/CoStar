@@ -1301,6 +1301,29 @@ Proof.
   eapply move_succ_step; eauto.
 Qed.
 
+Lemma aggrClosureResults_in_input_in_output :
+  forall g sp sp' sps sps' sps'',
+    In sp sps
+    -> spClosure g sp (lex_nat_pair_wf _) = inr sps'
+    -> In sp' sps'
+    -> aggrClosureResults (map (fun sp => spClosure g sp (lex_nat_pair_wf _)) sps) = inr sps''
+    -> In sp' sps''.
+Proof.
+  intros g sp sp' sps; induction sps as [| hd tl IH]; intros sps' sps'' hi hs hi' ha.
+  - inv hi.
+  - inv hi.
+    + clear IH.
+      sis.
+      dms; tc.
+      inv hs; inv ha.
+      apply in_or_app; auto.
+    + sis. 
+      dm; tc.
+      dmeq hagg; tc.
+      inv ha.
+      apply in_or_app; eauto.
+Qed.    
+
 Lemma closure_func_refines_rel :
   forall g sp sp' sps sps',
     In sp sps
@@ -1308,6 +1331,9 @@ Lemma closure_func_refines_rel :
     -> closure g sps = inr sps'
     -> In sp' sps'.
 Proof.
+  intros g sp sp' sps sps' hi hc hc'.
+  unfold closure in hc'.
+  eapply aggrClosureResults_in_input_in_output in hc'; eauto.
 Admitted.
 
 (* REFACTOR! *)
