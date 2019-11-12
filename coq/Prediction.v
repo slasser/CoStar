@@ -1,4 +1,4 @@
-Require Import Arith List Omega PeanoNat Program.Wf String.
+Require Import Arith Bool List Omega PeanoNat Program.Wf String.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Tactics.
@@ -1189,11 +1189,63 @@ Proof.
   apply closure_multistep_preserves_label in hc; tc.
 Qed.
 
-Lemma allPredictionEqual_in :
+Lemma allPredictionsEqual_inv_cons :
+  forall sp' sp sps,
+    allPredictionsEqual sp' (sp :: sps) = true
+    -> sp'.(prediction) = sp.(prediction)
+       /\ allPredictionsEqual sp' sps = true.
+Proof.
+  intros sp' sp sps ha.
+  unfold allPredictionsEqual in ha; unfold allEqual in ha; sis.
+  apply andb_true_iff in ha; destruct ha as [hhd htl]; split; auto.
+  unfold beqGamma in *; dms; tc.
+Qed.
+
+Lemma allPredictionEqual_in_tl :
   forall sp sp' sps,
+    allPredictionsEqual sp sps = true
+    -> In sp' sps
+    -> sp'.(prediction) = sp.(prediction).
+Proof.
+  intros sp sp' sps ha hi; induction sps as [| sp'' sps IH]; inv hi;
+  apply allPredictionsEqual_inv_cons in ha; destruct ha as [hhd htl]; auto.
+Qed.
+      
+Lemma allPredictionEqual_in :
+  forall sp' sp sps,
     allPredictionsEqual sp sps = true
     -> In sp' (sp :: sps)
     -> sp'.(prediction) = sp.(prediction).
+Proof.
+  intros sp' sp sps ha hi; inv hi; auto.
+  eapply allPredictionEqual_in_tl; eauto.
+Qed.
+
+Lemma move_func_refines_rel :
+  forall g t ts sp sp' sps sps',
+    In sp sps
+    -> move_step g sp (t :: ts) sp' ts
+    -> move g t sps = inr sps'
+    -> In sp' sps'.
+Proof.
+  intros g t ts sp sp' sps sps' hi hr hf.
+  unfold move in hf.
+  inv hr.
+Admitted.
+
+Lemma move_closure_code_refines_relation :
+  forall g sps sps' sps_after_move sps_after_move_closure wpre wsuf t,
+    (forall sp sp', In sp sps -> move_closure_multistep g sp (wpre ++ t :: wsuf) sp' (t :: wsuf) -> In sp' sps')
+    -> move g t sps' = inr sps_after_move
+    -> closure g sps_after_move = inr sps_after_move_closure
+    -> forall sp sp' w w',
+        In sp sps
+        -> move_closure_multistep g sp w sp' w'
+        -> w = wpre ++ t :: wsuf
+        -> w' = wsuf
+        -> In sp' sps_after_move_closure.
+Proof.
+  intros g sps sps' sps_after_move sps_after_move_closure wpre wsuf t hinv hm hc sp sp' w w' hin hrel. intros; subst.
 Admitted.
 
 Lemma llPredict'_succ_labels_eq :
@@ -1252,7 +1304,12 @@ Proof.
       * destruct hl as [wpre' [wsuf'' [heq hall]]].
         exists wpre'; exists wsuf''; split; auto.
         rewrite <- heq; apps.
-      * admit.
+      * intros orig_sp curr_sp hin hmc.
+        assert (exists sp', move_closure_multistep g orig_sp (wpre ++ t :: wsuf') sp' (t :: wsuf')) by admit.
+        destruct H as [sp'' hmc''].
+        apply hi in hmc''; auto.
+        assert (move_closure_multistep g sp'' (t :: wsuf') curr_sp wsuf') by admit.
+        admit.
 Admitted.
 
 Lemma llPredict_succ_rhs_derives_at_most_one_prefix :
