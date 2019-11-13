@@ -1324,6 +1324,112 @@ Proof.
       apply in_or_app; eauto.
 Qed.    
 
+Lemma spClosure_proof_irrel :
+  forall g (pr : nat * nat) (a : Acc lex_nat_pair pr) pr' (a' : Acc lex_nat_pair pr') sp sps sps' (a : Acc lex_nat_pair (meas g sp)) (a' : Acc lex_nat_pair (meas g sp)),
+    pr = meas g sp
+    -> pr' = meas g sp
+    -> spClosure g sp a = inr sps
+    -> spClosure g sp a' = inr sps'
+    -> sps = sps'.
+Proof.
+  intros g pr a.
+  induction a as [pr hlt IH]; intros pr' ha' sp sps sps' a'' a''' ? ? hs hs'; subst.
+  rename a'' into a; rename a''' into a'.
+  apply spClosure_success_cases in hs.
+  apply spClosure_success_cases in hs'.
+  destruct hs; destruct hs'; tc.
+  - admit.
+  - firstorder. tc.
+  - firstorder. tc.
+  - firstorder.
+    subst.
+    induction x; induction x2.
+    + sis.
+      inv H1. inv H2. auto.
+    + sis.
+      dm; tc.
+    + sis.
+      dm; tc.
+    + sis.
+      dmeqs h; tc.
+      inv H1. inv H2.
+Admitted.
+
+(*
+Lemma aggrClosureResults_dmap :
+  forall g sps' sps'' sps''' sp sp' sp'' (hs : spClosureStep g sp = SpClosureStepK sps'),
+    In sp' sps'
+    -> spClosure g sp' (lex_nat_pair_wf _) = inr sps''
+    -> In sp'' sps''
+    -> aggrClosureResults (dmap sps' (fun sp' (hi : In sp' sps') =>
+                                        spClosure g sp' (acc_after_step g sp sp' hs hi (lex_nat_pair_wf (meas g sp))))) = inr sps'''
+    -> In sp'' sps'''.
+Proof.
+  intros g sps'.
+  induction sps' as [| hd tl IH]; intros sps'' sps''' sp sp' sp'' hs hi hs' hi' ha.
+  - inv hi.
+  - inv hi.
+    + clear IH.
+      sis.
+      dmeq hspc; tc.
+      pose proof spClosure_proof_irrel as hirr.
+      eapply hirr in hs'; eauto.
+      subst.
+      dmeq hagg; tc.
+      inv ha.
+      apply in_or_app. left. auto.
+      rewrite hspc in hs'.
+    -> spClosure g sp (lex_nat_pair_wf _) = inr sps'
+    -> In sp' sps'
+    -> aggrClosureResults (dmap sps' (fun sp hi => spClosure g sp (acc_after_step g sp sp')) = inr sps''
+    -> In sp' sps''.
+
+
+
+hs : spClosureStep g sp = SpClosureStepK sps''
+  ha : aggrClosureResults
+         (dmap sps''
+            (fun (sp' : subparser) (hi : In sp' sps'') =>
+             spClosure g sp'
+               (acc_after_step g sp sp' hs hi (lex_nat_pair_wf (meas g sp))))) =
+       inr sps'
+  ============================
+  In sp' sps'
+
+
+aggrClosureResults
+         (dmap sps''
+            (fun (sp' : subparser) (hi : In sp' sps'') =>
+             spClosure g sp'
+               (acc_after_step g sp sp' hs hi (lex_nat_pair_wf (meas g sp))))) =
+       inr sps'
+  ============================
+  In sp' sps'
+*)
+
+Lemma spClosure_func_refines_rel :
+  forall (g  : grammar)
+         (pr : nat * nat)
+         (a  : Acc lex_nat_pair pr)
+         (sp sp'' : subparser)
+         (sps'' : list subparser),
+    pr = meas g sp
+    -> closure_multistep g sp sp''
+    -> spClosure g sp (lex_nat_pair_wf _) = inr sps''
+    -> In sp'' sps''.
+Proof.
+  intros g pr a.
+  induction a as [pr hlt IH]; intros sp sp'' sps'' heq hc hs; subst.
+  unfold spClosure in hs.
+  apply spClosure_success_cases in hs.
+  destruct hs as [[hdone heq] | [sps''' [hs [crs [heq ha]]]]]; subst.
+  - (* sp must be in a "done" configuration, so sp = sp' *)
+    admit.
+  - (* sp is in a non-final configuration, so we know something about what's in sps'' *)
+    (* also, we know that sp must step to some intermediate subparser sp',
+       and sp' multisteps to sp'' *)
+Admitted.
+
 Lemma closure_func_refines_rel :
   forall g sp sp' sps sps',
     In sp sps
@@ -1333,7 +1439,7 @@ Lemma closure_func_refines_rel :
 Proof.
   intros g sp sp' sps sps' hi hc hc'.
   unfold closure in hc'.
-  eapply aggrClosureResults_in_input_in_output in hc'; eauto.
+  eapply aggrClosureResults_in_input_in_output; eauto.
 Admitted.
 
 (* REFACTOR! *)
