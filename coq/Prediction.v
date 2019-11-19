@@ -1881,6 +1881,126 @@ Proof.
         apps.
 Qed.
 
+Lemma subparser_complete_starts_true :
+  forall g sp sp' sps w,
+    In sp sps
+    -> move_closure_multistep g sp w sp' w
+    -> In sp' sps.
+Proof.
+  intros g sp sp' sps w hi hm.
+  apply mcms_words_eq_subparser_eq in hm; subst; auto.
+Qed.
+
+Inductive stable_config : location_stack -> Prop :=
+| SC_empty :
+    forall o pre,
+    stable_config (Loc o pre [], [])
+| SC_terminal :
+    forall o pre a suf frs,
+      stable_config (Loc o pre (T a :: suf), frs).
+
+Lemma stable_config_recognize_nil_mcms :
+  forall g sp,
+    stable_config sp.(stack)
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) []
+    -> move_closure_multistep g sp [] sp [].
+Proof.
+  intros g sp hs hg.
+  destruct sp as [av pred stk].
+  inv hs.
+  - simpl in H.  subst. constructor.
+  - simpl in H. subst.
+    simpl in hg.
+    inv hg.
+    inv H2.
+    simpl in H1.
+    inv H1.
+Qed.
+
+Lemma exists_closure_multistep_target :
+  forall (w  : list token)
+         (pr : nat * nat)
+         (a  : Acc lex_nat_pair pr)
+         (g  : grammar)
+         (sp : subparser)
+         (a' : Acc lex_nat_pair (meas g sp)),
+    pr = meas g sp
+    -> lstack_wf g sp.(stack)
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) w
+    -> exists sp',
+      closure_multistep g sp sp'.
+Proof.
+  intros w pr a.
+  induction a as [m hlt IH]; intros g sp a' heq hw hg; subst.
+  destruct sp as [av pred ([o pre suf], frs)].
+  destruct suf as [| [a | x] suf].
+  - destruct frs as [| fr' frs].
+    + eexists; econstructor.
+    + inv hw. simpl in hg.
+      specialize IH with (sp := Sp (NtSet.add x av) pred (Loc xo (pre0 ++ [NT x]) suf, frs)).
+      edestruct IH as [sp' hcm]; eauto.
+      * eapply spClosureStep_meas_lt; eauto.
+        -- unfold spClosureStep; dms; tc; eauto.
+        -- apply in_eq.
+      * apply lex_nat_pair_wf.
+      * simpl.
+        inv H5.
+        -- constructor.
+        -- constructor; auto.
+           apps.
+      * eexists; eapply CMS_trans; eauto.
+  - eexists; eapply CMS_terminal.
+  - simpl in hg. 
+    inv hg.
+    inv H1.
+    specialize IH with (sp := Sp (NtSet.remove x av) pred (Loc (Some x) [] ys, (Loc o pre (NT x :: suf) :: frs))).
+    edestruct IH as [sp' hcm]; eauto.
+    + eapply spClosureStep_meas_lt; eauto.
+      * unfold spClosureStep; dmeqs h; tc.
+        -- 
+Abort.
+
+Lemma stable_config_recognize_cons_move_closure :
+  forall g sp t w',
+    stable_config sp.(stack)
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
+    -> exists sp',
+        move_step g sp (t :: w') sp' w'
+        /\ exists sp'',
+          closure_multistep g sp' sp''.
+Proof.
+  intros g sp t w' hs hg.
+  destruct sp as [av pred stk].
+  inv hs.
+  - simpl in H; subst. inv hg. 
+  - simpl in H; subst. inv hg.
+    inv H2. simpl in H1. inv H1.
+    eexists; split.
+    + econstructor.
+    + 
+Admitted.
+
+Lemma unproc_syms_recognize_move_closure_multistep :
+  forall g w sp,
+    stable_config sp.(stack)
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) w
+    -> exists sp'', 
+      move_closure_multistep g sp w sp'' [].
+Proof.
+  intros g w; induction w as [| t w' IH]; intros sp hs hg.
+  - apply stable_config_recognize_nil_mcms in hg; eauto.
+  - apply stable_config_recognize_cons_move_closure in hg; auto.
+    destruct hg as [sp' [hm [sp'' hc]]].
+    (* I'll need to prove that move and closure preserve these two invariants *)
+    assert (hs' : stable_config sp''.(stack)) by admit.
+    assert (hg : gamma_recognize g (unprocStackSyms sp''.(stack)) w') by admit.
+    apply IH in hs'; auto.
+    destruct hs' as [sp''' hmcms].
+    exists sp'''.
+    econstructor; eauto.
+Admitted.
+
+
 Lemma llPredict_succ_rhs_derives_at_most_one_prefix :
   forall g fr o pre x suf frs w rhs rhs',
     fr = Loc o pre (NT x :: suf)
@@ -1893,4 +2013,6 @@ Proof.
   unfold llPredict in hl.
   destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
   eapply llPredict'_succ_labels_eq with (wpre := []) (orig_sps := sps) in hl; eauto.
+  - destruct hl as [wpre [wsuf [heq hall]]]; sis.
+  - intros; eapply subparser_complete_starts_true; eauto.
 Abort.
