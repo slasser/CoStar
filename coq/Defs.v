@@ -138,6 +138,20 @@ with gamma_recognize (g : grammar) : list symbol -> list token -> Prop :=
            -> gamma_recognize g ss wsuf
            -> gamma_recognize g (s :: ss) (wpre ++ wsuf).
 
+Inductive gamma_recognize' (g : grammar) : list symbol -> list token -> Prop :=
+| Nil_gr :
+    gamma_recognize' g [] []
+| T_gr   : 
+    forall ys wsuf a l,
+      gamma_recognize' g ys wsuf
+      -> gamma_recognize' g (T a :: ys) ((a, l) :: wsuf)
+| NT_gr  : 
+    forall x ys ys' wpre wsuf,
+      In (x, ys) g
+      -> gamma_recognize' g ys  wpre
+      -> gamma_recognize' g ys' wsuf
+      -> gamma_recognize' g (NT x :: ys') (wpre ++ wsuf).
+
 (* Inductive definition of a nullable grammar symbol *)
 Inductive nullable_sym (g : grammar) : symbol -> Prop :=
 | NullableSym : forall x ys,
@@ -264,8 +278,19 @@ Lemma gamma_derivation_app :
 Proof.
   intros g ys1 w1 v1 hg.
   induction hg; intros ys2 w2 v2 hg2; simpl in *; auto.
-  rewrite <- app_assoc.
-  constructor; auto.
+  rewrite <- app_assoc; constructor; auto.
+Qed.
+
+Lemma gamma_recognize_app :
+  forall g ys1 w1,
+    gamma_recognize g ys1 w1
+    -> forall ys2 w2,
+      gamma_recognize g ys2 w2
+      -> gamma_recognize g (ys1 ++ ys2) (w1 ++ w2).
+Proof.
+  intros g ys1 w1 hg.
+  induction hg; intros ys2 w2 hg2; simpl in *; auto.
+  rewrite <- app_assoc; constructor; auto.
 Qed.
 
 Lemma forest_app_singleton_node : 
