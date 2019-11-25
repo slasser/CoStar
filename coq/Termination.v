@@ -39,7 +39,9 @@ Definition stackHeight {A} (stk : A * list A) : nat :=
 (* Termination-related lemmas *)
   
 Lemma nonzero_exponents_lt_powers_le :
-  forall b e1 e2, 0 < e1 < e2 -> b ^ e1 <= b ^ e2.
+  forall b e1 e2,
+    0 < e1 < e2
+    -> b ^ e1 <= b ^ e2.
 Proof.
   intros b e1 e2 [Hlt Hlt']. 
   destruct b as [| b']. 
@@ -167,7 +169,9 @@ Proof.
 Qed.
 
 Lemma base_gt_zero_power_gt_zero :
-  forall b e, 0 < b -> 0 < b ^ e.
+  forall b e,
+    0 < b
+    -> 0 < b ^ e.
 Proof.
   intros b e Hlt; induction e as [| e IH]; simpl in *; auto.
   destruct b as [| b]; try omega.

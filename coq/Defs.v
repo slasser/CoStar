@@ -371,7 +371,6 @@ Definition no_left_recursion g :=
     ~ left_recursive g (NT x).
 
 
-
 (* May not be necessary *)
 Inductive gamma_recognize' (g : grammar) : list symbol -> list token -> Prop :=
 | Nil_gr :
@@ -387,13 +386,3 @@ Inductive gamma_recognize' (g : grammar) : list symbol -> list token -> Prop :=
       -> gamma_recognize' g ys' wsuf
       -> gamma_recognize' g (NT x :: ys') (wpre ++ wsuf).
 
-(* May not be necessary *)
-Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
-| NullableNil'  : 
-    nullable_gamma' g []
-| NullableCons' : 
-    forall x ys tl,
-      In (x, ys) g
-      -> nullable_gamma' g ys
-      -> nullable_gamma' g tl
-      -> nullable_gamma' g (NT x :: tl).

@@ -37,6 +37,13 @@ Section PairLT.
     
 End PairLT.
 
+Definition lex_nat_pair := pair_lex nat nat lt lt.
+
+Lemma lex_nat_pair_wf : well_founded lex_nat_pair.
+Proof.
+  apply pair_lex_wf; apply lt_wf.
+Defined.
+
 Section TripleLT.
     
     Variables (A B C : Type) 
@@ -84,13 +91,6 @@ Section TripleLT.
     Defined.
     
 End TripleLT.
-
-Definition lex_nat_pair := pair_lex nat nat lt lt.
-
-Lemma lex_nat_pair_wf : well_founded lex_nat_pair.
-Proof.
-  apply pair_lex_wf; apply lt_wf.
-Defined.
 
 Definition lex_nat_triple := triple_lex nat nat nat lt lt lt.
 
