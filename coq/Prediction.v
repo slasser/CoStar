@@ -641,7 +641,7 @@ Lemma llPredict_succ_in_grammar :
     -> In (x, ys) g.
 Proof.
   intros g x stk ts ys hp.
-  apply rhssForNt_in_grammar_iff.
+  apply rhssForNt_in_iff.
   eapply llPredict_succ_in_rhssForNt; eauto.
 Qed.
 
@@ -651,7 +651,7 @@ Lemma llPredict_ambig_in_grammar :
     -> In (x, ys) g.
 Proof.
   intros g x stk ts ys hp.
-  apply rhssForNt_in_grammar_iff.
+  apply rhssForNt_in_iff.
   eapply llPredict_ambig_in_rhssForNt; eauto.
 Qed.
 
@@ -746,7 +746,7 @@ Lemma push_preserves_locations_wf_invar :
     -> locations_wf g (Loc (Some x) [] rhs :: Loc o pre (NT x :: suf) :: locs).
 Proof.
   intros; constructor; auto.
-  apply rhssForNt_in_grammar_iff; auto.
+  apply rhssForNt_in_iff; auto.
 Qed.
 
 Lemma consume_preserves_locations_wf_invar :

@@ -11,15 +11,18 @@ Definition nonterminal := nat.
 Inductive symbol       := T  : terminal -> symbol 
                         | NT : nonterminal -> symbol.
 
-Lemma t_eq_dec : forall a a' : terminal,
+Lemma t_eq_dec :
+  forall a a' : terminal,
     {a = a'} + {a <> a'}.
 Proof. repeat decide equality. Defined.
 
-Lemma nt_eq_dec : forall x x' : nonterminal,
+Lemma nt_eq_dec :
+  forall x x' : nonterminal,
     {x = x'} + {x <> x'}.
 Proof. decide equality. Defined.
 
-Lemma gamma_eq_dec : forall gamma gamma' : list symbol,
+Lemma gamma_eq_dec :
+  forall gamma gamma' : list symbol,
     {gamma = gamma'} + {gamma <> gamma'}.
 Proof. repeat decide equality. Defined.
 
@@ -54,20 +57,6 @@ Definition rhs (p : production) : list symbol :=
 
 Definition rhss (g : grammar) : list (list symbol) :=
   map rhs g.
-
-Definition rhsLengths (g : grammar) : list nat :=
-  map (fun rhs => List.length rhs) (rhss g).
-
-Lemma rhs_in_grammar_length_in_rhsLengths :
-  forall g rhs,
-    In rhs (rhss g) -> In (List.length rhs) (rhsLengths g).
-Proof.
-  intros g rhs Hin; induction g as [| (x, rhs') ps IH];
-  simpl in *; inv Hin; auto.
-Qed.
-
-Definition maxRhsLength (g : grammar) : nat :=
-  listMax (rhsLengths g).
 
 Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
   match ps with
@@ -107,6 +96,21 @@ Proof.
     destruct Hin as [Heq | Hin]; subst; auto.
 Qed.
 
+Definition rhsLengths (g : grammar) : list nat :=
+  map (fun rhs => List.length rhs) (rhss g).
+
+Lemma rhss_rhsLengths_in :
+  forall g rhs,
+    In rhs (rhss g)
+    -> In (List.length rhs) (rhsLengths g).
+Proof.
+  intros g rhs Hin; induction g as [| (x, rhs') ps IH];
+  simpl in *; inv Hin; auto.
+Qed.
+
+Definition maxRhsLength (g : grammar) : nat :=
+  listMax (rhsLengths g).
+
 Lemma grammar_rhs_length_le_max :
   forall g x rhs,
     In rhs (rhssForNt g x)
@@ -114,13 +118,14 @@ Lemma grammar_rhs_length_le_max :
 Proof.
   intros; unfold maxRhsLength.
   apply listMax_in_le.
-  apply rhs_in_grammar_length_in_rhsLengths.
+  apply rhss_rhsLengths_in.
   eapply rhssForNt_rhss; eauto.
 Qed.
 
 Lemma grammar_rhs_length_lt_max_plus_1 :
   forall g x rhs,
-    In rhs (rhssForNt g x) -> List.length rhs < 1 + maxRhsLength g.
+    In rhs (rhssForNt g x)
+    -> List.length rhs < 1 + maxRhsLength g.
 Proof.
   intros g x rhs Hin.
   apply grammar_rhs_length_le_max in Hin; omega.
@@ -286,21 +291,6 @@ Proof.
   rewrite <- app_assoc; constructor; auto.
 Qed.
 
-(* May not be necessary *)
-Inductive gamma_recognize' (g : grammar) : list symbol -> list token -> Prop :=
-| Nil_gr :
-    gamma_recognize' g [] []
-| T_gr   : 
-    forall ys wsuf a l,
-      gamma_recognize' g ys wsuf
-      -> gamma_recognize' g (T a :: ys) ((a, l) :: wsuf)
-| NT_gr  : 
-    forall x ys ys' wpre wsuf,
-      In (x, ys) g
-      -> gamma_recognize' g ys  wpre
-      -> gamma_recognize' g ys' wsuf
-      -> gamma_recognize' g (NT x :: ys') (wpre ++ wsuf).
-
 (* Inductive definition of a nullable grammar symbol *)
 Inductive nullable_sym (g : grammar) : symbol -> Prop :=
 | NullableSym : forall x ys,
@@ -343,17 +333,6 @@ Proof.
   induction xs as [| x xs]; sis; inv hng; auto.
 Qed.
 
-(* May not be necessary *)
-Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
-| NullableNil'  : 
-    nullable_gamma' g []
-| NullableCons' : 
-    forall x ys tl,
-      In (x, ys) g
-      -> nullable_gamma' g ys
-      -> nullable_gamma' g tl
-      -> nullable_gamma' g (NT x :: tl).
-
 Inductive nullable_path (g : grammar) :
   symbol -> symbol -> Prop :=
 | DirectPath : forall x z gamma pre suf,
@@ -392,3 +371,29 @@ Definition no_left_recursion g :=
     ~ left_recursive g (NT x).
 
 
+
+(* May not be necessary *)
+Inductive gamma_recognize' (g : grammar) : list symbol -> list token -> Prop :=
+| Nil_gr :
+    gamma_recognize' g [] []
+| T_gr   : 
+    forall ys wsuf a l,
+      gamma_recognize' g ys wsuf
+      -> gamma_recognize' g (T a :: ys) ((a, l) :: wsuf)
+| NT_gr  : 
+    forall x ys ys' wpre wsuf,
+      In (x, ys) g
+      -> gamma_recognize' g ys  wpre
+      -> gamma_recognize' g ys' wsuf
+      -> gamma_recognize' g (NT x :: ys') (wpre ++ wsuf).
+
+(* May not be necessary *)
+Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
+| NullableNil'  : 
+    nullable_gamma' g []
+| NullableCons' : 
+    forall x ys tl,
+      In (x, ys) g
+      -> nullable_gamma' g ys
+      -> nullable_gamma' g tl
+      -> nullable_gamma' g (NT x :: tl).
