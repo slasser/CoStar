@@ -21,10 +21,46 @@ Definition dmap {A B : Type} :
     apply in_cons; auto.
 Defined.
 
+Lemma dmap_in :
+  forall (A B : Type) 
+         (l   : list A) 
+         (f   : forall a, In a l -> B) 
+         (b   : B) 
+         (bs  : list B),
+    dmap l f = bs
+    -> In b bs
+    -> (exists a hi, In a l /\ f a hi = b).
+Proof.
+  intros A B l f b bs hd hi; subst.
+  induction l as [| a l IH].
+  - inv hi.
+  - destruct hi as [hh | ht].
+    + exists a; eexists; split; eauto.
+      apply in_eq.
+    + apply IH in ht; destruct ht as [a' [hi [hi' heq]]].
+      exists a'; eexists; split.
+      * apply in_cons; auto.
+      * apply heq.
+Qed.
+
 Definition listMax (xs : list nat) : nat := 
   fold_right max 0 xs.
 
-(* LEMMAS ABOUT STANDARD LIBRARY DEFINITIONS *)
+Lemma listMax_in_le :
+  forall (x : nat) (ys : list nat),
+    In x ys
+    -> x <= listMax ys.
+Proof.
+  intros x ys Hin; induction ys as [| y ys IH]; simpl in *.
+  - inv Hin.
+  - destruct Hin as [Heq | Hin]; subst.
+    + apply Max.le_max_l.
+    + apply IH in Hin.
+      eapply le_trans; eauto.
+      apply Max.le_max_r.
+Qed.
+
+(* Lemmas about standard library definitions *)
 
 Lemma app_nil_r' : forall A (xs : list A), xs = xs ++ [].
 Proof.
@@ -63,46 +99,13 @@ Proof.
 Qed.
 
 Lemma in_singleton_eq :
-  forall A (x x' : A), In x' [x] -> x' = x.
+  forall A (x x' : A),
+    In x' [x]
+    -> x' = x.
 Proof.
   intros A x x' Hin.
   destruct Hin as [Hhd | Htl]; auto.
   inv Htl.
-Qed.
-
-Lemma listMax_in_le :
-  forall (x : nat) (ys : list nat),
-    In x ys -> x <= listMax ys.
-Proof.
-  intros x ys Hin; induction ys as [| y ys IH]; simpl in *.
-  - inv Hin.
-  - destruct Hin as [Heq | Hin]; subst.
-    + apply Max.le_max_l.
-    + apply IH in Hin.
-      eapply le_trans; eauto.
-      apply Max.le_max_r.
-Qed.
-
-Lemma dmap_in :
-  forall (A B : Type) 
-         (l   : list A) 
-         (f   : forall a, In a l -> B) 
-         (b   : B) 
-         (bs  : list B),
-    dmap l f = bs
-    -> In b bs
-    -> (exists a hi, In a l /\ f a hi = b).
-Proof.
-  intros A B l f b bs hd hi; subst.
-  induction l as [| a l IH].
-  - inv hi.
-  - destruct hi as [hh | ht].
-    + exists a; eexists; split; eauto.
-      apply in_eq.
-    + apply IH in ht; destruct ht as [a' [hi [hi' heq]]].
-      exists a'; eexists; split.
-      * apply in_cons; auto.
-      * apply heq.
 Qed.
 
 Lemma Forall_In :
