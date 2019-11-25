@@ -58,6 +58,14 @@ Definition rhss (g : grammar) : list (list symbol) :=
 Definition rhsLengths (g : grammar) : list nat :=
   map (fun rhs => List.length rhs) (rhss g).
 
+Lemma rhs_in_grammar_length_in_rhsLengths :
+  forall g rhs,
+    In rhs (rhss g) -> In (List.length rhs) (rhsLengths g).
+Proof.
+  intros g rhs Hin; induction g as [| (x, rhs') ps IH];
+  simpl in *; inv Hin; auto.
+Qed.
+
 Definition maxRhsLength (g : grammar) : nat :=
   listMax (rhsLengths g).
 
@@ -71,11 +79,79 @@ Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol)
       rhssForNt ps' x
   end.
 
+Lemma rhssForNt_in_iff :
+  forall g x ys,
+    In ys (rhssForNt g x)
+    <-> In (x, ys) g.
+Proof.
+  intros g x ys; split; intros hi.
+  - induction g as [| (x', ys') g]; sis; tc.
+    destruct (nt_eq_dec x' x); subst; auto.
+    inv hi; auto.
+  - induction g as [| (x', ys') g]; sis; tc.
+    destruct hi as [heq | hi].
+    + inv heq.
+      destruct (nt_eq_dec x x); tc.
+      apply in_eq.
+    + destruct (nt_eq_dec x' x); subst; auto.
+      apply in_cons; auto.
+Qed.
+
+Lemma rhssForNt_rhss :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> In rhs (rhss g).
+Proof.
+  intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
+  - inv Hin.
+  - destruct (nt_eq_dec x' x); subst; auto.
+    destruct Hin as [Heq | Hin]; subst; auto.
+Qed.
+
+Lemma grammar_rhs_length_le_max :
+  forall g x rhs,
+    In rhs (rhssForNt g x)
+    -> List.length rhs <= maxRhsLength g.
+Proof.
+  intros; unfold maxRhsLength.
+  apply listMax_in_le.
+  apply rhs_in_grammar_length_in_rhsLengths.
+  eapply rhssForNt_rhss; eauto.
+Qed.
+
+Lemma grammar_rhs_length_lt_max_plus_1 :
+  forall g x rhs,
+    In rhs (rhssForNt g x) -> List.length rhs < 1 + maxRhsLength g.
+Proof.
+  intros g x rhs Hin.
+  apply grammar_rhs_length_le_max in Hin; omega.
+Qed.
+
 Definition fromNtList (ls : list nonterminal) : NtSet.t :=
   fold_right NtSet.add NtSet.empty ls.
 
+Lemma fromNtList_in_iff :
+  forall (x : nonterminal)
+         (l : list nonterminal), 
+    In x l <-> NtSet.In x (fromNtList l).
+Proof.
+  intros x l; split; intro hi; induction l as [| x' l IH]; sis; try ND.fsetdec.
+  - destruct hi as [hh | ht]; subst; auto.
+    + ND.fsetdec.
+    + apply IH in ht; ND.fsetdec.
+  - destruct (NF.eq_dec x' x); subst; auto.
+    right; apply IH; ND.fsetdec.
+Qed.
+
 Definition allNts (g : grammar) : NtSet.t := 
   fromNtList (lhss g).
+
+Lemma allNts_lhss_iff :
+  forall (g : grammar) (x : nonterminal),
+    In x (lhss g)
+    <-> NtSet.In x (allNts g).
+Proof.
+  intros g x; split; intros hi; apply fromNtList_in_iff; auto.
+Qed.
 
 (* Definitions related to input that the parser consumes. *)
 Definition literal := string.
@@ -116,6 +192,40 @@ with gamma_derivation (g : grammar) : list symbol -> list token-> forest-> Prop 
 
 Hint Constructors sym_derivation gamma_derivation.
 
+Lemma gamma_derivation_app :
+  forall g ys1 w1 v1,
+    gamma_derivation g ys1 w1 v1
+    -> forall ys2 w2 v2,
+      gamma_derivation g ys2 w2 v2
+      -> gamma_derivation g (ys1 ++ ys2) (w1 ++ w2) (v1 ++ v2).
+Proof.
+  intros g ys1 w1 v1 hg.
+  induction hg; intros ys2 w2 v2 hg2; simpl in *; auto.
+  rewrite <- app_assoc; constructor; auto.
+Qed.
+
+Lemma forest_app_singleton_node : 
+  forall g x ys ys' w w' v v',
+    In (x, ys') g
+    -> gamma_derivation g ys w v
+    -> gamma_derivation g ys' w' v'
+    -> gamma_derivation g (ys ++ [NT x]) (w ++ w') (v ++ [Node x v']).
+Proof.
+  intros g x ys ys' w w' v v' hi hg hg'.
+  apply gamma_derivation_app; auto.
+  rew_nil_r w'; eauto.
+Qed.
+
+Lemma terminal_head_gamma_derivation :
+  forall g a l ys w v,
+    gamma_derivation g ys w v
+    -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf l :: v).
+Proof.
+  intros g a l ys w v hg.
+  assert (happ : (a, l) :: w = [(a, l)] ++ w) by apply cons_app_singleton.
+  rewrite happ; auto.
+Qed.
+
 Definition unique_gamma_derivation g ss w v :=
   gamma_derivation g ss w v
   /\ forall v', gamma_derivation g ss w v' -> v = v'.
@@ -138,6 +248,45 @@ with gamma_recognize (g : grammar) : list symbol -> list token -> Prop :=
            -> gamma_recognize g ss wsuf
            -> gamma_recognize g (s :: ss) (wpre ++ wsuf).
 
+Lemma gamma_recognize_terminal_head :
+  forall g a suf w,
+    gamma_recognize g (T a :: suf) w
+    -> exists l w',
+      w = (a, l) :: w'
+      /\ gamma_recognize g suf w'.
+Proof.
+  intros g a suf w hg.
+  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
+  inv hs; simpl; eauto.
+Qed.
+
+Lemma gamma_recognize_nonterminal_head :
+  forall g x suf w,
+    gamma_recognize g (NT x :: suf) w
+    -> exists rhs wpre wsuf,
+      w = wpre ++ wsuf
+      /\ In (x, rhs) g
+      /\ gamma_recognize g rhs wpre
+      /\ gamma_recognize g suf wsuf.
+Proof.
+  intros g x suf w hg.
+  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
+  inv hs; simpl; eauto 8.
+Qed.
+
+Lemma gamma_recognize_app :
+  forall g ys1 w1,
+    gamma_recognize g ys1 w1
+    -> forall ys2 w2,
+      gamma_recognize g ys2 w2
+      -> gamma_recognize g (ys1 ++ ys2) (w1 ++ w2).
+Proof.
+  intros g ys1 w1 hg.
+  induction hg; intros ys2 w2 hg2; simpl in *; auto.
+  rewrite <- app_assoc; constructor; auto.
+Qed.
+
+(* May not be necessary *)
 Inductive gamma_recognize' (g : grammar) : list symbol -> list token -> Prop :=
 | Nil_gr :
     gamma_recognize' g [] []
@@ -167,67 +316,6 @@ with nullable_gamma (g : grammar) : list symbol -> Prop :=
 
 Hint Constructors nullable_sym nullable_gamma.
 
-Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
-| NullableNil'  : 
-    nullable_gamma' g []
-| NullableCons' : 
-    forall x ys tl,
-      In (x, ys) g
-      -> nullable_gamma' g ys
-      -> nullable_gamma' g tl
-      -> nullable_gamma' g (NT x :: tl).
-
-Inductive nullable_path (g : grammar) :
-  symbol -> symbol -> Prop :=
-| DirectPath : forall x z gamma pre suf,
-    In (x, gamma) g
-    -> gamma = pre ++ NT z :: suf
-    -> nullable_gamma g pre
-    -> nullable_path g (NT x) (NT z)
-| IndirectPath : forall x y z gamma pre suf,
-    In (x, gamma) g
-    -> gamma = pre ++ NT y :: suf
-    -> nullable_gamma g pre
-    -> nullable_path g (NT y) (NT z)
-    -> nullable_path g (NT x) (NT z).
-
-Hint Constructors nullable_path.
-
-Definition left_recursive g sym :=
-  nullable_path g sym sym.
-
-Definition no_left_recursion g :=
-  forall (x : nonterminal), 
-    ~ left_recursive g (NT x).
-
-(* LEMMAS *)
-
-Lemma gamma_recognize_terminal_head :
-  forall g a suf w,
-    gamma_recognize g (T a :: suf) w
-    -> exists l w',
-      w = (a, l) :: w'
-      /\ gamma_recognize g suf w'.
-Proof.
-  intros g a suf w hg.
-  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
-  inv hs; simpl; eauto.
-Qed.
-
-Lemma gamma_recognize_nonterminal_head :
-  forall g x suf w,
-    gamma_recognize g (NT x :: suf) w
-    -> exists rhs wpre wsuf,
-      w = wpre ++ wsuf
-      /\ In (x, rhs) g
-      /\ gamma_recognize g rhs wpre
-      /\ gamma_recognize g suf wsuf.
-Proof.
-  intros g x suf w hg.
-  inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
-  inv hs; simpl; eauto 8.
-Qed.
-
 Lemma nullable_split :
   forall g xs ys,
     nullable_gamma g (xs ++ ys)
@@ -255,6 +343,33 @@ Proof.
   induction xs as [| x xs]; sis; inv hng; auto.
 Qed.
 
+(* May not be necessary *)
+Inductive nullable_gamma' (g : grammar) : list symbol -> Prop :=
+| NullableNil'  : 
+    nullable_gamma' g []
+| NullableCons' : 
+    forall x ys tl,
+      In (x, ys) g
+      -> nullable_gamma' g ys
+      -> nullable_gamma' g tl
+      -> nullable_gamma' g (NT x :: tl).
+
+Inductive nullable_path (g : grammar) :
+  symbol -> symbol -> Prop :=
+| DirectPath : forall x z gamma pre suf,
+    In (x, gamma) g
+    -> gamma = pre ++ NT z :: suf
+    -> nullable_gamma g pre
+    -> nullable_path g (NT x) (NT z)
+| IndirectPath : forall x y z gamma pre suf,
+    In (x, gamma) g
+    -> gamma = pre ++ NT y :: suf
+    -> nullable_gamma g pre
+    -> nullable_path g (NT y) (NT z)
+    -> nullable_path g (NT x) (NT z).
+
+Hint Constructors nullable_path.
+
 Lemma nullable_path_trans :
   forall g x y z,
     nullable_path g x y
@@ -269,123 +384,11 @@ Proof.
     inv hyz.
 Qed.  
 
-Lemma gamma_derivation_app :
-  forall g ys1 w1 v1,
-    gamma_derivation g ys1 w1 v1
-    -> forall ys2 w2 v2,
-      gamma_derivation g ys2 w2 v2
-      -> gamma_derivation g (ys1 ++ ys2) (w1 ++ w2) (v1 ++ v2).
-Proof.
-  intros g ys1 w1 v1 hg.
-  induction hg; intros ys2 w2 v2 hg2; simpl in *; auto.
-  rewrite <- app_assoc; constructor; auto.
-Qed.
+Definition left_recursive g sym :=
+  nullable_path g sym sym.
 
-Lemma gamma_recognize_app :
-  forall g ys1 w1,
-    gamma_recognize g ys1 w1
-    -> forall ys2 w2,
-      gamma_recognize g ys2 w2
-      -> gamma_recognize g (ys1 ++ ys2) (w1 ++ w2).
-Proof.
-  intros g ys1 w1 hg.
-  induction hg; intros ys2 w2 hg2; simpl in *; auto.
-  rewrite <- app_assoc; constructor; auto.
-Qed.
+Definition no_left_recursion g :=
+  forall (x : nonterminal), 
+    ~ left_recursive g (NT x).
 
-Lemma forest_app_singleton_node : 
-  forall g x ys ys' w w' v v',
-    In (x, ys') g
-    -> gamma_derivation g ys w v
-    -> gamma_derivation g ys' w' v'
-    -> gamma_derivation g (ys ++ [NT x]) (w ++ w') (v ++ [Node x v']).
-Proof.
-  intros g x ys ys' w w' v v' hi hg hg'.
-  apply gamma_derivation_app; auto.
-  rew_nil_r w'; eauto.
-Qed.
 
-Lemma terminal_head_gamma_derivation :
-  forall g a l ys w v,
-    gamma_derivation g ys w v
-    -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf l :: v).
-Proof.
-  intros g a l ys w v hg.
-  assert (happ : (a, l) :: w = [(a, l)] ++ w) by apply cons_app_singleton.
-  rewrite happ; auto.
-Qed.
-
-Lemma in_list_iff_in_fromNtList :
-  forall (x : nonterminal)
-         (l : list nonterminal), 
-    In x l <-> NtSet.In x (fromNtList l).
-Proof.
-  intros x l; split; intro hi; induction l as [| x' l IH]; sis; try ND.fsetdec.
-  - destruct hi as [hh | ht]; subst; auto.
-    + ND.fsetdec.
-    + apply IH in ht; ND.fsetdec.
-  - destruct (NF.eq_dec x' x); subst; auto.
-    right; apply IH; ND.fsetdec.
-Qed.
-
-Lemma in_lhss_iff_in_allNts :
-  forall (g : grammar) (x : nonterminal),
-    In x (lhss g)
-    <-> NtSet.In x (allNts g).
-Proof.
-  intros g x; split; intros hi; apply in_list_iff_in_fromNtList; auto.
-Qed.
-
-Lemma rhssForNt_in_grammar_iff :
-  forall g x ys,
-    In ys (rhssForNt g x)
-    <-> In (x, ys) g.
-Proof.
-  intros g x ys; split; intros hi.
-  - induction g as [| (x', ys') g]; sis; tc.
-    destruct (nt_eq_dec x' x); subst; auto.
-    inv hi; auto.
-  - induction g as [| (x', ys') g]; sis; tc.
-    destruct hi as [heq | hi].
-    + inv heq.
-      destruct (nt_eq_dec x x); tc.
-      apply in_eq.
-    + destruct (nt_eq_dec x' x); subst; auto.
-      apply in_cons; auto.
-Qed.
-
-Lemma rhs_in_grammar_length_in_rhsLengths :
-  forall g rhs,
-    In rhs (rhss g) -> In (List.length rhs) (rhsLengths g).
-Proof.
-  intros g rhs Hin; induction g as [| (x, rhs') ps IH];
-  simpl in *; inv Hin; auto.
-Qed.
-
-Lemma rhssForNt_rhss :
-  forall g x rhs,
-    In rhs (rhssForNt g x) -> In rhs (rhss g).
-Proof.
-  intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
-  - inv Hin.
-  - destruct (nt_eq_dec x' x); subst; auto.
-    destruct Hin as [Heq | Hin]; subst; auto.
-Qed.
-  
-Lemma grammar_rhs_length_le_max :
-  forall g x rhs,
-    In rhs (rhssForNt g x) -> List.length rhs <= maxRhsLength g.
-Proof.
-  intros; unfold maxRhsLength.
-  apply listMax_in_le.
-  apply rhs_in_grammar_length_in_rhsLengths.
-  eapply rhssForNt_rhss; eauto.
-Qed.
-
-Lemma grammar_rhs_length_lt_max_plus_1 :
-  forall g x rhs,
-    In rhs (rhssForNt g x) -> List.length rhs < 1 + maxRhsLength g.
-Proof.
-  intros g x rhs Hin.
-  apply grammar_rhs_length_le_max in Hin; omega.
-Qed.
