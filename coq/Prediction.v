@@ -48,6 +48,15 @@ Definition moveSp (g : grammar) (tok : token) (sp : subparser) : subparser_move_
     end
   end.
 
+Lemma moveSp_preserves_prediction :
+  forall g t sp sp',
+    moveSp g t sp = SpMoveSucc sp'
+    -> sp'.(prediction) = sp.(prediction).
+Proof.
+  intros g t sp sp' hm; unfold moveSp in hm.
+  dms; tc; subst; inv hm; auto.
+Qed.
+
 Definition move_result := sum prediction_error (list subparser).
 
 Fixpoint aggrMoveResults (smrs : list subparser_move_result) : 
@@ -63,8 +72,58 @@ Fixpoint aggrMoveResults (smrs : list subparser_move_result) :
     end
   end.
 
+Lemma aggrMoveResults_succ_in_input :
+  forall (smrs : list subparser_move_result)
+         (sp   : subparser)
+         (sps  : list subparser),
+    aggrMoveResults smrs = inr sps
+    -> In sp sps
+    -> In (SpMoveSucc sp) smrs.
+Proof.
+  intros smrs sp.
+  induction smrs as [| smr smrs' IH]; intros sps ha hi; sis.
+  - inv ha; inv hi.
+  - destruct smr as [sp' | | e];
+    destruct (aggrMoveResults smrs') as [e' | sps']; tc; inv ha.
+    + inv hi; firstorder.
+    + firstorder.
+Qed.
+
+Lemma aggrMoveResults_error_in_input :
+  forall (smrs : list subparser_move_result)
+         (e    : prediction_error),
+    aggrMoveResults smrs = inl e
+    -> In (SpMoveError e) smrs.
+Proof.
+  intros smrs e ha.
+  induction smrs as [| smr smrs' IH]; sis; tc.
+  destruct smr as [sp' | | e'];
+  destruct (aggrMoveResults smrs') as [e'' | sps']; tc; inv ha; eauto.
+Qed.
+
 Definition move (g : grammar) (tok : token) (sps : list subparser) : move_result :=
   aggrMoveResults (map (moveSp g tok) sps).
+
+Lemma move_unfold :
+  forall g t sps,
+    move g t sps = aggrMoveResults (map (moveSp g t) sps).
+Proof. 
+  auto. 
+Qed.
+
+Lemma move_preserves_prediction :
+  forall g t sp' sps sps',
+    move g t sps = inr sps'
+    -> In sp' sps'
+    -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
+Proof.
+  intros g t sp' sps sps' hm hi.
+  unfold move in hm.
+  eapply aggrMoveResults_succ_in_input in hm; eauto.
+  eapply in_map_iff in hm; destruct hm as [sp [hmsp hi']].
+  eexists; split; eauto.
+  eapply moveSp_preserves_prediction; eauto.
+Qed.
 
 (* "closure" operation *)
 
@@ -102,6 +161,20 @@ Definition spClosureStep (g : grammar) (sp : subparser) :
     end
   end.
 
+Lemma spClosureStep_preserves_prediction :
+  forall g sp sp' sps',
+    spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> sp.(prediction) = sp'.(prediction).
+Proof.
+  intros g sp sp' sps' hs hi.
+  unfold spClosureStep in hs; dms; tc; inv hs.
+  - apply in_singleton_eq in hi; subst; auto.
+  - apply in_map_iff in hi.
+    destruct hi as [rhs [heq hi]]; subst; auto.
+  - inv hi.
+Qed.
+
 Definition closure_result := sum prediction_error (list subparser).
 
 Fixpoint aggrClosureResults (crs : list closure_result) : closure_result :=
@@ -114,6 +187,42 @@ Fixpoint aggrClosureResults (crs : list closure_result) : closure_result :=
     | (inr sps, inr sps') => inr (sps ++ sps')
     end
   end.
+
+Lemma aggrClosureResults_succ_in_input:
+  forall (crs : list closure_result) 
+         (sp  : subparser)
+         (sps : list subparser),
+    aggrClosureResults crs = inr sps 
+    -> In sp sps 
+    -> exists sps',
+        In (inr sps') crs
+        /\ In sp sps'.
+Proof.
+  intros crs; induction crs as [| cr crs IH]; intros sp sps ha hi; simpl in ha.
+  - inv ha; inv hi.
+  - destruct cr as [e | sps'];
+    destruct (aggrClosureResults crs) as [e' | sps'']; tc; inv ha.
+    apply in_app_or in hi.
+    destruct hi as [hi' | hi''].
+    + eexists; split; eauto.
+      apply in_eq.
+    + apply IH in hi''; auto.
+      destruct hi'' as [sps [hi hi']].
+      eexists; split; eauto.
+      apply in_cons; auto.
+Qed.
+
+Lemma aggrClosureResults_error_in_input:
+  forall (crs : list closure_result) 
+         (e   : prediction_error),
+    aggrClosureResults crs = inl e
+    -> In (inl e) crs.
+Proof.
+  intros crs e ha; induction crs as [| cr crs IH]; sis; tc.
+  destruct cr as [e' | sps].
+  - inv ha; auto.
+  - destruct (aggrClosureResults crs) as [e' | sps']; tc; auto.
+Qed.
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
@@ -169,182 +278,6 @@ Fixpoint spClosure (g  : grammar)
           dmap sps' (fun sp' hin => spClosure g sp' (acc_after_step _ _ _ hs hin a))
       in  aggrClosureResults crs
   end eq_refl.
-
-Definition closure (g : grammar) (sps : list subparser) :
-  sum prediction_error (list subparser) :=
-  aggrClosureResults (map (fun sp => spClosure g sp (lex_nat_pair_wf _)) sps).
-
-(* LL prediction *)
-
-Inductive prediction_result :=
-| PredSucc   : list symbol      -> prediction_result
-| PredAmbig  : list symbol      -> prediction_result
-| PredReject :                     prediction_result
-| PredError  : prediction_error -> prediction_result.
-
-Definition finalConfig (sp : subparser) : bool :=
-  match sp with
-  | Sp _ _ (Loc _ _ [], []) => true
-  | _                       => false
-  end.
-
-Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
-  allEqual _ beqGamma sp.(prediction) (map prediction sps).
-
-Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
-  match filter finalConfig sps with
-  | []         => PredReject
-  | sp :: sps' => 
-    if allPredictionsEqual sp sps' then
-      PredSucc sp.(prediction)
-    else
-      PredAmbig sp.(prediction)
-  end.
-
-Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
-  match sps with
-  | []         => PredReject
-  | sp :: sps' =>
-    if allPredictionsEqual sp sps' then
-      PredSucc sp.(prediction)
-    else
-      match ts with
-      | []       => handleFinalSubparsers sps
-      | t :: ts' =>
-        match move g t sps with
-        | inl msg => PredError msg
-        | inr mv  =>
-          match closure g mv with
-          | inl msg => PredError msg
-          | inr cl  => llPredict' g cl ts'
-          end
-        end
-      end
-  end.
-
-Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
-  sum prediction_error (list subparser) :=
-  match stk with
-  | (loc, locs) =>
-    let init := map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, loc :: locs))
-                    (rhssForNt g x)
-    in  closure g init
-  end.
-
-Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
-                     (ts : list token) : prediction_result :=
-  match startState g x stk with
-  | inl msg => PredError msg
-  | inr sps => llPredict' g sps ts
-  end.
-
-(* LEMMAS *)
-
-Lemma handleFinalSubparsers_facts :
-  forall sps rhs,
-    handleFinalSubparsers sps = PredSucc rhs
-    -> exists sp o pre,
-      In sp sps
-      /\ sp.(prediction) = rhs
-      /\ sp.(stack) = (Loc o pre [], []).
-Proof.
-  intros sps rhs hh.
-  unfold handleFinalSubparsers in hh.
-  destruct (filter _ _) as [| sp sps'] eqn:hf; tc.
-  destruct (allPredictionsEqual _ _); tc; inv hh.
-  assert (hin : In sp (filter finalConfig sps)).
-  { rewrite hf; apply in_eq. }
-  apply filter_In in hin.
-  destruct hin as [hin ht]; subst.
-  unfold finalConfig in ht.
-  exists sp.
-  destruct sp as [av pred ([o pre suf], frs)]; sis.
-  dm; tc.
-  dm; tc.
-  eexists; eexists; repeat split; auto.
-Qed.
-
-Lemma handleFinalSubparsers_success_from_subparsers :
-  forall sps gamma,
-    handleFinalSubparsers sps = PredSucc gamma
-    -> exists sp, In sp sps /\ sp.(prediction) = gamma.
-Proof.
-  intros sps gamma hh; unfold handleFinalSubparsers in hh.
-  dmeqs h; tc; inv hh.
-  eexists; split; eauto.
-  eapply filter_cons_in; eauto.
-Qed.
-
-Lemma handleFinalSubparsers_ambig_from_subparsers :
-  forall sps gamma,
-    handleFinalSubparsers sps = PredAmbig gamma
-    -> exists sp, In sp sps /\ sp.(prediction) = gamma.
-Proof.
-  intros sps gamma hh.
-  unfold handleFinalSubparsers in hh.
-  dmeqs h; tc; inv hh.
-  eexists; split; eauto.
-  eapply filter_cons_in; eauto.
-Qed.
-
-Lemma move_unfold :
-  forall g t sps,
-    move g t sps = aggrMoveResults (map (moveSp g t) sps).
-Proof. 
-  auto. 
-Qed.
-
-Lemma aggrMoveResults_succ_in_input :
-  forall (smrs : list subparser_move_result)
-         (sp   : subparser)
-         (sps  : list subparser),
-    aggrMoveResults smrs = inr sps
-    -> In sp sps
-    -> In (SpMoveSucc sp) smrs.
-Proof.
-  intros smrs sp.
-  induction smrs as [| smr smrs' IH]; intros sps ha hi; sis.
-  - inv ha; inv hi.
-  - destruct smr as [sp' | | e];
-    destruct (aggrMoveResults smrs') as [e' | sps']; tc; inv ha.
-    + inv hi; firstorder.
-    + firstorder.
-Qed.
-
-Lemma aggrMoveResults_error_in_input :
-  forall (smrs : list subparser_move_result)
-         (e    : prediction_error),
-    aggrMoveResults smrs = inl e
-    -> In (SpMoveError e) smrs.
-Proof.
-  intros smrs e ha.
-  induction smrs as [| smr smrs' IH]; sis; tc.
-  destruct smr as [sp' | | e'];
-  destruct (aggrMoveResults smrs') as [e'' | sps']; tc; inv ha; eauto.
-Qed.
-
-Lemma moveSp_preserves_prediction :
-  forall g t sp sp',
-    moveSp g t sp = SpMoveSucc sp'
-    -> sp'.(prediction) = sp.(prediction).
-Proof.
-  intros g t sp sp' hm; unfold moveSp in hm.
-  dms; tc; subst; inv hm; auto.
-Qed.
-
-Lemma move_preserves_prediction :
-  forall g t sp' sps sps',
-    move g t sps = inr sps'
-    -> In sp' sps'
-    -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
-Proof.
-  intros g t sp' sps sps' hm hi.
-  unfold move in hm.
-  eapply aggrMoveResults_succ_in_input in hm; eauto.
-  eapply in_map_iff in hm; destruct hm as [sp [hmsp hi']].
-  eexists; split; eauto.
-  eapply moveSp_preserves_prediction; eauto.
-Qed.
 
 Lemma spClosure_unfold :
   forall g sp a,
@@ -463,56 +396,6 @@ Lemma spClosure_error_cases :
 Proof.
   intros g sp a e hs; apply spClosure_cases with (cr := inl e); auto.
 Qed.
-                   
-Lemma aggrClosureResults_succ_in_input:
-  forall (crs : list closure_result) 
-         (sp  : subparser)
-         (sps : list subparser),
-    aggrClosureResults crs = inr sps 
-    -> In sp sps 
-    -> exists sps',
-        In (inr sps') crs
-        /\ In sp sps'.
-Proof.
-  intros crs; induction crs as [| cr crs IH]; intros sp sps ha hi; simpl in ha.
-  - inv ha; inv hi.
-  - destruct cr as [e | sps'];
-    destruct (aggrClosureResults crs) as [e' | sps'']; tc; inv ha.
-    apply in_app_or in hi.
-    destruct hi as [hi' | hi''].
-    + eexists; split; eauto.
-      apply in_eq.
-    + apply IH in hi''; auto.
-      destruct hi'' as [sps [hi hi']].
-      eexists; split; eauto.
-      apply in_cons; auto.
-Qed.
-
-Lemma aggrClosureResults_error_in_input:
-  forall (crs : list closure_result) 
-         (e   : prediction_error),
-    aggrClosureResults crs = inl e
-    -> In (inl e) crs.
-Proof.
-  intros crs e ha; induction crs as [| cr crs IH]; sis; tc.
-  destruct cr as [e' | sps].
-  - inv ha; auto.
-  - destruct (aggrClosureResults crs) as [e' | sps']; tc; auto.
-Qed.
-
-Lemma spClosureStep_preserves_prediction :
-  forall g sp sp' sps',
-    spClosureStep g sp = SpClosureStepK sps'
-    -> In sp' sps'
-    -> sp.(prediction) = sp'.(prediction).
-Proof.
-  intros g sp sp' sps' hs hi.
-  unfold spClosureStep in hs; dms; tc; inv hs.
-  - apply in_singleton_eq in hi; subst; auto.
-  - apply in_map_iff in hi.
-    destruct hi as [rhs [heq hi]]; subst; auto.
-  - inv hi.
-Qed.
 
 Lemma spClosure_preserves_prediction :
   forall g pair (a : Acc lex_nat_pair pair) sp a' sp' sps',
@@ -537,6 +420,10 @@ Proof.
     + eapply spClosureStep_meas_lt; eauto.
 Qed.
 
+Definition closure (g : grammar) (sps : list subparser) :
+  sum prediction_error (list subparser) :=
+  aggrClosureResults (map (fun sp => spClosure g sp (lex_nat_pair_wf _)) sps).
+
 Lemma closure_preserves_prediction :
   forall g sp' sps sps',
     closure g sps = inr sps'
@@ -552,6 +439,88 @@ Proof.
   apply lex_nat_pair_wf.
 Qed.
 
+(* LL prediction *)
+
+Inductive prediction_result :=
+| PredSucc   : list symbol      -> prediction_result
+| PredAmbig  : list symbol      -> prediction_result
+| PredReject :                     prediction_result
+| PredError  : prediction_error -> prediction_result.
+
+Definition finalConfig (sp : subparser) : bool :=
+  match sp with
+  | Sp _ _ (Loc _ _ [], []) => true
+  | _                       => false
+  end.
+
+Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
+  allEqual _ beqGamma sp.(prediction) (map prediction sps).
+
+Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
+  match filter finalConfig sps with
+  | []         => PredReject
+  | sp :: sps' => 
+    if allPredictionsEqual sp sps' then
+      PredSucc sp.(prediction)
+    else
+      PredAmbig sp.(prediction)
+  end.
+
+Lemma handleFinalSubparsers_succ_facts :
+  forall sps rhs,
+    handleFinalSubparsers sps = PredSucc rhs
+    -> exists sp o pre,
+      In sp sps
+      /\ sp.(prediction) = rhs
+      /\ sp.(stack) = (Loc o pre [], []).
+Proof.
+  intros sps rhs hh.
+  unfold handleFinalSubparsers in hh.
+  destruct (filter _ _) as [| sp sps'] eqn:hf; tc.
+  destruct (allPredictionsEqual _ _); tc; inv hh.
+  assert (hin : In sp (filter finalConfig sps)).
+  { rewrite hf; apply in_eq. }
+  apply filter_In in hin.
+  destruct hin as [hin ht]; subst.
+  unfold finalConfig in ht.
+  exists sp.
+  destruct sp as [av pred ([o pre suf], frs)].
+  dms; tc; repeat eexists; eauto.
+Qed.
+
+Lemma handleFinalSubparsers_ambig_from_subparsers :
+  forall sps gamma,
+    handleFinalSubparsers sps = PredAmbig gamma
+    -> exists sp, In sp sps /\ sp.(prediction) = gamma.
+Proof.
+  intros sps gamma hh.
+  unfold handleFinalSubparsers in hh.
+  dmeqs h; tc; inv hh.
+  eexists; split; eauto.
+  eapply filter_cons_in; eauto.
+Qed.
+
+Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
+  match sps with
+  | []         => PredReject
+  | sp :: sps' =>
+    if allPredictionsEqual sp sps' then
+      PredSucc sp.(prediction)
+    else
+      match ts with
+      | []       => handleFinalSubparsers sps
+      | t :: ts' =>
+        match move g t sps with
+        | inl msg => PredError msg
+        | inr mv  =>
+          match closure g mv with
+          | inl msg => PredError msg
+          | inr cl  => llPredict' g cl ts'
+          end
+        end
+      end
+  end.
+
 Lemma llPredict'_success_result_in_original_subparsers :
   forall g ts gamma sps,
     llPredict' g sps ts = PredSucc gamma
@@ -562,7 +531,8 @@ Proof.
   - destruct sps as [| sp sps']; tc; dmeq hall.
     + inv hl; exists sp; split; auto.
       apply in_eq.
-    + apply handleFinalSubparsers_success_from_subparsers; auto.
+    + apply handleFinalSubparsers_succ_facts in hl.
+      destruct hl as [sp' [_ [_ [hi [heq _]]]]]; eauto.
   - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
     + inv hl; exists sp; split; auto.
       apply in_eq.
@@ -595,6 +565,16 @@ Proof.
       destruct hm as [? [? ?]]; eauto.
 Qed.
 
+(* break this into two functions *)
+Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
+  sum prediction_error (list subparser) :=
+  match stk with
+  | (loc, locs) =>
+    let init := map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, loc :: locs))
+                    (rhssForNt g x)
+    in  closure g init
+  end.
+
 Lemma startState_sp_prediction_in_rhssForNt :
   forall g x stk sp' sps',
     startState g x stk = inr sps'
@@ -609,6 +589,13 @@ Proof.
   destruct hin as [gamma [hin heq']]; subst.
   rewrite heq; auto.
 Qed.
+
+Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
+                     (ts : list token) : prediction_result :=
+  match startState g x stk with
+  | inl msg => PredError msg
+  | inr sps => llPredict' g sps ts
+  end.
 
 Lemma llPredict_succ_in_rhssForNt :
   forall g x stk ts gamma,
@@ -654,6 +641,7 @@ Proof.
   apply rhssForNt_in_iff.
   eapply llPredict_ambig_in_rhssForNt; eauto.
 Qed.
+
 
 (* A WELL-FORMEDNESS PREDICATE OVER A LOCATION STACK *)
 
