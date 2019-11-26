@@ -57,6 +57,26 @@ Proof.
   dms; tc; subst; inv hm; auto.
 Qed.
 
+Lemma moveSp_succ_step :
+  forall g sp sp' av pred o pre a l suf frs,
+    sp = Sp av pred (Loc o pre (T a :: suf), frs)
+    -> sp' = Sp (allNts g) pred (Loc o (pre ++ [T a]) suf, frs)
+    -> moveSp g (a, l) sp = SpMoveSucc sp'.
+Proof.
+  intros; subst; unfold moveSp; dms; tc.
+Qed.
+
+(*
+Lemma moveSp_result_in_map :
+  forall g sp av pred o pre a t suf frs sps,
+    sp = Sp av pred (Loc o pre (T a :: suf), frs)
+    -> In sp sps
+    -> In (moveSp g t sp) (map (moveSp g t) sps).
+Proof.
+  intros; subst; apply in_map_iff; eauto.
+Qed.
+*)
+
 Definition move_result := sum prediction_error (list subparser).
 
 Fixpoint aggrMoveResults (smrs : list subparser_move_result) : 
@@ -101,6 +121,23 @@ Proof.
   destruct (aggrMoveResults smrs') as [e'' | sps']; tc; inv ha; eauto.
 Qed.
 
+Lemma aggrMoveResults_succ_all_sps_step :
+  forall g t sp sps sp' sps',
+    In sp sps
+    -> moveSp g t sp = SpMoveSucc sp'
+    -> aggrMoveResults (map (moveSp g t) sps) = inr sps'
+    -> In sp' sps'.
+Proof.
+  intros g t sp sps. 
+  induction sps as [| hd tl IH]; intros sp' sps' hi hm ha; inv hi; sis.
+  - dms; tc. 
+    inv hm; inv ha.
+    apply in_eq.
+  - dms; tc.
+    inv ha.
+    apply in_cons; auto.
+Qed.
+
 Definition move (g : grammar) (tok : token) (sps : list subparser) : move_result :=
   aggrMoveResults (map (moveSp g tok) sps).
 
@@ -123,6 +160,30 @@ Proof.
   eapply in_map_iff in hm; destruct hm as [sp [hmsp hi']].
   eexists; split; eauto.
   eapply moveSp_preserves_prediction; eauto.
+Qed.
+
+Lemma move_maps_moveSp :
+  forall g t sp sp' sps sps',
+    In sp sps
+    -> moveSp g t sp = SpMoveSucc sp'
+    -> move g t sps = inr sps'
+    -> In sp' sps'.
+Proof.
+  intros g t sp sp' sps sps' hi hm hm'.
+  eapply aggrMoveResults_succ_all_sps_step; eauto.
+Qed.
+
+Lemma move_succ_all_sps_step :
+  forall g sp sp' av pred o pre a l suf frs sps sps',
+    sp = Sp av pred (Loc o pre (T a :: suf), frs)
+    -> sp' = Sp (allNts g) pred (Loc o (pre ++ [T a]) suf, frs)
+    -> In sp sps
+    -> move g (a, l) sps = inr sps'
+    -> In sp' sps'.
+Proof.
+  intros g sp sp' av pred o pre a l suf frs sps sps' ? ? hi hm; subst.
+  eapply move_maps_moveSp; eauto.
+  eapply moveSp_succ_step; eauto.
 Qed.
 
 (* "closure" operation *)
@@ -222,6 +283,63 @@ Proof.
   destruct cr as [e' | sps].
   - inv ha; auto.
   - destruct (aggrClosureResults crs) as [e' | sps']; tc; auto.
+Qed.
+
+Lemma aggrClosureResults_map_succ_elt_succ :
+  forall sp (f : subparser -> closure_result) (sps : list subparser) sps'',
+    In sp sps
+    -> aggrClosureResults (map f sps) = inr sps''
+    -> exists sps',
+        f sp = inr sps'
+        /\ forall sp', In sp' sps' -> In sp' sps''.
+Proof.
+  intros sp f sps; induction sps as [| hd tl IH]; intros sps'' hi ha.
+  - inv hi.
+  - destruct hi as [hh | ht]; subst.
+    + simpl in ha.
+      dmeq hsp; tc.
+      dmeq hag; tc.
+      inv ha.
+      repeat eexists; eauto.
+      intros sp' hi; apply in_or_app; auto.
+    + simpl in ha.
+      dmeq hsp; tc.
+      dmeq hag; tc.
+      inv ha.
+      eapply IH with (sps'' := l0) in ht; eauto.
+      destruct ht as [sps' [heq hall]].
+      repeat eexists; eauto.
+      intros sp' hi.
+      apply in_or_app; auto.
+Qed.
+
+Lemma aggrClosureResults_dmap_succ_elt_succ :
+  forall sp (sps : list subparser) (f : forall sp, In sp sps -> closure_result) sps'',
+    In sp sps
+    -> aggrClosureResults (dmap sps f) = inr sps''
+    -> exists hi sps',
+        f sp hi = inr sps'
+        /\ forall sp', In sp' sps' -> In sp' sps''.
+Proof.
+  intros sp sps; induction sps as [| hd tl IH]; intros f sps'' hi ha.
+  - inv hi.
+  - destruct hi as [hh | ht]; subst.
+    + simpl in ha.
+      dmeq hsp; tc.
+      dmeq hag; tc.
+      inv ha.
+      repeat eexists; eauto.
+      intros sp' hi; apply in_or_app; auto.
+    + simpl in ha.
+      dmeq hsp; tc.
+      dmeq hag; tc.
+      inv ha.
+      unfold eq_rect_r in hag; simpl in hag.
+      apply IH in hag; auto.
+      destruct hag as [hi [sps' [heq hall]]].
+      repeat eexists; eauto.
+      intros sp' hi'.
+      apply in_or_app; auto.
 Qed.
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
@@ -455,6 +573,38 @@ Definition finalConfig (sp : subparser) : bool :=
 
 Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
   allEqual _ beqGamma sp.(prediction) (map prediction sps).
+
+Lemma allPredictionsEqual_inv_cons :
+  forall sp' sp sps,
+    allPredictionsEqual sp' (sp :: sps) = true
+    -> sp'.(prediction) = sp.(prediction)
+       /\ allPredictionsEqual sp' sps = true.
+Proof.
+  intros sp' sp sps ha.
+  unfold allPredictionsEqual in ha; unfold allEqual in ha; sis.
+  apply andb_true_iff in ha; destruct ha as [hhd htl]; split; auto.
+  unfold beqGamma in *; dms; tc.
+Qed.
+
+Lemma allPredictionEqual_in_tl :
+  forall sp sp' sps,
+    allPredictionsEqual sp sps = true
+    -> In sp' sps
+    -> sp'.(prediction) = sp.(prediction).
+Proof.
+  intros sp sp' sps ha hi; induction sps as [| sp'' sps IH]; inv hi;
+  apply allPredictionsEqual_inv_cons in ha; destruct ha as [hhd htl]; auto.
+Qed.
+      
+Lemma allPredictionEqual_in :
+  forall sp' sp sps,
+    allPredictionsEqual sp sps = true
+    -> In sp' (sp :: sps)
+    -> sp'.(prediction) = sp.(prediction).
+Proof.
+  intros sp' sp sps ha hi; inv hi; auto.
+  eapply allPredictionEqual_in_tl; eauto.
+Qed.
 
 Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
   match filter finalConfig sps with

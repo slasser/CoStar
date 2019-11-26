@@ -52,6 +52,18 @@ Definition lhs (p : production) : nonterminal :=
 Definition lhss (g : grammar) : list nonterminal :=
   map lhs g.
 
+Lemma production_lhs_in_lhss :
+  forall g x ys,
+    In (x, ys) g
+    -> In x (lhss g).
+Proof.
+  intros g x ys hi; induction g as [| (x', ys') ps IH]; sis.
+  - inv hi.
+  - destruct hi as [hh | ht].
+    + inv hh; apply in_eq.
+    + apply in_cons; auto.
+Qed.
+
 Definition rhs (p : production) : list symbol :=
   let (_, gamma) := p in gamma.
 
@@ -156,6 +168,17 @@ Lemma allNts_lhss_iff :
     <-> NtSet.In x (allNts g).
 Proof.
   intros g x; split; intros hi; apply fromNtList_in_iff; auto.
+Qed.
+
+Lemma lhs_mem_allNts_true :
+  forall g x ys,
+    In (x, ys) g
+    -> NtSet.mem x (allNts g) = true.
+Proof.
+  intros g x ys hi.
+  apply NtSet.mem_spec.
+  apply allNts_lhss_iff. 
+  eapply production_lhs_in_lhss; eauto.
 Qed.
 
 (* Definitions related to input that the parser consumes. *)
