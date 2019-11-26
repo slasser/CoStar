@@ -108,7 +108,7 @@ Proof.
   intros g fr o pre x suf frs rhs hi heq; subst.
   apply in_map_iff.
   exists rhs; split; auto.
-  apply rhssForNt_in_grammar_iff; auto.
+  apply rhssForNt_in_iff; auto.
 Qed.
 
 Lemma mc_multistep_succ_final_config :
@@ -537,7 +537,7 @@ Lemma lhs_mem_allNts_true :
 Proof.
   intros g x ys hi.
   apply NtSet.mem_spec.
-  apply in_lhss_iff_in_allNts.
+  apply allNts_lhss_iff. 
   eapply production_lhs_in_lhss; eauto.
 Qed.
 
@@ -560,7 +560,7 @@ Proof.
       * auto.
       * apply in_map_iff.
         eexists; split; eauto.
-        apply rhssForNt_in_grammar_iff; auto.
+        apply rhssForNt_in_iff; auto.
   - exfalso.
     inv hc. inv H.
     apply lhs_mem_allNts_true in H10; tc.
@@ -1030,10 +1030,10 @@ Proof.
         -- apply lhs_mem_allNts_true in H0; tc.
       * apply in_map_iff.
         eexists; split; eauto.
-        apply rhssForNt_in_grammar_iff; auto.
+        apply rhssForNt_in_iff; auto.
     + apply lex_nat_pair_wf.
     + eapply push_preserves_locations_wf_invar; eauto. 
-      apply rhssForNt_in_grammar_iff; auto. 
+      apply rhssForNt_in_iff; auto. 
     + eapply push_preserves_unavailable_nts_invar; eauto.
     + simpl.
       apply gamma_recognize_app; auto.
@@ -1222,13 +1222,13 @@ Proof.
                          (rhssForNt g x))).
     { apply in_map_iff. 
       eexists; split; eauto.
-      apply rhssForNt_in_grammar_iff; auto. }
+      apply rhssForNt_in_iff; auto. }
     assert (hex : exists sp',
                closure_multistep g (Sp (allNts g) rhs (Loc (Some x) [] rhs, Loc o pre (NT x :: suf) :: frs)) sp'
                /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w).
     { eapply exists_closure_multistep_target; eauto.
       - sis. apply push_preserves_locations_wf_invar; auto.
-        apply rhssForNt_in_grammar_iff; auto.
+        apply rhssForNt_in_iff; auto.
       - (* lemma *)
         unfold unavailable_nts_invar. unfold unavailable_nts_are_open_calls.
         intros.
@@ -1260,4 +1260,5 @@ Proof.
   - intros sp sp' hi hm.
     apply mcms_words_eq_subparser_eq in hm; subst; auto.
 Qed.
+
 
