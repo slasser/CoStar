@@ -64,7 +64,7 @@ Proof.
   intros g ss ts; unfold not; intros hp.
   unfold parse in hp.
   apply multistep_never_reaches_error_state
-    with (tri := Parser.meas g (mkInitState g ss ts)) in hp; auto.
+    with (tri := meas g (mkInitState g ss ts)) in hp; auto.
   - apply lex_nat_triple_wf.
   - constructor.
 Qed.
@@ -216,7 +216,7 @@ Proof.
   intros g ss ts e hn; unfold not; intros hp.
   unfold parse in hp.
   apply multistep_never_returns_prediction_error
-    with (tri := Parser.meas g (mkInitState g ss ts)) in hp; auto.
+    with (tri := meas g (mkInitState g ss ts)) in hp; auto.
   - apply lex_nat_triple_wf.
   - constructor.
 Qed.
