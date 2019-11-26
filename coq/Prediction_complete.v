@@ -869,16 +869,16 @@ Proof.
         ND.fsetdec. }
     destruct hex as [sp' [hcm hg']].
     assert (h_viable_cand : In sp' sps).
-    { eapply acr_map_inr_all_inr in hs; eauto.
+    { eapply aggrClosureResults_map_succ_elt_succ in hs; eauto.
       destruct hs as [sps' [hspc hall']].
       apply hall'.
-      eapply spClosure_func_refines_rel; eauto. }
+      eapply spClosure_refines_closure_multistep; eauto. }
     apply unproc_syms_recognize_move_closure_multistep in hg'; eauto.
     + destruct hg' as [sp'' hmcms].
       pose proof move_closure_multistep_backtrack as hb.
       assert (hpred : sp''.(prediction) = rhs).
       { eapply closure_multistep_preserves_label in hcm; sis; subst.
-        eapply mc_multistep_preserves_label in hmcms; auto. }
+        eapply mcms_preserves_label in hmcms; auto. }
       rewrite heq in hmcms.
       assert (wpre ++ wsuf = wpre ++ wsuf ++ []) by apps.
       rewrite H in hmcms.
@@ -1090,6 +1090,6 @@ Lemma aggrClosureResults_dmap' :
         /\ forall sp'', In sp'' sps'' -> In sp'' sps'''.
 Proof.
   intros g sp sp' sps' sps''' hs hi ha.
-  eapply acr_dmap_inr_all_inr in ha; eauto.
+  eapply aggrClosureResults_dmap_succ_elt_succ in ha; eauto.
   destruct ha as [hi' [sps'' [heq hall]]]; eauto.
 Qed.
