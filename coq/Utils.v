@@ -116,3 +116,41 @@ Proof.
   eapply Forall_forall; eauto.
 Qed.    
          
+Lemma app_left_identity_nil :
+  forall A (xs ys : list A),
+    xs ++ ys = ys 
+    -> xs = [].
+Proof.
+  intros A xs ys heq.
+  eapply app_inv_tail.
+  rewrite <- app_nil_l in heq; eauto.
+Qed.
+
+Lemma app_double_left_identity_nil :
+  forall A (xs ys zs : list A),
+    xs ++ ys ++ zs = zs
+    -> xs = [] /\ ys = [].
+Proof.
+  intros A xs ys zs heq.
+  apply app_eq_nil.
+  eapply app_left_identity_nil; rewrite <- app_assoc; eauto.
+Qed.
+
+Lemma cons_neq_tail :
+  forall A x (xs : list A),
+    (x :: xs) <> xs.
+Proof.
+  intros A x xs; unfold not; intros heq.
+  assert (heq' : [x] ++ xs = [] ++ xs) by apps.
+  apply app_inv_tail in heq'; inv heq'.
+Qed.
+
+(* Variant of filter_In that removes the conjunction *)
+Lemma filter_In' :
+  forall A (f : A -> bool) x l,
+    In x l 
+    -> f x = true 
+    -> In x (filter f l).
+Proof.
+  intros; apply filter_In; auto.
+Qed.

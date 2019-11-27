@@ -586,7 +586,7 @@ Proof.
   unfold beqGamma in *; dms; tc.
 Qed.
 
-Lemma allPredictionEqual_in_tl :
+Lemma allPredictionsEqual_in_tl :
   forall sp sp' sps,
     allPredictionsEqual sp sps = true
     -> In sp' sps
@@ -596,14 +596,14 @@ Proof.
   apply allPredictionsEqual_inv_cons in ha; destruct ha as [hhd htl]; auto.
 Qed.
       
-Lemma allPredictionEqual_in :
+Lemma allPredictionsEqual_in :
   forall sp' sp sps,
     allPredictionsEqual sp sps = true
     -> In sp' (sp :: sps)
     -> sp'.(prediction) = sp.(prediction).
 Proof.
   intros sp' sp sps ha hi; inv hi; auto.
-  eapply allPredictionEqual_in_tl; eauto.
+  eapply allPredictionsEqual_in_tl; eauto.
 Qed.
 
 Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=

@@ -44,6 +44,14 @@ Proof.
   intros g sp sp' w w' hm; inv hm; auto.
 Qed.
 
+Lemma move_step_word_length_lt :
+  forall g sp sp' ts ts',
+    move_step g sp ts sp' ts'
+    -> length ts' < length ts.
+Proof.
+  intros g sp sp' ts ts' hm; inv hm; auto.
+Qed.
+
 Lemma move_func_refines_move_step :
   forall g t ts sp sp' sps sps',
     In sp sps
@@ -103,6 +111,8 @@ Inductive closure_multistep (g : grammar) : subparser -> subparser -> Prop :=
       closure_step g sp sp'
       -> closure_multistep g sp' sp''
       -> closure_multistep g sp sp''.
+
+Hint Constructors closure_multistep.
 
 Lemma closure_multistep_preserves_label :
   forall g sp sp',
@@ -228,17 +238,27 @@ Inductive move_closure_multistep (g : grammar) :
       -> move_closure_multistep g sp'' ts'' sp''' ts'''
       -> move_closure_multistep g sp ts sp''' ts'''.
 
+Hint Constructors move_closure_multistep.
+
+Ltac induct_mcms hm :=
+  induction hm as [ ? ? ? ?
+                  | ? ? ? ? ? ? ? ? ?
+                  | ? ? ? ? ? ? ? hm hc hms IH].
+
+Ltac inv_mcms hm :=
+  inversion hm as [ ? ? ? ?
+                  | ? ? ? ? ? ? ? ? ?
+                  | ? ? ? ? ? ? ? hm' hc hms IH]; subst; clear hm.
+
 Lemma mcms_preserves_label :
   forall g sp sp' w w',
     move_closure_multistep g sp w sp' w'
     -> sp.(prediction) = sp'.(prediction).
 Proof.
   intros g sp sp' w w' hm.
-  induction hm as [ ? ? ? ?
-                  | ? ? ? ? ? ? ? ? ?
-                  | ? ? ? ? ? ? ? hm hc hmc]; auto.
+  induct_mcms hm; auto.
   apply move_step_preserves_label in hm.
-  apply closure_multistep_preserves_label in hc; tc.
+  apply closure_multistep_preserves_label in hc; tc. 
 Qed.
 
 Lemma mcms_succ_final_config :
@@ -252,6 +272,196 @@ Proof.
   inv heq.
 Qed.
 
+Lemma mcms_word_length_le :
+  forall g sp sp' ts ts',
+    move_closure_multistep g sp ts sp' ts'
+    -> length ts' <= length ts. 
+Proof.
+  intros g sp sp' ts ts' hm.
+  induct_mcms hm; auto.
+  inv hm; sis; auto.
+Qed.
+
+Lemma move_closure_multistep_backtrack' :
+  forall g sp sp'' w wsuf,
+    move_closure_multistep g sp w sp'' wsuf
+    -> forall wpre wmid,
+      wpre ++ wmid ++ wsuf = w
+      -> exists sp',
+          move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp' (wmid ++ wsuf)
+          /\ move_closure_multistep g sp' (wmid ++ wsuf) sp'' wsuf.
+Proof.
+  intros g sp sp'' w wsuf hm.
+  induct_mcms hm; intros wpre wmid heq; subst.
+  - rewrite app_nil_r in *; apply app_eq_nil in heq; destruct heq; subst; eauto.
+  - apply app_double_left_identity_nil in heq; destruct heq; subst; sis; eauto.
+  - destruct wpre as [| t wpre]; sis.
+    + destruct wmid as [| t wmid]; sis.
+      * apply move_step_word_length_lt in hm; apply mcms_word_length_le in hms.
+        omega.
+      * inv hm; eauto.
+    + inv hm; destruct (IH wpre wmid) as [sp' [hms' hms'']]; eauto.
+Qed.
+
+Lemma move_closure_multistep_backtrack :
+  forall g sp sp'' wpre wmid wsuf,
+    move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp'' wsuf
+    -> exists sp',
+      move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp' (wmid ++ wsuf)
+      /\ move_closure_multistep g sp' (wmid ++ wsuf) sp'' wsuf.
+Proof.
+  intros; eapply move_closure_multistep_backtrack'; eauto.
+Qed.
+
+Lemma move_closure_multistep_backtrack_once :
+  forall g sp sp'' t wpre wsuf,
+    move_closure_multistep g sp (wpre ++ t :: wsuf) sp'' wsuf
+    -> exists sp',
+      move_closure_multistep g sp (wpre ++ t :: wsuf) sp' (t :: wsuf)
+      /\ move_closure_multistep g sp' (t :: wsuf) sp'' wsuf.
+Proof.
+  intros; rewrite cons_app_singleton in *.
+  eapply move_closure_multistep_backtrack; eauto.
+Qed.
+
+Lemma mcms_words_eq_subparsers_eq' :
+  forall g sp sp' ts ts',
+    move_closure_multistep g sp ts sp' ts'
+    -> ts = ts'
+    -> sp = sp'.
+Proof.
+  intros g sp sp' ts ts' hm heq; inv_mcms hm; auto.
+  apply move_step_word_length_lt in hm'; apply mcms_word_length_le in hms. 
+  omega.
+Qed.
+
+Lemma mcms_words_eq_subparsers_eq :
+  forall g sp sp' ts,
+    move_closure_multistep g sp ts sp' ts
+    -> sp = sp'.
+Proof.
+  intros; eapply mcms_words_eq_subparsers_eq'; eauto.
+Qed.
+
+Lemma mcms_inv_nonempty_word :
+  forall g sp sp'' t wsuf,
+    move_closure_multistep g sp (t :: wsuf) sp'' wsuf
+    -> exists sp',
+      move_step g sp (t :: wsuf) sp' wsuf
+      /\ closure_multistep g sp' sp''.
+Proof.
+  intros g sp sp'' t wsuf hm; inv_mcms hm; auto.
+  - exfalso; eapply cons_neq_tail; eauto.
+  - inv hm'; apply mcms_words_eq_subparsers_eq in hms; subst; eauto.
+Qed.
+
+Lemma mcms_consume_exists_intermediate_subparser :
+  forall g sp sp'' t wsuf,
+    move_closure_multistep g sp (t :: wsuf) sp'' wsuf
+    -> exists sp',
+      move_step g sp (t :: wsuf) sp' wsuf
+      /\ closure_multistep g sp' sp''.
+Proof.
+  intros g sp sp'' t wsuf hm.
+  inv_mcms hm.
+  - exfalso; eapply cons_neq_tail; eauto.
+  - inv hm'.
+    eapply mcms_words_eq_subparsers_eq in hms; subst; eauto.
+Qed.
+
+(* Next definitions and lemmas relate to this invariant *)
+Definition subparsers_complete_wrt_originals g sps wpre sps' wsuf : Prop :=
+  forall sp sp',
+    In sp sps
+    -> move_closure_multistep g sp (wpre ++ wsuf) sp' wsuf
+    -> In sp' sps'.
+
+Lemma move_closure_op_preserves_subparsers_complete_invar :
+  forall g t wpre wsuf sps sps' sps'' sps''',
+    subparsers_complete_wrt_originals g sps wpre sps' (t :: wsuf)
+    -> move g t sps' = inr sps''
+    -> closure g sps'' = inr sps'''
+    -> subparsers_complete_wrt_originals g sps (wpre ++ [t]) sps''' wsuf.
+Proof.
+  intros g t wpre wsuf sps sps' sps'' sps''' hinvar hm hc. 
+  unfold subparsers_complete_wrt_originals. 
+  rewrite <- app_assoc; simpl; intros sp sp''' hi hms.
+  eapply move_closure_multistep_backtrack_once in hms.
+  destruct hms as [sp' [hms hms']].
+  apply hinvar in hms; auto.
+  eapply mcms_consume_exists_intermediate_subparser in hms'.
+  destruct hms' as [sp'' [hm' hc']].
+  eapply move_func_refines_move_step in hm'; eauto.
+  eapply closure_func_refines_closure_multistep; eauto.
+Qed.
+
+Lemma llPredict'_succ_labels_eq_after_prefix :
+  forall g orig_sps wsuf wpre curr_sps rhs,
+    subparsers_complete_wrt_originals g orig_sps wpre curr_sps wsuf
+    -> llPredict' g curr_sps wsuf = PredSucc rhs
+    -> exists wpre' wsuf',
+        wpre ++ wsuf = wpre' ++ wsuf'
+        /\ forall sp sp',
+          In sp orig_sps
+          -> move_closure_multistep g sp (wpre' ++ wsuf') sp' wsuf'
+          -> sp.(prediction) = rhs.
+Proof.
+  intros g orig_sps wsuf.
+  induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs hi hl; 
+  destruct curr_sps as [| curr_sp curr_sps]; sis; tc.
+  - dmeq hall.
+    + inv hl.
+      exists wpre; exists []; split; auto.
+      intros orig_sp curr_sp' hin hm.
+      apply eq_trans with (y := curr_sp'.(prediction)).
+      * eapply mcms_preserves_label; eauto.
+      * apply hi in hm; auto.
+        eapply allPredictionsEqual_in; eauto.
+    + unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp'' sps''] eqn:hf; tc.
+      destruct (allPredictionsEqual sp'' sps'') eqn:ha'; tc.
+      inv hl.
+      exists wpre; exists []; split; auto.
+      intros orig_sp curr_sp' hin hm.
+      apply eq_trans with (y := curr_sp'.(prediction)).
+      * eapply mcms_preserves_label; eauto.
+      * pose proof hm as hm'.
+        apply hi in hm; auto.
+        apply mcms_succ_final_config in hm'; auto.
+        eapply filter_In' in hm; eauto.
+        rewrite hf in hm.
+        eapply allPredictionsEqual_in; eauto.
+  - destruct (allPredictionsEqual curr_sp curr_sps) eqn:ha.
+    + inv hl.
+      exists wpre; exists (t :: wsuf'); split; auto.
+      intros orig_sp curr_sp' hin hm.
+      apply eq_trans with (y := curr_sp'.(prediction)).
+      * eapply mcms_preserves_label; eauto.
+      * eapply hi in hm; eauto.
+        eapply allPredictionsEqual_in; eauto.
+    + dmeq hm; tc; dmeq hc; tc.
+      eapply IH with (wpre := wpre ++ [t]) in hl; eauto.
+      * destruct hl as [wpre' [wsuf'' [heq hall]]].
+        exists wpre'; exists wsuf''; split; auto.
+        rewrite <- heq; apps.
+      * eapply move_closure_op_preserves_subparsers_complete_invar; eauto.
+Qed.
+    
+Lemma subparsers_complete_invar_starts_true :
+  forall g sp sp' sps w,
+    In sp sps
+    -> move_closure_multistep g sp w sp' w
+    -> In sp' sps.
+Proof.
+  intros g sp sp' sps w hi hm.
+  apply mcms_words_eq_subparsers_eq in hm; subst; auto.
+Qed.
+
+
+
+(* move this stuff *)
+
+
 Lemma start_state_init_all_rhss :
   forall g fr o pre x suf frs rhs,
     In (x, rhs) g
@@ -264,309 +474,6 @@ Proof.
   apply in_map_iff.
   exists rhs; split; auto.
   apply rhssForNt_in_iff; auto.
-Qed.
-
-
-
-
-
-(* move this stuff *)
-
-
-
-(* REFACTOR! *)
-Lemma move_closure_multistep_midpoint' :
-  forall g sp sp'' w w'',
-    move_closure_multistep g sp w sp'' w''
-    -> forall wpre wsuf t,
-      w = wpre ++ t :: wsuf
-      -> w'' = wsuf
-      -> exists sp',
-          move_closure_multistep g sp (wpre ++ t :: wsuf) sp' (t :: wsuf)
-          /\ move_closure_multistep g sp' (t :: wsuf) sp'' wsuf.
-Proof.
-  intros g sp sp'' w w'' hm.
-  induction hm; intros wpre wsuf t heq heq'; subst. 
-  - apply app_cons_not_nil in heq; inv heq. 
-  - assert (h : (a, l) :: ts = [] ++ (a, l) :: ts) by auto.
-    rewrite h in heq.
-    assert (h' : wpre ++ t :: [] ++ (a, l) :: ts = (wpre ++ [t]) ++ (a, l) :: ts) by apps.
-    rewrite h' in heq.
-    apply app_inv_tail in heq.
-    apply app_cons_not_nil in heq; inv heq.
-  - destruct wpre. 
-    + sis.
-      inv H.
-      eexists; split.
-      * apply MC_terminal.
-      * eapply MC_trans; eauto.
-    + sis. 
-      inv H.
-      specialize (IHhm wpre wsuf t).
-      destruct IHhm as [sp'''' [hmc hmc']]; auto.
-      eexists; split; eauto.
-      eapply MC_trans; eauto. 
-Qed.
-
-Lemma move_closure_multistep_midpoint :
-  forall g sp sp'' t wpre wsuf,
-    move_closure_multistep g sp (wpre ++ t :: wsuf) sp'' wsuf
-    -> exists sp',
-      move_closure_multistep g sp (wpre ++ t :: wsuf) sp' (t :: wsuf)
-      /\ move_closure_multistep g sp' (t :: wsuf) sp'' wsuf.
-Proof.
-  intros; eapply move_closure_multistep_midpoint'; eauto.
-Qed.
-
-(* This can be simplified -- all we really care about is the length inequality *)
-Lemma mcms_inv :
-  forall g sp sp' ts ts',
-    move_closure_multistep g sp ts sp' ts'
-    -> (exists av pred o pre,
-           sp = Sp av pred (Loc o pre [], [])
-           /\ sp'  = Sp av pred (Loc o pre [], [])
-           /\ ts   = []
-           /\ ts'  = []
-           /\ ts = ts')
-       \/ (exists av pred o pre suf frs a l ts'',
-              sp = Sp av pred (Loc o pre (T a :: suf), frs)
-              /\ sp' = Sp av pred (Loc o pre (T a :: suf), frs)
-              /\ ts  = (a, l) :: ts''
-              /\ ts' = (a, l) :: ts''
-              /\ ts = ts')
-       \/ (exists sp'' sp''' a l ts'',
-              ts = (a, l) :: ts''
-              /\ move_step g sp ts sp'' ts''
-              /\ closure_multistep g sp'' sp'''
-              /\ move_closure_multistep g sp''' ts'' sp' ts'
-              /\ List.length ts' < List.length ts).
-Proof.
-  intros g sp sp' ts ts' hm.
-  induction hm.
-  - left; eauto 10.
-  - right; left; eauto 20.
-  - right; right.
-    inv H.
-    destruct IHhm as [? | [? | ?]].
-    + firstorder. subst.
-      repeat eexists; eauto.
-    + firstorder; subst.
-      repeat eexists; eauto.
-    + firstorder.
-      subst.
-      repeat eexists; eauto.
-      sis.
-      omega.
-Qed.
-
-Lemma app_eq_self_contra :
-  forall A x (xs : list A),
-    (x :: xs) <> xs.
-Proof.
-  intros A x xs; unfold not; intros heq.
-  assert (heq' : [x] ++ xs = [] ++ xs) by apps.
-  apply app_inv_tail in heq'; inv heq'.
-Qed.
-
-(* REFACTOR! *)
-Lemma move_closure_multistep_midpoint_trans' :
-  forall g sp sp'' w w'',
-    move_closure_multistep g sp w sp'' w''
-    -> forall wpre wmid wsuf,
-      w = wpre ++ wmid ++ wsuf
-      -> w'' = wsuf
-      -> exists sp',
-          move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp' (wmid ++ wsuf)
-          /\ move_closure_multistep g sp' (wmid ++ wsuf) sp'' wsuf.
-Proof.
-  intros g sp sp'' w w'' hm.
-  induction hm; intros wpre wmid wsuf heq heq'; subst. 
-  - rewrite app_nil_r in *. 
-    symmetry in heq.
-    apply app_eq_nil in heq; destruct heq; subst.
-    eexists; split; eauto.
-    + constructor.
-    + constructor.
-  - assert (h : (a, l) :: ts = [] ++ (a, l) :: ts) by auto.
-    rewrite h in heq.
-    assert (h' : wpre ++ wmid ++ [] ++ (a,l) :: ts = ((wpre ++ wmid) ++ ((a, l) :: ts))) by apps.
-    rewrite h' in heq.
-    apply app_inv_tail in heq.
-    symmetry in heq; apply app_eq_nil in heq; destruct heq; subst.
-    sis.
-    eexists; split; eauto.
-    + constructor.
-    + constructor.
-  - destruct wpre as [| t wpre].
-    + sis.
-      destruct wmid as [| t' wmid].
-      * sis.
-        inv H.
-        eapply mcms_inv in hm.
-        destruct hm.
-        -- firstorder.
-           tc.
-        -- destruct H. 
-           ++ firstorder.
-              subst.
-              apply app_eq_self_contra in H3; inv H3.
-           ++ firstorder.
-              sis. omega. 
-      * inv H. 
-        eexists; split.
-        -- eapply MC_terminal.
-        -- eapply MC_trans.
-           ++ constructor.
-           ++ eauto.
-           ++ specialize (IHhm [] wmid wsuf).
-              destruct IHhm; auto.
-    + inv H.
-      specialize (IHhm wpre wmid wsuf).
-      destruct IHhm as [sp' [hmc hmc']]; auto.
-      exists sp'; split; auto.
-      eapply MC_trans; eauto.
-      constructor.
-Qed.
-
-(* strange--this doesn't seem to register as a lemma *)
-Lemma move_closure_multistep_backtrack :
-  forall g sp sp'' wpre wmid wsuf,
-    move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp'' wsuf
-    -> exists sp',
-      move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp' (wmid ++ wsuf)
-      /\ move_closure_multistep g sp' (wmid ++ wsuf) sp'' wsuf.
-Proof.
-  intros; eapply move_closure_multistep_midpoint_trans'; eauto.
-Qed.
-
-Lemma mcms_words_eq_subparser_eq :
-  forall g sp sp' ts ts',
-    move_closure_multistep g sp ts sp' ts'
-    -> ts = ts'
-    -> sp = sp'.
-Proof.
-  intros g sp sp' ts ts' hm heq; subst.
-  apply mcms_inv in hm.
-  destruct hm as [? | [? | ?]].
-  - firstorder. subst. auto.
-  - firstorder; subst; auto.
-  - firstorder.
-    omega.
-Qed.
-
-Lemma mcms_inv_nonempty_word :
-  forall g sp sp'' t wsuf,
-    move_closure_multistep g sp (t :: wsuf) sp'' wsuf
-    -> exists sp',
-      move_step g sp (t :: wsuf) sp' wsuf
-      /\ closure_multistep g sp' sp''.
-Proof.
-  intros g sp sp'' t wsuf hm.
-  inv hm.
-  - exfalso; eapply app_eq_self_contra; eauto.
-  - inv H.
-    apply mcms_words_eq_subparser_eq in H1; subst; auto.
-    eexists; split; eauto.
-Qed.
-
-Lemma move_closure_code_refines_relation :
-  forall g sps sps' sps_after_move sps_after_move_closure wpre wsuf t,
-    (forall sp sp', In sp sps -> move_closure_multistep g sp (wpre ++ t :: wsuf) sp' (t :: wsuf) -> In sp' sps')
-    -> move g t sps' = inr sps_after_move
-    -> closure g sps_after_move = inr sps_after_move_closure
-    -> forall sp sp' w w',
-        In sp sps
-        -> move_closure_multistep g sp w sp' w'
-        -> w = wpre ++ t :: wsuf
-        -> w' = wsuf
-        -> In sp' sps_after_move_closure.
-Proof.
-  intros g sps sps' sps_after_move sps_after_move_closure wpre wsuf t hinv hm hc sp sp' w w' hin hrel; intros; subst.
-  eapply move_closure_multistep_midpoint in hrel.
-  destruct hrel as [sp'' [hmc hmc']].
-  apply hinv in hmc; auto.
-  inv hmc'.
-  - exfalso; eapply app_eq_self_contra; eauto.
-  - inv H.
-    eapply move_func_refines_move_step with 
-        (sp' := {|
-                 avail := allNts g;
-                 prediction := pred;
-                 stack := ({| lopt := o; rpre := pre ++ [T a]; rsuf := suf |}, frs) |})
-        (ts := ts'') in hm; eauto.
-    eapply closure_func_refines_closure_multistep in hc; eauto.
-    apply mcms_words_eq_subparser_eq in H1; subst; auto.
-Qed.
-
-Lemma llPredict'_succ_labels_eq :
-  forall g orig_sps wsuf wpre curr_sps rhs,
-    llPredict' g curr_sps wsuf = PredSucc rhs
-    -> (forall sp sp',
-           In sp orig_sps
-           -> move_closure_multistep g sp (wpre ++ wsuf) sp' wsuf
-           -> In sp' curr_sps)
-    -> exists wpre' wsuf',
-        wpre ++ wsuf = wpre' ++ wsuf'
-        /\ forall sp sp',
-          In sp orig_sps
-          -> move_closure_multistep g sp (wpre' ++ wsuf') sp' wsuf'
-          -> sp.(prediction) = rhs.
-Proof.
-  intros g orig_sps wsuf.
-  induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs hl hi; sis.
-  - destruct curr_sps as [| sp' sps']; tc.
-    dmeq hall.
-    + inv hl.
-      exists wpre; exists []; split; auto.
-      intros orig_sp curr_sp hin hm.
-      erewrite mcms_preserves_label
-        with (sp := orig_sp) (sp' := curr_sp); eauto.
-      eapply hi in hin; eauto.
-      erewrite allPredictionEqual_in; eauto.
-    + unfold handleFinalSubparsers in hl.
-      destruct (filter _ _) as [| sp'' sps''] eqn:hf; tc.
-      destruct (allPredictionsEqual sp'' sps'') eqn:ha'; tc.
-      inv hl.
-      exists wpre; exists []; split; auto.
-      intros orig_sp curr_sp hin hm.
-      eapply hi in hin; eauto.
-      pose proof hm as hm'.
-      apply mcms_succ_final_config in hm'; auto.
-      pose proof (filter_In) as hfi.
-      assert (hand : In curr_sp (sp' :: sps') /\ finalConfig curr_sp = true) by firstorder.
-      apply hfi in hand.
-      rewrite hf in hand.
-      erewrite mcms_preserves_label with
-          (sp := orig_sp) (sp' := curr_sp); eauto.
-      erewrite allPredictionEqual_in; eauto.
-  - destruct curr_sps as [| sp' sps']; tc.
-    destruct (allPredictionsEqual sp' sps') eqn:ha.
-    + inv hl.
-      exists wpre; exists (t :: wsuf'); split; auto.
-      intros orig_sp curr_sp hin hm.
-      eapply hi in hin; eauto.
-      erewrite mcms_preserves_label with
-          (sp := orig_sp) (sp' := curr_sp); eauto.
-      erewrite allPredictionEqual_in; eauto.
-    + destruct (move _ _ _) as [msg | sps_after_mv] eqn:hm; tc.
-      destruct (closure _ _) as [msg | sps_after_mv_cl_step] eqn:hc; tc.
-      eapply IH with (wpre := wpre ++ [t]) in hl; eauto.
-      * destruct hl as [wpre' [wsuf'' [heq hall]]].
-        exists wpre'; exists wsuf''; split; auto.
-        rewrite <- heq; apps.
-      * intros.
-        eapply move_closure_code_refines_relation; eauto.
-        apps.
-Qed.
-
-Lemma subparser_complete_starts_true :
-  forall g sp sp' sps w,
-    In sp sps
-    -> move_closure_multistep g sp w sp' w
-    -> In sp' sps.
-Proof.
-  intros g sp sp' sps w hi hm.
-  apply mcms_words_eq_subparser_eq in hm; subst; auto.
 Qed.
 
 Inductive stable_config : location_stack -> Prop :=
@@ -894,6 +801,9 @@ Proof.
   - intros sp sp' hi hm.
     apply mcms_words_eq_subparser_eq in hm; subst; auto.
 Qed.
+
+
+
 
 
 (* May not be necessary *)
