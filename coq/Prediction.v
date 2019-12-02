@@ -350,6 +350,53 @@ Definition meas (g : grammar) (sp : subparser) : nat * nat :=
     in  (stackScore stk (1 + m) e, stackHeight stk)
   end.
 
+Lemma meas_lt_after_return :
+  forall g sp sp' av pred o o' pre pre' suf' x frs,
+    sp = Sp av pred (Loc o pre [], Loc o' pre' (NT x :: suf') :: frs)
+    -> sp' = Sp (NtSet.add x av) pred (Loc o' (pre' ++ [NT x]) suf', frs)
+    -> lex_nat_pair (meas g sp') (meas g sp).
+Proof.
+  intros g sp sp' av pred o o' pre pre' suf' x frs ? ?; subst.
+  pose proof (stackScore_le_after_return' o o' pre pre' suf' x) as hle.
+  eapply le_lt_or_eq in hle; eauto.
+  destruct hle as [hlt | heq]; sis.
+  - apply pair_fst_lt; eauto.
+  - rewrite heq; apply pair_snd_lt; auto.
+Defined.
+
+Lemma meas_lt_after_push :
+  forall g sp sp' fr fr' av pred o pre suf x rhs frs,
+    sp = Sp av pred (fr, frs)
+    -> sp' = Sp (NtSet.remove x av) pred (fr', fr :: frs)
+    -> fr  = Loc o pre (NT x :: suf)
+    -> fr' = Loc (Some x) [] rhs
+    -> NtSet.In x av
+    -> In rhs (rhssForNt g x)
+    -> lex_nat_pair (meas g sp') (meas g sp).
+Proof.
+  intros g sp sp' fr fr' av pred o pre suf x rhs frs ? ? ? ? hi hi'; subst.
+  apply pair_fst_lt.
+  eapply stackScore_lt_after_push; sis; eauto.
+Defined.
+
+Lemma spClosureStep_meas_lt :
+  forall (g      : grammar)
+         (sp sp' : subparser)
+         (sps'   : list subparser),
+    spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> lex_nat_pair (meas g sp') (meas g sp).
+Proof.
+  intros g sp sp' sps' hs hi. 
+  unfold spClosureStep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
+  - apply in_singleton_eq in hi; subst.
+    eapply meas_lt_after_return; eauto.
+  - apply in_map_iff in hi.
+    destruct hi as [rhs [heq hi]]; subst.
+    eapply meas_lt_after_push; eauto.
+    apply NtSet.mem_spec; auto.
+Defined.
+(*
 Lemma spClosureStep_meas_lt :
   forall (g      : grammar)
          (sp sp' : subparser)
@@ -371,7 +418,7 @@ Proof.
     eapply stackScore_lt_after_push; simpl; eauto.
     apply NtSet.mem_spec; auto.
 Defined.
-
+*)
 Lemma acc_after_step :
   forall g sp sp' sps',
     spClosureStep g sp = SpClosureStepK sps'

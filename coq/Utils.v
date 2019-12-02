@@ -154,3 +154,10 @@ Lemma filter_In' :
 Proof.
   intros; apply filter_In; auto.
 Qed.
+
+Lemma app_group_endpoints_l :
+  forall A (x y : A) (xs ys : list A),
+    x :: xs ++ y :: ys = (x :: xs ++ [y]) ++ ys.
+Proof.
+  intros A x y xs ys; simpl; apps.
+Qed.

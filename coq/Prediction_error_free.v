@@ -24,6 +24,15 @@ Definition sp_ready_for_move (sp : subparser) : Prop :=
 Definition all_sps_ready_for_move (sps : list subparser) : Prop :=
   forall sp, In sp sps -> sp_ready_for_move sp.
 
+(* This definition can probably be merged with sp_ready_for_move *)
+Inductive stable_config : location_stack -> Prop :=
+| SC_empty :
+    forall o pre,
+    stable_config (Loc o pre [], [])
+| SC_terminal :
+    forall o pre a suf frs,
+      stable_config (Loc o pre (T a :: suf), frs).
+
 Lemma spClosureStep_never_returns_SpInvalidState :
   forall g sp,
     lstack_wf g sp.(stack)
@@ -353,6 +362,26 @@ Proof.
     inv hp; eapply IH in hw; eauto.
 Qed.
 
+Lemma invars_imply_head_nt_available :
+  forall g av pred fr frs o pre suf x,
+    fr = Loc o pre (NT x :: suf)
+    -> no_left_recursion g
+    -> lstack_wf g (fr, frs)
+    -> unavailable_nts_invar g (Sp av pred (fr, frs))
+    -> NtSet.In x (allNts g)
+    -> NtSet.In x av.
+Proof.
+  intros g av pred fr frs o pre suf x ? hn hw hu hi; subst.
+  destruct (In_dec x av) as [hi' | hn']; auto.
+  exfalso.
+  apply hu in hn'; auto.
+  destruct hn' as [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
+  simpl in hw; rewrite app_group_endpoints_l in hw.
+  apply locations_wf_app_l in hw.
+  eapply stack_configuration_repr_nullable_path with (y := x) in hw; sis; eauto.
+  eapply hn; eauto.
+Qed.    
+
 Lemma spClosureStep_never_finds_left_recursion :
   forall g sp x,
     no_left_recursion g
@@ -361,22 +390,13 @@ Lemma spClosureStep_never_finds_left_recursion :
     -> spClosureStep g sp <> SpClosureStepError (SpLeftRecursion x).
 Proof.
   intros g sp x hn hw hu; unfold not; intros hs.
-  destruct sp as (av, pred, (fr, frs)); simpl in hw.
+  destruct sp as [av pred (fr, frs)]; simpl in hw.
   pose proof hs as hs'.
   apply spClosureStep_LeftRecursion_facts in hs'.
   destruct hs' as [hn' [hi [suf heq]]]; subst.
   unfold spClosureStep in hs; dms; tc; sis; subst.
   inv heq.
-  apply hu in hn'; clear hu; auto.
-  destruct hn' as [hn' [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
-   assert (happ : (Loc lopt rpre (NT x :: suf)) :: frs_pre ++ fr_cr :: frs_suf =
-                  (Loc lopt rpre (NT x :: suf) :: frs_pre ++ [fr_cr]) ++ frs_suf).
-    (* lemma *)
-    { simpl. rewrite <- app_assoc. simpl. auto. }
-    rewrite happ in hw.
-    apply locations_wf_app_l in hw.
-    eapply stack_configuration_repr_nullable_path with (y := x) in hw; sis; eauto.
-    eapply hn; eauto.
+  eapply invars_imply_head_nt_available with (pred := pred) in hi; eauto.
 Qed.
   
 Lemma spClosure_never_finds_left_recursion :

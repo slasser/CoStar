@@ -97,6 +97,7 @@ Proof.
     + destruct (nt_eq_dec x' x); subst; auto.
       apply in_cons; auto.
 Qed.
+Hint Resolve rhssForNt_in_iff.
 
 Lemma rhssForNt_rhss :
   forall g x rhs,
