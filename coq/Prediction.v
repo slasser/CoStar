@@ -762,15 +762,35 @@ Proof.
       destruct hm as [? [? ?]]; eauto.
 Qed.
 
-(* break this into two functions *)
+Definition initSps (g : grammar) (x : nonterminal) (stk : location_stack) : list subparser :=
+  let (loc, locs) := stk
+  in  map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, loc :: locs))
+          (rhssForNt g x).
+
+Lemma initSps_prediction_in_rhssForNt :
+  forall g x stk sp,
+    In sp (initSps g x stk)
+    -> In sp.(prediction) (rhssForNt g x).
+Proof.
+  intros g x (fr, frs) sp hi; unfold initSps in hi.
+  eapply in_map_iff in hi; firstorder; subst; auto.
+Qed.
+
+Lemma initSps_result_incl_all_rhss :
+  forall g fr o pre x suf rhs frs,
+    fr = Loc o pre (NT x :: suf)
+    -> In (x, rhs) g
+    -> In (Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs))
+          (initSps g x (fr, frs)).
+Proof.
+  intros g fr o pre x suf rhs frs ? hi; subst.
+  apply in_map_iff; exists rhs; split; auto.
+  apply rhssForNt_in_iff; auto.
+Qed.
+
 Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
   sum prediction_error (list subparser) :=
-  match stk with
-  | (loc, locs) =>
-    let init := map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, loc :: locs))
-                    (rhssForNt g x)
-    in  closure g init
-  end.
+  closure g (initSps g x stk).
 
 Lemma startState_sp_prediction_in_rhssForNt :
   forall g x stk sp' sps',
@@ -782,9 +802,8 @@ Proof.
   unfold startState in hf.
   eapply closure_preserves_prediction in hf; eauto.
   destruct hf as [sp [hin heq]].
-  apply in_map_iff in hin.
-  destruct hin as [gamma [hin heq']]; subst.
-  rewrite heq; auto.
+  rewrite heq.
+  eapply initSps_prediction_in_rhssForNt; eauto.
 Qed.
 
 Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
@@ -961,6 +980,19 @@ Proof.
   - inv hi.
 Qed.
 
+Lemma initSps_preserves_lstack_wf_invar :
+  forall g fr o pre x suf frs sp,
+    fr = Loc o pre (NT x :: suf)
+    -> lstack_wf g (fr, frs)
+    -> In sp (initSps g x (fr, frs))
+    -> lstack_wf g sp.(stack).
+Proof.
+  intros g fr o pre x suf frs sp ? hw hi; subst; unfold initSps in hi.
+  apply in_map_iff in hi.
+  destruct hi as [rhs [? hi]]; subst; sis.
+  apply push_preserves_locations_wf_invar; eauto.
+Qed.
+
 (* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
    TO THE SHAPE OF THE STACK *)
 
@@ -1052,3 +1084,13 @@ Proof.
   - inv hi.
 Qed.
 
+Lemma initSps_sat_unavailable_nts_invar :
+  forall g x o pre suf frs sp,
+    In sp (initSps g x (Loc o pre (NT x :: suf), frs))
+    -> unavailable_nts_invar g sp.
+Proof.
+  intros g x o pre suf frs sp hi; unfold initSps in hi.
+  apply in_map_iff in hi; destruct hi as [rhs [? hi]]; subst.
+  unfold unavailable_nts_invar; unfold unavailable_nts_are_open_calls.
+  intros; ND.fsetdec.
+Qed.

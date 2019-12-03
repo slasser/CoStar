@@ -667,8 +667,18 @@ Proof.
   apply rhssForNt_in_iff; auto.
 Qed.
 
+Lemma initSps_result_incl_all_rhss :
+  forall g fr o pre x suf rhs frs,
+    fr = Loc o pre (NT x :: suf)
+    -> In (x, rhs) g
+    -> In (Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs))
+          (initSps g x (fr, frs)).
+Proof.
+  intros g fr o pre x suf rhs frs ? hi; subst.
+  apply in_map_iff; exists rhs; split; auto.
+  apply rhssForNt_in_iff; auto.
+Qed.
 
-  
 (* refactor *)
 Lemma llPredict_succ_rhs_derives_at_most_one_prefix :
   forall g fr o pre x suf frs w rhs rhs',
@@ -684,15 +694,12 @@ Proof.
   unfold llPredict in hl.
   destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
   eapply llPredict'_succ_labels_eq_after_prefix
-    with (wpre := []) (orig_sps := sps) 
-    in hl; eauto.
+    with (wpre := []) (orig_sps := sps) in hl; eauto.
   - destruct hl as [wpre [wsuf [heq hall]]]; sis.
     assert (hi : In (Sp (allNts g) rhs (Loc (Some x) [] rhs, Loc o pre (NT x :: suf) :: frs)) 
                     (map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, Loc o pre (NT x :: suf) :: frs)) 
                          (rhssForNt g x))).
-    { apply in_map_iff. 
-      eexists; split; eauto.
-      apply rhssForNt_in_iff; auto. }
+    { eapply start_state_init_all_rhss; eauto. }
     assert (hex : exists sp',
                closure_multistep g (Sp (allNts g) rhs (Loc (Some x) [] rhs, Loc o pre (NT x :: suf) :: frs)) sp'
                /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w).
@@ -730,9 +737,6 @@ Proof.
   - intros sp sp' hi hm.
     apply mcms_words_eq_subparsers_eq in hm; subst; auto.
 Qed.
-
-
-
 
 
 (* May not be necessary *)

@@ -88,6 +88,7 @@ Proof.
   intros g loc locs x suf hw heq; unfold not; intros hss.
   eapply closure_never_returns_SpInvalidState; eauto.
   intros sp hi.
+  unfold initSps in hi.
   apply in_map_iff in hi.
   destruct hi as [rhs [heq' hi]]; subst; simpl.
   (* LEMMA *)
@@ -280,15 +281,10 @@ Lemma stacks_wf_in_startState_result :
     -> startState g x (fr, frs) = inr sps
     -> all_sp_stacks_wf g sps.
 Proof.
-  intros g fr frs x suf sps hw heq hs.
-  unfold startState in hs.
+  intros g [o pre suf'] frs x suf sps hw heq hs; sis; subst.
   eapply closure_preserves_lstack_wf_invar; eauto.
-  unfold all_sp_stacks_wf.
-  intros sp hi.
-  apply in_map_iff in hi.
-  destruct hi as [rhs [heq' hi]]; subst; sis.
-  apply rhssForNt_in_iff in hi.
-  inv hw; sis; subst; auto.
+  unfold all_sp_stacks_wf; intros sp hi.
+  eapply initSps_preserves_lstack_wf_invar; eauto.
 Qed.
 
 Lemma llPredict_never_returns_SpInvalidState :
@@ -443,25 +439,12 @@ Lemma startState_never_finds_left_recursion :
     -> fr.(rsuf) = NT x :: suf
     -> startState g x (fr, frs) <> inl (SpLeftRecursion x').
 Proof.
-  intros g x x' fr frs suf hn hw heq; unfold not; intros hs.
+  intros g x x' [o pre suf'] frs suf hn hw heq; unfold not; intros hs; sis; subst.
   eapply closure_never_finds_left_recursion; eauto.
-  - unfold all_sp_stacks_wf.
-    intros sp hi.
-    apply in_map_iff in hi.
-    destruct hi as [rhs [heq' hi]]; subst; simpl.
-    (* LEMMA *)
-    clear hs.
-    inv hw; sis; subst.
-    + constructor; auto.
-      apply rhssForNt_in_iff; auto.
-    + constructor; auto.
-      apply rhssForNt_in_iff; auto.
-  - unfold sps_unavailable_nts_invar.
-    intros sp hi.
-    apply in_map_iff in hi.
-    destruct hi as [rhs [heq' hi]]; subst.
-    unfold unavailable_nts_invar; unfold unavailable_nts_are_open_calls.
-    intros; ND.fsetdec.
+  - unfold all_sp_stacks_wf; intros sp hi.
+    eapply initSps_preserves_lstack_wf_invar; eauto.
+  - unfold sps_unavailable_nts_invar; intros sp hi.
+    eapply initSps_sat_unavailable_nts_invar; eauto.
 Qed.
 
 Lemma moveSp_never_returns_SpLeftRecursion :
