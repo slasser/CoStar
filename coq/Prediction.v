@@ -1084,6 +1084,13 @@ Proof.
   - inv hi.
 Qed.
 
+Lemma unavailable_nts_allNts :
+  forall g pred stk,
+    unavailable_nts_invar g (Sp (allNts g) pred stk).
+Proof.
+  intros g pred (fr, frs); repeat red; intros; ND.fsetdec.
+Qed.
+
 Lemma initSps_sat_unavailable_nts_invar :
   forall g x o pre suf frs sp,
     In sp (initSps g x (Loc o pre (NT x :: suf), frs))
@@ -1091,6 +1098,5 @@ Lemma initSps_sat_unavailable_nts_invar :
 Proof.
   intros g x o pre suf frs sp hi; unfold initSps in hi.
   apply in_map_iff in hi; destruct hi as [rhs [? hi]]; subst.
-  unfold unavailable_nts_invar; unfold unavailable_nts_are_open_calls.
-  intros; ND.fsetdec.
+  apply unavailable_nts_allNts.
 Qed.
