@@ -313,6 +313,30 @@ Proof.
       apply in_or_app; auto.
 Qed.
 
+Lemma aggrClosureResults_map_backwards :
+  forall sp'' (f : subparser -> closure_result) (sps sps'' : list subparser),
+    aggrClosureResults (map f sps) = inr sps''
+    -> In sp'' sps''
+    -> exists sp sps',
+        In sp sps
+        /\ f sp = inr sps'
+        /\ In sp'' sps'.
+Proof.
+  intros sp'' f sps; induction sps as [| sp sps IH]; intros sps'' ha hi.
+  - sis; inv ha; inv hi.
+  - simpl in ha.
+    destruct (f sp) as [? | hd_sps] eqn:hf; tc.
+    destruct (aggrClosureResults _) as [? | tl_sps] eqn:ha'; tc.
+    inv ha.
+    apply in_app_or in hi; destruct hi as [hhd | htl].
+    + exists sp; exists hd_sps; repeat split; auto.
+      apply in_eq.
+    + apply IH in htl; auto.
+      destruct htl as [sp' [sps' [? [? ?]]]]; subst.
+      exists sp'; exists sps'; repeat split; auto.
+      apply in_cons; auto.
+Qed.
+
 Lemma aggrClosureResults_dmap_succ_elt_succ :
   forall sp (sps : list subparser) (f : forall sp, In sp sps -> closure_result) sps'',
     In sp sps

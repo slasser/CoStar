@@ -408,7 +408,7 @@ Proof.
   eapply closure_func_refines_closure_multistep; eauto.
   eapply initSps_result_incl_all_rhss; eauto.
 Qed.
-
+  
 Inductive move_closure_multistep (g : grammar) :
   subparser -> list token -> subparser -> list token -> Prop :=
 | MC_empty :
@@ -738,6 +738,131 @@ Proof.
     apply push_preserves_locations_wf_invar; auto.
     apply rhssForNt_in_iff; auto.
 Qed.
+
+
+(* Moving on to the case where llPredict returns Ambig... *)
+
+Definition subparsers_sound_wrt_originals g sps wpre sps' wsuf :=
+  forall sp',
+    In sp' sps'
+    -> exists sp,
+      In sp sps
+      /\ move_closure_multistep g sp (wpre ++ wsuf) sp' wsuf.
+
+Lemma move_func_refines_move_step_backward :
+  forall g t w sps sps' sp',
+    move g t sps = inr sps'
+    -> In sp' sps'
+    -> exists sp,
+        In sp sps
+        /\ move_step g sp (t :: w) sp' w.
+Proof.
+Admitted.
+
+Lemma closure_func_refines_closure_multistep_backward :
+  forall g sps sps'' sp'',
+    closure g sps = inr sps''
+    -> In sp'' sps''
+    -> exists sp,
+        In sp sps
+        /\ closure_multistep g sp sp''.
+Proof.
+  intros g sps sps'' sp'' hc hi.
+  unfold closure in hc.
+  eapply aggrClosureResults_map_backwards in hc; eauto.
+  destruct hc as [sp [sps' [hi' [heq hi'']]]].
+  exists sp; split; auto.
+Admitted.
+
+Lemma move_closure_op_preserves_subparsers_sound_invar :
+  forall g t wpre wsuf sps sps' sps'' sps''',
+    subparsers_sound_wrt_originals g sps wpre sps' (t :: wsuf)
+    -> move g t sps' = inr sps''
+    -> closure g sps'' = inr sps'''
+    -> subparsers_sound_wrt_originals g sps (wpre ++ [t]) sps''' wsuf.
+Proof.
+  intros g t wpre wsuf sps sps' sps'' sps''' hi hm hc. 
+  unfold subparsers_sound_wrt_originals in *.
+  rewrite <- app_assoc; simpl; intros sp''' hi'''.
+  eapply closure_func_refines_closure_multistep_backward in hc; eauto.
+  destruct hc as [sp'' [hi'' hc]].
+  eapply move_func_refines_move_step_backward
+    with (w := wsuf) in hm; eauto.
+  destruct hm as [sp' [hi' hm]].
+  apply hi in hi'; clear hi.
+  destruct hi' as [sp [hi hmcms]].
+  exists sp; split; auto.
+  (* we need a transitivity lemma here *)
+Admitted.
+
+Lemma llPredict'_ambig_something :
+  forall g orig_sps wsuf wpre curr_sps rhs,
+    subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
+    -> llPredict' g curr_sps wsuf = PredAmbig rhs
+    -> exists orig_sp final_sp,
+        In orig_sp orig_sps
+        /\ orig_sp.(prediction) = rhs
+        /\ move_closure_multistep g orig_sp (wpre ++ wsuf) final_sp [].
+Proof.
+  intros g orig_sps wsuf.
+  induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs hi hl. 
+  destruct curr_sps as [| curr_sp curr_sps]; sis; tc.
+  - dmeq hall; tc.
+    unfold handleFinalSubparsers in hl.
+    destruct (filter _ _) as [| curr_sp' curr_sps'] eqn:hf; tc.
+    destruct (allPredictionsEqual curr_sp' curr_sps') eqn:ha; tc.
+    inv hl.
+    unfold subparsers_sound_wrt_originals in hi.
+    assert (hi' : In curr_sp' (curr_sp :: curr_sps)).
+    { eapply filter_In.
+      rewrite hf.
+      apply in_eq. }
+    apply hi in hi'.
+    destruct hi' as [orig_sp [hi' hm]].
+    exists orig_sp; exists curr_sp'; repeat split; auto.
+    eapply mcms_preserves_label; eauto.
+  - unfold llPredict' in hl.
+    destruct curr_sps as [| csp csps]; tc.
+    dm; tc.
+    destruct (move _ _ ) as [e | sps'] eqn:hm; tc.
+    destruct (closure _ _) as [e | sps''] eqn:hc; tc.
+    fold llPredict' in hl.
+    eapply IH with (wpre := wpre ++ [t]) in hl.
+    + destruct hl as [osp [fsp [hi' [heq hm']]]].
+      exists osp; exists fsp; repeat split; auto.
+      rewrite <- app_assoc in hm'; auto.
+    + eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
+Qed.    
+
+Lemma llPredict_ambig_multiple_rhss_apply :
+  forall g cr ce o pre x suf frs w rhs,
+    cr = Loc o pre (NT x :: suf)
+    -> ce = Loc (Some x) [] rhs
+    -> no_left_recursion g
+    -> lstack_wf g (cr, frs)
+    -> llPredict g x (cr, frs) w = PredAmbig rhs
+    -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
+       /\ exists rhs',
+        rhs <> rhs'
+        /\ gamma_recognize g (unprocStackSyms (Loc (Some x) [] rhs', cr :: frs)) w.
+Proof.
+  intros g cr ce o pre x suf frs w rhs ? ? hn hw hl; subst; sis.
+  pose proof hl as hl'; apply llPredict_ambig_in_grammar in hl'.
+  unfold llPredict in hl.
+  destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
+  eapply llPredict'_ambig_something
+    with (orig_sps := sps) (wpre := []) in hl; eauto; sis.
+  - (* orig_sp's unprocStackSyms must recognize remaining input *)
+    (* we should also need to prove that if orig_sp recognizes remaining input, then an sp in the initSps also recognizes remaining input *)
+    admit.
+  - (* lemma: invariant starts true *)
+    red.
+    intros sp' hi.
+    sis.
+    exists sp'; split; auto.
+    (* sp' must e in a stable config, so it steps to itself *)
+    admit.
+Admitted.
 
 
 (* May not be necessary *)
