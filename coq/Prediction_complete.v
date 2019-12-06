@@ -73,6 +73,18 @@ Proof.
   inv hm; unfold moveSp; dms; tc.
 Qed.
 
+Lemma move_step_moveSp :
+  forall g t w' sp sp',
+    moveSp g t sp = SpMoveSucc sp'
+    -> move_step g sp (t :: w') sp' w'.
+Proof.
+  intros g t w' [av pred ([o pre suf], frs)]
+                [av' pred' ([o' pre' suf'], frs')] hm.
+  unfold moveSp in hm.
+  destruct suf as [| [a | x] suf]; try (dms; tc); subst.
+  inv hm; constructor.
+Qed.
+
 Lemma move_step_preserves_lstack_wf_invar :
   forall g sp sp' t w,
     move_step g sp (t :: w) sp' w
@@ -160,6 +172,26 @@ Lemma closure_step_preserves_lstack_wf_invar :
 Proof.
   intros g sp sp' hc hw; inv hc; sis; auto.
   eapply return_preserves_locations_wf_invar; eauto.
+Qed.
+
+Lemma spClosureStep_sound :
+  forall g sp sp' sps',
+    lstack_wf g sp.(stack)
+    -> spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> closure_step g sp sp'.
+Proof.
+  intros g sp sp' sps' hw hs hi.
+  unfold spClosureStep in hs; dmeqs h; tc; subst; sis.
+  - inv hw; inv hs.
+    apply in_singleton_eq in hi; subst; auto.
+  - inv hs.
+    apply in_map_iff in hi.
+    destruct hi as [rhs [heq hi]]; subst.
+    constructor.
+    + apply NtSet.mem_spec; auto.
+    + apply rhssForNt_in_iff; auto.
+  - inv hs; inv hi.
 Qed.
 
 Inductive closure_multistep (g : grammar) : subparser -> subparser -> Prop :=
@@ -265,6 +297,53 @@ Lemma spClosure_refines_closure_multistep :
     -> In sp'' sps''.
 Proof.
   intros; eapply spClosure_refines_closure_multistep'; eauto.
+Qed.
+
+Lemma spClosure_sound_wrt_closure_multistep' :
+  forall (g  : grammar)
+         (pr : nat * nat)
+         (a  : Acc lex_nat_pair pr)
+         (sp sp''' : subparser)
+         (a' : Acc lex_nat_pair (meas g sp))
+         (sps''' : list subparser),
+    pr = meas g sp
+    -> lstack_wf g sp.(stack)
+    -> spClosure g sp a' = inr sps'''
+    -> In sp''' sps'''
+    -> closure_multistep g sp sp'''.
+Proof.
+  intros g pr a.
+  induction a as [pr hlt IH]; intros sp sp''' a' sps''' heq hw hs hi; subst.
+  apply spClosure_success_cases in hs.
+  destruct hs as [[hdone heq] | [sps' [hs [crs [heq ha]]]]]; subst.
+  - apply in_singleton_eq in hi; subst.
+    apply spClosureStepDone_ready_for_move in hdone.
+    red in hdone.
+    destruct sp as [av pred ([o pre suf], frs)].
+    destruct hdone as [ [hfr hfrs] | hterm]; sis; subst.
+    + constructor.
+    + destruct hterm as [a [suf' heq]]; subst.
+      constructor.
+  - eapply aggrClosureResults_dmap_backwards in ha; eauto.
+    destruct ha as [sp' [hi' [sps'' [hi'' [hs' hi''']]]]].
+    eapply CMS_trans with (sp' := sp').
+    + eapply spClosureStep_sound; eauto.
+    + eapply IH; eauto.
+      * eapply spClosureStep_meas_lt; eauto.
+      * eapply spClosureStep_preserves_lstack_wf_invar; eauto.
+Qed.
+
+Lemma spClosure_sound_wrt_closure_multistep :
+  forall (g  : grammar)
+         (sp sp' : subparser)
+         (a : Acc lex_nat_pair (meas g sp))
+         (sps' : list subparser),
+    lstack_wf g sp.(stack)
+    -> spClosure g sp a = inr sps'
+    -> In sp' sps'
+    -> closure_multistep g sp sp'.
+Proof.
+  intros; eapply spClosure_sound_wrt_closure_multistep'; eauto.
 Qed.
 
 Lemma closure_func_refines_closure_multistep :
@@ -408,7 +487,30 @@ Proof.
   eapply closure_func_refines_closure_multistep; eauto.
   eapply initSps_result_incl_all_rhss; eauto.
 Qed.
-  
+
+(*
+Inductive move_closure_multistep (g : grammar) :
+  subparser -> list token -> subparser -> list token -> Prop :=
+| MC_empty :
+    forall av pred o pre,
+      move_closure_multistep g (Sp av pred (Loc o pre [], []))
+                               []
+                               (Sp av pred (Loc o pre [], []))
+                               []
+| MC_terminal :
+    forall av pred o pre suf frs a l ts,
+      move_closure_multistep g (Sp av pred (Loc o pre (T a :: suf), frs))
+                               ((a,l) :: ts)
+                               (Sp av pred (Loc o pre (T a :: suf), frs))
+                               ((a,l) :: ts)
+| MC_trans :
+    forall sp sp' sp'' sp''' ts ts'' ts''',
+      move_step g sp ts sp' ts''
+      -> closure_multistep g sp' sp''
+      -> move_closure_multistep g sp'' ts'' sp''' ts'''
+      -> move_closure_multistep g sp ts sp''' ts'''.
+ *)
+
 Inductive move_closure_multistep (g : grammar) :
   subparser -> list token -> subparser -> list token -> Prop :=
 | MC_empty :
@@ -617,6 +719,25 @@ Proof.
       eapply move_step_preserves_lstack_wf_invar; eauto.
 Qed.
 
+Lemma mcms_transitive :
+  forall g w w' sp sp',
+    move_closure_multistep g sp w sp' w'
+    -> forall sp'' w'',
+      move_closure_multistep g sp' w' sp'' w''
+      -> move_closure_multistep g sp w sp'' w''.
+Proof.
+  intros g w w' sp sp' hm.
+  induction hm; intros sp'''' w'' hm'; inv hm'; eauto.
+Qed.
+
+Lemma mcms_transitive_three_groups :
+  forall g wpre wmid wsuf sp sp' sp'',
+    move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp' (wmid ++ wsuf)
+    -> move_closure_multistep g sp' (wmid ++ wsuf) sp'' wsuf
+    -> move_closure_multistep g sp (wpre ++ wmid ++ wsuf) sp'' wsuf.
+Proof.
+  intros; eapply mcms_transitive; eauto.
+Qed.
 
 (* Next definitions and lemmas relate to this invariant *)
 Definition subparsers_complete_wrt_originals g sps wpre sps' wsuf : Prop :=
@@ -742,12 +863,47 @@ Qed.
 
 (* Moving on to the case where llPredict returns Ambig... *)
 
+Inductive move_closure_multistep' (g : grammar) :
+  subparser -> list token -> subparser -> list token -> Prop :=
+| MC_empty' :
+    forall av pred o pre ts,
+      move_closure_multistep' g (Sp av pred (Loc o pre [], []))
+                               ts
+                               (Sp av pred (Loc o pre [], []))
+                               ts
+| MC_terminal' :
+    forall av pred o pre suf frs a ts,
+      move_closure_multistep' g (Sp av pred (Loc o pre (T a :: suf), frs))
+                             ts
+                               (Sp av pred (Loc o pre (T a :: suf), frs))
+                               ts
+| MC_trans' :
+    forall sp sp' sp'' sp''' ts ts'' ts''',
+      move_step g sp ts sp' ts''
+      -> closure_multistep g sp' sp''
+      -> move_closure_multistep' g sp'' ts'' sp''' ts'''
+      -> move_closure_multistep' g sp ts sp''' ts'''.
+
+Hint Constructors move_closure_multistep'.
+
+(*
+Ltac induct_mcms hm :=
+  induction hm as [ ? ? ? ?
+                  | ? ? ? ? ? ? ? ? ?
+                  | ? ? ? ? ? ? ? hm hc hms IH].
+
+Ltac inv_mcms hm :=
+  inversion hm as [ ? ? ? ?
+                  | ? ? ? ? ? ? ? ? ?
+                  | ? ? ? ? ? ? ? hm' hc hms IH]; subst; clear hm.
+ *)
+
 Definition subparsers_sound_wrt_originals g sps wpre sps' wsuf :=
   forall sp',
     In sp' sps'
     -> exists sp,
       In sp sps
-      /\ move_closure_multistep g sp (wpre ++ wsuf) sp' wsuf.
+      /\ move_closure_multistep' g sp (wpre ++ wsuf) sp' wsuf.
 
 Lemma move_func_refines_move_step_backward :
   forall g t w sps sps' sp',
@@ -757,33 +913,77 @@ Lemma move_func_refines_move_step_backward :
         In sp sps
         /\ move_step g sp (t :: w) sp' w.
 Proof.
-Admitted.
+  intros g t s sps sps' sp' hm hi.
+  unfold move in hm.
+  eapply aggrMoveResults_map_backwards in hm; eauto.
+  destruct hm as [sp [hi' hm]].
+  exists sp; split; auto.
+  apply move_step_moveSp; auto.
+Qed.
 
 Lemma closure_func_refines_closure_multistep_backward :
   forall g sps sps'' sp'',
-    closure g sps = inr sps''
+    all_sp_stacks_wf g sps
+    -> closure g sps = inr sps''
     -> In sp'' sps''
     -> exists sp,
         In sp sps
         /\ closure_multistep g sp sp''.
 Proof.
-  intros g sps sps'' sp'' hc hi.
+  intros g sps sps'' sp'' ha hc hi.
   unfold closure in hc.
   eapply aggrClosureResults_map_backwards in hc; eauto.
   destruct hc as [sp [sps' [hi' [heq hi'']]]].
   exists sp; split; auto.
-Admitted.
+  eapply spClosure_sound_wrt_closure_multistep; eauto.
+Qed.
+
+Lemma mcms'_transitive :
+  forall g w w' sp sp',
+    move_closure_multistep' g sp w sp' w'
+    -> forall sp'' w'',
+      move_closure_multistep' g sp' w' sp'' w''
+      -> move_closure_multistep' g sp w sp'' w''.
+Proof.
+  intros g w w' sp sp' hm.
+  induction hm; intros sp'''' w'' hm'; inv hm'; eauto.
+Qed.
+
+Lemma mcms'_transitive_three_groups :
+  forall g wpre wmid wsuf sp sp' sp'',
+    move_closure_multistep' g sp (wpre ++ wmid ++ wsuf) sp' (wmid ++ wsuf)
+    -> move_closure_multistep' g sp' (wmid ++ wsuf) sp'' wsuf
+    -> move_closure_multistep' g sp (wpre ++ wmid ++ wsuf) sp'' wsuf.
+Proof.
+  intros; eapply mcms'_transitive; eauto.
+Qed.
+
+Lemma mcms'_preserves_label :
+  forall g sp sp' w w',
+    move_closure_multistep' g sp w sp' w'
+    -> sp.(prediction) = sp'.(prediction).
+Proof.
+  intros g sp sp' w w' hm.
+  induction hm; auto.
+  apply move_step_preserves_label in H.
+  apply closure_multistep_preserves_label in H0; tc.
+Qed.
 
 Lemma move_closure_op_preserves_subparsers_sound_invar :
   forall g t wpre wsuf sps sps' sps'' sps''',
-    subparsers_sound_wrt_originals g sps wpre sps' (t :: wsuf)
+    all_sp_stacks_wf g sps'
+    -> subparsers_sound_wrt_originals g sps wpre sps' (t :: wsuf)
     -> move g t sps' = inr sps''
     -> closure g sps'' = inr sps'''
     -> subparsers_sound_wrt_originals g sps (wpre ++ [t]) sps''' wsuf.
 Proof.
-  intros g t wpre wsuf sps sps' sps'' sps''' hi hm hc. 
+  intros g t wpre wsuf sps sps' sps'' sps''' ha hi hm hc. 
   unfold subparsers_sound_wrt_originals in *.
   rewrite <- app_assoc; simpl; intros sp''' hi'''.
+  assert (ha'' : all_sp_stacks_wf g sps'').
+  { eapply move_preserves_lstack_wf_invar; eauto. }
+  assert (ha''' : all_sp_stacks_wf g sps''').
+  { eapply closure_preserves_lstack_wf_invar; eauto. }
   eapply closure_func_refines_closure_multistep_backward in hc; eauto.
   destruct hc as [sp'' [hi'' hc]].
   eapply move_func_refines_move_step_backward
@@ -792,12 +992,19 @@ Proof.
   apply hi in hi'; clear hi.
   destruct hi' as [sp [hi hmcms]].
   exists sp; split; auto.
-  (* we need a transitivity lemma here *)
-Admitted.
+  rewrite cons_app_singleton in *.
+  eapply mcms'_transitive_three_groups; eauto.
+  econstructor; eauto.
+  apply stable_config_after_closure_multistep in hc.
+  destruct sp''' as [av pred ([o pre suf], frs)]; sis.
+  inv hc; auto.
+Qed.
 
-Lemma llPredict'_ambig_something :
+(*
+Lemma llPredict_ambig_rhs_leads_to_successful_parse :
   forall g orig_sps wsuf wpre curr_sps rhs,
     subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
+    -> all_sp_stacks_wf g curr_sps
     -> llPredict' g curr_sps wsuf = PredAmbig rhs
     -> exists orig_sp final_sp,
         In orig_sp orig_sps
@@ -805,22 +1012,27 @@ Lemma llPredict'_ambig_something :
         /\ move_closure_multistep g orig_sp (wpre ++ wsuf) final_sp [].
 Proof.
   intros g orig_sps wsuf.
-  induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs hi hl. 
+  induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs hi ha hl. 
   destruct curr_sps as [| curr_sp curr_sps]; sis; tc.
   - dmeq hall; tc.
     unfold handleFinalSubparsers in hl.
     destruct (filter _ _) as [| curr_sp' curr_sps'] eqn:hf; tc.
-    destruct (allPredictionsEqual curr_sp' curr_sps') eqn:ha; tc.
+    destruct (allPredictionsEqual curr_sp' curr_sps') eqn:ha'; tc.
     inv hl.
     unfold subparsers_sound_wrt_originals in hi.
-    assert (hi' : In curr_sp' (curr_sp :: curr_sps)).
-    { eapply filter_In.
-      rewrite hf.
-      apply in_eq. }
-    apply hi in hi'.
-    destruct hi' as [orig_sp [hi' hm]].
+    pose proof hf as hf'.
+    eapply filter_cons_in in hf.
+    apply hi in hf.
+    destruct hf as [orig_sp [hi' hm]].
     exists orig_sp; exists curr_sp'; repeat split; auto.
-    eapply mcms_preserves_label; eauto.
+    + (* easy *)
+      admit.
+    + rewrite app_nil_r in *.
+      assert (finalConfig curr_sp' = true) by admit.
+      unfold finalConfig in H.
+      destruct curr_sp' as [av pred ([o pre suf], frs)].
+      destruct suf; tc. destruct frs; tc.
+      admit.
   - unfold llPredict' in hl.
     destruct curr_sps as [| csp csps]; tc.
     dm; tc.
@@ -832,38 +1044,106 @@ Proof.
       exists osp; exists fsp; repeat split; auto.
       rewrite <- app_assoc in hm'; auto.
     + eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
-Qed.    
+    + apply move_preserves_lstack_wf_invar in hm; auto.
+      eapply closure_preserves_lstack_wf_invar; eauto.
+Admitted.
+ *)
 
-Lemma llPredict_ambig_multiple_rhss_apply :
+Lemma llPredict'_ambig_rhs_leads_to_successful_parse :
+  forall g orig_sps wsuf wpre curr_sps rhs,
+    all_sp_stacks_wf g curr_sps
+    -> subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
+    -> llPredict' g curr_sps wsuf = PredAmbig rhs
+    -> exists orig_sp final_sp,
+        In orig_sp orig_sps
+        /\ orig_sp.(prediction) = rhs
+        /\ move_closure_multistep' g orig_sp (wpre ++ wsuf) final_sp []
+        /\ finalConfig final_sp = true.
+Proof.
+  intros g orig_sps wsuf.
+  induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs ha hi hl; destruct curr_sps as [| csp csps]; sis; tc.
+  - destruct (allPredictionsEqual csp csps) eqn:ha'; tc.
+    unfold handleFinalSubparsers in hl.
+    destruct (filter _ _) as [| csp' csps'] eqn:hf; tc.
+    destruct (allPredictionsEqual csp' csps') eqn:ha''; tc.
+    inv hl.
+    unfold subparsers_sound_wrt_originals in hi.
+    pose proof hf as hf'.
+    eapply filter_cons_in in hf.
+    apply hi in hf.
+    destruct hf as [orig_sp [hi' hm]].
+    exists orig_sp; exists csp'; repeat split; auto.
+    + (* easy *)
+      eapply mcms'_preserves_label; eauto.
+    + assert (hi'' : In csp' (filter finalConfig (csp :: csps))).
+      { rewrite hf'; apply in_eq. }
+      eapply filter_In in hi''; destruct hi''; auto.
+  - destruct (allPredictionsEqual _ _); tc.
+    destruct (move _ _ ) as [e | sps'] eqn:hm; tc.
+    destruct (closure _ _) as [e | sps''] eqn:hc; tc.
+    eapply IH with (wpre := wpre ++ [t]) in hl.
+    + destruct hl as [osp [fsp [hi' [heq [hm' hf]]]]].
+      exists osp; exists fsp; repeat split; auto.
+      rewrite <- app_assoc in hm'; auto.
+    + apply move_preserves_lstack_wf_invar in hm; auto.
+      apply closure_preserves_lstack_wf_invar in hc; auto.
+    + eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
+Qed.
+
+Lemma mcms'_final_config :
+  forall g w sp sp',
+    move_closure_multistep' g sp w sp' []
+    -> finalConfig sp' = true
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) w.
+Proof.
+  intros g w; induction w as [| t w IH]; intros sp sp' hm hf.
+  - inv hm; sis.
+    + constructor.
+    + tc.
+    + inv H.
+  - inv hm.
+    inv H; sis.
+    apply IH in H1; auto.
+    apply Cons_rec with (wpre := [(a,l)]).
+    + constructor.
+    + (* lemma that involves running closure_multistep backwards *)
+      admit.
+Admitted.
+
+Lemma llPredict_ambig_rhs_unproc_stack_syms :
   forall g cr ce o pre x suf frs w rhs,
     cr = Loc o pre (NT x :: suf)
     -> ce = Loc (Some x) [] rhs
     -> no_left_recursion g
     -> lstack_wf g (cr, frs)
     -> llPredict g x (cr, frs) w = PredAmbig rhs
-    -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
-       /\ exists rhs',
-        rhs <> rhs'
-        /\ gamma_recognize g (unprocStackSyms (Loc (Some x) [] rhs', cr :: frs)) w.
+    -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
 Proof.
   intros g cr ce o pre x suf frs w rhs ? ? hn hw hl; subst; sis.
   pose proof hl as hl'; apply llPredict_ambig_in_grammar in hl'.
   unfold llPredict in hl.
   destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
-  eapply llPredict'_ambig_something
-    with (orig_sps := sps) (wpre := []) in hl; eauto; sis.
-  - (* orig_sp's unprocStackSyms must recognize remaining input *)
-    (* we should also need to prove that if orig_sp recognizes remaining input, then an sp in the initSps also recognizes remaining input *)
+  eapply llPredict'_ambig_rhs_leads_to_successful_parse
+    with (orig_sps := sps) (wpre := []) in hl; sis.
+  - destruct hl as [sp [sp' [hi [heq [hm hf]]]]]; subst.
+    eapply mcms'_final_config in hm; auto.
+    unfold startState in hs.
+    (* lemma about running closure backwards *)
     admit.
-  - (* lemma: invariant starts true *)
-    red.
-    intros sp' hi.
-    sis.
+  - eapply stacks_wf_in_startState_result; eauto.
+    simpl; auto.
+  - red. intros sp' hi; sis.
     exists sp'; split; auto.
-    (* sp' must e in a stable config, so it steps to itself *)
-    admit.
+    eapply closure_func_refines_closure_multistep_backward in hi; eauto.
+    + destruct hi as [sp0 [hi hc]].
+      assert (hst : stable_config sp'.(stack)).
+      { eapply stable_config_after_closure_multistep; eauto. }
+      destruct sp' as [av pred ([o' pre' suf'], frs')]; sis.
+      inv hst; auto.
+    + red.
+      intros sp hi'.
+      eapply initSps_preserves_lstack_wf_invar; eauto.
 Admitted.
-
 
 (* May not be necessary *)
 

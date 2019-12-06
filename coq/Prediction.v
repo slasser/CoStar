@@ -138,6 +138,32 @@ Proof.
     apply in_cons; auto.
 Qed.
 
+Lemma aggrMoveResults_map_backwards :
+  forall (f : subparser -> subparser_move_result) sp' sps sps',
+    aggrMoveResults (map f sps) = inr sps'
+    -> In sp' sps'
+    -> exists sp,
+        In sp sps
+        /\ f sp = SpMoveSucc sp'.
+Proof.
+  intros f sp' sps; induction sps as [| sp sps IH]; intros sps' ha hi.
+  - inv ha; inv hi.
+  - simpl in ha.
+    dmeq hf; tc.
+    + dmeq ha'; tc.
+      inv ha.
+      destruct hi as [hh | ht]; subst.
+      * eexists; split; [apply in_eq | auto].
+      * apply IH in ht; auto.
+        destruct ht as [sp'' [hi heq]].
+        eexists; split; [apply in_cons; eauto | auto].
+    + dmeq ha'; tc.
+      inv ha.
+      apply IH in hi; auto.
+      destruct hi as [sp'' [hi heq]].
+      eexists; split; [apply in_cons; eauto | auto].
+Qed.
+
 Definition move (g : grammar) (tok : token) (sps : list subparser) : move_result :=
   aggrMoveResults (map (moveSp g tok) sps).
 
@@ -364,6 +390,32 @@ Proof.
       repeat eexists; eauto.
       intros sp' hi'.
       apply in_or_app; auto.
+Qed.
+
+Lemma aggrClosureResults_dmap_backwards :
+  forall sp'' (sps : list subparser) f sps'',
+    aggrClosureResults (dmap sps f) = inr sps''
+    -> In sp'' sps''
+    -> exists sp hi sps',
+        In sp sps
+        /\ f sp hi = inr sps'
+        /\ In sp'' sps'.
+Proof.
+  intros sp'' sps f; induction sps as [| sp sps IH]; intros sps'' ha hi.
+  - inv ha; inv hi.
+  - simpl in ha.
+    dmeq hf; tc.
+    dmeq ha'; tc.
+    inv ha.
+    apply in_app_or in hi.
+    destruct hi as [hh | ht].
+    + repeat eexists; eauto.
+      apply in_eq.
+    + apply IH in ha'; auto.
+      destruct ha' as [sp' [hi [sps' [hi' [heq hi'']]]]].
+      unfold eq_rect_r in heq; simpl in heq.
+      repeat eexists; eauto.
+      apply in_cons; auto.
 Qed.
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
