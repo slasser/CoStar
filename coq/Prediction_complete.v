@@ -1103,11 +1103,16 @@ Proof.
     + inv H.
   - inv hm.
     inv H; sis.
-    apply IH in H1; auto.
     apply Cons_rec with (wpre := [(a,l)]).
     + constructor.
-    + (* lemma that involves running closure_multistep backwards *)
-      admit.
+    + apply IH in H1; auto.
+      (* lemma that involves running closure_multistep backwards *)
+      assert (forall sp sp' w,
+                 closure_multistep g sp sp'
+                 -> gamma_recognize g (unprocStackSyms (sp'.(stack))) w
+                 -> gamma_recognize g (unprocStackSyms (sp.(stack))) w) by admit.
+      eapply H in H1; eauto.
+      sis; auto.
 Admitted.
 
 Lemma llPredict_ambig_rhs_unproc_stack_syms :
