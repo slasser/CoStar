@@ -1145,6 +1145,199 @@ Proof.
       eapply initSps_preserves_lstack_wf_invar; eauto.
 Qed.
 
+
+
+(* Now some facts about how prediction doesn't return Reject when the initial
+   stack's unprocessed symbols recognize the input *)
+
+Definition all_stacks_stable sps :=
+  forall sp, In sp sps -> stable_config sp.(stack).
+
+Definition exists_successful_sp g sps w :=
+  exists sp, In sp sps /\ gamma_recognize g (unprocStackSyms sp.(stack)) w.
+
+
+Lemma stable_config_recognize_nil__final_config :
+  forall g sp,
+    gamma_recognize g (unprocStackSyms sp.(stack)) []
+    -> stable_config sp.(stack)
+    -> finalConfig sp = true.
+Proof.
+  intros g [av pred ([o pre [| [a | x] suf]], frs)] hg hs; inv hs; sis; auto.
+  apply gamma_recognize_terminal_head in hg.
+  destruct hg as [l [w' [heq hg]]]; inv heq.
+Qed.
+
+Lemma stable_config_gamma_recognize_terminal_inv :
+  forall g sp t w',
+    stable_config sp.(stack)
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
+    -> exists o pre a suf frs,
+        sp.(stack) = (Loc o pre (T a :: suf), frs).
+Proof.
+  intros g [av pred ([o pre [| [a|x] suf]], frs)] t w' hs hg; sis.
+  - destruct frs; sis.
+    + inv hg.
+    + inv hs.
+  - repeat eexists; eauto. 
+  - inv hs.
+Qed.
+  
+Lemma moveSp_preserves_successful_sp_invar :
+  forall g sp t w',
+  stable_config sp.(stack)
+  -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
+  -> exists sp',
+      moveSp g t sp = SpMoveSucc sp'
+      /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w'.
+Proof.
+  intros g sp t w' hs hg.
+  pose proof hg as hg'.
+  apply stable_config_gamma_recognize_terminal_inv in hg; auto.
+  destruct hg as [o [pre [a [suf [frs heq]]]]].
+  unfold moveSp.
+  destruct sp as [av pred stk]; subst; sis.
+  rewrite heq.
+  rewrite heq in hg'. sis.
+  inv hg'.
+  inv H2.
+  inv H1.
+  dm; tc.
+  eexists; eauto.
+Qed.
+
+(* refactor *)
+Lemma aggrMoveResults_map_preserves_successful_sp_invar :
+  forall g sp sps sps' t w',
+    all_stacks_stable sps
+    -> In sp sps
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
+    -> aggrMoveResults (map (moveSp g t) sps) = inr sps'
+    -> exists sp',
+        moveSp g t sp = SpMoveSucc sp'
+        /\ In sp' sps'
+        /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w'.
+Proof.
+  intros g sp sps.
+  induction sps as [| hd tl IH]; intros sps' t w' ha hi hg hm.
+  - inv hi.
+  - destruct hi as [hh | ht]; subst.
+    + simpl in hm.
+      apply moveSp_preserves_successful_sp_invar in hg.
+      * destruct hg as [sp' [hmsp hg]].
+        rewrite hmsp in hm.
+        dm; tc.
+        inv hm.
+        eexists; repeat split; eauto.
+        apply in_eq.
+      * firstorder. 
+    + simpl in hm.
+      dm; tc.
+      * dmeq hag; tc.
+        inv hm.
+        eapply IH in hag; eauto; firstorder.
+      * dmeq hag; tc.
+        inv hm.
+        eapply IH in hag; eauto; firstorder.
+Qed.
+
+Lemma move_preserves_successful_sp_invar :
+  forall g sps sps' t w',
+    all_stacks_stable sps
+    -> exists_successful_sp g sps (t :: w')
+    -> move g t sps = inr sps'
+    -> exists_successful_sp g sps' w'.
+Proof.
+  intros g sps sps' t w' ha he hm.
+  destruct he as [sp [hi hg]].
+  red.
+  eapply aggrMoveResults_map_preserves_successful_sp_invar in hm; eauto.
+  firstorder.
+Qed.
+
+Lemma move_closure_preserves_successful_sp_invar :
+  forall g sps sps' sps'' t w',
+    all_stacks_stable sps
+    -> exists_successful_sp g sps (t :: w')
+    -> move g t sps = inr sps'
+    -> closure g sps' = inr sps''
+    -> exists_successful_sp g sps w'.
+Proof.
+  intros g sps sps' sps'' t w' ha he hm hc.
+  eapply move_preserves_successful_sp_invar in hm; eauto.
+Abort. (* start here next time *)
+  
+Lemma exists_successful_sp_llPredict'_neq_reject :
+  forall g w sps,
+    all_sp_stacks_wf g sps
+    -> all_stacks_stable sps
+    -> exists_successful_sp g sps w
+    -> llPredict' g sps w <> PredReject.
+Proof.
+  intros g w; induction w as [| t w' IH]; intros sps ha ha' hex; unfold not; intros hl; unfold exists_successful_sp in hex; sis.
+  - destruct hex as [sp [hi hg]]. 
+    destruct sps as [| sp' sps'].
+    + inv hi.
+    + dm; tc.
+      (* lemma *)
+      unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp'' sps''] eqn:hf; dms; tc.
+      apply stable_config_recognize_nil__final_config in hg; auto.
+      eapply filter_In' in hg; eauto.
+      rewrite hf in hg; inv hg.
+  - destruct hex as [sp [hi hg]]. 
+    destruct sps as [| sp' sps'].
+    + inv hi.
+    + dm; tc.
+      destruct (move _ _ _) as [e | sps''] eqn:hm; tc.
+      destruct (closure _ _) as [e | sps'''] eqn:hc; tc.
+      eapply IH in hl; eauto.
+      * red. 
+        intros sp''' hi'.
+        eapply move_preserves_lstack_wf_invar in hm; auto.
+        eapply closure_preserves_lstack_wf_invar in hc; auto.
+      * red.
+        intros sp''' hi'.
+        eapply closure_func_refines_closure_multistep_backward in hc; eauto.
+        -- destruct hc as [sp'' [hi'' hc]].
+           eapply stable_config_after_closure_multistep; eauto.
+        -- red; intros sp'''' hi''.
+           eapply move_preserves_lstack_wf_invar in hm; auto.
+      * 
+           eapply closure_multistep_preserves_lstack_wf_invar; eauto.
+           eapply move_preserves_lstack_wf_invar; eauto.
+        -- eapply move_preserves_lstack_wf_invar; eauto.
+      * red.
+        intros sp''' hi'.
+        eapply 
+        
+admit. 
+      * admit.
+Admitted.
+
+
+Lemma ussr_llPredict_neq_reject :
+  forall g fr o pre x suf frs w,
+    fr = Loc o pre (NT x :: suf)
+    -> gamma_recognize g (unprocStackSyms (fr, frs)) w
+    -> llPredict g x (fr, frs) w <> PredReject.
+Proof.
+  intros g fr o pre x suf frs w ? hg; unfold not; intros hl; subst.
+  unfold llPredict in hl.
+  destruct (startState _ _ _) as [e | sps] eqn:hs; tc.
+  assert (hex : exists_successful_sp g sps w) by admit.
+  eapply exists_successful_sp_llPredict'_neq_reject; eauto.
+  
+  
+
+hu : gamma_recognize g (NT n :: l0 ++ unprocTailSyms (map loc l)) w
+  h4 : NtSet.mem n av = true
+  h5 : llPredict g n
+         ({| lopt := lopt; rpre := rpre; rsuf := NT n :: l0 |}, map loc l) w =
+       PredReject
+  ============================
+  False
+
 (* May not be necessary *)
 
 Lemma aggrClosureResults_in_input_in_output :

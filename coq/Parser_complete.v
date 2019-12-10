@@ -178,15 +178,20 @@ Proof.
   destruct hm as [hs | [st' [a' [hs hm]]]]. 
   - (* lemma *)
     clear a hlt IH.
-    unfold step in hs; dmeqs h; tc; inv hs; sis; inv hu.
-    + inv H2. 
+    unfold step in hs; dmeqs h; tc; inv hs; sis.
+    + inv hu.
+    + inv hu. 
+      inv H2.
       inv H1.
-    + inv H2.
-      inv H1.
+    + inv hu. 
+      inv H2. 
+      inv H1. 
       tc.
     + admit.
-    + inv H1.
-      apply lhs_mem_allNts_true in H0. tc.
+    + inv hu. 
+      inv H1.
+      apply lhs_mem_allNts_true in H0. 
+      tc.
   - destruct st' as [av' stk' w' u']. 
     eapply IH with (y := meas g (Pst av' stk' w' u')); eauto.
     + apply step_meas_lt; auto.
