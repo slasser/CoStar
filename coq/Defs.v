@@ -277,6 +277,8 @@ with gamma_recognize (g : grammar) : list symbol -> list token -> Prop :=
            -> gamma_recognize g ss wsuf
            -> gamma_recognize g (s :: ss) (wpre ++ wsuf).
 
+Hint Constructors sym_recognize gamma_recognize.
+
 Lemma gamma_recognize_terminal_head :
   forall g a suf w,
     gamma_recognize g (T a :: suf) w
@@ -303,7 +305,7 @@ Proof.
   inv hs; simpl; eauto 8.
 Qed.
 
-Lemma gamma_recognize_app :
+Lemma gamma_recognize_app' :
   forall g ys1 w1,
     gamma_recognize g ys1 w1
     -> forall ys2 w2,
@@ -313,6 +315,30 @@ Proof.
   intros g ys1 w1 hg.
   induction hg; intros ys2 w2 hg2; simpl in *; auto.
   rewrite <- app_assoc; constructor; auto.
+Qed.
+
+Lemma gamma_recognize_app :
+  forall g ys1 ys2 w1 w2,
+    gamma_recognize g ys1 w1
+    -> gamma_recognize g ys2 w2
+    -> gamma_recognize g (ys1 ++ ys2) (w1 ++ w2).
+Proof.
+  intros; apply gamma_recognize_app'; auto.
+Qed.
+
+Lemma gamma_recognize_split :
+  forall g ys ys' w'',
+    gamma_recognize g (ys ++ ys') w''
+    -> exists w w',
+      w'' = w ++ w'
+      /\ gamma_recognize g ys w
+      /\ gamma_recognize g ys' w'.
+Proof.
+  intros g ys; induction ys as [| y ys IH]; intros ys' w'' hg; sis.
+  - exists []; exists w''; repeat split; auto.
+  - inversion hg as [| s ss wpre wsuf hs hg']; subst; clear hg. 
+    apply IH in hg'; destruct hg' as [w [w' [? [hg' hg'']]]]; subst.
+    exists (wpre ++ w); exists w'; repeat split; auto; apps.
 Qed.
 
 (* Inductive definition of a nullable grammar symbol *)
