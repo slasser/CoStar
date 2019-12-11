@@ -221,6 +221,9 @@ with gamma_derivation (g : grammar) : list symbol -> list token-> forest-> Prop 
 
 Hint Constructors sym_derivation gamma_derivation.
 
+Scheme sym_derivation_mutual_ind   := Induction for sym_derivation Sort Prop
+  with gamma_derivation_mutual_ind := Induction for gamma_derivation Sort Prop.
+
 Lemma gamma_derivation_app :
   forall g ys1 w1 v1,
     gamma_derivation g ys1 w1 v1
@@ -278,6 +281,9 @@ with gamma_recognize (g : grammar) : list symbol -> list token -> Prop :=
            -> gamma_recognize g (s :: ss) (wpre ++ wsuf).
 
 Hint Constructors sym_recognize gamma_recognize.
+
+Scheme sym_recognize_mutual_ind   := Induction for sym_recognize Sort Prop
+  with gamma_recognize_mutual_ind := Induction for gamma_recognize Sort Prop.
 
 Lemma gamma_recognize_terminal_head :
   forall g a suf w,

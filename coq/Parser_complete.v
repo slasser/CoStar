@@ -155,7 +155,7 @@ Proof.
   - eapply push_ambig_preserves_ussr; eauto.
 Qed.
 
-Lemma ussr_implies_multistep_doesn't_reject :
+Lemma ussr_implies_multistep_doesn't_reject' :
   forall (g : grammar) 
          (tri : nat * nat * nat)
          (a   : Acc lex_nat_triple tri)
@@ -187,7 +187,7 @@ Proof.
       inv H2. 
       inv H1. 
       tc.
-    + admit.
+    + eapply ussr_llPredict_neq_reject; eauto.
     + inv hu. 
       inv H1.
       apply lhs_mem_allNts_true in H0. 
@@ -197,9 +197,80 @@ Proof.
     + apply step_meas_lt; auto.
     + eapply step_preserves_stack_wf_invar; eauto. 
     + eapply step_preserves_ussr; eauto.
-Admitted.
-Print Assumptions ussr_implies_multistep_doesn't_reject.
+Qed.
+Print Assumptions ussr_implies_multistep_doesn't_reject'.
 
+Lemma ussr_implies_multistep_doesn't_reject :
+  forall (g : grammar) 
+         (av  : NtSet.t)
+         (stk : parser_stack)
+         (w   : list token)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g (Pst av stk w u)))
+         (s   : string),
+    no_left_recursion g
+    -> stack_wf g stk
+    -> gamma_recognize g (unprocStackSyms' stk) w
+    -> multistep g (Pst av stk w u) a <> Reject s.
+Proof.
+  intros; eapply ussr_implies_multistep_doesn't_reject'; eauto.
+Qed.
+
+Theorem valid_derivation_implies_parser_doesn't_reject :
+  forall g ys w s,
+    no_left_recursion g
+    -> gamma_recognize g ys w
+    -> parse g ys w <> Reject s.
+Proof.
+  intros g ys w s hn hg; unfold not; intros hp.
+  unfold parse in hp.
+  unfold mkInitState in hp.
+  eapply ussr_implies_multistep_doesn't_reject; eauto.
+  - constructor. 
+  - simpl; rewrite app_nil_r; auto.
+Qed.
+
+Lemma gamma_derivation__gamma_recognize :
+  forall g ys w v,
+    gamma_derivation g ys w v
+    -> gamma_recognize g ys w.
+Proof.
+  intros g ys w v hg.
+  induction hg using gamma_derivation_mutual_ind with
+      (P := fun s w t (hs : sym_derivation g s w t) => 
+              sym_recognize g s w); eauto.
+Qed.
+
+Lemma gamma_recognize__exists_gamma_derivation :
+  forall g ys w,
+    gamma_recognize g ys w
+    -> exists v,
+      gamma_derivation g ys w v.
+Proof.
+  intros g ys w hg.
+  induction hg using gamma_recognize_mutual_ind with
+      (P := fun s w (hs : sym_recognize g s w) => 
+              exists t, sym_derivation g s w t); firstorder; eauto.
+  repeat econstructor; eauto.
+Qed.
+
+Theorem parse_complete :
+  forall g ys w v,
+    no_left_recursion g
+    -> gamma_derivation g ys w v
+    -> exists (v' : forest),
+        parse g ys w = Accept v'
+        \/ parse g ys w = Ambig v'.
+Proof.
+  intros g ys w v hn hg.
+  destruct (parse g ys w) as [v' | v' | s | e] eqn:hp; eauto.
+  - exfalso. 
+    apply gamma_derivation__gamma_recognize in hg.
+    apply valid_derivation_implies_parser_doesn't_reject in hp; auto.
+  - exfalso.
+    apply parser_terminates_without_error in hp; auto.
+Qed.
+Print Assumptions parse_complete.
 
 
 Lemma return_preserves_ussr :
