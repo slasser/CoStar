@@ -255,7 +255,10 @@ Proof.
 Qed.
 
 Theorem parse_complete :
-  forall g ys w v,
+  forall (g  : grammar)
+         (ys : list symbol)
+         (w  : list token)
+         (v  : forest),
     no_left_recursion g
     -> gamma_derivation g ys w v
     -> exists (v' : forest),
