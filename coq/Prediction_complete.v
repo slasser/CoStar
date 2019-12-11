@@ -1255,17 +1255,84 @@ Proof.
   firstorder.
 Qed.
 
+Lemma spClosureStep_preserves_successful_sp_invar :
+  forall g sp sps' w,
+    gamma_recognize g (unprocStackSyms sp.(stack)) w
+    -> spClosureStep g sp = SpClosureStepK sps'
+    -> exists_successful_sp g sps' w.
+Proof.
+  intros g sp sps' w hg hs.
+  unfold spClosureStep in hs; dmeqs h; tc; sis; inv hs.
+  - eexists; split; [apply in_eq | auto].
+  - apply gamma_recognize_nonterminal_head in hg. 
+    destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst. 
+    eexists; split.
+    + apply in_map_iff.
+      eexists; split; eauto.
+      apply rhssForNt_in_iff; eauto.
+    + sis; apply gamma_recognize_app; auto.
+  - exfalso.
+    apply gamma_recognize_nonterminal_head in hg. 
+    destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst.
+    apply lhs_mem_allNts_true in hi; tc.
+Qed.
+
+Lemma spClosure_preserves_successful_sp_invar' :
+  forall g pr (a : Acc lex_nat_pair pr) sp (a' : Acc lex_nat_pair (meas g sp)) sps' w,
+    pr = meas g sp
+    -> spClosure g sp a' = inr sps'
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) w
+    -> exists_successful_sp g sps' w.
+Proof.
+  intros g pr a'.
+  induction a' as [pr hlt IH]; intros sp a sps'' w ? hs hg; subst.
+  apply spClosure_success_cases in hs.
+  destruct hs as [[hdone heq] | [sps' [hs [crs [heq ha]]]]]; subst.
+  - firstorder.
+  - pose proof hs as hs'. 
+    eapply spClosureStep_preserves_successful_sp_invar in hs'; eauto.
+    destruct hs' as [sp' [hi hg']].
+    eapply aggrClosureResults_dmap_succ_elt_succ in ha; eauto.
+    destruct ha as [? [? [hs' ha]]].
+    eapply IH in hs'; eauto.
+    + firstorder.
+    + eapply spClosureStep_meas_lt; eauto.
+Qed.
+
+Lemma spClosure_preserves_successful_sp_invar :
+  forall g sp (a : Acc lex_nat_pair (meas g sp)) sps' w,
+    spClosure g sp a = inr sps'
+    -> gamma_recognize g (unprocStackSyms sp.(stack)) w
+    -> exists_successful_sp g sps' w.
+Proof.
+  intros; eapply spClosure_preserves_successful_sp_invar'; eauto.
+Qed.
+
+Lemma closure_preserves_successful_sp_invar :
+  forall g sps sps' w,
+    exists_successful_sp g sps w
+    -> closure g sps = inr sps'
+    -> exists_successful_sp g sps' w.
+Proof.
+  intros g sps sps'' w he hc; destruct he as [sp [hi hg]]; red.
+  unfold closure in hc.
+  eapply aggrClosureResults_map_succ_elt_succ in hc; eauto.
+  destruct hc as [sps' [hs ha]].
+  eapply spClosure_preserves_successful_sp_invar in hs; eauto; firstorder.
+Qed.
+  
 Lemma move_closure_preserves_successful_sp_invar :
   forall g sps sps' sps'' t w',
     all_stacks_stable sps
     -> exists_successful_sp g sps (t :: w')
     -> move g t sps = inr sps'
     -> closure g sps' = inr sps''
-    -> exists_successful_sp g sps w'.
+    -> exists_successful_sp g sps'' w'.
 Proof.
   intros g sps sps' sps'' t w' ha he hm hc.
   eapply move_preserves_successful_sp_invar in hm; eauto.
-Abort. (* start here next time *)
+  eapply closure_preserves_successful_sp_invar; eauto.
+Qed.
   
 Lemma exists_successful_sp_llPredict'_neq_reject :
   forall g w sps,
@@ -1303,40 +1370,50 @@ Proof.
            eapply stable_config_after_closure_multistep; eauto.
         -- red; intros sp'''' hi''.
            eapply move_preserves_lstack_wf_invar in hm; auto.
-      * 
-           eapply closure_multistep_preserves_lstack_wf_invar; eauto.
-           eapply move_preserves_lstack_wf_invar; eauto.
-        -- eapply move_preserves_lstack_wf_invar; eauto.
-      * red.
-        intros sp''' hi'.
-        eapply 
-        
-admit. 
-      * admit.
-Admitted.
+      * eapply move_closure_preserves_successful_sp_invar; eauto.
+        exists sp; split; eauto.
+Qed.
 
+Lemma initSps_preserves_exists_successful_sp_invar :
+  forall g fr o pre x suf frs w,
+    fr = Loc o pre (NT x :: suf)
+    -> gamma_recognize g (unprocStackSyms (fr, frs)) w
+    -> exists_successful_sp g (initSps g x (fr, frs)) w.
+Proof.
+  intros g fr o pre x suf frs w ? hg; subst; sis.
+  apply gamma_recognize_nonterminal_head in hg.
+  destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst.
+  eexists; split.
+  - apply in_map_iff; eexists; split; eauto.
+    apply rhssForNt_in_iff; eauto.
+  - sis; apply gamma_recognize_app; auto.
+Qed.
 
 Lemma ussr_llPredict_neq_reject :
   forall g fr o pre x suf frs w,
     fr = Loc o pre (NT x :: suf)
+    -> lstack_wf g (fr, frs)
     -> gamma_recognize g (unprocStackSyms (fr, frs)) w
     -> llPredict g x (fr, frs) w <> PredReject.
 Proof.
-  intros g fr o pre x suf frs w ? hg; unfold not; intros hl; subst.
+  intros g fr o pre x suf frs w ? hw hg; unfold not; intros hl; subst.
   unfold llPredict in hl.
   destruct (startState _ _ _) as [e | sps] eqn:hs; tc.
-  assert (hex : exists_successful_sp g sps w) by admit.
   eapply exists_successful_sp_llPredict'_neq_reject; eauto.
-  
-  
-
-hu : gamma_recognize g (NT n :: l0 ++ unprocTailSyms (map loc l)) w
-  h4 : NtSet.mem n av = true
-  h5 : llPredict g n
-         ({| lopt := lopt; rpre := rpre; rsuf := NT n :: l0 |}, map loc l) w =
-       PredReject
-  ============================
-  False
+  - (* lemma *)
+    eapply closure_preserves_lstack_wf_invar; eauto.
+    red; intros.
+    eapply initSps_preserves_lstack_wf_invar; eauto.
+  - (* lemma *)
+    red; intros.
+    eapply closure_func_refines_closure_multistep_backward in hs; eauto.
+    + firstorder.
+      eapply stable_config_after_closure_multistep; eauto.
+    + red; intros.
+      eapply initSps_preserves_lstack_wf_invar; eauto.
+  - eapply closure_preserves_successful_sp_invar; eauto.
+    eapply initSps_preserves_exists_successful_sp_invar; eauto.
+Qed.
 
 (* May not be necessary *)
 
