@@ -275,6 +275,146 @@ Proof.
 Qed.
 Print Assumptions parse_complete.
 
+Definition unprocTailSyms' (frs : list frame) :=
+  unprocTailSyms (map loc frs).
+
+Fixpoint procSyms (frs : list frame) : list symbol :=
+  match frs with
+  | []                         => []
+  | Fr (Loc _ pre _) _ :: frs' => procSyms frs' ++ pre
+  end.
+
+Definition procStackSyms (stk : parser_stack) :=
+  let (fr, frs) := stk in procSyms (fr :: frs).
+
+Fixpoint procVals (frs : list frame) : forest :=
+  match frs with
+  | []                         => []
+  | Fr _ v :: frs' => procVals frs' ++ v
+  end.
+
+Definition stackVals (stk : parser_stack) :=
+  let (fr, frs) := stk in procVals (fr :: frs).
+
+Inductive unique_stack_prefix_derivation g stk wsuf w :=
+| USPD :
+    forall wpre,
+      wpre ++ wsuf = w
+      -> gamma_derivation g (procStackSyms stk) wpre (stackVals stk)
+      -> (forall wpre' wsuf' v',
+             wpre' ++ wsuf' = w
+             -> gamma_derivation g (procStackSyms stk) wpre' v'
+             -> gamma_recognize g (unprocStackSyms' stk) wsuf'
+             -> wpre' = wpre /\ wsuf' = wsuf /\ v' = (stackVals stk))
+      -> unique_stack_prefix_derivation g stk wsuf w.
+
+Lemma uspd_starts_true :
+  forall g ys ts,
+    unique_stack_prefix_derivation g (mkInitState g ys ts).(stack) ts ts.
+Proof.
+  intros g ys ts.
+  unfold mkInitState; sis.
+  eapply USPD with (wpre := []); eauto.
+  intros wpre' wsuf' v' heq hd hr; sis; subst.
+  inv hd; repeat split; auto.
+Qed.
+
+    
+  list token -> parser_stack -> list token -> 
+Inductive
+stack_prefix_derivation (g : grammar) (stk : parser_stack)
+(wsuf w : list token) : Prop :=
+    SPD : forall wpre : list token,
+          stack_derivation g stk wpre ->
+          wpre ++ wsuf = w ->
+          stack_prefix_derivation g stk wsuf w
+
+Inductive all_pushes_unique (g : grammar) : list frame -> list token -> Prop :=
+| APU_empty :
+    forall w,
+    all_pushes_unique g [] w
+| APU_bottom :
+    forall fr w,
+      all_pushes_unique g [fr] w
+| APU_upper :
+    forall o o' pre pre' suf suf' v v' x frs w,
+      all_pushes_unique g (Fr (Loc o pre (NT x :: suf)) v :: frs) w
+      -> (forall rhs,
+             In (x, rhs) g
+             -> gamma_recognize g (rhs ++ suf ++ 
+             -> gamma_recognize g (suf ++ unprocTailSyms' frs) w'
+             -> rhs = pre' ++ suf')
+      -> all_pushes_unique g (Fr (Loc o' pre' suf') v' ::
+                              Fr (Loc o  pre  (NT x :: suf )) v  ::
+                              frs) (w ++ w').
+
+Hint Constructors all_pushes_unique.
+
+Definition all_stack_pushes_unique g (stk : parser_stack) w :=
+  let (fr, frs) := stk in all_pushes_unique g (fr :: frs) w.
+
+Definition all_stack_pushes_unique_invar g st :=
+  match st with
+  | Pst av stk ts u =>
+    if u then all_stack_pushes_unique g stk ts else True
+  end.
+      
+Lemma return_preserves_apu_invar :
+  forall g fr cr cr' frs o o' pre pre' x suf' v v' v'' w,
+    fr     = Fr (Loc o pre []) v
+    -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
+    -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') v''
+    -> stack_wf g (fr, cr :: frs)
+    -> all_stack_pushes_unique g (fr, cr :: frs) w
+    -> all_stack_pushes_unique g (cr', frs) w.
+Proof.
+  intros g fr cr cr' frs o o' pre pre' x suf' v v' v'' w ? ? ? hw hu; subst; sis.
+  inv hw.
+  inv hu.
+  destruct frs as [| fr' frs]; auto.
+  destruct fr' as [[o'' pre'' suf''] v''']; sis.
+  inv H12.
+  constructor; auto.
+  intros.
+  apply H14 in H; auto.
+  subst.
+  apps.
+Qed.
+
+Lemma consume_preserves_apu_invar :
+  forall g fr fr' frs o pre suf a l ts' v,
+    fr = Fr (Loc o pre (T a :: suf)) v
+    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf l])
+    -> stack_wf g (fr, frs)
+    -> all_stack_pushes_unique g (fr, frs) ((a,l) :: ts')
+    -> all_stack_pushes_unique g (fr', frs) ts'.
+Proof.
+  intros g fr fr' frs o pre suf a l ts' v ? ? hw hu; subst; sis.
+  destruct frs as [| fr' frs]; auto.
+  inv hw.
+  inv hu; sis.
+  rewrite H9 in H2.
+  inv H2.
+  - 
+    constructor.
+  econstructor.
+  sis.
+  destruct fr' as [[o' pre' suf'] v'].
+  simpl in H3.
+  rewrite <- H3.
+  constructor.
+  inv hu.
+  constructor; auto.
+  inv H6; auto.
+  constructor; auto.
+  inv H6.
+  inv H5.
+  constructor; auto.
+    -> stack_derivation g (fr', frs) (w ++ [(a, l)]).
+Proof.
+
+
+
 
 Lemma return_preserves_ussr :
   forall g ce cr cr' frs x o o' pre pre' suf' v v' w,
