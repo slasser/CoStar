@@ -296,6 +296,178 @@ Fixpoint procVals (frs : list frame) : forest :=
 Definition stackVals (stk : parser_stack) :=
   let (fr, frs) := stk in procVals (fr :: frs).
 
+(* Note: using st here, as opposed to the deconstructed components, seems to work well *)
+Inductive unique_stack_prefix_derivation g st w : Prop :=
+| USPD :
+    forall av stk wpre wsuf u,
+      st = Pst av stk wsuf u
+      -> wpre ++ wsuf = w
+      -> gamma_derivation g (procStackSyms stk) wpre (stackVals stk)
+      -> (u = true
+          -> (forall wpre' wsuf' v',
+                 wpre' ++ wsuf' = w
+                 -> gamma_derivation g (procStackSyms stk) wpre' v'
+                 -> gamma_recognize g (unprocStackSyms' stk) wsuf'
+                 -> wpre' = wpre /\ wsuf' = wsuf /\ v' = (stackVals stk)))
+      -> unique_stack_prefix_derivation g st w.
+
+Lemma step_preserves_uspd :
+  forall g st st' w,
+    no_left_recursion g
+    -> stack_wf g st.(stack)
+    -> unique_stack_prefix_derivation g st w
+    -> step g st = StepK st'
+    -> unique_stack_prefix_derivation g st' w.
+Proof.
+  intros g [av stk ts u] [av' stk' ts' u'] w hn hw hu hs.
+  unfold step in hs; dmeqs h; tc; inv hs.
+  - (* return case *)
+    sis.
+    inv hu. inv H. sis.
+    econstructor; eauto.
+    + sis.
+      eapply gamma_derivation_split in H1.
+      destruct H1 as [w [w' [v [v' [? [? [hd hd']]]]]]]; subst.
+      apply gamma_derivation_split in hd.
+      destruct hd as [w'' [w''' [v'' [v''' [? [? [hd hd'']]]]]]]; subst.
+      inv hw.
+    admit. 
+    + admit.
+  - (* consume case *)
+    inv hu. inv H; sis.
+    eapply USPD with (wpre := wpre ++ [(t, l2)]); eauto; sis.
+    + apps.
+    + sis.
+      (* lemma *)
+      repeat rewrite app_assoc. apply gamma_derivation_app; auto.
+      assert ([(t, l2)] = [(t, l2)] ++ []) by apps.
+      rewrite H; eauto.
+    + intros.
+      rewrite app_assoc in H3.
+      apply gamma_derivation_terminal_end in H3.
+      destruct H3 as [wfront [l' [vfront [? [? hg]]]]]; subst.
+      eapply H2 in hg; eauto.
+      * destruct hg as [? [? ?]]; subst.
+        rewrite <- app_assoc in H0.
+        apply app_inv_head in H0.
+        inv H0.
+        repeat split; auto.
+        apps.
+      * rewrite <- app_assoc in H0. rewrite <- H0. eauto.
+      * constructor; auto.
+  - (* PredSucc case *)
+    sis.
+    inv hu. inv H. sis.
+    econstructor; eauto.
+    + sis.
+      repeat rewrite app_nil_r; auto.
+    + intros hu wpre' wsuf' v' heq hd hr. sis.
+      rewrite app_nil_r in *.
+      eapply H2 with (v' := v') in hu ; eauto.
+      pose proof h5 as hll.
+      apply llPredict_succ_in_grammar in hll.
+      eapply gamma_recognize_split in hr.
+      destruct hr as [w [w' [? [hr hr']]]]; subst.
+      econstructor; eauto.
+  - (* PredAmbig case *)
+    sis.
+    inv hu. inv H. sis.
+    econstructor; eauto.
+    + sis. repeat rewrite app_nil_r in *. auto.
+    + intros hc; inv hc.
+Admitted.
+
+Lemma uspd_starts_true :
+  forall g ys ts,
+    unique_stack_prefix_derivation g (mkInitState g ys ts) ts.
+Proof.
+  intros g ys ts.
+  unfold mkInitState; sis.
+  eapply USPD with (wpre := []); eauto.
+  intros ? wpre' wsuf' v' heq hd hr; sis; subst.
+  inv hd; repeat split; auto.
+Qed.
+
+Require Import Parser_sound.
+
+Lemma multistep_sound_unambig' :
+  forall (g      : grammar)
+         (tri    : nat * nat * nat)
+         (a      : Acc lex_nat_triple tri)
+         (w wsuf : list token)
+         (av     : NtSet.t)
+         (stk    : parser_stack)
+         (u      : bool)
+         (a'     : Acc lex_nat_triple (meas g (Pst av stk wsuf u)))
+         (v      : forest),
+    tri = meas g (Pst av stk wsuf u)
+    -> stack_wf g stk
+    -> unique_stack_prefix_derivation g (Pst av stk wsuf u) w
+    -> multistep g (Pst av stk wsuf u) a' = Accept v
+    -> gamma_derivation g (bottomFrameSyms stk) w v
+       /\ (forall v',
+              gamma_derivation g (bottomFrameSyms stk) w v'
+              -> v' = v).
+Proof.
+  intros g tri a.
+  induction a as [tri hlt IH].
+  intros w wsuf av stk u a' v heq hw hi hm; subst.
+  apply multistep_accept_cases in hm.
+  destruct hm as [[hf hu] | he].
+  - apply step_StepAccept_facts in hf.
+    destruct hf as [[xo [rpre [v' [heq]]]] heq']; subst.
+    unfold bottomFrameSyms; simpl; rewrite app_nil_r.
+    inv hi.
+    inv H.
+    rewrite app_nil_r in *.
+    sis.
+    split; auto.
+    intros.
+    eapply H2 with (wsuf' := []) in H; eauto.
+    + destruct H as [? [? ?]]; auto.
+    + apply app_nil_r.
+  - destruct he as [st' [a'' [hf hm]]].
+    destruct st' as [av' stk' wsuf'].
+    eapply IH with (w := w) in hm; eauto. 
+    + erewrite step_preserves_bottomFrameSyms_invar; eauto.
+    + apply step_meas_lt; auto.
+    + eapply step_preserves_stack_wf_invar; eauto.
+    + eapply step_preserves_uspd; eauto.
+Qed.  
+
+Theorem parse_sound_unambig :
+  forall (g  : grammar)
+         (ys : list symbol)
+         (ts : list token)
+         (v  : forest),
+    parse g ys ts = Accept v
+    -> gamma_derivation g ys ts v
+       /\ (forall v',
+              gamma_derivation g ys ts v'
+              -> v' = v).
+Proof.
+  intros g ys ts v hp.
+  unfold parse in hp.
+  eapply multistep_sound in hp; eauto.
+  - apply lex_nat_triple_wf.
+  - constructor. (* how do I get auto to take care of this? *)
+  - apply stack_prefix_derivation_init. 
+Qed.
+
+
+Inductive unique_stack_prefix_derivation g stk wsuf u w : Prop :=
+| USPD :
+    forall wpre,
+      wpre ++ wsuf = w
+      -> gamma_derivation g (procStackSyms stk) wpre (stackVals stk)
+      -> (u = true
+          -> (forall wpre' wsuf' v',
+                 wpre' ++ wsuf' = w
+                 -> gamma_derivation g (procStackSyms stk) wpre' v'
+                 -> gamma_recognize g (unprocStackSyms' stk) wsuf'
+                 -> wpre' = wpre /\ wsuf' = wsuf /\ v' = (stackVals stk)))
+      -> unique_stack_prefix_derivation g stk wsuf u w.
+    
 Inductive unique_stack_prefix_derivation g stk wsuf w :=
 | USPD :
     forall wpre,

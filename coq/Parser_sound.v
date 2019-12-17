@@ -27,7 +27,7 @@ Proof.
   induction a as [tri hlt IH].
   intros w wsuf av stk u a' v heq hw hi hm; subst.
   apply multistep_accept_cases in hm.
-  destruct hm as [hf | he].
+  destruct hm as [[hf hu] | he].
   - apply step_StepAccept_facts in hf.
     destruct hf as [[xo [rpre [v' [heq]]]] heq']; subst.
     unfold bottomFrameSyms; simpl; rewrite app_nil_r.

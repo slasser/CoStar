@@ -308,7 +308,7 @@ Lemma multistep_cases' :
     | StepError s => fun _ => Error s
     end heq = pr
     -> match pr with
-       | Accept f => sr = StepAccept f
+       | Accept f => (sr = StepAccept f /\ st.(unique) = true)
                      \/ exists st' a', sr = StepK st' 
                                        /\ multistep g st' a' = Accept f
        | Ambig f  => sr = StepAccept f
@@ -334,7 +334,7 @@ Lemma multistep_cases :
          (pr  : parse_result),
     multistep g st a = pr
     -> match pr with
-       | Accept f => step g st = StepAccept f
+       | Accept f => (step g st = StepAccept f /\ st.(unique) = true)
                      \/ exists st' a', step g st = StepK st' 
                                        /\ multistep g st' a' = Accept f
        | Ambig f  => step g st = StepAccept f
@@ -359,7 +359,7 @@ Lemma multistep_accept_cases :
          (a  : Acc lex_nat_triple (meas g st))
          (f  : forest),
     multistep g st a = Accept f
-    -> step g st = StepAccept f
+    -> (step g st = StepAccept f /\ st.(unique) = true)
        \/ exists st' a', step g st = StepK st' 
                          /\ multistep g st' a' = Accept f.
 Proof.

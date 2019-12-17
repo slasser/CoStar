@@ -224,7 +224,7 @@ Hint Constructors sym_derivation gamma_derivation.
 Scheme sym_derivation_mutual_ind   := Induction for sym_derivation Sort Prop
   with gamma_derivation_mutual_ind := Induction for gamma_derivation Sort Prop.
 
-Lemma gamma_derivation_app :
+Lemma gamma_derivation_app' :
   forall g ys1 w1 v1,
     gamma_derivation g ys1 w1 v1
     -> forall ys2 w2 v2,
@@ -234,6 +234,15 @@ Proof.
   intros g ys1 w1 v1 hg.
   induction hg; intros ys2 w2 v2 hg2; simpl in *; auto.
   rewrite <- app_assoc; constructor; auto.
+Qed.
+
+Lemma gamma_derivation_app :
+  forall g ys ys' w w' v v',
+    gamma_derivation g ys w v
+    -> gamma_derivation g ys' w' v'
+    -> gamma_derivation g (ys ++ ys') (w ++ w') (v ++ v').
+Proof.
+  intros; eapply gamma_derivation_app'; eauto.
 Qed.
 
 Lemma forest_app_singleton_node : 
@@ -257,6 +266,40 @@ Proof.
   assert (happ : (a, l) :: w = [(a, l)] ++ w) by apply cons_app_singleton.
   rewrite happ; auto.
 Qed.
+
+Lemma gamma_derivation_split :
+  forall g ys ys' w'' v'',
+    gamma_derivation g (ys ++ ys') w'' v''
+    -> exists w w' v v',
+      w'' = w ++ w'
+      /\ v'' = v ++ v'
+      /\ gamma_derivation g ys  w  v
+      /\ gamma_derivation g ys' w' v'.
+Proof.
+  intros g ys; induction ys as [| y ys IH]; intros ys' w'' v'' hg; sis.
+  - exists []; exists w''; exists []; exists v''; repeat split; auto.
+  - inversion hg as [| s ss wpre wsuf t f hs hg']; subst; clear hg. 
+    apply IH in hg'; destruct hg' as [w [w' [v [v' [? [? [hg' hg'']]]]]]]; subst.
+    exists (wpre ++ w); exists w'; exists (t :: v); exists v'. 
+    repeat split; auto; apps.
+Qed.
+
+Lemma gamma_derivation_terminal_end :
+  forall g ys a w v,
+    gamma_derivation g (ys ++ [T a]) w v
+    -> exists w_front l v_front,
+      w = w_front ++ [(a, l)]
+      /\ v = v_front ++ [Leaf l]
+      /\ gamma_derivation g ys w_front v_front.
+Proof.
+  intros g ys a w v hg.
+  eapply gamma_derivation_split in hg.
+  destruct hg as [w' [w'' [v' [v'' [? [? [hg hg']]]]]]]; subst.
+  inv hg'.
+  (* lemma *)
+  inv H1. inv H4.
+  repeat eexists; eauto.
+Qed.  
 
 Definition unique_gamma_derivation g ss w v :=
   gamma_derivation g ss w v
