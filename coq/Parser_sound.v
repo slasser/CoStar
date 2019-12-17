@@ -7,7 +7,7 @@ Require Import GallStar.Termination.
 Require Import GallStar.Utils.
 Import ListNotations.
 
-Lemma multistep_sound :
+Lemma multistep_sound' :
   forall (g      : grammar)
          (tri    : nat * nat * nat)
          (a      : Acc lex_nat_triple tri)
@@ -41,6 +41,22 @@ Proof.
     + eapply step_preserves_stack_prefix_derivation; eauto.
 Qed.
 
+Lemma multistep_sound :
+  forall (g      : grammar)
+         (w wsuf : list token)
+         (av     : NtSet.t)
+         (stk    : parser_stack)
+         (u      : bool)
+         (a      : Acc lex_nat_triple (meas g (Pst av stk wsuf u)))
+         (v      : forest),
+    stack_wf g stk
+    -> stack_prefix_derivation g stk wsuf w
+    -> multistep g (Pst av stk wsuf u) a = Accept v
+    -> gamma_derivation g (bottomFrameSyms stk) w v.
+Proof.
+  intros; eapply multistep_sound'; eauto.
+Qed.
+
 Theorem parser_sound :
   forall (g  : grammar)
          (ss : list symbol)
@@ -52,7 +68,6 @@ Proof.
   intros g ss ts v hp.
   unfold parse in hp.
   eapply multistep_sound in hp; eauto.
-  - apply lex_nat_triple_wf.
   - constructor. (* how do I get auto to take care of this? *)
   - apply stack_prefix_derivation_init. 
 Qed.
