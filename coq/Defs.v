@@ -299,6 +299,25 @@ Proof.
   (* lemma *)
   inv H1. inv H4.
   repeat eexists; eauto.
+Qed.
+
+Lemma gamma_derivation_nonterminal_end :
+  forall g ys x w v,
+    gamma_derivation g (ys ++ [NT x]) w v
+    -> exists wpre wsuf vpre v',
+      w = wpre ++ wsuf
+      /\ v = vpre ++ [Node x v']
+      /\ gamma_derivation g ys wpre vpre
+      /\ sym_derivation g (NT x) wsuf (Node x v').
+Proof.
+  intros g ys x w v hg.
+  eapply gamma_derivation_split in hg.
+  destruct hg as [w' [w'' [v' [v'' [? [? [hg hg']]]]]]]; subst.
+  inv hg'.
+  (* lemma *)
+  inv H4. rewrite app_nil_r in *.
+  inv H1.
+  repeat eexists; eauto.
 Qed.  
 
 Definition unique_gamma_derivation g ss w v :=
