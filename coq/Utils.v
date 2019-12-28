@@ -98,6 +98,18 @@ Proof.
   apply filter_In in Hin; destruct Hin as [Hp _]; auto.
 Qed.
 
+Lemma filter_tail_in :
+  forall (A : Type) (f : A -> bool) (l : list A) (h x : A) (t : list A) ,
+    filter f l = h :: t
+    -> In x t
+    -> In x l.
+Proof.
+  intros A f l h x t hf hi.
+  assert (hi' : In x (filter f l)).
+  { rewrite hf; apply in_cons; auto. }
+  apply filter_In in hi'; destruct hi'; auto.
+Qed.
+
 Lemma in_singleton_eq :
   forall A (x x' : A),
     In x' [x]
