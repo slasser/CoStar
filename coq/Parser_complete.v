@@ -612,36 +612,95 @@ Inductive frames_derivation (g : grammar) :
     -> frames_derivation g frs wpre (wmid ++ wsuf) 
     -> frames_derivation g (Fr (Loc o pre suf) v :: frs) (wpre ++ wmid) wsuf.
 
+Hint Constructors frames_derivation.
+
+Lemma fd_inv_cons :
+  forall g o pre suf v frs w wsuf,
+    frames_derivation g (Fr (Loc o pre suf) v :: frs) w wsuf
+    -> exists wpre wmid,
+      w = wpre ++ wmid
+      /\ frames_derivation g frs wpre (wmid ++ wsuf)
+      /\ gamma_derivation g pre wmid v.
+Proof.
+  intros g o pre suf v frs w wsuf hf; inv hf; eauto.
+Qed.
+
+Lemma return_preserves_frames_derivation :
+  forall g ce cr cr' o o' pre pre' x suf v v' wpre wsuf frs,
+    ce = Fr (Loc o' pre' []) v'
+    -> cr = Fr (Loc o pre (NT x :: suf)) v
+    -> cr' = Fr (Loc o (pre ++ [NT x]) suf) (v ++ [Node x v'])
+    -> stack_wf g (ce, cr :: frs)
+    -> frames_derivation g (ce :: cr :: frs) wpre wsuf
+    -> frames_derivation g (cr' :: frs) wpre wsuf.
+Proof.
+  intros g ce cr cr' o o' pre pre' x suf v v' w wsuf frs ? ? ? hw hf; subst.
+  apply fd_inv_cons in hf; destruct hf as [w' [wmid' [heq [hf hg']]]]; subst.
+  apply fd_inv_cons in hf; destruct hf as [wpre [wmid [heq [hf hg]]]]; subst.
+  rewrite <- app_assoc; econstructor; eauto.
+  - apply gamma_derivation_app; auto.
+    inv hw; rewrite app_nil_r in *.
+    rew_nil_r wmid'; eauto.
+  - rewrite <- app_assoc; auto.
+Qed.
+
+Lemma consume_preserves_frames_derivation :
+  forall g fr fr' frs o pre suf v a l wpre wsuf,
+    fr = Fr (Loc o pre (T a :: suf)) v
+    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf l])
+    -> frames_derivation g (fr :: frs) wpre ((a,l) :: wsuf)
+    -> frames_derivation g (fr' :: frs) (wpre ++ [(a,l)]) wsuf.
+Proof.
+  intros g fr fr' frs o pre suf v a l wpre wsuf ? ? hf; subst; inv hf.
+  rewrite <- app_assoc; econstructor.
+  - apply gamma_derivation_app; auto.
+    rew_nil_r [(a,l)]; eauto.
+  - rewrite <- app_assoc; auto.
+Qed.
+
+Lemma push_preserves_frames_derivation :
+  forall g cr ce frs o o' pre suf v x rhs wpre wsuf,
+    cr = Fr (Loc o pre (NT x :: suf)) v
+    -> ce = Fr (Loc o' [] rhs) []
+    -> frames_derivation g (cr :: frs) wpre wsuf
+    -> frames_derivation g (ce :: cr :: frs) wpre wsuf.
+Proof.
+  intros g cr ce frs o o' pre suf v x rhs w wsuf ? ? hf; subst.
+  apply fd_inv_cons in hf; destruct hf as [wpre [wmid [heq [hf hg]]]]; subst.
+  rew_nil_r (wpre ++ wmid); eauto.
+Qed.
+
+(* might need hypotheses about frames_derivation *)
 Inductive ambiguous_frames_derivation (g : grammar) :
   list frame -> list token -> list token -> Prop :=
-| ASD_push :
+| AFD_push :
     forall cr ce o o' pre pre' x suf suf' v v' wpre wmid wsuf frs alt_rhs,
       cr = Fr (Loc o pre (NT x :: suf)) v
       -> ce = Fr (Loc o' pre' suf') v'
       -> frames_derivation g (cr :: frs) wpre (wmid ++ wsuf)
       -> gamma_derivation g pre' wmid v'
-      -> gamma_recognize g (suf' ++ unprocTailSyms' frs) wsuf
-      -> In (x, pre' ++ suf') g
+      -> gamma_recognize g (suf' ++ suf ++ unprocTailSyms' frs) wsuf
       -> In (x, alt_rhs) g
+      -> gamma_recognize g (alt_rhs ++ suf ++ unprocTailSyms' frs) (wmid ++ wsuf)
       -> pre' ++ suf' <> alt_rhs
-      -> gamma_recognize g (alt_rhs ++ unprocTailSyms' frs) (wmid ++ wsuf)
-      -> ambiguous_frames_derivation g (Fr (Loc o' pre' suf') v' ::
-                                           Fr (Loc o pre (NT x :: suf)) v :: frs) (wpre ++ wmid) wsuf
-| ASD_sem :
+      -> ambiguous_frames_derivation g (ce :: cr :: frs) (wpre ++ wmid) wsuf
+| AFD_sem :
     forall fr o pre suf v v' wpre wmid wmid' wsuf wsuf' frs,
       fr = Fr (Loc o pre suf) v
       -> frames_derivation g frs wpre (wmid ++ wsuf)
-      -> gamma_derivation g pre wmid v
       -> wmid' ++ wsuf' = wmid ++ wsuf
+      -> gamma_derivation g pre wmid v
       -> gamma_derivation g pre wmid' v'
       -> v' <> v
       -> ambiguous_frames_derivation g (fr :: frs) (wpre ++ wmid) wsuf
-| ASD_tail :
+| AFD_tail :
     forall fr o pre suf v frs wpre wmid wsuf,
       fr = Fr (Loc o pre suf) v
       -> ambiguous_frames_derivation g frs wpre (wmid ++ wsuf)
       -> gamma_derivation g pre wmid v
       -> ambiguous_frames_derivation g (fr :: frs) (wpre ++ wmid) wsuf.
+
+Hint Constructors ambiguous_frames_derivation.
 
 (* before proving that this invariant is preserved, 
    I'll need to prove a stronger fact about a PredAmbig result *)
@@ -667,7 +726,8 @@ Proof.
       exists sp''; split; auto.
       apply in_cons; auto.
 Qed.
-      
+
+(* refactor *)
 Lemma llPredict'_ambig_rhs_leads_to_successful_parse' :
   forall g orig_sps wsuf wpre curr_sps rhs,
     all_sp_stacks_wf g curr_sps
@@ -788,7 +848,132 @@ Proof.
       eapply initSps_preserves_lstack_wf_invar; eauto.
 Qed.
 
+Lemma trees_eq__gammas_eq_words_eq' :
+  forall g ys w v,
+    gamma_derivation g ys w v
+    -> forall ys' w',
+        gamma_derivation g ys' w' v
+        -> ys' = ys /\ w' = w.
+Proof.
+  intros g ys w v hg.
+  induction hg using gamma_derivation_mutual_ind with
+      (P := fun s w t (hs : sym_derivation g s w t) =>
+              forall s' w',
+                sym_derivation g s' w' t
+                -> s' = s /\ w' = w).
+  - intros s' w' hs.
+  - inv hg'.
 
+Lemma return_preserves_ambiguous_frames_derivation :
+  forall g ce cr cr' o o' pre pre' x suf v v' wpre wsuf frs,
+    ce = Fr (Loc o' pre' []) v'
+    -> cr = Fr (Loc o pre (NT x :: suf)) v
+    -> cr' = Fr (Loc o (pre ++ [NT x]) suf) (v ++ [Node x v'])
+    -> stack_wf g (ce, cr :: frs)
+    -> ambiguous_frames_derivation g (ce :: cr :: frs) wpre wsuf
+    -> ambiguous_frames_derivation g (cr' :: frs) wpre wsuf.
+Proof.
+  intros g ce cr cr' o o' pre pre' x suf v v' w wsuf frs ? ? ? hw ha; subst.
+  inv ha.
+  - (* ambig push case *)
+    inv H2; inv H3.
+    rewrite app_nil_r in *; sis.
+    rename pre'0 into rhs.
+    apply fd_inv_cons in H4.
+    destruct H4 as [wpre' [wpre'' [heq [hf hg]]]]; subst.
+    apply gamma_recognize_split in H10.
+    destruct H10 as [wmid' [wsuf' [heq [hr hr']]]].
+    apply gamma_recognize__exists_gamma_derivation in hr.
+    destruct hr as [v_alt hd].
+    rewrite <- app_assoc.
+    assert (gamma_recognize g (rhs ++ suf0 ++ unprocTailSyms' frs) (wmid ++ wsuf)).
+    { apply gamma_recognize_app; auto.
+      eapply gamma_derivation__gamma_recognize; eauto. }
+    eapply AFD_sem with (wmid := wpre'' ++ wmid)
+                        (wmid' := wpre'' ++ wmid')
+                        (wsuf' := wsuf')
+                        (v' := v0 ++ [Node x0 v_alt]); eauto.
+    + rewrite <- app_assoc; auto.
+    + repeat rewrite <- app_assoc.
+      rewrite heq; auto.
+    + apply gamma_derivation_app; auto.
+      inv hw; rewrite app_nil_r in *.
+      rew_nil_r wmid; eauto.
+    + apply gamma_derivation_app; auto.
+      rew_nil_r wmid'; eauto.
+    + unfold not; intros.
+      apply app_inv_head in H0.
+      inv H0.
+      admit.
+  - 
+    apply gamma_recognize_split in H10.
+    destruct H10 as [wmid' [wsuf' [heq [hg' hg'']]]].
+    apply gamma_recognize__exists_gamma_derivation in hg'.
+    destruct hg' as [v_alt hg'].
+    assert (wmid0 = wmid) by admit; subst.
+    rewrite H2.
+    rewrite <- app_assoc.
+    eapply AFD_sem with (wpre := wpre') (wmid := wpre'' ++ wmid) (wmid' := wmid') (v' := v0 ++ [Node x0 v_alt]); eauto.
+    + apply app_inv_tail in H2; subst.
+    + apply gamma_derivation_app; auto.
+      inv hw; rewrite app_nil_r in *.
+      rew_nil_r wmid; eauto.
+    + apply gamma_derivation_app; auto.
+      
+    eapply AFD_sem with (wpre := wpre1) (wmid := wmid1 ++ wmid0) (wmid' := wmid') (v' := v0 ++ [Node x0 v_alt]); eauto.
+    + apply gamma_derivation_app; auto.
+      inv hw; rewrite app_nil_r in *.
+      rew_nil_r wmid0; eauto.
+    + apply gamma_derivation_app; auto.
+      rew_nil_r wmid0; auto.
+  - (* ambig values case *)
+    admit.
+  - inv H1.
+    inv H2.
+    + admit.
+    + admit.
+    + inv H1.
+      rewrite <- app_assoc.
+      eapply AFD_tail; eauto.
+      * rewrite <- app_assoc; auto.
+      * apply gamma_derivation_app; auto.
+        inv hw; rewrite app_nil_r in *.
+        rew_nil_r wmid; eauto.
+    
+  apply fd_inv_cons in hf; destruct hf as [w' [wmid' [heq [hf hg']]]]; subst.
+  apply fd_inv_cons in hf; destruct hf as [wpre [wmid [heq [hf hg]]]]; subst.
+  rewrite <- app_assoc; econstructor; eauto.
+  - apply gamma_derivation_app; auto.
+    inv hw; rewrite app_nil_r in *.
+    rew_nil_r wmid'; eauto.
+  - rewrite <- app_assoc; auto.
+Qed.
+
+Lemma consume_preserves_frames_derivation :
+  forall g fr fr' frs o pre suf v a l wpre wsuf,
+    fr = Fr (Loc o pre (T a :: suf)) v
+    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf l])
+    -> frames_derivation g (fr :: frs) wpre ((a,l) :: wsuf)
+    -> frames_derivation g (fr' :: frs) (wpre ++ [(a,l)]) wsuf.
+Proof.
+  intros g fr fr' frs o pre suf v a l wpre wsuf ? ? hf; subst; inv hf.
+  rewrite <- app_assoc; econstructor.
+  - apply gamma_derivation_app; auto.
+    rew_nil_r [(a,l)]; eauto.
+  - rewrite <- app_assoc; auto.
+Qed.
+
+Lemma push_preserves_frames_derivation :
+  forall g cr ce frs o o' pre suf v x rhs wpre wsuf,
+    cr = Fr (Loc o pre (NT x :: suf)) v
+    -> ce = Fr (Loc o' [] rhs) []
+    -> frames_derivation g (cr :: frs) wpre wsuf
+    -> frames_derivation g (ce :: cr :: frs) wpre wsuf.
+Proof.
+  intros g cr ce frs o o' pre suf v x rhs w wsuf ? ? hf; subst.
+  apply fd_inv_cons in hf; destruct hf as [wpre [wmid [heq [hf hg]]]]; subst.
+  rew_nil_r (wpre ++ wmid); eauto.
+Qed.
 
 | USD_bottom :
     forall o pre suf v wpre wsuf,
