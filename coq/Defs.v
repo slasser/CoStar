@@ -188,7 +188,7 @@ Definition literal := string.
 Definition token   := (terminal * literal)% type.
 
 (* Parser return values *)
-Inductive tree    := Leaf : literal -> tree
+Inductive tree    := Leaf : terminal -> literal -> tree
                    | Node : nonterminal -> list tree -> tree.
 
 Definition forest := list tree.
@@ -203,7 +203,7 @@ Record location := Loc { lopt : option nonterminal
 Inductive sym_derivation (g : grammar) : symbol -> list token -> tree -> Prop :=
 | T_der  : 
     forall (a : terminal) (l : literal),
-      sym_derivation g (T a) [(a, l)] (Leaf l)
+      sym_derivation g (T a) [(a, l)] (Leaf a l)
 | NT_der : 
     forall (x  : nonterminal) (ys : list symbol) (w : list token) (sts : forest),
       In (x, ys) g
@@ -260,7 +260,7 @@ Qed.
 Lemma terminal_head_gamma_derivation :
   forall g a l ys w v,
     gamma_derivation g ys w v
-    -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf l :: v).
+    -> gamma_derivation g (T a :: ys) ((a, l) :: w) (Leaf a l :: v).
 Proof.
   intros g a l ys w v hg.
   assert (happ : (a, l) :: w = [(a, l)] ++ w) by apply cons_app_singleton.
@@ -289,7 +289,7 @@ Lemma gamma_derivation_terminal_end :
     gamma_derivation g (ys ++ [T a]) w v
     -> exists w_front l v_front,
       w = w_front ++ [(a, l)]
-      /\ v = v_front ++ [Leaf l]
+      /\ v = v_front ++ [Leaf a l]
       /\ gamma_derivation g ys w_front v_front.
 Proof.
   intros g ys a w v hg.

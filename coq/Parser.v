@@ -82,7 +82,7 @@ Definition step (g : grammar) (st : parser_state) : step_result :=
         | []               => StepReject "input exhausted"
         | (a', l) :: ts_tl =>
           if t_eq_dec a' a then 
-            let fr' := Fr (Loc xo (pre ++ [T a]) suf_tl) (sv ++ [Leaf l])
+            let fr' := Fr (Loc xo (pre ++ [T a]) suf_tl) (sv ++ [Leaf a l])
             in  StepK (Pst (allNts g) (fr', frs) ts_tl u)
           else
             StepReject "token mismatch"
@@ -311,7 +311,7 @@ Lemma multistep_cases' :
        | Accept f => (sr = StepAccept f /\ st.(unique) = true)
                      \/ exists st' a', sr = StepK st' 
                                        /\ multistep g st' a' = Accept f
-       | Ambig f  => sr = StepAccept f
+       | Ambig f  => (sr = StepAccept f /\ st.(unique) = false)
                      \/ exists st' a', sr = StepK st' 
                                        /\ multistep g st' a' = Ambig f
        | Reject s => sr = StepReject s
@@ -337,7 +337,7 @@ Lemma multistep_cases :
        | Accept f => (step g st = StepAccept f /\ st.(unique) = true)
                      \/ exists st' a', step g st = StepK st' 
                                        /\ multistep g st' a' = Accept f
-       | Ambig f  => step g st = StepAccept f
+       | Ambig f  => (step g st = StepAccept f /\ st.(unique) = false)
                      \/ exists st' a', step g st = StepK st' 
                                        /\ multistep g st' a' = Ambig f
        | Reject s => step g st = StepReject s
@@ -365,6 +365,20 @@ Lemma multistep_accept_cases :
 Proof.
   intros g st a f hm; subst.
   destruct (multistep_cases g st a (Accept f)); auto.
+Qed.
+
+Lemma multistep_ambig_cases :
+  forall (g  : grammar)
+         (st : parser_state)
+         (a  : Acc lex_nat_triple (meas g st))
+         (f  : forest),
+    multistep g st a = Ambig f
+    -> (step g st = StepAccept f /\ st.(unique) = false)
+       \/ exists st' a', step g st = StepK st' 
+                         /\ multistep g st' a' = Ambig f.
+Proof.
+  intros g st a f hm; subst.
+  destruct (multistep_cases g st a (Ambig f)); auto.
 Qed.
 
 Lemma multistep_reject_cases :
@@ -642,7 +656,7 @@ Qed.
 Lemma consume_preserves_stack_derivation :
   forall g fr fr' frs o pre suf a l v w,
     fr = Fr (Loc o pre (T a :: suf)) v
-    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf l])
+    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf a l])
     -> stack_derivation g (fr, frs) w
     -> stack_derivation g (fr', frs) (w ++ [(a, l)]).
 Proof.
@@ -691,7 +705,7 @@ Qed.
 Lemma consume_preserves_stack_prefix_derivation :
   forall g fr fr' frs o pre suf a l v wsuf w,
     fr = Fr (Loc o pre (T a :: suf)) v
-    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf l])
+    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf a l])
     -> stack_prefix_derivation g (fr, frs) ((a, l) :: wsuf) w
     -> stack_prefix_derivation g (fr', frs) wsuf w.
 Proof.
