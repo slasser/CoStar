@@ -17,6 +17,9 @@ Definition parser_stack := (frame * list frame)%type.
 Definition lstackOf (stk : parser_stack) : location_stack :=
   let (fr, frs) := stk in (fr.(loc), map loc frs).
 
+Definition unprocTailSyms' (frs : list frame) :=
+  unprocTailSyms (map loc frs).
+
 Fixpoint bottomFrame' (h : frame) (t : list frame) : frame :=
   match t with
   | []        => h

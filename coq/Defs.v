@@ -318,7 +318,37 @@ Proof.
   inv H4. rewrite app_nil_r in *.
   inv H1.
   repeat eexists; eauto.
-Qed.  
+Qed.
+
+Lemma trees_eq__gammas_eq_words_eq' :
+  forall g ys w v,
+    gamma_derivation g ys w v
+    -> forall ys' w',
+        gamma_derivation g ys' w' v
+        -> ys' = ys /\ w' = w.
+Proof.
+  intros g ys w v hg.
+  induction hg using gamma_derivation_mutual_ind with
+      (P := fun s w t (hs : sym_derivation g s w t) =>
+              forall s' w',
+                sym_derivation g s' w' t
+                -> s' = s /\ w' = w).
+  - intros s' w' hs; inv hs; auto.
+  - intros s' w' hs; inv hs; firstorder.
+  - intros ys' w' hg; inv hg; auto.
+  - intros ys' w' hg'; inv hg'.
+    apply IHhg in H3; destruct H3; subst.
+    apply IHhg0 in H4; destruct H4; subst; auto.
+Qed.
+
+Lemma trees_eq__gammas_eq_words_eq :
+  forall g ys ys' w w' v,
+    gamma_derivation g ys w v
+    -> gamma_derivation g ys' w' v
+    -> ys' = ys /\ w' = w.
+Proof.
+  intros; eapply trees_eq__gammas_eq_words_eq'; eauto.
+Qed.
 
 Definition unique_gamma_derivation g ss w v :=
   gamma_derivation g ss w v
@@ -407,6 +437,30 @@ Proof.
   - inversion hg as [| s ss wpre wsuf hs hg']; subst; clear hg. 
     apply IH in hg'; destruct hg' as [w [w' [? [hg' hg'']]]]; subst.
     exists (wpre ++ w); exists w'; repeat split; auto; apps.
+Qed.
+
+Lemma gamma_derivation__gamma_recognize :
+  forall g ys w v,
+    gamma_derivation g ys w v
+    -> gamma_recognize g ys w.
+Proof.
+  intros g ys w v hg.
+  induction hg using gamma_derivation_mutual_ind with
+      (P := fun s w t (hs : sym_derivation g s w t) => 
+              sym_recognize g s w); eauto.
+Qed.
+
+Lemma gamma_recognize__exists_gamma_derivation :
+  forall g ys w,
+    gamma_recognize g ys w
+    -> exists v,
+      gamma_derivation g ys w v.
+Proof.
+  intros g ys w hg.
+  induction hg using gamma_recognize_mutual_ind with
+      (P := fun s w (hs : sym_recognize g s w) => 
+              exists t, sym_derivation g s w t); firstorder; eauto.
+  repeat econstructor; eauto.
 Qed.
 
 (* Inductive definition of a nullable grammar symbol *)

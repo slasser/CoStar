@@ -828,6 +828,8 @@ Qed.
 (* One of the main lemmas in this file; if llPredict return a right-hand side
    and finds no ambiguity, then only that right-hand side will result in a 
    successful derivation *)
+(* This probably belongs in a different file, since it's involved in more than
+   just proving completeness *)
 Lemma llPredict_succ_at_most_one_rhs_applies :
   forall g cr ce o pre x suf frs w rhs rhs',
     cr = Loc o pre (NT x :: suf)

@@ -13,6 +13,19 @@ Definition sum := Datatypes.sum.
 
 Definition location_stack := (location * list location)%type.
 
+Fixpoint unprocTailSyms (frs : list location) : list symbol :=
+  match frs with 
+  | []                            => []
+  | Loc _ _ [] :: _               => [] (* impossible for a well-formed stack *)
+  | Loc _ _ (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
+  | Loc _ _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
+  end.
+
+Definition unprocStackSyms (stk : location_stack) : list symbol :=
+  match stk with
+  | (Loc o pre suf, frs) => suf ++ unprocTailSyms frs
+  end.
+
 Record subparser := Sp { avail      : NtSet.t
                        ; prediction : list symbol
                        ; stack      : location_stack
