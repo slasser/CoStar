@@ -1,2 +1,2 @@
-# ocaml-allstar
-Simple OCaml implementation of the ALL(*) parsing algorithm
+# GallStar
+Formally verified parser interpreter based on the ALL(*) parsing algorithm
