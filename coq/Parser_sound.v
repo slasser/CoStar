@@ -79,9 +79,6 @@ Qed.
 (* The stronger parser soundness theorems -- one for unique derivations, one for
    ambiguous derivations, appear below. *)
 
-Definition unprocTailSyms' (frs : list frame) :=
-  unprocTailSyms (map loc frs).
-
 (* Invariant for proving the "unambiguous" version of the parser soundness
    lemma. The processed stack symbols and the semantic values stored
    in each frame comprise a unique partial derivation for the tokens that
@@ -992,7 +989,6 @@ Proof.
   eapply multistep_sound_ambig in hp; eauto.
   - constructor.
   - (* lemma *)
-    red.
     exists []; split; eauto.
     rew_nil_r ([] : list token); eauto.
   - apply apd_starts_true.
