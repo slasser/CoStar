@@ -490,36 +490,6 @@ Proof.
     eapply push_preserves_frames_derivation; eauto.
 Qed.
 
-Lemma trees_eq__gammas_eq_words_eq' :
-  forall g ys w v,
-    gamma_derivation g ys w v
-    -> forall ys' w',
-        gamma_derivation g ys' w' v
-        -> ys' = ys /\ w' = w.
-Proof.
-  intros g ys w v hg.
-  induction hg using gamma_derivation_mutual_ind with
-      (P := fun s w t (hs : sym_derivation g s w t) =>
-              forall s' w',
-                sym_derivation g s' w' t
-                -> s' = s /\ w' = w).
-  - intros s' w' hs; inv hs; auto.
-  - intros s' w' hs; inv hs; firstorder.
-  - intros ys' w' hg; inv hg; auto.
-  - intros ys' w' hg'; inv hg'.
-    apply IHhg in H3; destruct H3; subst.
-    apply IHhg0 in H4; destruct H4; subst; auto.
-Qed.
-
-Lemma trees_eq__gammas_eq_words_eq :
-  forall g ys ys' w w' v,
-    gamma_derivation g ys w v
-    -> gamma_derivation g ys' w' v
-    -> ys' = ys /\ w' = w.
-Proof.
-  intros; eapply trees_eq__gammas_eq_words_eq'; eauto.
-Qed.
-
 (* Invariant for proving the "ambiguous" version of the parser soundness
    theorem. The processed stack symbols and semantic values constructed
    for them comprise a correct partial derivation for the tokens consumed,
