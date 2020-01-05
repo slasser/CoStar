@@ -1,5 +1,6 @@
 Require Import List String ExtrOcamlBasic ExtrOcamlString.
 Require Import GallStar.Defs.
+Require Import GallStar.Lex.
 Require Import GallStar.Parser.
 Import ListNotations.
 Open Scope string_scope.
@@ -87,10 +88,27 @@ Definition tokens := [ (LeftBrace, "")
                      ].
 
 (* next step: change lemmas from Qed to Defined so that parse can simplify. *)
+
+Lemma mkIniteState_test :
+  mkInitState jsonGrammar [NT Value] tokens =
+  Pst (allNts jsonGrammar)
+      (Fr (Loc None [] [NT Value]) [], [])
+      tokens
+      true.
+Proof. auto. Qed.
+
+Definition init_st := 
+  Pst (allNts jsonGrammar)
+      (Fr (Loc None [] [NT Value]) [], [])
+      tokens
+      true.
+
+(* simpl seems to diverge *)
 Lemma test :
   parse jsonGrammar [NT Value] tokens = Accept [Node Value []].
 Proof.
   unfold parse.
+  auto.
 Abort.
 
 Extraction "myJsonParser.ml" jsonGrammar parse.

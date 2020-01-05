@@ -162,7 +162,7 @@ Lemma state_lt_after_return :
 Proof.
   intros g st st' ts ce cr cr' frs x x' suf_cr_tl av u
          Hst hst' Hce Hcr Hcr'; subst.
-  unfold meas. unfold lstackOf.
+  unfold meas; unfold lstackOf.
   pose proof (stackScore_le_after_return (loc ce) (loc cr) (loc cr')
                                          x x' (rsuf (loc cr')) av (map loc frs)
                                          (1 + maxRhsLength g)) as Hle.
@@ -173,9 +173,7 @@ Defined.
 
 Lemma loc_proj_eq :
   forall l v, loc (Fr l v) = l.
-Proof.
-  auto.
-Qed.
+Proof. auto. Defined.
 
 Lemma state_lt_after_return' :
   forall g st st' av u ts fr cr cr' frs o o' pre pre' suf' x v v' v'',
@@ -444,7 +442,7 @@ Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) : p
 
 Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
   multistep g (mkInitState g gamma ts) (lex_nat_triple_wf _).
-
+Print Assumptions parse.
 (* A WELL-FORMEDNESS INVARIANT FOR THE PARSER STACK *)
 
 Definition frames_wf (g : grammar) (frs : list frame) : Prop :=

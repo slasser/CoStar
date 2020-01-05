@@ -68,7 +68,7 @@ Lemma moveSp_preserves_prediction :
 Proof.
   intros g t sp sp' hm; unfold moveSp in hm.
   dms; tc; subst; inv hm; auto.
-Qed.
+Defined.
 
 Lemma moveSp_succ_step :
   forall g sp sp' av pred o pre a l suf frs,
@@ -77,7 +77,7 @@ Lemma moveSp_succ_step :
     -> moveSp g (a, l) sp = SpMoveSucc sp'.
 Proof.
   intros; subst; unfold moveSp; dms; tc.
-Qed.
+Defined.
 
 (*
 Lemma moveSp_result_in_map :
@@ -87,7 +87,7 @@ Lemma moveSp_result_in_map :
     -> In (moveSp g t sp) (map (moveSp g t) sps).
 Proof.
   intros; subst; apply in_map_iff; eauto.
-Qed.
+Defined.
 *)
 
 Definition move_result := sum prediction_error (list subparser).
@@ -120,7 +120,7 @@ Proof.
     destruct (aggrMoveResults smrs') as [e' | sps']; tc; inv ha.
     + inv hi; firstorder.
     + firstorder.
-Qed.
+Defined.
 
 Lemma aggrMoveResults_error_in_input :
   forall (smrs : list subparser_move_result)
@@ -132,7 +132,7 @@ Proof.
   induction smrs as [| smr smrs' IH]; sis; tc.
   destruct smr as [sp' | | e'];
   destruct (aggrMoveResults smrs') as [e'' | sps']; tc; inv ha; eauto.
-Qed.
+Defined.
 
 Lemma aggrMoveResults_succ_all_sps_step :
   forall g t sp sps sp' sps',
@@ -149,7 +149,7 @@ Proof.
   - dms; tc.
     inv ha.
     apply in_cons; auto.
-Qed.
+Defined.
 
 Lemma aggrMoveResults_map_backwards :
   forall (f : subparser -> subparser_move_result) sp' sps sps',
@@ -175,7 +175,7 @@ Proof.
       apply IH in hi; auto.
       destruct hi as [sp'' [hi heq]].
       eexists; split; [apply in_cons; eauto | auto].
-Qed.
+Defined.
 
 Definition move (g : grammar) (tok : token) (sps : list subparser) : move_result :=
   aggrMoveResults (map (moveSp g tok) sps).
@@ -185,7 +185,7 @@ Lemma move_unfold :
     move g t sps = aggrMoveResults (map (moveSp g t) sps).
 Proof. 
   auto. 
-Qed.
+Defined.
 
 Lemma move_preserves_prediction :
   forall g t sp' sps sps',
@@ -199,7 +199,7 @@ Proof.
   eapply in_map_iff in hm; destruct hm as [sp [hmsp hi']].
   eexists; split; eauto.
   eapply moveSp_preserves_prediction; eauto.
-Qed.
+Defined.
 
 Lemma move_maps_moveSp :
   forall g t sp sp' sps sps',
@@ -210,7 +210,7 @@ Lemma move_maps_moveSp :
 Proof.
   intros g t sp sp' sps sps' hi hm hm'.
   eapply aggrMoveResults_succ_all_sps_step; eauto.
-Qed.
+Defined.
 
 Lemma move_succ_all_sps_step :
   forall g sp sp' av pred o pre a l suf frs sps sps',
@@ -223,7 +223,7 @@ Proof.
   intros g sp sp' av pred o pre a l suf frs sps sps' ? ? hi hm; subst.
   eapply move_maps_moveSp; eauto.
   eapply moveSp_succ_step; eauto.
-Qed.
+Defined.
 
 (* "closure" operation *)
 
@@ -273,7 +273,7 @@ Proof.
   - apply in_map_iff in hi.
     destruct hi as [rhs [heq hi]]; subst; auto.
   - inv hi.
-Qed.
+Defined.
 
 Definition closure_result := sum prediction_error (list subparser).
 
@@ -310,7 +310,7 @@ Proof.
       destruct hi'' as [sps [hi hi']].
       eexists; split; eauto.
       apply in_cons; auto.
-Qed.
+Defined.
 
 Lemma aggrClosureResults_error_in_input:
   forall (crs : list closure_result) 
@@ -322,7 +322,7 @@ Proof.
   destruct cr as [e' | sps].
   - inv ha; auto.
   - destruct (aggrClosureResults crs) as [e' | sps']; tc; auto.
-Qed.
+Defined.
 
 Lemma aggrClosureResults_map_succ_elt_succ :
   forall sp (f : subparser -> closure_result) (sps : list subparser) sps'',
@@ -350,7 +350,7 @@ Proof.
       repeat eexists; eauto.
       intros sp' hi.
       apply in_or_app; auto.
-Qed.
+Defined.
 
 Lemma aggrClosureResults_map_backwards :
   forall sp'' (f : subparser -> closure_result) (sps sps'' : list subparser),
@@ -374,7 +374,7 @@ Proof.
       destruct htl as [sp' [sps' [? [? ?]]]]; subst.
       exists sp'; exists sps'; repeat split; auto.
       apply in_cons; auto.
-Qed.
+Defined.
 
 Lemma aggrClosureResults_dmap_succ_elt_succ :
   forall sp (sps : list subparser) (f : forall sp, In sp sps -> closure_result) sps'',
@@ -403,7 +403,7 @@ Proof.
       repeat eexists; eauto.
       intros sp' hi'.
       apply in_or_app; auto.
-Qed.
+Defined.
 
 Lemma aggrClosureResults_dmap_backwards :
   forall sp'' (sps : list subparser) f sps'',
@@ -429,7 +429,7 @@ Proof.
       unfold eq_rect_r in heq; simpl in heq.
       repeat eexists; eauto.
       apply in_cons; auto.
-Qed.
+Defined.
 
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
@@ -547,7 +547,7 @@ Lemma spClosure_unfold :
     end eq_refl.
 Proof.
   intros g sp a; destruct a; auto.
-Qed.
+Defined.
 
 Lemma spClosure_cases' :
   forall (g   : grammar)
@@ -589,7 +589,7 @@ Proof.
   destruct sr as [ | sps | e];
   destruct cr as [e' | sps']; intros heq'; tc;
   try solve [inv heq'; auto | eauto 6].
-Qed.
+Defined.
 
 Lemma spClosure_cases :
   forall (g  : grammar)
@@ -620,7 +620,7 @@ Proof.
   intros g sp a cr hs; subst.
   rewrite spClosure_unfold.
   eapply spClosure_cases'; eauto.
-Qed.
+Defined.
 
 Lemma spClosure_success_cases :
   forall g sp a sps,
@@ -635,7 +635,7 @@ Lemma spClosure_success_cases :
         /\ aggrClosureResults crs = inr sps.
 Proof.
   intros g sp a sps hs; apply spClosure_cases with (cr := inr sps); auto.
-Qed.
+Defined.
 
 Lemma spClosure_error_cases :
   forall g sp a e,
@@ -649,7 +649,7 @@ Lemma spClosure_error_cases :
         /\ aggrClosureResults crs = inl e.
 Proof.
   intros g sp a e hs; apply spClosure_cases with (cr := inl e); auto.
-Qed.
+Defined.
 
 Lemma spClosure_preserves_prediction :
   forall g pair (a : Acc lex_nat_pair pair) sp a' sp' sps',
@@ -672,7 +672,7 @@ Proof.
     + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs; auto.
       rewrite hs; auto.
     + eapply spClosureStep_meas_lt; eauto.
-Qed.
+Defined.
 
 Definition closure (g : grammar) (sps : list subparser) :
   sum prediction_error (list subparser) :=
@@ -691,7 +691,7 @@ Proof.
   eexists; split; eauto.
   eapply spClosure_preserves_prediction; eauto.
   apply lex_nat_pair_wf.
-Qed.
+Defined.
 
 (* LL prediction *)
 
@@ -720,7 +720,7 @@ Proof.
   unfold allPredictionsEqual in ha; unfold allEqual in ha; sis.
   apply andb_true_iff in ha; destruct ha as [hhd htl]; split; auto.
   unfold beqGamma in *; dms; tc.
-Qed.
+Defined.
 
 Lemma allPredictionsEqual_in_tl :
   forall sp sp' sps,
@@ -730,7 +730,7 @@ Lemma allPredictionsEqual_in_tl :
 Proof.
   intros sp sp' sps ha hi; induction sps as [| sp'' sps IH]; inv hi;
   apply allPredictionsEqual_inv_cons in ha; destruct ha as [hhd htl]; auto.
-Qed.
+Defined.
       
 Lemma allPredictionsEqual_in :
   forall sp' sp sps,
@@ -740,7 +740,7 @@ Lemma allPredictionsEqual_in :
 Proof.
   intros sp' sp sps ha hi; inv hi; auto.
   eapply allPredictionsEqual_in_tl; eauto.
-Qed.
+Defined.
 
 Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
   match filter finalConfig sps with
@@ -772,7 +772,7 @@ Proof.
   exists sp.
   destruct sp as [av pred ([o pre suf], frs)].
   dms; tc; repeat eexists; eauto.
-Qed.
+Defined.
 
 Lemma handleFinalSubparsers_ambig_from_subparsers :
   forall sps gamma,
@@ -784,7 +784,7 @@ Proof.
   dmeqs h; tc; inv hh.
   eexists; split; eauto.
   eapply filter_cons_in; eauto.
-Qed.
+Defined.
 
 Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
   match sps with
@@ -829,7 +829,7 @@ Proof.
       destruct hc as [? [? heq]]; rewrite heq.
       eapply move_preserves_prediction in hm; eauto.
       destruct hm as [? [? ?]]; eauto.
-Qed.
+Defined.
 
 Lemma llPredict'_ambig_result_in_original_subparsers :
   forall g ts gamma sps,
@@ -849,7 +849,7 @@ Proof.
       destruct hc as [? [? heq]]; rewrite heq.
       eapply move_preserves_prediction in hm; eauto.
       destruct hm as [? [? ?]]; eauto.
-Qed.
+Defined.
 
 Definition initSps (g : grammar) (x : nonterminal) (stk : location_stack) : list subparser :=
   let (loc, locs) := stk
@@ -863,7 +863,7 @@ Lemma initSps_prediction_in_rhssForNt :
 Proof.
   intros g x (fr, frs) sp hi; unfold initSps in hi.
   eapply in_map_iff in hi; firstorder; subst; auto.
-Qed.
+Defined.
 
 Lemma initSps_result_incl_all_rhss :
   forall g fr o pre x suf rhs frs,
@@ -875,7 +875,7 @@ Proof.
   intros g fr o pre x suf rhs frs ? hi; subst.
   apply in_map_iff; exists rhs; split; auto.
   apply rhssForNt_in_iff; auto.
-Qed.
+Defined.
 
 Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
   sum prediction_error (list subparser) :=
@@ -893,7 +893,7 @@ Proof.
   destruct hf as [sp [hin heq]].
   rewrite heq.
   eapply initSps_prediction_in_rhssForNt; eauto.
-Qed.
+Defined.
 
 Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
                      (ts : list token) : prediction_result :=
@@ -912,7 +912,7 @@ Proof.
   apply llPredict'_success_result_in_original_subparsers in hp.
   destruct hp as [sp [hin heq]]; subst.
   eapply startState_sp_prediction_in_rhssForNt; eauto.
-Qed.
+Defined.
 
 Lemma llPredict_ambig_in_rhssForNt :
   forall g x stk ts gamma,
@@ -925,7 +925,7 @@ Proof.
   apply llPredict'_ambig_result_in_original_subparsers in hf.
   destruct hf as [sp [hin heq]]; subst.
   eapply startState_sp_prediction_in_rhssForNt; eauto.
-Qed.
+Defined.
 
 Lemma llPredict_succ_in_grammar :
   forall g x stk ts ys,
@@ -935,7 +935,7 @@ Proof.
   intros g x stk ts ys hp.
   apply rhssForNt_in_iff.
   eapply llPredict_succ_in_rhssForNt; eauto.
-Qed.
+Defined.
 
 Lemma llPredict_ambig_in_grammar :
   forall g x stk ts ys,
@@ -945,7 +945,7 @@ Proof.
   intros g x stk ts ys hp.
   apply rhssForNt_in_iff.
   eapply llPredict_ambig_in_rhssForNt; eauto.
-Qed.
+Defined.
 
 
 (* A WELL-FORMEDNESS PREDICATE OVER A LOCATION STACK *)
@@ -998,7 +998,7 @@ Proof.
     destruct p as [| fr' p]; sis; subst; inv heq; auto.
     specialize (IHhw (Loc xo pre (NT x :: suf):: p) s).
     destruct IHhw as [hs hp]; auto.
-Qed.
+Defined.
 
 Lemma locations_wf_app_l :
   forall g p s,
@@ -1008,7 +1008,7 @@ Proof.
   intros g p s hw.
   eapply locations_wf_app in hw; eauto.
   firstorder.
-Qed.
+Defined.
 
 Lemma locations_wf_tl :
   forall g h t,
@@ -1019,7 +1019,7 @@ Proof.
   rewrite cons_app_singleton in hw.
   eapply locations_wf_app in hw; eauto.
   firstorder.
-Qed.
+Defined.
 
 Lemma return_preserves_locations_wf_invar :
   forall g o o_cr pre pre_cr suf_cr x locs,
@@ -1030,7 +1030,7 @@ Proof.
   inversion hw as [ | o' pre' suf' hw' | x' o' pre' pre'' suf suf' locs' hi hw']; subst; clear hw.
   inv hw'; constructor; auto.
   rewrite <- app_assoc; auto.
-Qed.
+Defined.
 
 Lemma push_preserves_locations_wf_invar :
   forall g o pre suf x rhs locs,
@@ -1040,7 +1040,7 @@ Lemma push_preserves_locations_wf_invar :
 Proof.
   intros; constructor; auto.
   apply rhssForNt_in_iff; auto.
-Qed.
+Defined.
 
 Lemma consume_preserves_locations_wf_invar :
   forall g o pre suf a locs,
@@ -1051,7 +1051,7 @@ Proof.
   inversion hw as [ | o' pre' suf' hw' | x o' pre' pre'' suf' suf'' locs' hi hw']; subst; clear hw; auto.
   rewrite cons_app_singleton in hi.
   rewrite app_assoc in hi; auto.
-Qed.
+Defined.
 
 Lemma spClosureStep_preserves_lstack_wf_invar :
   forall g sp sp' sps',
@@ -1067,7 +1067,7 @@ Proof.
   - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
     apply push_preserves_locations_wf_invar; auto.
   - inv hi.
-Qed.
+Defined.
 
 Lemma initSps_preserves_lstack_wf_invar :
   forall g fr o pre x suf frs sp,
@@ -1080,7 +1080,7 @@ Proof.
   apply in_map_iff in hi.
   destruct hi as [rhs [? hi]]; subst; sis.
   apply push_preserves_locations_wf_invar; eauto.
-Qed.
+Defined.
 
 (* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
    TO THE SHAPE OF THE STACK *)
@@ -1135,7 +1135,7 @@ Proof.
   - inv heq; inv hp; sis; split; eauto 8.
     apply nullable_app; auto.
     inv hw; rewrite app_nil_r in *; eauto.
-Qed.
+Defined.
 
 Lemma push_preserves_unavailable_nts_invar :
   forall g cr ce av pr o pre suf x rhs frs,
@@ -1154,7 +1154,7 @@ Proof.
     destruct hn' as
         [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
     exists (Loc o pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
-Qed.
+Defined.
 
 Lemma spClosureStep_preserves_unavailable_nts_invar :
   forall g sp sp' sps',
@@ -1171,14 +1171,14 @@ Proof.
   - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
     eapply push_preserves_unavailable_nts_invar; eauto.
   - inv hi.
-Qed.
+Defined.
 
 Lemma unavailable_nts_allNts :
   forall g pred stk,
     unavailable_nts_invar g (Sp (allNts g) pred stk).
 Proof.
   intros g pred (fr, frs); repeat red; intros; ND.fsetdec.
-Qed.
+Defined.
 
 Lemma initSps_sat_unavailable_nts_invar :
   forall g x o pre suf frs sp,
@@ -1188,4 +1188,4 @@ Proof.
   intros g x o pre suf frs sp hi; unfold initSps in hi.
   apply in_map_iff in hi; destruct hi as [rhs [? hi]]; subst.
   apply unavailable_nts_allNts.
-Qed.
+Defined.

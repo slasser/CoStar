@@ -41,7 +41,7 @@ Proof.
       exists a'; eexists; split.
       * apply in_cons; auto.
       * apply heq.
-Qed.
+Defined.
 
 Definition listMax (xs : list nat) : nat := 
   fold_right max 0 xs.
@@ -58,14 +58,14 @@ Proof.
     + apply IH in Hin.
       eapply le_trans; eauto.
       apply Max.le_max_r.
-Qed.
+Defined.
 
 (* Lemmas about standard library definitions *)
 
 Lemma app_nil_r' : forall A (xs : list A), xs = xs ++ [].
 Proof.
   intros; rewrite app_nil_r; auto.
-Qed.
+Defined.
 
 Ltac rew_nil_r xs :=
   let heq := fresh "heq" in
@@ -76,7 +76,7 @@ Lemma cons_app_singleton :
     x :: ys = [x] ++ ys.
 Proof.
   auto.
-Qed.
+Defined.
 
 Lemma cons_inv_eq :
   forall A (x x' : A) (xs xs' : list A),
@@ -85,7 +85,7 @@ Lemma cons_inv_eq :
 Proof.
   intros A x x' xs xs' heq.
   inv heq; auto.
-Qed.
+Defined.
 
 Lemma filter_cons_in :
   forall (A : Type) (f : A -> bool) (l : list A) (hd : A) (tl : list A),
@@ -96,7 +96,7 @@ Proof.
   assert (Hin : In hd (hd :: tl)) by apply in_eq.
   rewrite <- Hf in Hin.
   apply filter_In in Hin; destruct Hin as [Hp _]; auto.
-Qed.
+Defined.
 
 Lemma filter_tail_in :
   forall (A : Type) (f : A -> bool) (l : list A) (h x : A) (t : list A) ,
@@ -108,7 +108,7 @@ Proof.
   assert (hi' : In x (filter f l)).
   { rewrite hf; apply in_cons; auto. }
   apply filter_In in hi'; destruct hi'; auto.
-Qed.
+Defined.
 
 Lemma in_singleton_eq :
   forall A (x x' : A),
@@ -118,7 +118,7 @@ Proof.
   intros A x x' Hin.
   destruct Hin as [Hhd | Htl]; auto.
   inv Htl.
-Qed.
+Defined.
 
 Lemma Forall_In :
   forall (A : Type) (P : A -> Prop) (x : A) (xs : list A),
@@ -126,7 +126,7 @@ Lemma Forall_In :
 Proof.
   intros A P x xs hf hi.
   eapply Forall_forall; eauto.
-Qed.    
+Defined.    
          
 Lemma app_left_identity_nil :
   forall A (xs ys : list A),
@@ -136,7 +136,7 @@ Proof.
   intros A xs ys heq.
   eapply app_inv_tail.
   rewrite <- app_nil_l in heq; eauto.
-Qed.
+Defined.
 
 Lemma app_double_left_identity_nil :
   forall A (xs ys zs : list A),
@@ -146,7 +146,7 @@ Proof.
   intros A xs ys zs heq.
   apply app_eq_nil.
   eapply app_left_identity_nil; rewrite <- app_assoc; eauto.
-Qed.
+Defined.
 
 Lemma cons_neq_tail :
   forall A x (xs : list A),
@@ -155,7 +155,7 @@ Proof.
   intros A x xs; unfold not; intros heq.
   assert (heq' : [x] ++ xs = [] ++ xs) by apps.
   apply app_inv_tail in heq'; inv heq'.
-Qed.
+Defined.
 
 (* Variant of filter_In that removes the conjunction *)
 Lemma filter_In' :
@@ -165,11 +165,11 @@ Lemma filter_In' :
     -> In x (filter f l).
 Proof.
   intros; apply filter_In; auto.
-Qed.
+Defined.
 
 Lemma app_group_endpoints_l :
   forall A (x y : A) (xs ys : list A),
     x :: xs ++ y :: ys = (x :: xs ++ [y]) ++ ys.
 Proof.
   intros A x y xs ys; simpl; apps.
-Qed.
+Defined.
