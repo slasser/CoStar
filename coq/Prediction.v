@@ -1189,3 +1189,187 @@ Proof.
   apply in_map_iff in hi; destruct hi as [rhs [? hi]]; subst.
   apply unavailable_nts_allNts.
 Defined.
+
+(* Cache optimization *)
+
+Require Import FMaps.
+
+Definition sp_key := (list symbol * location_stack)%type.
+
+Definition dfa_state := list sp_key.
+
+Lemma dfa_state_eq_dec :
+  forall st st' : dfa_state, {st = st'} + {st <> st'}.
+Proof. repeat decide equality. Defined.
+
+Definition cache_key := (dfa_state * terminal)%type.
+
+Lemma cache_key_eq_dec :
+  forall k k' : cache_key, {k = k'} + {k <> k'}.
+Proof. repeat decide equality. Defined.
+  
+Module MDT_Key.
+  Definition t := cache_key.
+  Definition eq_dec := cache_key_eq_dec.
+End MDT_Key.
+Module Key_as_DT := Make_UDT(MDT_Key).
+Module Cache := FMapWeakList.Make Key_as_DT.
+
+Definition dfa_cache := Cache.t (list subparser).
+
+Inductive sll_subparser_closure_step_result :=
+| SllStepDone     : sll_subparser_closure_step_result
+| SllStepK        : list subparser -> sll_subparser_closure_step_result
+| SllStepError    : prediction_error -> sll_subparser_closure_step_result
+| SllStepFailover : sll_subparser_closure_step_result.
+
+Definition sllSpClosureStep (g : grammar) (sp : subparser) : 
+  sll_subparser_closure_step_result :=
+  match sp with
+  | Sp av pred (loc, locs) =>
+    match loc with
+    | Loc _ _ [] =>
+      match locs with
+      | []                        => SllStepFailover
+      | (Loc _ _ []) :: _         => SllStepError SpInvalidState
+      | (Loc _ _ (T _ :: _)) :: _ => SllStepError SpInvalidState
+      | (Loc xo_cr pre_cr (NT x :: suf_cr)) :: locs_tl =>
+        let stk':= (Loc xo_cr (pre_cr ++ [NT x]) suf_cr, locs_tl) 
+        in  SllStepK [Sp (NtSet.add x av) pred stk']
+      end
+    | Loc _ _ (T _ :: _)       => SllStepDone
+    | Loc xo pre (NT x :: suf) =>
+      if NtSet.mem x av then
+        let sps' := map (fun rhs => Sp (NtSet.remove x av) 
+                                       pred 
+                                       (Loc (Some x) [] rhs, loc :: locs))
+                        (rhssForNt g x)
+        in  SllStepK sps'
+      else if NtSet.mem x (allNts g) then
+             SllStepError (SpLeftRecursion x)
+           else
+             SllStepK []
+    end
+  end.
+
+Lemma sllSpClosureStep_meas_lt :
+  forall (g      : grammar)
+         (sp sp' : subparser)
+         (sps'   : list subparser),
+    sllSpClosureStep g sp = SllStepK sps'
+    -> In sp' sps'
+    -> lex_nat_pair (meas g sp') (meas g sp).
+Proof.
+  intros g sp sp' sps' hs hi. 
+  unfold sllSpClosureStep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
+  - apply in_singleton_eq in hi; subst.
+    eapply meas_lt_after_return; eauto.
+  - apply in_map_iff in hi.
+    destruct hi as [rhs [heq hi]]; subst.
+    eapply meas_lt_after_push; eauto.
+    apply NtSet.mem_spec; auto.
+Defined.
+
+Lemma acc_after_sll_step :
+  forall g sp sp' sps',
+    sllSpClosureStep g sp = SllStepK sps'
+    -> In sp' sps'
+    -> Acc lex_nat_pair (meas g sp)
+    -> Acc lex_nat_pair (meas g sp').
+Proof.
+  intros g so sp' sps' heq hi ha.
+  eapply Acc_inv; eauto.
+  eapply sllSpClosureStep_meas_lt; eauto.
+Defined.
+
+Inductive sll_closure_result :=
+| Sllc_error : prediction_error -> sll_closure_result
+| Sllc_failover : sll_closure_result
+| Sllc_succ : list subparser -> sll_closure_result.
+
+Fixpoint aggrSllClosureResults (crs : list sll_closure_result) : sll_closure_result :=
+  match crs with
+  | [] => Sllc_succ []
+  | cr :: crs' =>
+    match (cr, aggrSllClosureResults crs') with
+    | (Sllc_error e, _)   => Sllc_error e
+    | (_, Sllc_error e)   => Sllc_error e
+    | (Sllc_failover, _)  => Sllc_failover
+    | (_, Sllc_failover)  => Sllc_failover
+    | (Sllc_succ sps, Sllc_succ sps') => Sllc_succ (sps ++ sps')
+    end
+  end.
+
+Fixpoint sllSpClosure (g  : grammar) 
+                      (sp : subparser) 
+                      (a  : Acc lex_nat_pair (meas g sp)) : sll_closure_result :=
+  match sllSpClosureStep g sp as r return sllSpClosureStep g sp = r -> _ with
+  | SllStepDone     => fun _  => Sllc_succ [sp]
+  | SllStepError e  => fun _  => Sllc_error e
+  | SllStepFailover => fun _  => Sllc_failover
+  | SllStepK sps'   => 
+    fun hs => 
+      let crs := 
+          dmap sps' (fun sp' hin => sllSpClosure g sp' (acc_after_sll_step _ _ _ hs hin a))
+      in  aggrSllClosureResults crs
+  end eq_refl.
+
+Definition sll_closure (g : grammar) (sps : list subparser) :
+  sll_closure_result := 
+  aggrSllClosureResults (map (fun sp => sllSpClosure g sp (lex_nat_pair_wf _)) sps).
+
+Inductive sll_result :=
+| Sll_failover : sll_result
+| Sll_normal   : dfa_cache -> prediction_result -> sll_result.
+
+Definition dfa_state_of (sps : list subparser) : dfa_state :=
+  map (fun sp => (sp.(prediction), sp.(stack))) sps.
+
+Fixpoint sllPredict' (g : grammar) (sps : list subparser) (ts : list token) (c : dfa_cache) : sll_result :=
+  match sps with
+  | []         => Sll_normal c PredReject
+  | sp :: sps' =>
+    if allPredictionsEqual sp sps' then
+      Sll_normal c (PredSucc sp.(prediction))
+    else
+      match ts with
+      | []       => Sll_normal c (handleFinalSubparsers sps)
+      | (a,l) :: ts' =>
+        let k := (dfa_state_of sps, a) in
+        match Cache.find k c with
+        | Some sps' => sllPredict' g sps' ts' c
+        | None =>
+          match move g (a,l) sps with
+          | inl msg => Sll_normal c (PredError msg)
+          | inr mv  =>
+            match sll_closure g mv with
+            | Sllc_failover => Sll_failover
+            | Sllc_error e  => Sll_normal c (PredError e)
+            | Sllc_succ cl  =>
+              let c' := Cache.add k cl c
+              in  sllPredict' g cl ts' c'
+            end
+          end
+        end
+      end
+  end.
+
+Definition sllInitSps (g : grammar) (x : nonterminal) : list subparser :=
+  map (fun rhs => Sp (allNts g)
+                     rhs
+                     (Loc (Some x) [] rhs, []))
+      (rhssForNt g x).
+
+Definition sllStartState (g : grammar) (x : nonterminal) : sll_closure_result :=
+  sll_closure g (sllInitSps g x).
+
+Definition sllPredict
+           (g : grammar)
+           (x : nonterminal)
+           (ts : list token)
+           (c : dfa_cache): sll_result :=
+  match sllStartState g x with
+  | Sllc_failover => Sll_failover
+  | Sllc_error e => Sll_normal c (PredError e)
+  | Sllc_succ sps => sllPredict' g sps ts c
+  end.

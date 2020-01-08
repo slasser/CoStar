@@ -779,3 +779,210 @@ Proof.
   unfold step in hs.
   dms; inv hs; tc; unfold bottomFrameSyms; destr_tl; sis; auto; apps.
 Qed.
+
+(* Cache optimization *)
+
+Record parser_state_opt :=
+  Pst_opt { avail_opt  : NtSet.t
+          ; cache_opt  : dfa_cache
+          ; stack_opt  : parser_stack     
+          ; tokens_opt : list token
+          ; unique_opt : bool
+          }.
+
+Inductive step_result_opt :=
+| StepAccept_opt : forest -> step_result_opt
+| StepReject_opt : string -> step_result_opt
+| StepK_opt      : parser_state_opt -> step_result_opt
+| StepError_opt  : parse_error -> step_result_opt.
+
+(* try redefining lstackOf so that it doesn't use map,
+   to see if extracting the locations from the frames
+   is what's slowing the parser down *)
+Fixpoint extract_locs (frs : list frame) : list location :=
+  match frs with
+  | [] => []
+  | Fr l _ :: frs' => l :: extract_locs frs'
+  end.
+
+Definition lstackOf_opt (stk : parser_stack) : location_stack :=
+  let (fr, frs) := stk in (fr.(loc), extract_locs frs).
+
+Definition predict g x (stk : parser_stack) ts c :=
+  match sllPredict g x ts c with
+  | Sll_normal c' r => (c', r)
+  | Sll_failover  => (c, llPredict g x (lstackOf_opt stk) ts)
+  end.
+
+Definition step_opt (g : grammar) (st : parser_state_opt) : step_result_opt :=
+  match st with
+  | Pst_opt av c (fr, frs) ts u =>
+    match fr with
+    | Fr (Loc xo pre suf) sv =>
+      match suf with
+      | [] => 
+        match frs with
+        (* empty stack --> accept *)
+        | [] => 
+          match ts with
+          | []     => StepAccept_opt sv
+          | _ :: _ => StepReject_opt "stack exhausted, tokens remain"
+          end
+        (* nonempty stack --> return to caller frame *)
+        | (Fr (Loc xo_cr pre_cr suf_cr) sv_cr) :: frs_tl =>
+          match suf_cr with
+          | []                => StepError_opt InvalidState
+          | T _ :: _          => StepError_opt InvalidState
+          | NT x :: suf_cr_tl => 
+            let cr' := Fr (Loc xo_cr (pre_cr ++ [NT x]) suf_cr_tl)
+                          (sv_cr ++ [Node x sv])
+            in  StepK_opt (Pst_opt (NtSet.add x av) c (cr', frs_tl) ts u)
+          end
+        end
+      (* terminal case --> consume a token *)
+      | T a :: suf_tl =>
+        match ts with
+        | []               => StepReject_opt "input exhausted"
+        | (a', l) :: ts_tl =>
+          if t_eq_dec a' a then 
+            let fr' := Fr (Loc xo (pre ++ [T a]) suf_tl) (sv ++ [Leaf a l])
+            in  StepK_opt (Pst_opt (allNts g) c (fr', frs) ts_tl u)
+          else
+            StepReject_opt "token mismatch"
+        end
+      (* nonterminal case --> push a frame onto the stack *)
+      | NT x :: suf_tl => 
+        if NtSet.mem x av then
+          match predict g x (fr, frs) ts c with
+          | (c', PredSucc rhs) =>
+            let callee := Fr (Loc (Some x) [] rhs) []
+            in  StepK_opt (Pst_opt (NtSet.remove x av) c' (callee, fr :: frs) ts u)
+          | (c', PredAmbig rhs) =>
+            let callee := Fr (Loc (Some x) [] rhs) []
+            in  StepK_opt (Pst_opt (NtSet.remove x av) c' (callee, fr :: frs) ts false)
+          | (_, PredReject)    => StepReject_opt "prediction found no viable right-hand sides"
+          | (_, PredError e) => StepError_opt (PredictionError e)
+          end
+        else if NtSet.mem x (allNts g) then
+               StepError_opt (LeftRecursion x)
+             else
+               StepReject_opt "nonterminal not in grammar"
+      end
+    end
+  end.
+
+Definition meas_opt (g : grammar) (st : parser_state_opt) : nat * nat * nat :=
+  match st with
+  | Pst_opt av _ stk ts _ =>
+    let m := maxRhsLength g    in
+    let e := NtSet.cardinal av in
+    (List.length ts, stackScore (lstackOf stk) (1 + m) e, stackHeight stk)
+  end.
+
+Lemma state_lt_after_return_opt :
+  forall g st st' av c u ts fr cr cr' frs o o' pre pre' suf' x v v' v'',
+    st = Pst_opt av c (fr, cr :: frs) ts u
+    -> st' = Pst_opt (NtSet.add x av) c (cr', frs) ts u
+    -> fr  = Fr (Loc o pre []) v
+    -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
+    -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') v''
+    -> lex_nat_triple (meas_opt g st') (meas_opt g st).
+Proof.
+  intros; subst; unfold meas; unfold lstackOf.
+  pose proof stackScore_le_after_return' as hs.
+  eapply le_lt_or_eq in hs; eauto.
+  destruct hs as [hlt | heq].
+  - apply triple_snd_lt; eauto.
+  - sis; rewrite heq. 
+    apply triple_thd_lt; auto.
+Defined.
+
+Lemma state_lt_after_push_opt :
+  forall g st st' ts callee caller frs x suf_tl gamma av c c' u u',
+    st = Pst_opt av c (caller, frs) ts u
+    -> st' = Pst_opt (NtSet.remove x av) c' (callee, caller :: frs) ts u'
+    -> caller.(loc).(rsuf) = NT x :: suf_tl
+    -> callee.(loc).(rsuf) = gamma
+    -> In gamma (rhssForNt g x)
+    -> NtSet.In x av
+    -> lex_nat_triple (meas_opt g st') (meas_opt g st).
+Proof.
+  intros; subst.
+  apply triple_snd_lt.
+  eapply stackScore_lt_after_push; eauto.
+Defined.
+
+Axiom magic : forall A, A.
+
+Lemma step_meas_lt_opt :
+  forall g st st',
+    step_opt g st = StepK_opt st'
+    -> lex_nat_triple (meas_opt g st') (meas_opt g st).
+Proof.
+  intros g st st' Hs.
+  unfold step_opt in Hs.
+  destruct st as [av c [fr frs] ts u].
+  destruct fr as [[xo pre suf] sv].
+  destruct suf as [| [a | y] suf_tl].
+  - (* return from the current frame *)
+    destruct frs as [| caller frs_tl].
+    + destruct ts; tc.
+    + destruct caller as [[xo_cr pre_cr suf_cr] sv_cr].
+      destruct suf_cr as [| [a | x] suf_cr_tl]; tc.
+      inv Hs.
+      eapply state_lt_after_return_opt; simpl; eauto.
+  - (* terminal case *) 
+    destruct ts as [| (a', l) ts_tl]; tc.
+    destruct (t_eq_dec a' a); tc; subst.
+    inv Hs.
+    apply triple_fst_lt; simpl; auto.
+  - (* nonterminal case -- push a new frame onto the stack *)
+    destruct (NtSet.mem y av) eqn:Hm; tc.
+    apply NtSet.mem_spec in Hm.
+    destruct (predict g y _ ts c) as (c', [gamma|gamma| |msg]) eqn:Hp; tc.
+    + inv Hs.
+      apply magic.
+      (*
+      eapply state_lt_after_push; eauto.
+      apply llPredict_succ_in_rhssForNt in Hp.
+      eapply state_lt_after_push; eauto.
+      simpl; auto. *)
+    + inv Hs.
+      apply magic.
+      (*
+apply llPredict_ambig_in_rhssForNt in Hp.
+      eapply state_lt_after_push; eauto.
+      simpl; auto.
+       *)
+    + destruct (NtSet.mem y (allNts g)); tc.
+Defined.
+
+Lemma StepK_st_acc_opt :
+  forall g st st' (a : Acc lex_nat_triple (meas_opt g st)),
+    step_opt g st = StepK_opt st' -> Acc lex_nat_triple (meas_opt g st').
+Proof.
+  intros g st st' a hs.
+  eapply Acc_inv; eauto.
+  apply step_meas_lt_opt; auto.
+Defined.
+
+Fixpoint multistep_opt
+         (g  : grammar) 
+         (st : parser_state_opt)
+         (a  : Acc lex_nat_triple (meas_opt g st))
+         {struct a} :
+  parse_result :=
+  match step_opt g st as res return step_opt g st = res -> _ with
+  | StepAccept_opt sv    => fun _  => if st.(unique_opt) then Accept sv else Ambig sv
+  | StepReject_opt s     => fun _  => Reject s
+  | StepError_opt e      => fun _  => Error e
+  | StepK_opt st'        => fun hs => multistep_opt g st' (StepK_st_acc_opt _ _ _ a hs)
+  end eq_refl.
+
+
+
+Definition mkInitState_opt g gamma ts :=
+  Pst_opt (allNts g) (Cache.empty (list subparser)) (Fr (Loc None [] gamma) [], []) ts true.
+  
+  Definition parse_opt (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
+  multistep_opt g (mkInitState_opt g gamma ts) (lex_nat_triple_wf _).

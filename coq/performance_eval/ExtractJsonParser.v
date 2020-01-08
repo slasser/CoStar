@@ -87,13 +87,15 @@ Definition tokens := [ (LeftBrace, "")
                      ; (RightBrace, "")
                      ].
 
+Definition tokens' := [ (Tru, "")].
+
 (* next step: change lemmas from Qed to Defined so that parse can simplify. *)
 
 Lemma mkIniteState_test :
-  mkInitState jsonGrammar [NT Value] tokens =
+  mkInitState jsonGrammar [NT Value] tokens' =
   Pst (allNts jsonGrammar)
       (Fr (Loc None [] [NT Value]) [], [])
-      tokens
+      tokens'
       true.
 Proof. auto. Qed.
 
@@ -105,10 +107,10 @@ Definition init_st :=
 
 (* simpl seems to diverge *)
 Lemma test :
-  parse jsonGrammar [NT Value] tokens = Accept [Node Value []].
+  parse jsonGrammar [NT Value] tokens' = Accept [Node Value []].
 Proof.
   unfold parse.
-  auto.
+  unfold jsonGrammar.
 Abort.
 
-Extraction "myJsonParser.ml" jsonGrammar parse.
+Extraction "myJsonParser.ml" jsonGrammar parse parse_opt.
