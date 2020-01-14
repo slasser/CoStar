@@ -62,7 +62,7 @@ Proof.
   - destruct hi as [hh | ht].
     + inv hh; apply in_eq.
     + apply in_cons; auto.
-Defined.
+Qed.
 
 Definition rhs (p : production) : list symbol :=
   let (_, gamma) := p in gamma.
@@ -96,7 +96,7 @@ Proof.
       apply in_eq.
     + destruct (nt_eq_dec x' x); subst; auto.
       apply in_cons; auto.
-Defined.
+Qed.
 Hint Resolve rhssForNt_in_iff.
 
 Lemma rhssForNt_rhss :
@@ -107,7 +107,7 @@ Proof.
   - inv Hin.
   - destruct (nt_eq_dec x' x); subst; auto.
     destruct Hin as [Heq | Hin]; subst; auto.
-Defined.
+Qed.
 
 Definition rhsLengths (g : grammar) : list nat :=
   map (fun rhs => List.length rhs) (rhss g).
@@ -119,7 +119,7 @@ Lemma rhss_rhsLengths_in :
 Proof.
   intros g rhs Hin; induction g as [| (x, rhs') ps IH];
   simpl in *; inv Hin; auto.
-Defined.
+Qed.
 
 Definition maxRhsLength (g : grammar) : nat :=
   listMax (rhsLengths g).
@@ -133,7 +133,7 @@ Proof.
   apply listMax_in_le.
   apply rhss_rhsLengths_in.
   eapply rhssForNt_rhss; eauto.
-Defined.
+Qed.
 
 Lemma grammar_rhs_length_lt_max_plus_1 :
   forall g x rhs,
@@ -142,7 +142,7 @@ Lemma grammar_rhs_length_lt_max_plus_1 :
 Proof.
   intros g x rhs Hin.
   apply grammar_rhs_length_le_max in Hin; omega.
-Defined.
+Qed.
 
 Definition fromNtList (ls : list nonterminal) : NtSet.t :=
   fold_right NtSet.add NtSet.empty ls.
@@ -158,7 +158,7 @@ Proof.
     + apply IH in ht; ND.fsetdec.
   - destruct (NF.eq_dec x' x); subst; auto.
     right; apply IH; ND.fsetdec.
-Defined.
+Qed.
 
 Definition allNts (g : grammar) : NtSet.t := 
   fromNtList (lhss g).
@@ -169,7 +169,7 @@ Lemma allNts_lhss_iff :
     <-> NtSet.In x (allNts g).
 Proof.
   intros g x; split; intros hi; apply fromNtList_in_iff; auto.
-Defined.
+Qed.
 
 Lemma lhs_mem_allNts_true :
   forall g x ys,
@@ -180,7 +180,7 @@ Proof.
   apply NtSet.mem_spec.
   apply allNts_lhss_iff. 
   eapply production_lhs_in_lhss; eauto.
-Defined.
+Qed.
 
 (* Definitions related to input that the parser consumes. *)
 Definition literal := string.
@@ -234,7 +234,7 @@ Proof.
   intros g ys1 w1 v1 hg.
   induction hg; intros ys2 w2 v2 hg2; simpl in *; auto.
   rewrite <- app_assoc; constructor; auto.
-Defined.
+Qed.
 
 Lemma gamma_derivation_app :
   forall g ys ys' w w' v v',
@@ -243,7 +243,7 @@ Lemma gamma_derivation_app :
     -> gamma_derivation g (ys ++ ys') (w ++ w') (v ++ v').
 Proof.
   intros; eapply gamma_derivation_app'; eauto.
-Defined.
+Qed.
 
 Lemma forest_app_singleton_node : 
   forall g x ys ys' w w' v v',
@@ -255,7 +255,7 @@ Proof.
   intros g x ys ys' w w' v v' hi hg hg'.
   apply gamma_derivation_app; auto.
   rew_nil_r w'; eauto.
-Defined.
+Qed.
 
 Lemma terminal_head_gamma_derivation :
   forall g a l ys w v,
@@ -265,7 +265,7 @@ Proof.
   intros g a l ys w v hg.
   assert (happ : (a, l) :: w = [(a, l)] ++ w) by apply cons_app_singleton.
   rewrite happ; auto.
-Defined.
+Qed.
 
 Lemma gamma_derivation_split :
   forall g ys ys' w'' v'',
@@ -282,7 +282,7 @@ Proof.
     apply IH in hg'; destruct hg' as [w [w' [v [v' [? [? [hg' hg'']]]]]]]; subst.
     exists (wpre ++ w); exists w'; exists (t :: v); exists v'. 
     repeat split; auto; apps.
-Defined.
+Qed.
 
 Lemma gamma_derivation_terminal_end :
   forall g ys a w v,
@@ -299,7 +299,7 @@ Proof.
   (* lemma *)
   inv H1. inv H4.
   repeat eexists; eauto.
-Defined.
+Qed.
 
 Lemma gamma_derivation_nonterminal_end :
   forall g ys x w v,
@@ -318,7 +318,7 @@ Proof.
   inv H4. rewrite app_nil_r in *.
   inv H1.
   repeat eexists; eauto.
-Defined.
+Qed.
 
 Lemma trees_eq__gammas_eq_words_eq' :
   forall g ys w v,
@@ -339,7 +339,7 @@ Proof.
   - intros ys' w' hg'; inv hg'.
     apply IHhg in H3; destruct H3; subst.
     apply IHhg0 in H4; destruct H4; subst; auto.
-Defined.
+Qed.
 
 Lemma trees_eq__gammas_eq_words_eq :
   forall g ys ys' w w' v,
@@ -348,7 +348,7 @@ Lemma trees_eq__gammas_eq_words_eq :
     -> ys' = ys /\ w' = w.
 Proof.
   intros; eapply trees_eq__gammas_eq_words_eq'; eauto.
-Defined.
+Qed.
 
 Definition unique_gamma_derivation g ss w v :=
   gamma_derivation g ss w v
@@ -387,7 +387,7 @@ Proof.
   intros g a suf w hg.
   inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
   inv hs; simpl; eauto.
-Defined.
+Qed.
 
 Lemma gamma_recognize_nonterminal_head :
   forall g x suf w,
@@ -401,7 +401,7 @@ Proof.
   intros g x suf w hg.
   inversion hg as [| h t wpre wsuf hs hg']; subst; clear hg.
   inv hs; simpl; eauto 8.
-Defined.
+Qed.
 
 Lemma gamma_recognize_app' :
   forall g ys1 w1,
@@ -413,7 +413,7 @@ Proof.
   intros g ys1 w1 hg.
   induction hg; intros ys2 w2 hg2; simpl in *; auto.
   rewrite <- app_assoc; constructor; auto.
-Defined.
+Qed.
 
 Lemma gamma_recognize_app :
   forall g ys1 ys2 w1 w2,
@@ -422,7 +422,7 @@ Lemma gamma_recognize_app :
     -> gamma_recognize g (ys1 ++ ys2) (w1 ++ w2).
 Proof.
   intros; apply gamma_recognize_app'; auto.
-Defined.
+Qed.
 
 Lemma gamma_recognize_split :
   forall g ys ys' w'',
@@ -437,7 +437,7 @@ Proof.
   - inversion hg as [| s ss wpre wsuf hs hg']; subst; clear hg. 
     apply IH in hg'; destruct hg' as [w [w' [? [hg' hg'']]]]; subst.
     exists (wpre ++ w); exists w'; repeat split; auto; apps.
-Defined.
+Qed.
 
 Lemma gamma_derivation__gamma_recognize :
   forall g ys w v,
@@ -448,7 +448,7 @@ Proof.
   induction hg using gamma_derivation_mutual_ind with
       (P := fun s w t (hs : sym_derivation g s w t) => 
               sym_recognize g s w); eauto.
-Defined.
+Qed.
 
 Lemma gamma_recognize__exists_gamma_derivation :
   forall g ys w,
@@ -461,7 +461,7 @@ Proof.
       (P := fun s w (hs : sym_recognize g s w) => 
               exists t, sym_derivation g s w t); firstorder; eauto.
   repeat econstructor; eauto.
-Defined.
+Qed.
 
 (* Inductive definition of a nullable grammar symbol *)
 Inductive nullable_sym (g : grammar) : symbol -> Prop :=
@@ -485,7 +485,7 @@ Lemma nullable_split :
 Proof.
   intros g xs; induction xs as [| x xs IH]; intros ys hn; sis; auto.
   inv hn; firstorder.
-Defined.
+Qed.
 
 Lemma nullable_split_l :
   forall g xs ys,
@@ -493,7 +493,7 @@ Lemma nullable_split_l :
     -> nullable_gamma g ys.
 Proof.
   intros g xs ys hn; apply nullable_split in hn; firstorder.
-Defined.
+Qed.
 
 Lemma nullable_app :
   forall g xs ys,
@@ -503,7 +503,7 @@ Lemma nullable_app :
 Proof.
   intros g xs ys hng hng'.
   induction xs as [| x xs]; sis; inv hng; auto.
-Defined.
+Qed.
 
 Inductive nullable_path (g : grammar) :
   symbol -> symbol -> Prop :=
@@ -533,7 +533,7 @@ Proof.
     inv hyz.
   - destruct z as [a | z]; eauto.
     inv hyz.
-Defined.  
+Qed.  
 
 Definition left_recursive g sym :=
   nullable_path g sym sym.

@@ -55,7 +55,7 @@ Proof.
       apply fact.
       apply Nat.pow_lt_mono_r; auto.
       omega.
-Defined.
+Qed.
   
 Lemma nonzero_exponents_lt_tailFrameScore_le :
   forall loc b e1 e2,
@@ -66,7 +66,7 @@ Proof.
   unfold tailFrameScore. 
   apply Nat.mul_le_mono_l.
   apply nonzero_exponents_lt_powers_le; auto.
-Defined.
+Qed.
 
 Lemma nonzero_exponents_lt_tailFramesScore_le :
   forall locs b e1 e2,
@@ -78,7 +78,7 @@ Proof.
   apply plus_le_compat.
   - apply nonzero_exponents_lt_tailFrameScore_le; auto.
   - apply IH; omega.
-Defined.
+Qed.
 
 Lemma nonzero_exponents_lt_stackScore_le :
   forall v b e1 e2 e3 e4 locs,
@@ -92,7 +92,7 @@ Proof.
   - apply Nat.mul_le_mono_l. 
     apply nonzero_exponents_lt_powers_le; auto.
   - apply nonzero_exponents_lt_tailFramesScore_le; auto.
-Defined.
+Qed.
 
 Lemma mem_true_cardinality_neq_0 :
   forall x s,
@@ -103,7 +103,7 @@ Proof.
   apply cardinal_inv_1 in Heq.
   unfold NtSet.Empty in Heq. 
   eapply Heq; eauto.
-Defined.
+Qed.
   
 Lemma mem_true_cardinality_gt_0 :
   forall x s,
@@ -111,7 +111,7 @@ Lemma mem_true_cardinality_gt_0 :
 Proof.
   intros x s Hm.
   apply mem_true_cardinality_neq_0 in Hm; omega.
-Defined.
+Qed.
 
 Lemma stackScore_le_after_return :
     forall callee caller caller' x x' suf' av locs b,
@@ -132,7 +132,7 @@ Proof.
       eapply mem_true_cardinality_gt_0; eauto.
     + split; omega.
   - rewrite add_cardinal_2; auto.
-Defined.
+Qed.
 
 (* this version might be easier to apply *)
 Lemma stackScore_le_after_return' :
@@ -146,7 +146,7 @@ Lemma stackScore_le_after_return' :
                  (NtSet.cardinal av).
 Proof.
   intros; eapply stackScore_le_after_return; sis; eauto.
-Defined.
+Qed.
 
 Lemma remove_cardinal_minus_1 :
   forall (x : nonterminal) (s : NtSet.t),
@@ -156,7 +156,7 @@ Proof.
   intros x s Hm.
   rewrite <- remove_cardinal_1 with (s := s) (x := x); auto.
   omega.
-Defined.
+Qed.
 
 Lemma lt_lt_mul_nonzero_r :
   forall y x z,
@@ -166,7 +166,7 @@ Proof.
   destruct z as [| z]; try omega.
   rewrite Nat.mul_succ_r. 
   apply Nat.lt_lt_add_l; auto.
-Defined.
+Qed.
 
 Lemma base_gt_zero_power_gt_zero :
   forall b e,
@@ -176,7 +176,7 @@ Proof.
   intros b e Hlt; induction e as [| e IH]; simpl in *; auto.
   destruct b as [| b]; try omega.
   apply lt_lt_mul_nonzero_r; auto.
-Defined.
+Qed.
 
 Lemma less_significant_value_lt_more_significant_digit :
   forall e2 e1 v b,
@@ -196,7 +196,7 @@ Proof.
     apply mult_lt_compat_l; try omega.
     rewrite Nat.mul_comm.
     apply IH; omega. 
-Defined.
+Qed.
 
 Lemma stackScore_lt_after_push :
   forall g callee caller x suf' av rhs locs,
@@ -223,7 +223,7 @@ Proof.
   apply less_significant_value_lt_more_significant_digit.
   - eapply grammar_rhs_length_lt_max_plus_1; eauto.
   - erewrite <- remove_cardinal_1; eauto; omega.
-Defined.
+Qed.
 
 Lemma stackScore_lt_after_push' :
   forall g o o_cr pre_cr suf_cr rhs x av locs,
@@ -238,4 +238,4 @@ Lemma stackScore_lt_after_push' :
                   (NtSet.cardinal av).
 Proof.
   intros; eapply stackScore_lt_after_push; sis; eauto.
-Defined.
+Qed.

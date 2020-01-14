@@ -24,6 +24,3 @@ setup.log
 
 # Merlin configuring file for Vim and Emacs
 .merlin
-
-# now sure where this comes from
-.coqdeps.d
