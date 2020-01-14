@@ -963,4 +963,3 @@ Proof.
     rew_nil_r ([] : list token); eauto.
   - apply apd_starts_true.
 Qed.
-Print Assumptions parse_sound_ambig.
