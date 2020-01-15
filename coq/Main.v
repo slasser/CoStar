@@ -14,9 +14,9 @@ Inductive parse_result :=
 | Rej : string -> parse_result
 | Err : parse_error -> parse_result.
 
-Definition parse (g : grammar)
-                 (s : symbol)
-                 (w : list token) : parse_result :=
+Definition parseSymbol (g : grammar)
+                       (s : symbol)
+                       (w : list token) : parse_result :=
   match Parser.parse g [s] w with
   | Accept [v] => Acc v
   | Ambig  [v] => Amb v
@@ -27,18 +27,18 @@ Definition parse (g : grammar)
 
 (* Soundness theorems for unambiguous and ambiguous derivations *)
 
-Theorem parse_sound_unambig :
+Theorem parseSymbol_sound_unambig :
   forall (g : grammar)
          (s : symbol)
          (w : list token)
          (t : tree),
     no_left_recursion g
-    -> parse g s w = Acc t
+    -> parseSymbol g s w = Acc t
     -> sym_derivation g s w t
        /\ (forall t', sym_derivation g s w t' -> t' = t).
 Proof.
   intros g s w t hn hp.
-  unfold parse in hp.
+  unfold parseSymbol in hp.
   destruct (Parser.parse _ _ _) as [v | v | str | e] eqn:hp'; tc.
   - apply parse_sound_unambig in hp'; auto.
     destruct hp' as (hg & ha).
@@ -54,18 +54,18 @@ Proof.
   - destruct v as [ | ? [ | ? ? ]]; tc.
 Qed.
 
-Theorem parse_sound_ambig :
+Theorem parseSymbol_sound_ambig :
   forall (g : grammar)
          (s : symbol)
          (w : list token)
          (t : tree),
     no_left_recursion g
-    -> parse g s w = Amb t
+    -> parseSymbol g s w = Amb t
     -> sym_derivation g s w t
        /\ (exists t', sym_derivation g s w t' /\ t' <> t).
 Proof.
   intros g s w t hn hp.
-  unfold parse in hp.
+  unfold parseSymbol in hp.
   destruct (Parser.parse _ _ _) as [v | v | str | e] eqn:hp'; tc.
   - destruct v as [ | ? [ | ? ? ]]; tc.
   - apply parse_sound_ambig in hp'; auto.
@@ -83,16 +83,16 @@ Qed.
 
 (* Error-free termination theorem *)
 
-Theorem parse_error_free :
+Theorem parseSymbol_error_free :
   forall (g  : grammar)
          (s  : symbol)
          (ts : list token)
          (e  : parse_error),
     no_left_recursion g
-    -> parse g s ts <> Err e.
+    -> parseSymbol g s ts <> Err e.
 Proof.
   intros g s ts e hn; unfold not; intros hp.
-  unfold parse in hp.
+  unfold parseSymbol in hp.
   destruct (Parser.parse _ _ _) eqn:hp'; tc.
   - apply Parser_sound.parse_sound_unambig in hp'; auto.
     destruct hp' as (hg & _).
@@ -105,7 +105,7 @@ Qed.
 
 (* Completeness theorems for unambiguous and ambiguous derivations *)
 
-Theorem parse_complete_unambig :
+Theorem parseSymbol_complete_unambig :
   forall (g : grammar)
          (s : symbol)
          (w : list token)
@@ -113,13 +113,13 @@ Theorem parse_complete_unambig :
     no_left_recursion g
     -> sym_derivation g s w t
     -> (forall t', sym_derivation g s w t' -> t' = t)
-    -> parse g s w = Acc t.
+    -> parseSymbol g s w = Acc t.
 Proof.
   intros g s w t hn hs ha.
   assert (hg : gamma_derivation g [s] w [t]).
   { rew_nil_r w; eauto. }
   apply parse_complete_unambig in hg; auto.
-  - unfold parse; rewrite hg; auto.
+  - unfold parseSymbol; rewrite hg; auto.
   - (* lemma *)
     inv hg.
     inv H5; rewrite app_nil_r in *.
@@ -129,7 +129,7 @@ Proof.
     apply ha in H1; subst; auto.
 Qed.
 
-Theorem parse_complete_ambig :
+Theorem parseSymbol_complete_ambig :
   forall (g    : grammar)
          (s    : symbol)
          (w    : list token)
@@ -138,7 +138,7 @@ Theorem parse_complete_ambig :
     -> sym_derivation g s w t
     -> sym_derivation g s w t'
     -> t <> t'
-    -> exists t'', parse g s w = Amb t''.
+    -> exists t'', parseSymbol g s w = Amb t''.
 Proof.
   intros g s w t t' hn hs hs' hneq.
   assert (hg : gamma_derivation g [s] w [t]).
@@ -154,7 +154,7 @@ Proof.
   destruct hp as (hg & _).
   inv hg.
   inv H4; rewrite app_nil_r in *.
-  unfold parse.
+  unfold parseSymbol.
   rewrite hp'; eauto.
 Qed.
   
