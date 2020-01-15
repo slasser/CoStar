@@ -1,7 +1,7 @@
 Require Import List String ExtrOcamlBasic ExtrOcamlString.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.Parser.
+Require Import GallStar.Main.
 Import ListNotations.
 Open Scope string_scope.
 
@@ -18,8 +18,6 @@ Definition LeftBrack  := "LeftBrack".
 Definition RightBrack := "RightBrack".
 Definition Colon      := "Colon".
 Definition Comma      := "Comma".
-
-Open Scope positive_scope.
 
 (* JSON nonterminals *)
 Definition Value   := 1.
@@ -91,23 +89,4 @@ Definition tokens := [ (LeftBrace, "")
 
 Definition tokens' := [ (Tru, "")].
 
-(* next step: change lemmas from Qed to Defined so that parse can simplify. *)
-
-
-Lemma mkIniteState_test :
-  mkInitState jsonGrammar [NT Value] tokens' =
-  Pst (Loc None [] [NT Value], [])
-      ([], [])
-      tokens'
-      (allNts jsonGrammar)
-      true.
-Proof. auto. Qed.
-
-(* simpl seems to diverge *)
-Lemma test :
-  parse jsonGrammar [NT Value] tokens' = Accept [Node Value []].
-Proof.
-  unfold parse. 
-Abort.
-
-Extraction "myJsonParser.ml" jsonGrammar parse.
+Extraction "myJsonParser.ml" jsonGrammar parseSymbol.

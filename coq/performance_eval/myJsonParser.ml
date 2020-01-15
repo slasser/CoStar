@@ -12,16 +12,25 @@ type nat =
 | O
 | S of nat
 
-(** val option_map :
-    ('a1 -> 'a2) -> 'a1 option -> 'a2 option **)
-
-let option_map f = function
-| Some a -> Some (f a)
-| None -> None
-
 type ('a, 'b) sum =
 | Inl of 'a
 | Inr of 'b
+
+(** val fst : ('a1 * 'a2) -> 'a1 **)
+
+let fst = function
+| (x, _) -> x
+
+(** val snd : ('a1 * 'a2) -> 'a2 **)
+
+let snd = function
+| (_, y) -> y
+
+(** val length : 'a1 list -> nat **)
+
+let rec length = function
+| [] -> O
+| _ :: l' -> S (length l')
 
 (** val app : 'a1 list -> 'a1 list -> 'a1 list **)
 
@@ -30,30 +39,63 @@ let rec app l m =
   | [] -> m
   | a :: l1 -> a :: (app l1 m)
 
-type comparison =
-| Eq
-| Lt
-| Gt
+(** val flip : ('a1 -> 'a2 -> 'a3) -> 'a2 -> 'a1 -> 'a3 **)
 
-module Coq__1 = struct
- (** val add : nat -> nat -> nat **)
- let rec add n m =
-   match n with
-   | O -> m
-   | S p -> S (add p m)
-end
-include Coq__1
+let flip f x y =
+  f y x
 
-(** val eqb : bool -> bool -> bool **)
+module type DecidableType =
+ sig
+  type t
 
-let eqb b1 b2 =
-  if b1 then b2 else if b2 then false else true
+  val eq_dec : t -> t -> bool
+ end
+
+module type MiniDecidableType =
+ sig
+  type t
+
+  val eq_dec : t -> t -> bool
+ end
+
+module Make_UDT =
+ functor (M:MiniDecidableType) ->
+ struct
+  type t = M.t
+
+  (** val eq_dec : t -> t -> bool **)
+
+  let eq_dec =
+    M.eq_dec
+ end
+
+module Nat =
+ struct
+  (** val eq_dec : nat -> nat -> bool **)
+
+  let rec eq_dec n m =
+    match n with
+    | O -> (match m with
+            | O -> true
+            | S _ -> false)
+    | S n0 -> (match m with
+               | O -> false
+               | S m0 -> eq_dec n0 m0)
+ end
 
 (** val map : ('a1 -> 'a2) -> 'a1 list -> 'a2 list **)
 
 let rec map f = function
 | [] -> []
 | a :: t0 -> (f a) :: (map f t0)
+
+(** val fold_left :
+    ('a1 -> 'a2 -> 'a1) -> 'a2 list -> 'a1 -> 'a1 **)
+
+let rec fold_left f l a0 =
+  match l with
+  | [] -> a0
+  | b :: t0 -> fold_left f t0 (f a0 b)
 
 (** val fold_right :
     ('a2 -> 'a1 -> 'a1) -> 'a1 -> 'a2 list -> 'a1 **)
@@ -74,382 +116,253 @@ let rec filter f = function
 | [] -> []
 | x :: l0 -> if f x then x :: (filter f l0) else filter f l0
 
-type positive =
-| XI of positive
-| XO of positive
-| XH
-
-module Pos =
+module MakeRaw =
+ functor (X:DecidableType) ->
  struct
-  (** val eqb : positive -> positive -> bool **)
+  type elt = X.t
 
-  let rec eqb p q =
-    match p with
-    | XI p0 -> (match q with
-                | XI q0 -> eqb p0 q0
-                | _ -> false)
-    | XO p0 -> (match q with
-                | XO q0 -> eqb p0 q0
-                | _ -> false)
-    | XH -> (match q with
-             | XH -> true
-             | _ -> false)
- end
-
-module PositiveOrderedTypeBits =
- struct
-  type t = positive
-
-  (** val eqb : positive -> positive -> bool **)
-
-  let eqb =
-    Pos.eqb
-
-  (** val eq_dec : positive -> positive -> bool **)
-
-  let eq_dec x y =
-    let b = Pos.eqb x y in if b then true else false
-
-  (** val compare : positive -> positive -> comparison **)
-
-  let rec compare x y =
-    match x with
-    | XI x0 -> (match y with
-                | XI y0 -> compare x0 y0
-                | _ -> Gt)
-    | XO x0 -> (match y with
-                | XO y0 -> compare x0 y0
-                | _ -> Lt)
-    | XH -> (match y with
-             | XI _ -> Lt
-             | XO _ -> Gt
-             | XH -> Eq)
- end
-
-module PositiveSet =
- struct
-  module E = PositiveOrderedTypeBits
-
-  type elt = positive
-
-  type tree =
-  | Leaf
-  | Node of tree * bool * tree
-
-  type t = tree
+  type t = elt list
 
   (** val empty : t **)
 
   let empty =
-    Leaf
+    []
 
   (** val is_empty : t -> bool **)
 
-  let rec is_empty = function
-  | Leaf -> true
-  | Node (l, b, r) ->
-    if if negb b then is_empty l else false
-    then is_empty r
-    else false
+  let is_empty = function
+  | [] -> true
+  | _ :: _ -> false
 
-  (** val mem : positive -> t -> bool **)
+  (** val mem : elt -> t -> bool **)
 
-  let rec mem i = function
-  | Leaf -> false
-  | Node (l, o, r) ->
-    (match i with
-     | XI i0 -> mem i0 r
-     | XO i0 -> mem i0 l
-     | XH -> o)
+  let rec mem x = function
+  | [] -> false
+  | y :: l -> if X.eq_dec x y then true else mem x l
 
-  (** val add : positive -> t -> t **)
+  (** val add : elt -> t -> t **)
 
-  let rec add i = function
-  | Leaf ->
-    (match i with
-     | XI i0 -> Node (Leaf, false, (add i0 Leaf))
-     | XO i0 -> Node ((add i0 Leaf), false, Leaf)
-     | XH -> Node (Leaf, true, Leaf))
-  | Node (l, o, r) ->
-    (match i with
-     | XI i0 -> Node (l, o, (add i0 r))
-     | XO i0 -> Node ((add i0 l), o, r)
-     | XH -> Node (l, true, r))
+  let rec add x s = match s with
+  | [] -> x :: []
+  | y :: l -> if X.eq_dec x y then s else y :: (add x l)
 
-  (** val singleton : positive -> t **)
+  (** val singleton : elt -> t **)
 
-  let singleton i =
-    add i empty
+  let singleton x =
+    x :: []
 
-  (** val node : t -> bool -> t -> t **)
+  (** val remove : elt -> t -> t **)
 
-  let node l b r =
-    if b
-    then Node (l, b, r)
-    else (match l with
-          | Leaf ->
-            (match r with
-             | Leaf -> Leaf
-             | Node (_, _, _) -> Node (l, false, r))
-          | Node (_, _, _) -> Node (l, false, r))
+  let rec remove x = function
+  | [] -> []
+  | y :: l -> if X.eq_dec x y then l else y :: (remove x l)
 
-  (** val remove : positive -> t -> t **)
+  (** val fold : (elt -> 'a1 -> 'a1) -> t -> 'a1 -> 'a1 **)
 
-  let rec remove i = function
-  | Leaf -> Leaf
-  | Node (l, o, r) ->
-    (match i with
-     | XI i0 -> node l o (remove i0 r)
-     | XO i0 -> node (remove i0 l) o r
-     | XH -> node l false r)
+  let fold f =
+    fold_left (flip f)
 
   (** val union : t -> t -> t **)
 
-  let rec union m m' =
-    match m with
-    | Leaf -> m'
-    | Node (l, o, r) ->
-      (match m' with
-       | Leaf -> m
-       | Node (l', o', r') ->
-         Node ((union l l'), ((||) o o'), (union r r')))
-
-  (** val inter : t -> t -> t **)
-
-  let rec inter m m' =
-    match m with
-    | Leaf -> Leaf
-    | Node (l, o, r) ->
-      (match m' with
-       | Leaf -> Leaf
-       | Node (l', o', r') ->
-         node (inter l l') ((&&) o o') (inter r r'))
+  let union s =
+    fold add s
 
   (** val diff : t -> t -> t **)
 
-  let rec diff m m' =
-    match m with
-    | Leaf -> Leaf
-    | Node (l, o, r) ->
-      (match m' with
-       | Leaf -> m
-       | Node (l', o', r') ->
-         node (diff l l') ((&&) o (negb o')) (diff r r'))
+  let diff s s' =
+    fold remove s' s
 
-  (** val equal : t -> t -> bool **)
+  (** val inter : t -> t -> t **)
 
-  let rec equal m m' =
-    match m with
-    | Leaf -> is_empty m'
-    | Node (l, o, r) ->
-      (match m' with
-       | Leaf -> is_empty m
-       | Node (l', o', r') ->
-         if if eqb o o' then equal l l' else false
-         then equal r r'
-         else false)
+  let inter s s' =
+    fold (fun x s0 -> if mem x s' then add x s0 else s0) s []
 
   (** val subset : t -> t -> bool **)
 
-  let rec subset m m' =
-    match m with
-    | Leaf -> true
-    | Node (l, o, r) ->
-      (match m' with
-       | Leaf -> is_empty m
-       | Node (l', o', r') ->
-         if if if negb o then true else o'
-            then subset l l'
-            else false
-         then subset r r'
-         else false)
+  let subset s s' =
+    is_empty (diff s s')
 
-  (** val rev_append : elt -> elt -> elt **)
+  (** val equal : t -> t -> bool **)
 
-  let rec rev_append y x =
-    match y with
-    | XI y0 -> rev_append y0 (XI x)
-    | XO y0 -> rev_append y0 (XO x)
-    | XH -> x
+  let equal s s' =
+    (&&) (subset s s') (subset s' s)
 
-  (** val rev : elt -> elt **)
+  (** val filter : (elt -> bool) -> t -> t **)
 
-  let rev x =
-    rev_append x XH
+  let rec filter f = function
+  | [] -> []
+  | x :: l -> if f x then x :: (filter f l) else filter f l
 
-  (** val xfold :
-      (positive -> 'a1 -> 'a1) -> t -> 'a1 -> positive -> 'a1 **)
+  (** val for_all : (elt -> bool) -> t -> bool **)
 
-  let rec xfold f m v i =
-    match m with
-    | Leaf -> v
-    | Node (l, b, r) ->
-      if b
-      then xfold f r (f (rev i) (xfold f l v (XO i))) (XI i)
-      else xfold f r (xfold f l v (XO i)) (XI i)
+  let rec for_all f = function
+  | [] -> true
+  | x :: l -> if f x then for_all f l else false
 
-  (** val fold :
-      (positive -> 'a1 -> 'a1) -> t -> 'a1 -> 'a1 **)
+  (** val exists_ : (elt -> bool) -> t -> bool **)
 
-  let fold f m i =
-    xfold f m i XH
+  let rec exists_ f = function
+  | [] -> false
+  | x :: l -> if f x then true else exists_ f l
 
-  (** val xforall :
-      (positive -> bool) -> t -> positive -> bool **)
+  (** val partition : (elt -> bool) -> t -> t * t **)
 
-  let rec xforall f m i =
-    match m with
-    | Leaf -> true
-    | Node (l, o, r) ->
-      if if if negb o then true else f (rev i)
-         then xforall f r (XI i)
-         else false
-      then xforall f l (XO i)
-      else false
-
-  (** val for_all : (positive -> bool) -> t -> bool **)
-
-  let for_all f m =
-    xforall f m XH
-
-  (** val xexists :
-      (positive -> bool) -> t -> positive -> bool **)
-
-  let rec xexists f m i =
-    match m with
-    | Leaf -> false
-    | Node (l, o, r) ->
-      if if if o then f (rev i) else false
-         then true
-         else xexists f r (XI i)
-      then true
-      else xexists f l (XO i)
-
-  (** val exists_ : (positive -> bool) -> t -> bool **)
-
-  let exists_ f m =
-    xexists f m XH
-
-  (** val xfilter :
-      (positive -> bool) -> t -> positive -> t **)
-
-  let rec xfilter f m i =
-    match m with
-    | Leaf -> Leaf
-    | Node (l, o, r) ->
-      node (xfilter f l (XO i))
-        (if o then f (rev i) else false) (xfilter f r (XI i))
-
-  (** val filter : (positive -> bool) -> t -> t **)
-
-  let filter f m =
-    xfilter f m XH
-
-  (** val xpartition :
-      (positive -> bool) -> t -> positive -> t * t **)
-
-  let rec xpartition f m i =
-    match m with
-    | Leaf -> (Leaf, Leaf)
-    | Node (l, o, r) ->
-      let (lt, lf) = xpartition f l (XO i) in
-      let (rt, rf) = xpartition f r (XI i) in
-      if o
-      then let fi = f (rev i) in
-           ((node lt fi rt), (node lf (negb fi) rf))
-      else ((node lt false rt), (node lf false rf))
-
-  (** val partition : (positive -> bool) -> t -> t * t **)
-
-  let partition f m =
-    xpartition f m XH
-
-  (** val xelements :
-      t -> positive -> positive list -> positive list **)
-
-  let rec xelements m i a =
-    match m with
-    | Leaf -> a
-    | Node (l, b, r) ->
-      if b
-      then xelements l (XO i)
-             ((rev i) :: (xelements r (XI i) a))
-      else xelements l (XO i) (xelements r (XI i) a)
-
-  (** val elements : t -> positive list **)
-
-  let elements m =
-    xelements m XH []
+  let rec partition f = function
+  | [] -> ([], [])
+  | x :: l ->
+    let (s1, s2) = partition f l in
+    if f x then ((x :: s1), s2) else (s1, (x :: s2))
 
   (** val cardinal : t -> nat **)
 
-  let rec cardinal = function
-  | Leaf -> O
-  | Node (l, b, r) ->
-    if b
-    then S (Coq__1.add (cardinal l) (cardinal r))
-    else Coq__1.add (cardinal l) (cardinal r)
+  let cardinal =
+    length
+
+  (** val elements : t -> elt list **)
+
+  let elements s =
+    s
 
   (** val choose : t -> elt option **)
 
-  let rec choose = function
-  | Leaf -> None
-  | Node (l, o, r) ->
-    if o
-    then Some XH
-    else (match choose l with
-          | Some i -> Some (XO i)
-          | None -> option_map (fun x -> XI x) (choose r))
+  let choose = function
+  | [] -> None
+  | x :: _ -> Some x
 
-  (** val min_elt : t -> elt option **)
+  (** val isok : elt list -> bool **)
 
-  let rec min_elt = function
-  | Leaf -> None
-  | Node (l, o, r) ->
-    (match min_elt l with
-     | Some i -> Some (XO i)
-     | None ->
-       if o
-       then Some XH
-       else option_map (fun x -> XI x) (min_elt r))
+  let rec isok = function
+  | [] -> true
+  | a :: l0 -> (&&) (negb (mem a l0)) (isok l0)
+ end
 
-  (** val max_elt : t -> elt option **)
+module Make =
+ functor (X:DecidableType) ->
+ struct
+  module Raw = MakeRaw(X)
 
-  let rec max_elt = function
-  | Leaf -> None
-  | Node (l, o, r) ->
-    (match max_elt r with
-     | Some i -> Some (XI i)
-     | None ->
-       if o
-       then Some XH
-       else option_map (fun x -> XO x) (max_elt l))
+  module E =
+   struct
+    type t = X.t
 
-  (** val compare_bool : bool -> bool -> comparison **)
+    (** val eq_dec : t -> t -> bool **)
 
-  let compare_bool a b =
-    if a then if b then Eq else Gt else if b then Lt else Eq
+    let eq_dec =
+      X.eq_dec
+   end
 
-  (** val compare : t -> t -> comparison **)
+  type elt = X.t
 
-  let rec compare m m' =
-    match m with
-    | Leaf -> if is_empty m' then Eq else Lt
-    | Node (l, o, r) ->
-      (match m' with
-       | Leaf -> if is_empty m then Eq else Gt
-       | Node (l', o', r') ->
-         (match compare_bool o o' with
-          | Eq ->
-            (match compare l l' with
-             | Eq -> compare r r'
-             | x -> x)
-          | x -> x))
+  type t_ =
+    Raw.t
+    (* singleton inductive, whose constructor was Mkt *)
+
+  (** val this : t_ -> Raw.t **)
+
+  let this t0 =
+    t0
+
+  type t = t_
+
+  (** val mem : elt -> t -> bool **)
+
+  let mem x s =
+    Raw.mem x (this s)
+
+  (** val add : elt -> t -> t **)
+
+  let add x s =
+    Raw.add x (this s)
+
+  (** val remove : elt -> t -> t **)
+
+  let remove x s =
+    Raw.remove x (this s)
+
+  (** val singleton : elt -> t **)
+
+  let singleton =
+    Raw.singleton
+
+  (** val union : t -> t -> t **)
+
+  let union s s' =
+    Raw.union (this s) (this s')
+
+  (** val inter : t -> t -> t **)
+
+  let inter s s' =
+    Raw.inter (this s) (this s')
+
+  (** val diff : t -> t -> t **)
+
+  let diff s s' =
+    Raw.diff (this s) (this s')
+
+  (** val equal : t -> t -> bool **)
+
+  let equal s s' =
+    Raw.equal (this s) (this s')
+
+  (** val subset : t -> t -> bool **)
+
+  let subset s s' =
+    Raw.subset (this s) (this s')
+
+  (** val empty : t **)
+
+  let empty =
+    Raw.empty
+
+  (** val is_empty : t -> bool **)
+
+  let is_empty s =
+    Raw.is_empty (this s)
+
+  (** val elements : t -> elt list **)
+
+  let elements s =
+    Raw.elements (this s)
+
+  (** val choose : t -> elt option **)
+
+  let choose s =
+    Raw.choose (this s)
+
+  (** val fold : (elt -> 'a1 -> 'a1) -> t -> 'a1 -> 'a1 **)
+
+  let fold f s =
+    Raw.fold f (this s)
+
+  (** val cardinal : t -> nat **)
+
+  let cardinal s =
+    Raw.cardinal (this s)
+
+  (** val filter : (elt -> bool) -> t -> t **)
+
+  let filter f s =
+    Raw.filter f (this s)
+
+  (** val for_all : (elt -> bool) -> t -> bool **)
+
+  let for_all f s =
+    Raw.for_all f (this s)
+
+  (** val exists_ : (elt -> bool) -> t -> bool **)
+
+  let exists_ f s =
+    Raw.exists_ f (this s)
+
+  (** val partition : (elt -> bool) -> t -> t * t **)
+
+  let partition f s =
+    let p = Raw.partition f (this s) in ((fst p), (snd p))
 
   (** val eq_dec : t -> t -> bool **)
 
-  let eq_dec s s' =
-    if equal s s' then true else false
+  let eq_dec s0 s'0 =
+    let b = Raw.equal s0 s'0 in if b then true else false
  end
 
 (** val allEqual :
@@ -467,7 +380,7 @@ let rec dmap l f =
 
 type terminal = char list
 
-type nonterminal = positive
+type nonterminal = nat
 
 type symbol =
 | T of terminal
@@ -3248,19 +3161,15 @@ let rec t_eq_dec s x =
 
 (** val nt_eq_dec : nonterminal -> nonterminal -> bool **)
 
-let rec nt_eq_dec p x0 =
-  match p with
-  | XI p0 ->
+let rec nt_eq_dec n x0 =
+  match n with
+  | O -> (match x0 with
+          | O -> true
+          | S _ -> false)
+  | S n0 ->
     (match x0 with
-     | XI p1 -> nt_eq_dec p0 p1
-     | _ -> false)
-  | XO p0 ->
-    (match x0 with
-     | XO p1 -> nt_eq_dec p0 p1
-     | _ -> false)
-  | XH -> (match x0 with
-           | XH -> true
-           | _ -> false)
+     | O -> false
+     | S n1 -> nt_eq_dec n0 n1)
 
 (** val gamma_eq_dec : symbol list -> symbol list -> bool **)
 
@@ -5838,20 +5747,16 @@ let rec gamma_eq_dec l x =
             (match s with
              | T _ -> false
              | NT n0 ->
-               let rec f p x1 =
-                 match p with
-                 | XI p0 ->
+               let rec f n x1 =
+                 match n with
+                 | O ->
                    (match x1 with
-                    | XI p1 -> f p0 p1
-                    | _ -> false)
-                 | XO p0 ->
+                    | O -> true
+                    | S _ -> false)
+                 | S n1 ->
                    (match x1 with
-                    | XO p1 -> f p0 p1
-                    | _ -> false)
-                 | XH ->
-                   (match x1 with
-                    | XH -> true
-                    | _ -> false)
+                    | O -> false
+                    | S n2 -> f n1 n2)
                in f x0 n0)
        then gamma_eq_dec l0 l1
        else false)
@@ -5861,7 +5766,19 @@ let rec gamma_eq_dec l x =
 let beqGamma xs ys =
   if gamma_eq_dec xs ys then true else false
 
-module NtSet = PositiveSet
+module MDT_NT =
+ struct
+  type t = nonterminal
+
+  (** val eq_dec : nat -> nat -> bool **)
+
+  let eq_dec =
+    Nat.eq_dec
+ end
+
+module NT_as_DT = Make_UDT(MDT_NT)
+
+module NtSet = Make(NT_as_DT)
 
 type production = nonterminal * symbol list
 
@@ -5903,11 +5820,11 @@ type literal = char list
 
 type token = terminal * literal
 
-type tree0 =
-| Leaf0 of terminal * literal
-| Node0 of nonterminal * tree0 list
+type tree =
+| Leaf of terminal * literal
+| Node of nonterminal * tree list
 
-type forest = tree0 list
+type forest = tree list
 
 type location = { lopt : nonterminal option;
                   rpre : symbol list; rsuf : symbol list }
@@ -5916,8 +5833,10 @@ type location_stack = location * location list
 
 type ('a, 'b) sum0 = ('a, 'b) sum
 
+type location_stack0 = location * location list
+
 type subparser = { avail : NtSet.t; prediction : symbol list;
-                   stack : location_stack }
+                   stack : location_stack0 }
 
 (** val prediction : subparser -> symbol list **)
 
@@ -5987,10 +5906,10 @@ type subparser_closure_step_result =
     grammar -> subparser -> subparser_closure_step_result **)
 
 let spClosureStep g sp =
-  let { avail = av; prediction = pred; stack = stack0 } = sp
+  let { avail = av; prediction = pred; stack = stack1 } = sp
   in
-  let (loc, locs) = stack0 in
-  let { lopt = _; rpre = _; rsuf = rsuf0 } = loc in
+  let (loc0, locs) = stack1 in
+  let { lopt = _; rpre = _; rsuf = rsuf0 } = loc0 in
   (match rsuf0 with
    | [] ->
      (match locs with
@@ -6004,8 +5923,9 @@ let spClosureStep g sp =
            (match s with
             | T _ -> SpClosureStepError SpInvalidState
             | NT x ->
-              let stk' = ({ lopt = xo_cr; rpre = ((NT
-                x) :: pre_cr); rsuf = suf_cr }, locs_tl)
+              let stk' = ({ lopt = xo_cr; rpre =
+                (app pre_cr ((NT x) :: [])); rsuf = suf_cr },
+                locs_tl)
               in
               SpClosureStepK ({ avail = (NtSet.add x av);
               prediction = pred; stack = stk' } :: []))))
@@ -6018,7 +5938,7 @@ let spClosureStep g sp =
                map (fun rhs -> { avail = (NtSet.remove x av);
                  prediction = pred; stack = ({ lopt = (Some
                  x); rpre = []; rsuf = rhs },
-                 (loc :: locs)) }) (rhssForNt g x)
+                 (loc0 :: locs)) }) (rhssForNt g x)
              in
              SpClosureStepK sps'
         else if NtSet.mem x (allNts g)
@@ -6067,8 +5987,8 @@ type prediction_result =
 (** val finalConfig : subparser -> bool **)
 
 let finalConfig sp =
-  let { avail = _; prediction = _; stack = stack0 } = sp in
-  let (l, l0) = stack0 in
+  let { avail = _; prediction = _; stack = stack1 } = sp in
+  let (l, l0) = stack1 in
   let { lopt = _; rpre = _; rsuf = rsuf0 } = l in
   (match rsuf0 with
    | [] -> (match l0 with
@@ -6114,36 +6034,47 @@ let rec llPredict' g sps ts =
                 | Inr cl -> llPredict' g cl ts')))
 
 (** val initSps :
-    grammar -> nonterminal -> location_stack -> subparser list **)
+    grammar -> nonterminal -> location_stack0 -> subparser
+    list **)
 
 let initSps g x = function
-| (loc, locs) ->
+| (loc0, locs) ->
   map (fun rhs -> { avail = (allNts g); prediction = rhs;
     stack = ({ lopt = (Some x); rpre = []; rsuf = rhs },
-    (loc :: locs)) }) (rhssForNt g x)
+    (loc0 :: locs)) }) (rhssForNt g x)
 
 (** val startState :
-    grammar -> nonterminal -> location_stack ->
+    grammar -> nonterminal -> location_stack0 ->
     (prediction_error, subparser list) sum0 **)
 
 let startState g x stk =
   closure g (initSps g x stk)
 
 (** val llPredict :
-    grammar -> nonterminal -> location_stack -> token list ->
-    prediction_result **)
+    grammar -> nonterminal -> location_stack0 -> token list
+    -> prediction_result **)
 
 let llPredict g x stk ts =
   match startState g x stk with
   | Inl msg -> PredError msg
   | Inr sps -> llPredict' g sps ts
 
-type value_stack = forest * forest list
+type frame = { loc : location; sem : forest }
 
-type parser_state = { lstack : location_stack;
-                      vstack : value_stack;
-                      tokens : token list; avail0 : NtSet.t;
-                      unique : bool }
+(** val loc : frame -> location **)
+
+let loc x = x.loc
+
+type parser_stack = frame * frame list
+
+(** val lstackOf : parser_stack -> location_stack **)
+
+let lstackOf = function
+| (fr, frs) -> (fr.loc, (map loc frs))
+
+type parser_state = { avail0 : NtSet.t;
+                      stack0 : parser_stack;
+                      tokens : token list; unique : bool }
 
 (** val unique : parser_state -> bool **)
 
@@ -6169,76 +6100,74 @@ type parse_result =
 (** val step : grammar -> parser_state -> step_result **)
 
 let step g st =
-  let { lstack = lstack0; vstack = vstack0; tokens = ts;
-    avail0 = av; unique = u } = st
+  let { avail0 = av; stack0 = stack1; tokens = ts; unique =
+    u } = st
   in
-  let (fr, frs) = lstack0 in
-  let (v, vs) = vstack0 in
-  let { lopt = o; rpre = pre; rsuf = suf } = fr in
+  let (fr, frs) = stack1 in
+  let { loc = loc0; sem = sv } = fr in
+  let { lopt = xo; rpre = pre; rsuf = suf } = loc0 in
   (match suf with
    | [] ->
      (match frs with
       | [] ->
-        (match vs with
-         | [] ->
-           (match ts with
-            | [] -> StepAccept v
-            | _ :: _ ->
-              StepReject
-                ('s'::('t'::('a'::('c'::('k'::(' '::('e'::('x'::('h'::('a'::('u'::('s'::('t'::('e'::('d'::(','::(' '::('t'::('o'::('k'::('e'::('n'::('s'::(' '::('r'::('e'::('m'::('a'::('i'::('n'::[])))))))))))))))))))))))))))))))
-         | _ :: _ -> StepError InvalidState)
-      | l :: frs' ->
-        let { lopt = o'; rpre = pre'; rsuf = suf' } = l in
-        (match vs with
+        (match ts with
+         | [] -> StepAccept sv
+         | _ :: _ ->
+           StepReject
+             ('s'::('t'::('a'::('c'::('k'::(' '::('e'::('x'::('h'::('a'::('u'::('s'::('t'::('e'::('d'::(','::(' '::('t'::('o'::('k'::('e'::('n'::('s'::(' '::('r'::('e'::('m'::('a'::('i'::('n'::[])))))))))))))))))))))))))))))))
+      | f :: frs_tl ->
+        let { loc = loc1; sem = sv_cr } = f in
+        let { lopt = xo_cr; rpre = pre_cr; rsuf = suf_cr } =
+          loc1
+        in
+        (match suf_cr with
          | [] -> StepError InvalidState
-         | v' :: vs' ->
-           (match suf' with
-            | [] -> StepError InvalidState
-            | s :: suf'0 ->
-              (match s with
-               | T _ -> StepError InvalidState
-               | NT x ->
-                 let cr' = { lopt = o'; rpre = ((NT
-                   x) :: pre'); rsuf = suf'0 }
-                 in
-                 StepK { lstack = (cr', frs'); vstack =
-                 (((Node0 (x, v)) :: v'), vs'); tokens = ts;
-                 avail0 = (NtSet.add x av); unique = u }))))
-   | s :: suf' ->
+         | s :: suf_cr_tl ->
+           (match s with
+            | T _ -> StepError InvalidState
+            | NT x ->
+              let cr' = { loc = { lopt = xo_cr; rpre =
+                (app pre_cr ((NT x) :: [])); rsuf =
+                suf_cr_tl }; sem =
+                (app sv_cr ((Node (x, sv)) :: [])) }
+              in
+              StepK { avail0 = (NtSet.add x av); stack0 =
+              (cr', frs_tl); tokens = ts; unique = u })))
+   | s :: suf_tl ->
      (match s with
       | T a ->
         (match ts with
          | [] ->
            StepReject
              ('i'::('n'::('p'::('u'::('t'::(' '::('e'::('x'::('h'::('a'::('u'::('s'::('t'::('e'::('d'::[])))))))))))))))
-         | t0 :: ts' ->
+         | t0 :: ts_tl ->
            let (a', l) = t0 in
            if t_eq_dec a' a
-           then let fr' = { lopt = o; rpre = ((T a) :: pre);
-                  rsuf = suf' }
+           then let fr' = { loc = { lopt = xo; rpre =
+                  (app pre ((T a) :: [])); rsuf = suf_tl };
+                  sem = (app sv ((Leaf (a, l)) :: [])) }
                 in
-                StepK { lstack = (fr', frs); vstack =
-                (((Leaf0 (a, l)) :: v), vs); tokens = ts';
-                avail0 = (allNts g); unique = u }
+                StepK { avail0 = (allNts g); stack0 = (fr',
+                frs); tokens = ts_tl; unique = u }
            else StepReject
                   ('t'::('o'::('k'::('e'::('n'::(' '::('m'::('i'::('s'::('m'::('a'::('t'::('c'::('h'::[])))))))))))))))
       | NT x ->
         if NtSet.mem x av
-        then (match llPredict g x (fr, frs) ts with
+        then (match llPredict g x (lstackOf (fr, frs)) ts with
               | PredSucc rhs ->
-                let callee = { lopt = (Some x); rpre = [];
-                  rsuf = rhs }
+                let callee = { loc = { lopt = (Some x);
+                  rpre = []; rsuf = rhs }; sem = [] }
                 in
-                StepK { lstack = (callee, (fr :: frs));
-                vstack = ([], (v :: vs)); tokens = ts;
-                avail0 = (NtSet.remove x av); unique = u }
+                StepK { avail0 = (NtSet.remove x av);
+                stack0 = (callee, (fr :: frs)); tokens = ts;
+                unique = u }
               | PredAmbig rhs ->
-                let callee = { lopt = (Some x); rpre = [];
-                  rsuf = rhs }
+                let callee = { loc = { lopt = (Some x);
+                  rpre = []; rsuf = rhs }; sem = [] }
                 in
-                StepK { lstack = (callee, (fr :: frs));
-                vstack = ([], (v :: vs)); tokens = ts;
-                avail0 = (NtSet.remove x av); unique = false }
+                StepK { avail0 = (NtSet.remove x av);
+                stack0 = (callee, (fr :: frs)); tokens = ts;
+                unique = false }
               | PredReject ->
                 StepReject
                   ('p'::('r'::('e'::('d'::('i'::('c'::('t'::('i'::('o'::('n'::(' '::('f'::('o'::('u'::('n'::('d'::(' '::('n'::('o'::(' '::('v'::('i'::('a'::('b'::('l'::('e'::(' '::('r'::('i'::('g'::('h'::('t'::('-'::('h'::('a'::('n'::('d'::(' '::('s'::('i'::('d'::('e'::('s'::[])))))))))))))))))))))))))))))))))))))))))))
@@ -6262,8 +6191,8 @@ let rec multistep g st =
     grammar -> symbol list -> token list -> parser_state **)
 
 let mkInitState g gamma ts =
-  { lstack = ({ lopt = None; rpre = []; rsuf = gamma }, []);
-    vstack = ([], []); tokens = ts; avail0 = (allNts g);
+  { avail0 = (allNts g); stack0 = ({ loc = { lopt = None;
+    rpre = []; rsuf = gamma }; sem = [] }, []); tokens = ts;
     unique = true }
 
 (** val parse :
@@ -6271,6 +6200,34 @@ let mkInitState g gamma ts =
 
 let parse g gamma ts =
   multistep g (mkInitState g gamma ts)
+
+type parse_result0 =
+| Acc of tree
+| Amb of tree
+| Rej of char list
+| Err of parse_error
+
+(** val parseSymbol :
+    grammar -> symbol -> token list -> parse_result0 **)
+
+let parseSymbol g s w =
+  match parse g (s :: []) w with
+  | Accept f ->
+    (match f with
+     | [] -> Err InvalidState
+     | v :: l ->
+       (match l with
+        | [] -> Acc v
+        | _ :: _ -> Err InvalidState))
+  | Ambig f ->
+    (match f with
+     | [] -> Err InvalidState
+     | v :: l ->
+       (match l with
+        | [] -> Amb v
+        | _ :: _ -> Err InvalidState))
+  | Reject str0 -> Rej str0
+  | Error e -> Err e
 
 (** val jInt : char list **)
 
@@ -6332,35 +6289,35 @@ let colon =
 let comma =
   'C'::('o'::('m'::('m'::('a'::[]))))
 
-(** val value : positive **)
+(** val value : nat **)
 
 let value =
-  XH
+  S O
 
-(** val pairs : positive **)
+(** val pairs : nat **)
 
 let pairs =
-  XO XH
+  S (S O)
 
-(** val pairsTl : positive **)
+(** val pairsTl : nat **)
 
 let pairsTl =
-  XI XH
+  S (S (S O))
 
-(** val pair : positive **)
+(** val pair : nat **)
 
 let pair =
-  XO (XO XH)
+  S (S (S (S O)))
 
-(** val elts : positive **)
+(** val elts : nat **)
 
 let elts =
-  XI (XO XH)
+  S (S (S (S (S O))))
 
-(** val eltsTl : positive **)
+(** val eltsTl : nat **)
 
 let eltsTl =
-  XO (XI XH)
+  S (S (S (S (S (S O)))))
 
 (** val jsonGrammar : grammar **)
 

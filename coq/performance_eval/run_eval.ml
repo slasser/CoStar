@@ -118,7 +118,7 @@ let benchmark_mparser (n : int) (fnames : string list) : float list =
 
 let run_gparser_trial (fname : string) : float * float =
   let lexbuf         = Lexing.from_channel (open_in fname) in
-  let (lextime, ts) = benchmark (JsonTokenizer.top Vlexer.vread) lexbuf in
+  let (lextime, ts) = benchmark (JsonTokenizer.top Lexer.vread) lexbuf in
   let ts'           = map gtoken_of_token ts in
   let (parsetime, v) = benchmark (parse jsonGrammar [NT value]) ts' in
 (*  let ts'            = List.map vtoken_of_mtoken ts in
@@ -194,12 +194,12 @@ let compare_semantic_values (fname : string) : unit =
 
 let rec iota n : int list = if n <= 0 then [] else n :: iota (n-1)
     
-let main (data_dir : string) (out_f : string) : unit = 
+let main (data_dir : string) (trials_per_file : int) (out_f : string) : unit = 
   (* First, collect the results *)
   let fnames = filenames_in_dir data_dir in
   let lextime_parsetime_pairs =
     map (fun fname ->
-               let lt_pt_pairs = map (fun _ -> run_gparser_trial fname) (iota 10) in
+               let lt_pt_pairs = map (fun _ -> run_gparser_trial fname) (iota trials_per_file) in
                let (lts, pts)  = List.split lt_pt_pairs in
                (avg_floats lts, avg_floats pts)) fnames in
   let (lextimes, parsetimes) = List.split lextime_parsetime_pairs in
@@ -213,4 +213,4 @@ let main (data_dir : string) (out_f : string) : unit =
   let out_c = open_out out_f in
   output_string out_c json_str
 
-let () = main Sys.argv.(1) Sys.argv.(2)
+let () = main Sys.argv.(1) (int_of_string Sys.argv.(2)) Sys.argv.(3)
