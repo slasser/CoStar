@@ -1,0 +1,10 @@
+01_15_20_benchmark_results.json / 01_15_20_benchmark_results.eps
+================================================================
+- results of performance evaluation on Nobel data set
+- each bar is average of 10 parser runs on a single file
+
+01_15_20_perf_report.png
+========================
+- result of profiling code with perf tool
+- shows that mapping over the entire parser stack to extract the location
+  from each frame takes up most of the computation time

@@ -120,9 +120,7 @@ let run_gparser_trial (fname : string) : float * float =
   let lexbuf         = Lexing.from_channel (open_in fname) in
   let (lextime, ts) = benchmark (JsonTokenizer.top Lexer.vread) lexbuf in
   let ts'           = map gtoken_of_token ts in
-  let (parsetime, v) = benchmark (parse jsonGrammar [NT value]) ts' in
-(*  let ts'            = List.map vtoken_of_mtoken ts in
-  let (parsetime, _) = benchmark (PG.parse tbl (NT jsonGrammar.start)) ts' *)
+  let (parsetime, v) = benchmark (parseSymbol jsonGrammar (NT value)) ts' in
   (lextime, parsetime)
 
 (*
@@ -199,7 +197,12 @@ let main (data_dir : string) (trials_per_file : int) (out_f : string) : unit =
   let fnames = filenames_in_dir data_dir in
   let lextime_parsetime_pairs =
     map (fun fname ->
-               let lt_pt_pairs = map (fun _ -> run_gparser_trial fname) (iota trials_per_file) in
+               let () = print_string ("file: " ^ fname ^ "\n") in
+               let lt_pt_pairs = map (fun i ->
+                                        let () = print_string ("trial " ^ string_of_int i ^ "\n") in
+                                        run_gparser_trial fname)
+                                   (iota trials_per_file) in
+               let () = print_newline () in
                let (lts, pts)  = List.split lt_pt_pairs in
                (avg_floats lts, avg_floats pts)) fnames in
   let (lextimes, parsetimes) = List.split lextime_parsetime_pairs in
