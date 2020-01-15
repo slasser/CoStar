@@ -27,3 +27,7 @@ setup.log
 
 # Not sure where this file comes from
 .coqdeps.d
+
+# Extracted OCaml files -- the user should generate these
+myJsonParser.ml
+myJsonParser.mli
