@@ -41,6 +41,9 @@ Module Export NP    := MSetProperties.Properties NtSet.
 Module Export NE    := EqProperties NtSet.
 Module Export ND    := WDecideOn NT_as_DT NtSet.
 
+(* Hide an alternative definition of "sum" from NtSet *)
+Definition sum := Datatypes.sum.
+
 (* Grammar-related definitions *)               
 Definition production := (nonterminal * list symbol)%type.
 
@@ -193,11 +196,27 @@ Inductive tree    := Leaf : terminal -> literal -> tree
 
 Definition forest := list tree.
 
+Definition value_stack := (forest * list forest)%type.
+
 (* Grammar locations *)
-Record location := Loc { lopt : option nonterminal
-                       ; rpre : list symbol
+Record location := Loc { rpre : list symbol
                        ; rsuf : list symbol
                        }.
+
+Definition location_stack := (location * list location)%type.
+
+Fixpoint unprocTailSyms (frs : list location) : list symbol :=
+  match frs with 
+  | []                          => []
+  | Loc _ [] :: _               => [] (* impossible for a well-formed stack *)
+  | Loc _ (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
+  | Loc _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
+  end.
+
+Definition unprocStackSyms (stk : location_stack) : list symbol :=
+  match stk with
+  | (Loc pre suf, frs) => suf ++ unprocTailSyms frs
+  end.
 
 (* Grammatical derivation relation *)
 Inductive sym_derivation (g : grammar) : symbol -> list token -> tree -> Prop :=
@@ -541,20 +560,4 @@ Definition left_recursive g sym :=
 Definition no_left_recursion g :=
   forall (x : nonterminal), 
     ~ left_recursive g (NT x).
-
-
-(* May not be necessary *)
-Inductive gamma_recognize' (g : grammar) : list symbol -> list token -> Prop :=
-| Nil_gr :
-    gamma_recognize' g [] []
-| T_gr   : 
-    forall ys wsuf a l,
-      gamma_recognize' g ys wsuf
-      -> gamma_recognize' g (T a :: ys) ((a, l) :: wsuf)
-| NT_gr  : 
-    forall x ys ys' wpre wsuf,
-      In (x, ys) g
-      -> gamma_recognize' g ys  wpre
-      -> gamma_recognize' g ys' wsuf
-      -> gamma_recognize' g (NT x :: ys') (wpre ++ wsuf).
 

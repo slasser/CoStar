@@ -8,36 +8,25 @@ Require Import GallStar.Utils.
 Import ListNotations.
 Open Scope list_scope.
 
-Record frame := Fr { loc : location
-                   ; sem : forest
-                   }.                               
-
-Definition parser_stack := (frame * list frame)%type.
-
-Definition lstackOf (stk : parser_stack) : location_stack :=
-  let (fr, frs) := stk in (fr.(loc), map loc frs).
-
-Definition unprocTailSyms' (frs : list frame) :=
-  unprocTailSyms (map loc frs).
-
-Fixpoint bottomFrame' (h : frame) (t : list frame) : frame :=
+Fixpoint bottomElt' {A} (h : A) (t : list A) : A :=
   match t with
   | []        => h
-  | fr :: frs => bottomFrame' fr frs
+  | h' :: t' => bottomElt' h' t'
   end.
 
-Definition bottomFrame (stk : parser_stack) : frame :=
-  let (h, t) := stk in bottomFrame' h t.
+Definition bottomElt {A} (stk : A * list A) : A :=
+  let (h, t) := stk in bottomElt' h t.
 
-Definition bottomFrameSyms (stk : parser_stack) : list symbol :=
-  let fr := bottomFrame stk
-  in  fr.(loc).(rpre) ++ fr.(loc).(rsuf).
+Definition bottomFrameSyms (stk : location_stack) : list symbol :=
+  let fr := bottomElt stk
+  in  fr.(rpre) ++ fr.(rsuf).
   
-Record parser_state    := Pst { avail  : NtSet.t
+(*Record parser_state    := Pst { avail  : NtSet.t
                               ; stack  : parser_stack     
                               ; tokens : list token
                               ; unique : bool
                               }.
+ *)
 
 Inductive parse_error :=
 | InvalidState    : parse_error
@@ -46,7 +35,7 @@ Inductive parse_error :=
 
 Inductive step_result := StepAccept : forest -> step_result
                        | StepReject : string -> step_result
-                       | StepK      : parser_state -> step_result
+                       | StepK      : location_stack -> value_stack -> list token -> NtSet.t -> bool -> step_result
                        | StepError  : parse_error -> step_result.
 
 Inductive parse_result := Accept : forest -> parse_result
@@ -54,54 +43,66 @@ Inductive parse_result := Accept : forest -> parse_result
                         | Reject : string -> parse_result
                         | Error  : parse_error -> parse_result.
 
-Definition step (g : grammar) (st : parser_state) : step_result :=
-  match st with
-  | Pst av (fr, frs) ts u =>
+Definition step (g      : grammar)
+                (lstack : location_stack)
+                (vstack : value_stack)
+                (ts     : list token)
+                (av     : NtSet.t)
+                (u      : bool) : step_result := 
+  match lstack, vstack with
+  | (fr, frs), (v, vs) =>
     match fr with
-    | Fr (Loc xo pre suf) sv =>
+    | Loc pre suf =>
       match suf with
-      | [] => 
-        match frs with
-        (* empty stack --> accept *)
-        | [] => 
+      (* no more symbols to process in current frame *)
+      | [] =>
+        match frs, vs with
+        (* empty symbol and value stacks --> terminate *)
+        | [], [] => 
           match ts with
-          | []     => StepAccept sv
+          | []     => StepAccept v
           | _ :: _ => StepReject "stack exhausted, tokens remain"
           end
-        (* nonempty stack --> return to caller frame *)
-        | (Fr (Loc xo_cr pre_cr suf_cr) sv_cr) :: frs_tl =>
+        (* nonempty symbol and value stacks --> return to caller frame *)
+        | Loc pre_cr suf_cr :: frs', v_cr :: vs' =>
           match suf_cr with
           | []                => StepError InvalidState
-          | T _ :: _          => StepError InvalidState
-          | NT x :: suf_cr_tl => 
-            let cr' := Fr (Loc xo_cr (pre_cr ++ [NT x]) suf_cr_tl)
-                          (sv_cr ++ [Node x sv])
-            in  StepK (Pst (NtSet.add x av) (cr', frs_tl) ts u)
+          | T _  :: _         => StepError InvalidState
+          | NT x :: suf_cr'   =>
+            let lstack' := (Loc (pre_cr ++ [NT x]) suf_cr, frs') in
+            let vstack' := (v_cr ++ [Node x v], vs')             in
+            StepK lstack' vstack' ts (NtSet.add x av) u
           end
+        | _, _ => StepError InvalidState
         end
       (* terminal case --> consume a token *)
-      | T a :: suf_tl =>
+      | T a :: suf' =>
         match ts with
-        | []               => StepReject "input exhausted"
-        | (a', l) :: ts_tl =>
-          if t_eq_dec a' a then 
-            let fr' := Fr (Loc xo (pre ++ [T a]) suf_tl) (sv ++ [Leaf a l])
-            in  StepK (Pst (allNts g) (fr', frs) ts_tl u)
+        | []             => StepReject "input exhausted"
+        | (a', l) :: ts' =>
+          if t_eq_dec a' a then
+            let lstack' := (Loc (pre ++ [T a]) suf', frs) in
+            let vstack' := (v ++ [Leaf a l], vs)          in
+            StepK lstack' vstack' ts' (allNts g) u
           else
             StepReject "token mismatch"
         end
       (* nonterminal case --> push a frame onto the stack *)
-      | NT x :: suf_tl => 
+      | NT x :: suf' => 
         if NtSet.mem x av then
-          match llPredict g x (lstackOf (fr, frs)) ts with
+          match llPredict g x (fr, frs) ts with
           | PredSucc rhs =>
-            let callee := Fr (Loc (Some x) [] rhs) []
-            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts u)
+            let lstack' := (Loc [] rhs, fr :: frs) in
+            let vstack' := ([], v :: vs)           in
+            StepK lstack' vstack' ts (NtSet.remove x av) u
           | PredAmbig rhs =>
-            let callee := Fr (Loc (Some x) [] rhs) []
-            in  StepK (Pst (NtSet.remove x av) (callee, fr :: frs) ts false)
-          | PredReject    => StepReject "prediction found no viable right-hand sides"
-          | PredError e => StepError (PredictionError e)
+            let lstack' := (Loc [] rhs, fr :: frs) in
+            let vstack' := ([], v :: vs)           in
+            StepK lstack' vstack' ts (NtSet.remove x av) false
+          | PredReject =>
+            StepReject "prediction found no viable right-hand sides"
+          | PredError e =>
+            StepError (PredictionError e)
           end
         else if NtSet.mem x (allNts g) then
                StepError (LeftRecursion x)

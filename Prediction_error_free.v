@@ -27,11 +27,11 @@ Definition all_sps_ready_for_move (sps : list subparser) : Prop :=
 (* This definition can probably be merged with sp_ready_for_move *)
 Inductive stable_config : location_stack -> Prop :=
 | SC_empty :
-    forall o pre,
-    stable_config (Loc o pre [], [])
+    forall pre,
+    stable_config (Loc pre [], [])
 | SC_terminal :
-    forall o pre a suf frs,
-      stable_config (Loc o pre (T a :: suf), frs).
+    forall pre a suf frs,
+      stable_config (Loc pre (T a :: suf), frs).
 
 Lemma spClosureStep_never_returns_SpInvalidState :
   forall g sp,
@@ -281,7 +281,7 @@ Lemma stacks_wf_in_startState_result :
     -> startState g x (fr, frs) = inr sps
     -> all_sp_stacks_wf g sps.
 Proof.
-  intros g [o pre suf'] frs x suf sps hw heq hs; sis; subst.
+  intros g [pre suf'] frs x suf sps hw heq hs; sis; subst.
   eapply closure_preserves_lstack_wf_invar; eauto.
   unfold all_sp_stacks_wf; intros sp hi.
   eapply initSps_preserves_lstack_wf_invar; eauto.
@@ -359,15 +359,15 @@ Proof.
 Qed.
 
 Lemma invars_imply_head_nt_available :
-  forall g av pred fr frs o pre suf x,
-    fr = Loc o pre (NT x :: suf)
+  forall g av pred fr frs pre suf x,
+    fr = Loc pre (NT x :: suf)
     -> no_left_recursion g
     -> lstack_wf g (fr, frs)
     -> unavailable_nts_invar g (Sp av pred (fr, frs))
     -> NtSet.In x (allNts g)
     -> NtSet.In x av.
 Proof.
-  intros g av pred fr frs o pre suf x ? hn hw hu hi; subst.
+  intros g av pred fr frs pre suf x ? hn hw hu hi; subst.
   destruct (In_dec x av) as [hi' | hn']; auto.
   exfalso.
   apply hu in hn'; auto.
@@ -439,7 +439,7 @@ Lemma startState_never_finds_left_recursion :
     -> fr.(rsuf) = NT x :: suf
     -> startState g x (fr, frs) <> inl (SpLeftRecursion x').
 Proof.
-  intros g x x' [o pre suf'] frs suf hn hw heq; unfold not; intros hs; sis; subst.
+  intros g x x' [pre suf'] frs suf hn hw heq; unfold not; intros hs; sis; subst.
   eapply closure_never_finds_left_recursion; eauto.
   - unfold all_sp_stacks_wf; intros sp hi.
     eapply initSps_preserves_lstack_wf_invar; eauto.

@@ -6,8 +6,6 @@ Import ListNotations.
 
 (* Definitions related to well-founded measures *)
 
-Definition location_stack := (location * list location)%type.
-
 Definition headFrameSize (loc : location) : nat :=
   length loc.(rsuf).
 
@@ -136,12 +134,12 @@ Qed.
 
 (* this version might be easier to apply *)
 Lemma stackScore_le_after_return' :
-    forall o o_cr pre pre_cr suf_cr x b av locs,
-      stackScore (Loc o_cr (pre_cr ++ [NT x]) suf_cr, locs) 
+    forall pre pre_cr suf_cr x b av locs,
+      stackScore (Loc (pre_cr ++ [NT x]) suf_cr, locs) 
                  b 
                  (NtSet.cardinal (NtSet.add x av))
       <= 
-      stackScore (Loc o pre [], Loc o_cr pre_cr (NT x :: suf_cr) :: locs) 
+      stackScore (Loc pre [], Loc pre_cr (NT x :: suf_cr) :: locs) 
                  b 
                  (NtSet.cardinal av).
 Proof.
@@ -226,14 +224,14 @@ Proof.
 Qed.
 
 Lemma stackScore_lt_after_push' :
-  forall g o o_cr pre_cr suf_cr rhs x av locs,
+  forall g pre_cr suf_cr rhs x av locs,
     NtSet.In x av
     -> In rhs (rhssForNt g x)
-    -> stackScore (Loc o [] rhs, Loc o_cr pre_cr (NT x :: suf_cr) :: locs)
+    -> stackScore (Loc [] rhs, Loc pre_cr (NT x :: suf_cr) :: locs)
                   (1 + maxRhsLength g)
                   (NtSet.cardinal (NtSet.remove x av))
        <
-       stackScore (Loc o_cr pre_cr (NT x :: suf_cr), locs)
+       stackScore (Loc pre_cr (NT x :: suf_cr), locs)
                   (1 + maxRhsLength g)
                   (NtSet.cardinal av).
 Proof.

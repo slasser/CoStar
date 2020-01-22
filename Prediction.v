@@ -8,24 +8,6 @@ Import ListNotations.
 Open Scope list_scope.
 Set Implicit Arguments.
 
-(* Hide an alternative definition of "sum" from NtSet *)
-Definition sum := Datatypes.sum.
-
-Definition location_stack := (location * list location)%type.
-
-Fixpoint unprocTailSyms (frs : list location) : list symbol :=
-  match frs with 
-  | []                            => []
-  | Loc _ _ [] :: _               => [] (* impossible for a well-formed stack *)
-  | Loc _ _ (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
-  | Loc _ _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
-  end.
-
-Definition unprocStackSyms (stk : location_stack) : list symbol :=
-  match stk with
-  | (Loc o pre suf, frs) => suf ++ unprocTailSyms frs
-  end.
-
 Record subparser := Sp { avail      : NtSet.t
                        ; prediction : list symbol
                        ; stack      : location_stack
@@ -47,14 +29,14 @@ Definition moveSp (g : grammar) (tok : token) (sp : subparser) : subparser_move_
   match sp with
   | Sp _ pred stk =>
     match stk with
-    | (Loc _ _ [], [])                => SpMoveReject
-    | (Loc _ _ [], _ :: _)            => SpMoveError SpInvalidState
-    | (Loc _ _ (NT _ :: _), _)        => SpMoveError SpInvalidState
-    | (Loc xo pre (T a :: suf), locs) =>
+    | (Loc _ [], [])                => SpMoveReject
+    | (Loc _ [], _ :: _)            => SpMoveError SpInvalidState
+    | (Loc _ (NT _ :: _), _)        => SpMoveError SpInvalidState
+    | (Loc pre (T a :: suf), locs) =>
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          SpMoveSucc (Sp (allNts g) pred (Loc xo (pre ++ [T a]) suf, locs))
+          SpMoveSucc (Sp (allNts g) pred (Loc (pre ++ [T a]) suf, locs))
         else
           SpMoveReject
       end
@@ -71,27 +53,17 @@ Proof.
 Qed.
 
 Lemma moveSp_succ_step :
-  forall g sp sp' av pred o pre a l suf frs,
-    sp = Sp av pred (Loc o pre (T a :: suf), frs)
-    -> sp' = Sp (allNts g) pred (Loc o (pre ++ [T a]) suf, frs)
+  forall g sp sp' av pred pre a l suf frs,
+    sp = Sp av pred (Loc pre (T a :: suf), frs)
+    -> sp' = Sp (allNts g) pred (Loc (pre ++ [T a]) suf, frs)
     -> moveSp g (a, l) sp = SpMoveSucc sp'.
 Proof.
   intros; subst; unfold moveSp; dms; tc.
 Qed.
 
-(*
-Lemma moveSp_result_in_map :
-  forall g sp av pred o pre a t suf frs sps,
-    sp = Sp av pred (Loc o pre (T a :: suf), frs)
-    -> In sp sps
-    -> In (moveSp g t sp) (map (moveSp g t) sps).
-Proof.
-  intros; subst; apply in_map_iff; eauto.
-Qed.
-*)
-
 Definition move_result := sum prediction_error (list subparser).
 
+(* consider refactoring to short-circuit in case of error *)
 Fixpoint aggrMoveResults (smrs : list subparser_move_result) : 
   move_result :=
   match smrs with
@@ -213,14 +185,14 @@ Proof.
 Qed.
 
 Lemma move_succ_all_sps_step :
-  forall g sp sp' av pred o pre a l suf frs sps sps',
-    sp = Sp av pred (Loc o pre (T a :: suf), frs)
-    -> sp' = Sp (allNts g) pred (Loc o (pre ++ [T a]) suf, frs)
+  forall g sp sp' av pred pre a l suf frs sps sps',
+    sp = Sp av pred (Loc pre (T a :: suf), frs)
+    -> sp' = Sp (allNts g) pred (Loc (pre ++ [T a]) suf, frs)
     -> In sp sps
     -> move g (a, l) sps = inr sps'
     -> In sp' sps'.
 Proof.
-  intros g sp sp' av pred o pre a l suf frs sps sps' ? ? hi hm; subst.
+  intros g sp sp' av pred pre a l suf frs sps sps' ? ? hi hm; subst.
   eapply move_maps_moveSp; eauto.
   eapply moveSp_succ_step; eauto.
 Qed.
@@ -237,21 +209,21 @@ Definition spClosureStep (g : grammar) (sp : subparser) :
   match sp with
   | Sp av pred (loc, locs) =>
     match loc with
-    | Loc _ _ [] =>
+    | Loc _ [] =>
       match locs with
       | []                        => SpClosureStepDone
-      | (Loc _ _ []) :: _         => SpClosureStepError SpInvalidState
-      | (Loc _ _ (T _ :: _)) :: _ => SpClosureStepError SpInvalidState
-      | (Loc xo_cr pre_cr (NT x :: suf_cr)) :: locs_tl =>
-        let stk':= (Loc xo_cr (pre_cr ++ [NT x]) suf_cr, locs_tl) 
+      | (Loc _ []) :: _         => SpClosureStepError SpInvalidState
+      | (Loc _ (T _ :: _)) :: _ => SpClosureStepError SpInvalidState
+      | (Loc pre_cr (NT x :: suf_cr)) :: locs_tl =>
+        let stk':= (Loc (pre_cr ++ [NT x]) suf_cr, locs_tl) 
         in  SpClosureStepK [Sp (NtSet.add x av) pred stk']
       end
-    | Loc _ _ (T _ :: _)       => SpClosureStepDone
-    | Loc xo pre (NT x :: suf) =>
+    | Loc _ (T _ :: _)       => SpClosureStepDone
+    | Loc pre (NT x :: suf) =>
       if NtSet.mem x av then
         let sps' := map (fun rhs => Sp (NtSet.remove x av) 
                                        pred 
-                                       (Loc (Some x) [] rhs, loc :: locs))
+                                       (Loc [] rhs, loc :: locs))
                         (rhssForNt g x)
         in  SpClosureStepK sps'
       else if NtSet.mem x (allNts g) then
@@ -277,6 +249,7 @@ Qed.
 
 Definition closure_result := sum prediction_error (list subparser).
 
+(* consider refactoring to short-circuit in case of error *)
 Fixpoint aggrClosureResults (crs : list closure_result) : closure_result :=
   match crs with
   | [] => inr []
@@ -440,13 +413,13 @@ Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   end.
 
 Lemma meas_lt_after_return :
-  forall g sp sp' av pred o o' pre pre' suf' x frs,
-    sp = Sp av pred (Loc o pre [], Loc o' pre' (NT x :: suf') :: frs)
-    -> sp' = Sp (NtSet.add x av) pred (Loc o' (pre' ++ [NT x]) suf', frs)
+  forall g sp sp' av pred pre pre' suf' x frs,
+    sp = Sp av pred (Loc pre [], Loc pre' (NT x :: suf') :: frs)
+    -> sp' = Sp (NtSet.add x av) pred (Loc (pre' ++ [NT x]) suf', frs)
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g sp sp' av pred o o' pre pre' suf' x frs ? ?; subst.
-  pose proof (stackScore_le_after_return' o o' pre pre' suf' x) as hle.
+  intros g sp sp' av pred pre pre' suf' x frs ? ?; subst.
+  pose proof (stackScore_le_after_return' pre pre' suf' x) as hle.
   eapply le_lt_or_eq in hle; eauto.
   destruct hle as [hlt | heq]; sis.
   - apply pair_fst_lt; eauto.
@@ -454,16 +427,16 @@ Proof.
 Defined.
 
 Lemma meas_lt_after_push :
-  forall g sp sp' fr fr' av pred o pre suf x rhs frs,
+  forall g sp sp' fr fr' av pred pre suf x rhs frs,
     sp = Sp av pred (fr, frs)
     -> sp' = Sp (NtSet.remove x av) pred (fr', fr :: frs)
-    -> fr  = Loc o pre (NT x :: suf)
-    -> fr' = Loc (Some x) [] rhs
+    -> fr  = Loc pre (NT x :: suf)
+    -> fr' = Loc [] rhs
     -> NtSet.In x av
     -> In rhs (rhssForNt g x)
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
-  intros g sp sp' fr fr' av pred o pre suf x rhs frs ? ? ? ? hi hi'; subst.
+  intros g sp sp' fr fr' av pred pre suf x rhs frs ? ? ? ? hi hi'; subst.
   apply pair_fst_lt.
   eapply stackScore_lt_after_push; sis; eauto.
 Defined.
@@ -485,29 +458,7 @@ Proof.
     eapply meas_lt_after_push; eauto.
     apply NtSet.mem_spec; auto.
 Defined.
-(*
-Lemma spClosureStep_meas_lt :
-  forall (g      : grammar)
-         (sp sp' : subparser)
-         (sps'   : list subparser),
-    spClosureStep g sp = SpClosureStepK sps'
-    -> In sp' sps'
-    -> lex_nat_pair (meas g sp') (meas g sp).
-Proof.
-  intros g sp sp' sps' hs hi; unfold spClosureStep in hs; dmeqs h; tc; inv hs; try solve [inv hi]; unfold meas.
-  - apply in_singleton_eq in hi; subst.
-    pose proof stackScore_le_after_return' as hle.
-    eapply le_lt_or_eq in hle; eauto.
-    destruct hle as [hlt | heq].
-    + apply pair_fst_lt; eauto.
-    + rewrite heq; apply pair_snd_lt; auto.
-  - apply in_map_iff in hi.
-    destruct hi as [rhs [heq hi]]; subst.
-    apply pair_fst_lt.
-    eapply stackScore_lt_after_push; simpl; eauto.
-    apply NtSet.mem_spec; auto.
-Defined.
-*)
+
 Lemma acc_after_step :
   forall g sp sp' sps',
     spClosureStep g sp = SpClosureStepK sps'
@@ -703,7 +654,7 @@ Inductive prediction_result :=
 
 Definition finalConfig (sp : subparser) : bool :=
   match sp with
-  | Sp _ _ (Loc _ _ [], []) => true
+  | Sp _ _ (Loc _ [], []) => true
   | _                       => false
   end.
 
@@ -755,10 +706,10 @@ Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
 Lemma handleFinalSubparsers_succ_facts :
   forall sps rhs,
     handleFinalSubparsers sps = PredSucc rhs
-    -> exists sp o pre,
+    -> exists sp pre,
       In sp sps
       /\ sp.(prediction) = rhs
-      /\ sp.(stack) = (Loc o pre [], []).
+      /\ sp.(stack) = (Loc pre [], []).
 Proof.
   intros sps rhs hh.
   unfold handleFinalSubparsers in hh.
@@ -770,7 +721,7 @@ Proof.
   destruct hin as [hin ht]; subst.
   unfold finalConfig in ht.
   exists sp.
-  destruct sp as [av pred ([o pre suf], frs)].
+  destruct sp as [av pred ([pre suf], frs)].
   dms; tc; repeat eexists; eauto.
 Qed.
 
@@ -818,7 +769,7 @@ Proof.
     + inv hl; exists sp; split; auto.
       apply in_eq.
     + apply handleFinalSubparsers_succ_facts in hl.
-      destruct hl as [sp' [_ [_ [hi [heq _]]]]]; eauto.
+      destruct hl as [sp' [_ [hi [heq _]]]]; eauto.
   - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
     + inv hl; exists sp; split; auto.
       apply in_eq.
@@ -853,7 +804,7 @@ Qed.
 
 Definition initSps (g : grammar) (x : nonterminal) (stk : location_stack) : list subparser :=
   let (loc, locs) := stk
-  in  map (fun rhs => Sp (allNts g) rhs (Loc (Some x) [] rhs, loc :: locs))
+  in  map (fun rhs => Sp (allNts g) rhs (Loc [] rhs, loc :: locs))
           (rhssForNt g x).
 
 Lemma initSps_prediction_in_rhssForNt :
@@ -866,13 +817,13 @@ Proof.
 Qed.
 
 Lemma initSps_result_incl_all_rhss :
-  forall g fr o pre x suf rhs frs,
-    fr = Loc o pre (NT x :: suf)
+  forall g fr pre x suf rhs frs,
+    fr = Loc pre (NT x :: suf)
     -> In (x, rhs) g
-    -> In (Sp (allNts g) rhs (Loc (Some x) [] rhs, fr :: frs))
+    -> In (Sp (allNts g) rhs (Loc [] rhs, fr :: frs))
           (initSps g x (fr, frs)).
 Proof.
-  intros g fr o pre x suf rhs frs ? hi; subst.
+  intros g fr pre x suf rhs frs ? hi; subst.
   apply in_map_iff; exists rhs; split; auto.
   apply rhssForNt_in_iff; auto.
 Qed.
@@ -956,14 +907,13 @@ Inductive locations_wf (g : grammar) : list location -> Prop :=
 | WF_nil :
     locations_wf g []
 | WF_bottom :
-    forall xo pre suf,
-      locations_wf g [Loc xo pre suf]
+    forall pre suf,
+      locations_wf g [Loc pre suf]
 | WF_upper :
-    forall x xo pre pre' suf suf' locs,
+    forall x pre pre' suf suf' locs,
       In (x, pre' ++ suf') g
-      -> locations_wf g (Loc xo pre (NT x :: suf) :: locs)
-      -> locations_wf g (Loc (Some x) pre' suf'   ::
-                         Loc xo pre (NT x :: suf) :: locs).
+      -> locations_wf g (Loc pre (NT x :: suf) :: locs)
+      -> locations_wf g (Loc pre' suf' :: Loc pre (NT x :: suf) :: locs).
 
 Hint Constructors locations_wf.
 
@@ -996,7 +946,7 @@ Proof.
     apply app_eq_nil in ht; destruct ht; subst; auto.
   - destruct p as [| fr  p]; sis; subst; auto.
     destruct p as [| fr' p]; sis; subst; inv heq; auto.
-    specialize (IHhw (Loc xo pre (NT x :: suf):: p) s).
+    specialize (IHhw (Loc pre (NT x :: suf):: p) s).
     destruct IHhw as [hs hp]; auto.
 Qed.
 
@@ -1022,33 +972,35 @@ Proof.
 Qed.
 
 Lemma return_preserves_locations_wf_invar :
-  forall g o o_cr pre pre_cr suf_cr x locs,
-    locations_wf g (Loc o pre [] :: Loc o_cr pre_cr (NT x :: suf_cr) :: locs)
-    -> locations_wf g (Loc o_cr (pre_cr ++ [NT x]) suf_cr :: locs).
+  forall g pre pre_cr suf_cr x locs,
+    locations_wf g (Loc pre [] :: Loc pre_cr (NT x :: suf_cr) :: locs)
+    -> locations_wf g (Loc (pre_cr ++ [NT x]) suf_cr :: locs).
 Proof.
-  intros g o o_cr pre pre_cr suf_cr x locs hw.
-  inversion hw as [ | o' pre' suf' hw' | x' o' pre' pre'' suf suf' locs' hi hw']; subst; clear hw.
+  intros g pre pre_cr suf_cr x locs hw.
+  inversion hw as [ | pre' suf' hw' | x' pre' pre'' suf suf' locs' hi hw']; subst; clear hw.
   inv hw'; constructor; auto.
   rewrite <- app_assoc; auto.
 Qed.
 
 Lemma push_preserves_locations_wf_invar :
-  forall g o pre suf x rhs locs,
+  forall g pre suf x rhs locs,
     In rhs (rhssForNt g x)
-    -> locations_wf g (Loc o pre (NT x :: suf) :: locs)
-    -> locations_wf g (Loc (Some x) [] rhs :: Loc o pre (NT x :: suf) :: locs).
+    -> locations_wf g (Loc pre (NT x :: suf) :: locs)
+    -> locations_wf g (Loc [] rhs :: Loc pre (NT x :: suf) :: locs).
 Proof.
   intros; constructor; auto.
   apply rhssForNt_in_iff; auto.
 Qed.
 
 Lemma consume_preserves_locations_wf_invar :
-  forall g o pre suf a locs,
-    locations_wf g (Loc o pre (T a :: suf) :: locs)
-    -> locations_wf g (Loc o (pre ++ [T a]) suf :: locs).
+  forall g pre suf a locs,
+    locations_wf g (Loc pre (T a :: suf) :: locs)
+    -> locations_wf g (Loc (pre ++ [T a]) suf :: locs).
 Proof.
-  intros g o pre suf a locs hw.
-  inversion hw as [ | o' pre' suf' hw' | x o' pre' pre'' suf' suf'' locs' hi hw']; subst; clear hw; auto.
+  intros g pre suf a locs hw.
+  inversion hw as [
+                  | pre' suf' hw'
+                  | x pre' pre'' suf' suf'' locs' hi hw']; subst; clear hw; auto.
   rewrite cons_app_singleton in hi.
   rewrite app_assoc in hi; auto.
 Qed.
@@ -1070,13 +1022,13 @@ Proof.
 Qed.
 
 Lemma initSps_preserves_lstack_wf_invar :
-  forall g fr o pre x suf frs sp,
-    fr = Loc o pre (NT x :: suf)
+  forall g fr pre x suf frs sp,
+    fr = Loc pre (NT x :: suf)
     -> lstack_wf g (fr, frs)
     -> In sp (initSps g x (fr, frs))
     -> lstack_wf g sp.(stack).
 Proof.
-  intros g fr o pre x suf frs sp ? hw hi; subst; unfold initSps in hi.
+  intros g fr pre x suf frs sp ? hw hi; subst; unfold initSps in hi.
   apply in_map_iff in hi.
   destruct hi as [rhs [? hi]]; subst; sis.
   apply push_preserves_locations_wf_invar; eauto.
@@ -1117,15 +1069,15 @@ Definition sps_unavailable_nts_invar g sps : Prop :=
   forall sp, In sp sps -> unavailable_nts_invar g sp.
 
 Lemma return_preserves_unavailable_nts_invar :
-  forall g av pr o o' pre pre' suf' x fr cr cr' frs,
-    fr     = Loc o pre []
-    -> cr  = Loc o' pre' (NT x :: suf')
-    -> cr' = Loc o' (pre' ++ [NT x]) suf'
+  forall g av pr pre pre' suf' x fr cr cr' frs,
+    fr     = Loc pre []
+    -> cr  = Loc pre' (NT x :: suf')
+    -> cr' = Loc (pre' ++ [NT x]) suf'
     -> lstack_wf g (fr, cr :: frs)
     -> unavailable_nts_invar g (Sp av pr (fr, cr :: frs))
     -> unavailable_nts_invar g (Sp (NtSet.add x av) pr (cr', frs)). 
 Proof.
-  intros g av pr o o' pre pre' suf' x' fr cr cr' frs hfr hcr hcr' hw hu; subst.
+  intros g av pr pre pre' suf' x' fr cr cr' frs hfr hcr hcr' hw hu; subst.
   intros x hi hn; simpl.
   assert (hn' : ~ NtSet.In x av) by ND.fsetdec.
   apply hu in hn'; clear hu; auto.
@@ -1138,13 +1090,13 @@ Proof.
 Qed.
 
 Lemma push_preserves_unavailable_nts_invar :
-  forall g cr ce av pr o pre suf x rhs frs,
-    cr = Loc o pre (NT x :: suf)
-    -> ce = Loc (Some x) [] rhs
+  forall g cr ce av pr pre suf x rhs frs,
+    cr = Loc pre (NT x :: suf)
+    -> ce = Loc [] rhs
     -> unavailable_nts_invar g (Sp av pr (cr, frs))
     -> unavailable_nts_invar g (Sp (NtSet.remove x av) pr (ce, cr :: frs)).
 Proof.
-  intros g cr ce av pr o pre suf x rhs frs hcr hce hu; subst.
+  intros g cr ce av pr pre suf x rhs frs hcr hce hu; subst.
   intros x' hi hn; simpl; split; auto.
   unfold processed_symbols_all_nullable.
   destruct (NF.eq_dec x' x); subst.
@@ -1153,7 +1105,7 @@ Proof.
     apply hu in hn'; simpl in hn'; clear hu; auto.
     destruct hn' as
         [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
-    exists (Loc o pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
+    exists (Loc pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
 Qed.
 
 Lemma spClosureStep_preserves_unavailable_nts_invar :
@@ -1181,11 +1133,11 @@ Proof.
 Qed.
 
 Lemma initSps_sat_unavailable_nts_invar :
-  forall g x o pre suf frs sp,
-    In sp (initSps g x (Loc o pre (NT x :: suf), frs))
+  forall g x pre suf frs sp,
+    In sp (initSps g x (Loc pre (NT x :: suf), frs))
     -> unavailable_nts_invar g sp.
 Proof.
-  intros g x o pre suf frs sp hi; unfold initSps in hi.
+  intros g x pre suf frs sp hi; unfold initSps in hi.
   apply in_map_iff in hi; destruct hi as [rhs [? hi]]; subst.
   apply unavailable_nts_allNts.
 Qed.
