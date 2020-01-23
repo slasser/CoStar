@@ -173,3 +173,13 @@ Lemma app_group_endpoints_l :
 Proof.
   intros A x y xs ys; simpl; apps.
 Qed.
+
+(* Get the bottom element of a stack, where stack ::= A * list A *)
+Fixpoint bottomElt' {A} (h : A) (t : list A) : A :=
+  match t with
+  | []        => h
+  | h' :: t' => bottomElt' h' t'
+  end.
+
+Definition bottomElt {A} (stk : A * list A) : A :=
+  let (h, t) := stk in bottomElt' h t.

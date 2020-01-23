@@ -8,9 +8,10 @@ Import ListNotations.
 Open Scope list_scope.
 Set Implicit Arguments.
 
+(* to do : get the available set out of this record *)
 Record subparser := Sp { avail      : NtSet.t
                        ; prediction : list symbol
-                       ; stack      : location_stack
+                       ; stack      : suffix_stack
                        }.
 
 (* Error values that the prediction mechanism can return *)
@@ -29,14 +30,14 @@ Definition moveSp (g : grammar) (tok : token) (sp : subparser) : subparser_move_
   match sp with
   | Sp _ pred stk =>
     match stk with
-    | (Loc _ [], [])                => SpMoveReject
-    | (Loc _ [], _ :: _)            => SpMoveError SpInvalidState
-    | (Loc _ (NT _ :: _), _)        => SpMoveError SpInvalidState
-    | (Loc pre (T a :: suf), locs) =>
+    | (SF [], [])            => SpMoveReject
+    | (SF [], _ :: _)        => SpMoveError SpInvalidState
+    | (SF (NT _ :: _), _)    => SpMoveError SpInvalidState
+    | (SF (T a :: suf), frs) =>
       match tok with
       | (a', _) =>
         if t_eq_dec a' a then
-          SpMoveSucc (Sp (allNts g) pred (Loc (pre ++ [T a]) suf, locs))
+          SpMoveSucc (Sp (allNts g) pred (SF suf, frs))
         else
           SpMoveReject
       end
@@ -51,25 +52,25 @@ Proof.
   intros g t sp sp' hm; unfold moveSp in hm.
   dms; tc; subst; inv hm; auto.
 Qed.
-
+(*
 Lemma moveSp_succ_step :
   forall g sp sp' av pred pre a l suf frs,
-    sp = Sp av pred (Loc pre (T a :: suf), frs)
+    sp = Sp av pred (SF (T a :: suf), frs)
     -> sp' = Sp (allNts g) pred (Loc (pre ++ [T a]) suf, frs)
     -> moveSp g (a, l) sp = SpMoveSucc sp'.
 Proof.
   intros; subst; unfold moveSp; dms; tc.
 Qed.
+ *)
 
 Definition move_result := sum prediction_error (list subparser).
 
 (* consider refactoring to short-circuit in case of error *)
-Fixpoint aggrMoveResults (smrs : list subparser_move_result) : 
-  move_result :=
-  match smrs with
-  | []           => inr []
-  | smr :: smrs' =>
-    match (smr, aggrMoveResults smrs') with
+Fixpoint aggrMoveResults (rs : list subparser_move_result) : move_result :=
+  match rs with
+  | []       => inr []
+  | r :: rs' =>
+    match (r, aggrMoveResults rs') with
     | (SpMoveError e, _)       => inl e
     | (_, inl e)               => inl e
     | (SpMoveSucc sp, inr sps) => inr (sp :: sps)
@@ -77,6 +78,7 @@ Fixpoint aggrMoveResults (smrs : list subparser_move_result) :
     end
   end.
 
+(*
 Lemma aggrMoveResults_succ_in_input :
   forall (smrs : list subparser_move_result)
          (sp   : subparser)
@@ -148,10 +150,10 @@ Proof.
       destruct hi as [sp'' [hi heq]].
       eexists; split; [apply in_cons; eauto | auto].
 Qed.
-
+*)
 Definition move (g : grammar) (tok : token) (sps : list subparser) : move_result :=
   aggrMoveResults (map (moveSp g tok) sps).
-
+(*
 Lemma move_unfold :
   forall g t sps,
     move g t sps = aggrMoveResults (map (moveSp g t) sps).
@@ -196,7 +198,7 @@ Proof.
   eapply move_maps_moveSp; eauto.
   eapply moveSp_succ_step; eauto.
 Qed.
-
+*)
 (* "closure" operation *)
 
 Inductive subparser_closure_step_result :=
@@ -207,23 +209,23 @@ Inductive subparser_closure_step_result :=
 Definition spClosureStep (g : grammar) (sp : subparser) : 
   subparser_closure_step_result :=
   match sp with
-  | Sp av pred (loc, locs) =>
-    match loc with
-    | Loc _ [] =>
-      match locs with
-      | []                        => SpClosureStepDone
-      | (Loc _ []) :: _         => SpClosureStepError SpInvalidState
-      | (Loc _ (T _ :: _)) :: _ => SpClosureStepError SpInvalidState
-      | (Loc pre_cr (NT x :: suf_cr)) :: locs_tl =>
-        let stk':= (Loc (pre_cr ++ [NT x]) suf_cr, locs_tl) 
+  | Sp av pred (fr, frs) =>
+    match fr with
+    | SF [] =>
+      match frs with
+      | []                 => SpClosureStepDone
+      | SF [] :: _         => SpClosureStepError SpInvalidState
+      | SF (T _ :: _) :: _ => SpClosureStepError SpInvalidState
+      | SF (NT x :: suf_cr) :: frs_tl =>
+        let stk':= (SF suf_cr, frs_tl) 
         in  SpClosureStepK [Sp (NtSet.add x av) pred stk']
       end
-    | Loc _ (T _ :: _)       => SpClosureStepDone
-    | Loc pre (NT x :: suf) =>
+    | SF (T _ :: _)    => SpClosureStepDone
+    | SF (NT x :: suf) =>
       if NtSet.mem x av then
         let sps' := map (fun rhs => Sp (NtSet.remove x av) 
                                        pred 
-                                       (Loc [] rhs, loc :: locs))
+                                       (SF rhs, fr :: frs))
                         (rhssForNt g x)
         in  SpClosureStepK sps'
       else if NtSet.mem x (allNts g) then
@@ -232,7 +234,7 @@ Definition spClosureStep (g : grammar) (sp : subparser) :
              SpClosureStepK []
     end
   end.
-
+(*
 Lemma spClosureStep_preserves_prediction :
   forall g sp sp' sps',
     spClosureStep g sp = SpClosureStepK sps'
@@ -246,7 +248,7 @@ Proof.
     destruct hi as [rhs [heq hi]]; subst; auto.
   - inv hi.
 Qed.
-
+*)
 Definition closure_result := sum prediction_error (list subparser).
 
 (* consider refactoring to short-circuit in case of error *)
@@ -260,7 +262,7 @@ Fixpoint aggrClosureResults (crs : list closure_result) : closure_result :=
     | (inr sps, inr sps') => inr (sps ++ sps')
     end
   end.
-
+(*
 Lemma aggrClosureResults_succ_in_input:
   forall (crs : list closure_result) 
          (sp  : subparser)
@@ -403,7 +405,7 @@ Proof.
       repeat eexists; eauto.
       apply in_cons; auto.
 Qed.
-
+*)
 Definition meas (g : grammar) (sp : subparser) : nat * nat :=
   match sp with
   | Sp av _ stk =>
@@ -411,7 +413,7 @@ Definition meas (g : grammar) (sp : subparser) : nat * nat :=
     let e := NtSet.cardinal av               
     in  (stackScore stk (1 + m) e, stackHeight stk)
   end.
-
+(*
 Lemma meas_lt_after_return :
   forall g sp sp' av pred pre pre' suf' x frs,
     sp = Sp av pred (Loc pre [], Loc pre' (NT x :: suf') :: frs)
@@ -458,7 +460,10 @@ Proof.
     eapply meas_lt_after_push; eauto.
     apply NtSet.mem_spec; auto.
 Defined.
+ *)
 
+Axiom magic : forall A, A.
+(*
 Lemma acc_after_step :
   forall g sp sp' sps',
     spClosureStep g sp = SpClosureStepK sps'
@@ -469,6 +474,20 @@ Proof.
   intros g so sp' sps' heq hi ha.
   eapply Acc_inv; eauto.
   eapply spClosureStep_meas_lt; eauto.
+Defined.
+ *)
+
+
+Lemma acc_after_step :
+  forall g sp sp' sps',
+    spClosureStep g sp = SpClosureStepK sps'
+    -> In sp' sps'
+    -> Acc lex_nat_pair (meas g sp)
+    -> Acc lex_nat_pair (meas g sp').
+Proof.
+  intros g so sp' sps' heq hi ha.
+  eapply Acc_inv; eauto.
+  apply magic.
 Defined.
 
 Fixpoint spClosure (g  : grammar) 
@@ -483,7 +502,7 @@ Fixpoint spClosure (g  : grammar)
           dmap sps' (fun sp' hin => spClosure g sp' (acc_after_step _ _ _ hs hin a))
       in  aggrClosureResults crs
   end eq_refl.
-
+(*
 Lemma spClosure_unfold :
   forall g sp a,
     spClosure g sp a =
@@ -624,11 +643,11 @@ Proof.
       rewrite hs; auto.
     + eapply spClosureStep_meas_lt; eauto.
 Qed.
-
+*)
 Definition closure (g : grammar) (sps : list subparser) :
   sum prediction_error (list subparser) :=
   aggrClosureResults (map (fun sp => spClosure g sp (lex_nat_pair_wf _)) sps).
-
+(*
 Lemma closure_preserves_prediction :
   forall g sp' sps sps',
     closure g sps = inr sps'
@@ -643,7 +662,7 @@ Proof.
   eapply spClosure_preserves_prediction; eauto.
   apply lex_nat_pair_wf.
 Qed.
-
+*)
 (* LL prediction *)
 
 Inductive prediction_result :=
@@ -654,13 +673,13 @@ Inductive prediction_result :=
 
 Definition finalConfig (sp : subparser) : bool :=
   match sp with
-  | Sp _ _ (Loc _ [], []) => true
-  | _                       => false
+  | Sp _ _ (SF [], []) => true
+  | _                  => false
   end.
 
 Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
   allEqual _ beqGamma sp.(prediction) (map prediction sps).
-
+(*
 Lemma allPredictionsEqual_inv_cons :
   forall sp' sp sps,
     allPredictionsEqual sp' (sp :: sps) = true
@@ -692,7 +711,7 @@ Proof.
   intros sp' sp sps ha hi; inv hi; auto.
   eapply allPredictionsEqual_in_tl; eauto.
 Qed.
-
+*)
 Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
   match filter finalConfig sps with
   | []         => PredReject
@@ -702,7 +721,7 @@ Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
     else
       PredAmbig sp.(prediction)
   end.
-
+(*
 Lemma handleFinalSubparsers_succ_facts :
   forall sps rhs,
     handleFinalSubparsers sps = PredSucc rhs
@@ -736,7 +755,7 @@ Proof.
   eexists; split; eauto.
   eapply filter_cons_in; eauto.
 Qed.
-
+*)
 Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
   match sps with
   | []         => PredReject
@@ -757,7 +776,7 @@ Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : pre
         end
       end
   end.
-
+(*
 Lemma llPredict'_success_result_in_original_subparsers :
   forall g ts gamma sps,
     llPredict' g sps ts = PredSucc gamma
@@ -801,12 +820,12 @@ Proof.
       eapply move_preserves_prediction in hm; eauto.
       destruct hm as [? [? ?]]; eauto.
 Qed.
-
-Definition initSps (g : grammar) (x : nonterminal) (stk : location_stack) : list subparser :=
-  let (loc, locs) := stk
-  in  map (fun rhs => Sp (allNts g) rhs (Loc [] rhs, loc :: locs))
+*)
+Definition initSps (g : grammar) (x : nonterminal) (stk : suffix_stack) : list subparser :=
+  let (fr, frs) := stk
+  in  map (fun rhs => Sp (allNts g) rhs (SF rhs, fr :: frs))
           (rhssForNt g x).
-
+(*
 Lemma initSps_prediction_in_rhssForNt :
   forall g x stk sp,
     In sp (initSps g x stk)
@@ -827,11 +846,11 @@ Proof.
   apply in_map_iff; exists rhs; split; auto.
   apply rhssForNt_in_iff; auto.
 Qed.
-
-Definition startState (g : grammar) (x : nonterminal) (stk : location_stack) :
+*)
+Definition startState (g : grammar) (x : nonterminal) (stk : suffix_stack) :
   sum prediction_error (list subparser) :=
   closure g (initSps g x stk).
-
+(*
 Lemma startState_sp_prediction_in_rhssForNt :
   forall g x stk sp' sps',
     startState g x stk = inr sps'
@@ -845,14 +864,14 @@ Proof.
   rewrite heq.
   eapply initSps_prediction_in_rhssForNt; eauto.
 Qed.
-
-Definition llPredict (g : grammar) (x : nonterminal) (stk : location_stack)
+*)
+Definition llPredict (g : grammar) (x : nonterminal) (stk : suffix_stack)
                      (ts : list token) : prediction_result :=
   match startState g x stk with
   | inl msg => PredError msg
   | inr sps => llPredict' g sps ts
   end.
-
+(*
 Lemma llPredict_succ_in_rhssForNt :
   forall g x stk ts gamma,
     llPredict g x stk ts = PredSucc gamma
@@ -1141,3 +1160,4 @@ Proof.
   apply in_map_iff in hi; destruct hi as [rhs [? hi]]; subst.
   apply unavailable_nts_allNts.
 Qed.
+*)

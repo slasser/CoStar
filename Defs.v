@@ -196,26 +196,28 @@ Inductive tree    := Leaf : terminal -> literal -> tree
 
 Definition forest := list tree.
 
-Definition value_stack := (forest * list forest)%type.
+(* Parser stacks *)
+Inductive prefix_frame :=
+| PF : list symbol -> forest -> prefix_frame.
 
-(* Grammar locations *)
-Record location := Loc { rpre : list symbol
-                       ; rsuf : list symbol
-                       }.
+Definition prefix_stack := (prefix_frame * list prefix_frame)%type.
 
-Definition location_stack := (location * list location)%type.
+Inductive suffix_frame :=
+| SF : list symbol -> suffix_frame.
 
-Fixpoint unprocTailSyms (frs : list location) : list symbol :=
+Definition suffix_stack := (suffix_frame * list suffix_frame)%type. 
+
+Fixpoint unprocTailSyms (frs : list suffix_frame) : list symbol :=
   match frs with 
-  | []                          => []
-  | Loc _ [] :: _               => [] (* impossible for a well-formed stack *)
-  | Loc _ (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
-  | Loc _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
+  | []                        => []
+  | SF [] :: _               => [] (* impossible for a well-formed stack *)
+  | SF (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
+  | SF (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
   end.
 
-Definition unprocStackSyms (stk : location_stack) : list symbol :=
+Definition unprocStackSyms (stk : suffix_stack) : list symbol :=
   match stk with
-  | (Loc pre suf, frs) => suf ++ unprocTailSyms frs
+  | (SF suf, frs) => suf ++ unprocTailSyms frs
   end.
 
 (* Grammatical derivation relation *)

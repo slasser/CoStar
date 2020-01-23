@@ -8,19 +8,11 @@ Require Import GallStar.Utils.
 Import ListNotations.
 Open Scope list_scope.
 
-Fixpoint bottomElt' {A} (h : A) (t : list A) : A :=
-  match t with
-  | []        => h
-  | h' :: t' => bottomElt' h' t'
-  end.
-
-Definition bottomElt {A} (stk : A * list A) : A :=
-  let (h, t) := stk in bottomElt' h t.
-
-Definition bottomFrameSyms (stk : location_stack) : list symbol :=
+(*Definition bottomFrameSyms (stk : location_stack) : list symbol :=
   let fr := bottomElt stk
   in  fr.(rpre) ++ fr.(rsuf).
-  
+ *)
+
 (*Record parser_state    := Pst { avail  : NtSet.t
                               ; stack  : parser_stack     
                               ; tokens : list token
@@ -33,10 +25,11 @@ Inductive parse_error :=
 | LeftRecursion   : nonterminal -> parse_error
 | PredictionError : prediction_error -> parse_error.
 
-Inductive step_result := StepAccept : forest -> step_result
-                       | StepReject : string -> step_result
-                       | StepK      : location_stack -> value_stack -> list token -> NtSet.t -> bool -> step_result
-                       | StepError  : parse_error -> step_result.
+Inductive step_result :=
+  StepAccept : forest -> step_result
+| StepReject : string -> step_result
+| StepK      : prefix_stack -> suffix_stack -> list token -> NtSet.t -> bool -> step_result
+| StepError  : parse_error -> step_result.
 
 Inductive parse_result := Accept : forest -> parse_result
                         | Ambig  : forest -> parse_result
@@ -44,59 +37,59 @@ Inductive parse_result := Accept : forest -> parse_result
                         | Error  : parse_error -> parse_result.
 
 Definition step (g      : grammar)
-                (lstack : location_stack)
-                (vstack : value_stack)
+                (p_stk  : prefix_stack)
+                (s_stk  : suffix_stack)
                 (ts     : list token)
                 (av     : NtSet.t)
                 (u      : bool) : step_result := 
-  match lstack, vstack with
-  | (fr, frs), (v, vs) =>
-    match fr with
+  match p_stk, s_stk with
+  | (PF pre v, p_frs), (SF suf, s_frs) =>
+    match suf with
     (* no more symbols to process in current frame *)
-    | Loc _ [] =>
-      match frs, vs with
-      (* empty symbol and value stacks --> terminate *)
+    | [] =>
+      match p_frs, s_frs with
+      (* empty stacks --> terminate *)
       | [], [] => 
         match ts with
         | []     => StepAccept v
         | _ :: _ => StepReject "stack exhausted, tokens remain"
         end
-      (* nonempty symbol and value stacks --> return to caller frame *)
-      | Loc pre_cr suf_cr :: frs', v_cr :: vs' =>
+      (* nonempty stacks --> return to caller frames *)
+      | PF pre_cr v_cr :: p_frs', SF suf_cr :: s_frs' =>
         match suf_cr with
         | []                => StepError InvalidState
         | T _  :: _         => StepError InvalidState
         | NT x :: suf_cr'   =>
-          let lstack' := (Loc (pre_cr ++ [NT x]) suf_cr', frs') in
-          let vstack' := (v_cr ++ [Node x v], vs')              in
-          StepK lstack' vstack' ts (NtSet.add x av) u
+          let p_stk' := (PF (pre_cr ++ [NT x]) (v_cr ++ [Node x v]), p_frs') in
+          let s_stk' := (SF suf_cr', s_frs')                                 in
+          StepK p_stk' s_stk' ts (NtSet.add x av) u
         end
       | _, _ => StepError InvalidState
       end
     (* terminal case --> consume a token *)
-    | Loc pre (T a :: suf) =>
+    | T a :: suf' =>
       match ts with
       | []             => StepReject "input exhausted"
       | (a', l) :: ts' =>
         if t_eq_dec a' a then
-          let lstack' := (Loc (pre ++ [T a]) suf, frs) in
-          let vstack' := (v ++ [Leaf a l], vs)         in
-          StepK lstack' vstack' ts' (allNts g) u
+          let p_stk' := (PF (pre ++ [T a]) (v ++ [Leaf a l]), p_frs) in
+          let s_stk' := (SF suf', s_frs)                             in
+          StepK p_stk' s_stk' ts' (allNts g) u
         else
           StepReject "token mismatch"
       end
     (* nonterminal case --> push a frame onto the stack *)
-    | Loc _ (NT x :: _) => 
+    | NT x :: _ => 
       if NtSet.mem x av then
-        match llPredict g x (fr, frs) ts with
+        match llPredict g x s_stk ts with
         | PredSucc rhs =>
-          let lstack' := (Loc [] rhs, fr :: frs) in
-          let vstack' := ([], v :: vs)           in
-          StepK lstack' vstack' ts (NtSet.remove x av) u
+          let p_stk' := (PF [] [], PF pre v :: p_frs) in
+          let s_stk' := (SF rhs, SF suf :: s_frs)     in
+          StepK p_stk' s_stk' ts (NtSet.remove x av) u
         | PredAmbig rhs =>
-          let lstack' := (Loc [] rhs, fr :: frs) in
-          let vstack' := ([], v :: vs)           in
-          StepK lstack' vstack' ts (NtSet.remove x av) false
+          let p_stk' := (PF [] [], PF pre v :: p_frs) in
+          let s_stk' := (SF rhs, SF suf :: s_frs)     in
+          StepK p_stk' s_stk' ts (NtSet.remove x av) false
         | PredReject =>
           StepReject "prediction found no viable right-hand sides"
         | PredError e =>
@@ -139,13 +132,13 @@ Proof.
   - apply NtSet.mem_spec; auto.
 Qed.
 *)
-Definition meas (g      : grammar)
-                (lstack : location_stack)
-                (ts     : list token)
-                (av     : NtSet.t) : nat * nat * nat := 
+Definition meas (g   : grammar)
+                (stk : suffix_stack)
+                (ts  : list token)
+                (av  : NtSet.t) : nat * nat * nat := 
   let m := maxRhsLength g    in
   let e := NtSet.cardinal av in
-  (List.length ts, stackScore lstack (1 + m) e, stackHeight lstack).
+  (List.length ts, stackScore stk (1 + m) e, stackHeight stk).
 (*
 (* It might be possible to delete this lemma and replace it
    with the primed version, or at least remove the
@@ -251,29 +244,29 @@ Defined.
 Axiom magic : forall A, A.
 
 Lemma StepK_result_acc :
-  forall g ls ls' vs vs' ts ts' av av' u u' (a : Acc lex_nat_triple (meas g ls ts av)),
-    step g ls vs ts av u = StepK ls' vs' ts' av' u'
-    -> Acc lex_nat_triple (meas g ls' ts' av').
+  forall g ps ps' ss ss' ts ts' av av' u u' (a : Acc lex_nat_triple (meas g ss ts av)),
+    step g ps ss ts av u = StepK ps' ss' ts' av' u'
+    -> Acc lex_nat_triple (meas g ss' ts' av').
 Proof.
   intros; eapply Acc_inv; eauto.
   apply magic.
 Defined.
 
 Fixpoint multistep (g  : grammar)
-                   (ls : location_stack)
-                   (vs : value_stack)
+                   (ps : prefix_stack)
+                   (ss : suffix_stack)
                    (ts : list token)
                    (av : NtSet.t)
                    (u  : bool)
-                   (a  : Acc lex_nat_triple (meas g ls ts av))
+                   (a  : Acc lex_nat_triple (meas g ss ts av))
                    {struct a} :
                    parse_result :=
-  match step g ls vs ts av u as res return step g ls vs ts av u = res -> _ with
+  match step g ps ss ts av u as res return step g ps ss ts av u = res -> _ with
   | StepAccept v             => fun _  => if u then Accept v else Ambig v
   | StepReject s             => fun _  => Reject s
   | StepError e              => fun _  => Error e
-  | StepK ls' vs' ts' av' u' =>
-    fun hs => multistep g ls' vs' ts' av' u'
+  | StepK ps' ss' ts' av' u' =>
+    fun hs => multistep g ps' ss' ts' av' u'
                         (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
   end eq_refl.
 (*
@@ -450,16 +443,16 @@ Qed.
  *)
 
 Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) :
-  location_stack * value_stack * list token * NtSet.t * bool :=
-  ( (Loc [] gamma, []),
-    ([]          , []),
+  prefix_stack * suffix_stack * list token * NtSet.t * bool :=
+  ( (PF [] [], []),
+    (SF gamma, []),
     ts                ,
     allNts g          ,
     true ). 
 
 Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
   match mkInitState g gamma ts with
-  | (ls, vs, ts, av, u) => multistep g ls vs ts av u (lex_nat_triple_wf _)
+  | (ps, ss, ts, av, u) => multistep g ps ss ts av u (lex_nat_triple_wf _)
   end.
 (*
 (* A WELL-FORMEDNESS INVARIANT FOR THE PARSER STACK *)
