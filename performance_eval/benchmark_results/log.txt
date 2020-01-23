@@ -8,3 +8,15 @@
 - result of profiling code with perf tool
 - shows that mapping over the entire parser stack to extract the location
   from each frame takes up most of the computation time
+
+
+
+01_22_20_benchmark_results_after_stack_sep.eps
+==============================================
+- average of 3 parser runs on each Nobel file
+- runtime on largest file dropped from 20s to 4s
+
+01_22_20_perf_report_after_stack_sep.png
+========================================
+- most expensive operations are spClosureStep, add (maybe from adding to av
+set), and app

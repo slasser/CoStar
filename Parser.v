@@ -52,66 +52,64 @@ Definition step (g      : grammar)
   match lstack, vstack with
   | (fr, frs), (v, vs) =>
     match fr with
-    | Loc pre suf =>
-      match suf with
-      (* no more symbols to process in current frame *)
-      | [] =>
-        match frs, vs with
-        (* empty symbol and value stacks --> terminate *)
-        | [], [] => 
-          match ts with
-          | []     => StepAccept v
-          | _ :: _ => StepReject "stack exhausted, tokens remain"
-          end
-        (* nonempty symbol and value stacks --> return to caller frame *)
-        | Loc pre_cr suf_cr :: frs', v_cr :: vs' =>
-          match suf_cr with
-          | []                => StepError InvalidState
-          | T _  :: _         => StepError InvalidState
-          | NT x :: suf_cr'   =>
-            let lstack' := (Loc (pre_cr ++ [NT x]) suf_cr, frs') in
-            let vstack' := (v_cr ++ [Node x v], vs')             in
-            StepK lstack' vstack' ts (NtSet.add x av) u
-          end
-        | _, _ => StepError InvalidState
-        end
-      (* terminal case --> consume a token *)
-      | T a :: suf' =>
+    (* no more symbols to process in current frame *)
+    | Loc _ [] =>
+      match frs, vs with
+      (* empty symbol and value stacks --> terminate *)
+      | [], [] => 
         match ts with
-        | []             => StepReject "input exhausted"
-        | (a', l) :: ts' =>
-          if t_eq_dec a' a then
-            let lstack' := (Loc (pre ++ [T a]) suf', frs) in
-            let vstack' := (v ++ [Leaf a l], vs)          in
-            StepK lstack' vstack' ts' (allNts g) u
-          else
-            StepReject "token mismatch"
+        | []     => StepAccept v
+        | _ :: _ => StepReject "stack exhausted, tokens remain"
         end
-      (* nonterminal case --> push a frame onto the stack *)
-      | NT x :: suf' => 
-        if NtSet.mem x av then
-          match llPredict g x (fr, frs) ts with
-          | PredSucc rhs =>
-            let lstack' := (Loc [] rhs, fr :: frs) in
-            let vstack' := ([], v :: vs)           in
-            StepK lstack' vstack' ts (NtSet.remove x av) u
-          | PredAmbig rhs =>
-            let lstack' := (Loc [] rhs, fr :: frs) in
-            let vstack' := ([], v :: vs)           in
-            StepK lstack' vstack' ts (NtSet.remove x av) false
-          | PredReject =>
-            StepReject "prediction found no viable right-hand sides"
-          | PredError e =>
-            StepError (PredictionError e)
-          end
-        else if NtSet.mem x (allNts g) then
-               StepError (LeftRecursion x)
-             else
-               StepReject "nonterminal not in grammar"
+      (* nonempty symbol and value stacks --> return to caller frame *)
+      | Loc pre_cr suf_cr :: frs', v_cr :: vs' =>
+        match suf_cr with
+        | []                => StepError InvalidState
+        | T _  :: _         => StepError InvalidState
+        | NT x :: suf_cr'   =>
+          let lstack' := (Loc (pre_cr ++ [NT x]) suf_cr', frs') in
+          let vstack' := (v_cr ++ [Node x v], vs')              in
+          StepK lstack' vstack' ts (NtSet.add x av) u
+        end
+      | _, _ => StepError InvalidState
       end
+    (* terminal case --> consume a token *)
+    | Loc pre (T a :: suf) =>
+      match ts with
+      | []             => StepReject "input exhausted"
+      | (a', l) :: ts' =>
+        if t_eq_dec a' a then
+          let lstack' := (Loc (pre ++ [T a]) suf, frs) in
+          let vstack' := (v ++ [Leaf a l], vs)         in
+          StepK lstack' vstack' ts' (allNts g) u
+        else
+          StepReject "token mismatch"
+      end
+    (* nonterminal case --> push a frame onto the stack *)
+    | Loc _ (NT x :: _) => 
+      if NtSet.mem x av then
+        match llPredict g x (fr, frs) ts with
+        | PredSucc rhs =>
+          let lstack' := (Loc [] rhs, fr :: frs) in
+          let vstack' := ([], v :: vs)           in
+          StepK lstack' vstack' ts (NtSet.remove x av) u
+        | PredAmbig rhs =>
+          let lstack' := (Loc [] rhs, fr :: frs) in
+          let vstack' := ([], v :: vs)           in
+          StepK lstack' vstack' ts (NtSet.remove x av) false
+        | PredReject =>
+          StepReject "prediction found no viable right-hand sides"
+        | PredError e =>
+          StepError (PredictionError e)
+        end
+      else if NtSet.mem x (allNts g) then
+             StepError (LeftRecursion x)
+           else
+             StepReject "nonterminal not in grammar"
     end
   end.
 
+(*
 Lemma step_StepAccept_facts :
   forall g av stk ts u v,
     step g (Pst av stk ts u) = StepAccept v
@@ -140,15 +138,15 @@ Proof.
     apply NtSet.mem_spec in hi; tc.
   - apply NtSet.mem_spec; auto.
 Qed.
-
-Definition meas (g : grammar) (st : parser_state) : nat * nat * nat :=
-  match st with
-  | Pst av stk ts _ =>
-    let m := maxRhsLength g    in
-    let e := NtSet.cardinal av in
-    (List.length ts, stackScore (lstackOf stk) (1 + m) e, stackHeight stk)
-  end.
-
+*)
+Definition meas (g      : grammar)
+                (lstack : location_stack)
+                (ts     : list token)
+                (av     : NtSet.t) : nat * nat * nat := 
+  let m := maxRhsLength g    in
+  let e := NtSet.cardinal av in
+  (List.length ts, stackScore lstack (1 + m) e, stackHeight lstack).
+(*
 (* It might be possible to delete this lemma and replace it
    with the primed version, or at least remove the
    specialization after pose proof by using stackScore_le_after_return' *)
@@ -248,27 +246,37 @@ Proof.
       simpl; auto.
     + destruct (NtSet.mem y (allNts g)); tc.
 Defined.
+ *)
 
-Lemma StepK_st_acc :
-  forall g st st' (a : Acc lex_nat_triple (meas g st)),
-    step g st = StepK st' -> Acc lex_nat_triple (meas g st').
+Axiom magic : forall A, A.
+
+Lemma StepK_result_acc :
+  forall g ls ls' vs vs' ts ts' av av' u u' (a : Acc lex_nat_triple (meas g ls ts av)),
+    step g ls vs ts av u = StepK ls' vs' ts' av' u'
+    -> Acc lex_nat_triple (meas g ls' ts' av').
 Proof.
-  intros g st st' a Hs.
-  eapply Acc_inv; eauto.
-  apply step_meas_lt; auto.
+  intros; eapply Acc_inv; eauto.
+  apply magic.
 Defined.
 
-Fixpoint multistep (g  : grammar) 
-                   (st : parser_state)
-                   (a  : Acc lex_nat_triple (meas g st)) :
+Fixpoint multistep (g  : grammar)
+                   (ls : location_stack)
+                   (vs : value_stack)
+                   (ts : list token)
+                   (av : NtSet.t)
+                   (u  : bool)
+                   (a  : Acc lex_nat_triple (meas g ls ts av))
+                   {struct a} :
                    parse_result :=
-  match step g st as res return step g st = res -> _ with
-  | StepAccept sv    => fun _  => if st.(unique) then Accept sv else Ambig sv
-  | StepReject s     => fun _  => Reject s
-  | StepError e      => fun _  => Error e
-  | StepK st'        => fun hs => multistep g st' (StepK_st_acc _ _ _ a hs)
+  match step g ls vs ts av u as res return step g ls vs ts av u = res -> _ with
+  | StepAccept v             => fun _  => if u then Accept v else Ambig v
+  | StepReject s             => fun _  => Reject s
+  | StepError e              => fun _  => Error e
+  | StepK ls' vs' ts' av' u' =>
+    fun hs => multistep g ls' vs' ts' av' u'
+                        (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
   end eq_refl.
-
+(*
 Lemma multistep_unfold :
   forall g st a,
     multistep g st a = 
@@ -439,13 +447,21 @@ Proof.
   intros g st a e hm; subst.
   destruct (multistep_cases g st a (Error (PredictionError e))); auto.
 Qed.
+ *)
 
-Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) : parser_state :=
-  Pst (allNts g) (Fr (Loc None [] gamma) [], []) ts true.
+Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) :
+  location_stack * value_stack * list token * NtSet.t * bool :=
+  ( (Loc [] gamma, []),
+    ([]          , []),
+    ts                ,
+    allNts g          ,
+    true ). 
 
 Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-  multistep g (mkInitState g gamma ts) (lex_nat_triple_wf _).
-
+  match mkInitState g gamma ts with
+  | (ls, vs, ts, av, u) => multistep g ls vs ts av u (lex_nat_triple_wf _)
+  end.
+(*
 (* A WELL-FORMEDNESS INVARIANT FOR THE PARSER STACK *)
 
 Definition frames_wf (g : grammar) (frs : list frame) : Prop :=
@@ -782,3 +798,4 @@ Proof.
   unfold step in hs.
   dms; inv hs; tc; unfold bottomFrameSyms; destr_tl; sis; auto; apps.
 Qed.
+*)

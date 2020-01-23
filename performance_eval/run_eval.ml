@@ -199,9 +199,11 @@ let main (data_dir : string) (trials_per_file : int) (out_f : string) : unit =
     map (fun fname ->
                let () = print_string ("file: " ^ fname ^ "\n") in
                let lt_pt_pairs = map (fun i ->
+                                        let (lt, pt) = run_gparser_trial fname in
                                         let () = print_string ("trial " ^ string_of_int i ^ "\n") in
-                                        run_gparser_trial fname)
-                                   (iota trials_per_file) in
+                                        let () = print_string (string_of_float pt ^ "s \n") in
+                                        (lt, pt))
+                                     (iota trials_per_file) in
                let () = print_newline () in
                let (lts, pts)  = List.split lt_pt_pairs in
                (avg_floats lts, avg_floats pts)) fnames in

@@ -1,9 +1,9 @@
 Require Import List String.
 Require Import GallStar.Defs.
 Require Import GallStar.Parser.
-Require Import GallStar.Parser_sound.
+(*Require Import GallStar.Parser_sound.
 Require Import GallStar.Parser_error_free.
-Require Import GallStar.Parser_complete.
+Require Import GallStar.Parser_complete.*)
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
         Import ListNotations.
@@ -26,7 +26,7 @@ Definition parseSymbol (g : grammar)
   end.
 
 (* Soundness theorems for unambiguous and ambiguous derivations *)
-
+(*
 Theorem parseSymbol_sound_unambig :
   forall (g : grammar)
          (s : symbol)
@@ -157,4 +157,4 @@ Proof.
   unfold parseSymbol.
   rewrite hp'; eauto.
 Qed.
-  
+ *)
