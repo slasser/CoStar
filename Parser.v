@@ -60,8 +60,8 @@ Definition step (g      : grammar)
         | []                => StepError InvalidState
         | T _  :: _         => StepError InvalidState
         | NT x :: suf_cr'   =>
-          let p_stk' := (PF (pre_cr ++ [NT x]) (v_cr ++ [Node x v]), p_frs') in
-          let s_stk' := (SF suf_cr', s_frs')                                 in
+          let p_stk' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
+          let s_stk' := (SF suf_cr', s_frs')                                   in
           StepK p_stk' s_stk' ts (NtSet.add x av) u
         end
       | _, _ => StepError InvalidState
@@ -72,8 +72,8 @@ Definition step (g      : grammar)
       | []             => StepReject "input exhausted"
       | (a', l) :: ts' =>
         if t_eq_dec a' a then
-          let p_stk' := (PF (pre ++ [T a]) (v ++ [Leaf a l]), p_frs) in
-          let s_stk' := (SF suf', s_frs)                             in
+          let p_stk' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
+          let s_stk' := (SF suf', s_frs)                         in
           StepK p_stk' s_stk' ts' (allNts g) u
         else
           StepReject "token mismatch"

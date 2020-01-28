@@ -52,16 +52,15 @@ Proof.
   intros g t sp sp' hm; unfold moveSp in hm.
   dms; tc; subst; inv hm; auto.
 Qed.
-(*
+
 Lemma moveSp_succ_step :
-  forall g sp sp' av pred pre a l suf frs,
+  forall g sp sp' av pred a l suf frs,
     sp = Sp av pred (SF (T a :: suf), frs)
-    -> sp' = Sp (allNts g) pred (Loc (pre ++ [T a]) suf, frs)
+    -> sp' = Sp (allNts g) pred (SF suf, frs)
     -> moveSp g (a, l) sp = SpMoveSucc sp'.
 Proof.
   intros; subst; unfold moveSp; dms; tc.
 Qed.
- *)
 
 Definition move_result := sum prediction_error (list subparser).
 
@@ -78,20 +77,19 @@ Fixpoint aggrMoveResults (rs : list subparser_move_result) : move_result :=
     end
   end.
 
-(*
 Lemma aggrMoveResults_succ_in_input :
-  forall (smrs : list subparser_move_result)
-         (sp   : subparser)
-         (sps  : list subparser),
-    aggrMoveResults smrs = inr sps
+  forall (rs  : list subparser_move_result)
+         (sp  : subparser)
+         (sps : list subparser),
+    aggrMoveResults rs = inr sps
     -> In sp sps
-    -> In (SpMoveSucc sp) smrs.
+    -> In (SpMoveSucc sp) rs.
 Proof.
-  intros smrs sp.
-  induction smrs as [| smr smrs' IH]; intros sps ha hi; sis.
+  intros rs sp.
+  induction rs as [| r rs' IH]; intros sps ha hi; sis.
   - inv ha; inv hi.
-  - destruct smr as [sp' | | e];
-    destruct (aggrMoveResults smrs') as [e' | sps']; tc; inv ha.
+  - destruct r as [sp' | | e];
+    destruct (aggrMoveResults rs') as [e' | sps']; tc; inv ha.
     + inv hi; firstorder.
     + firstorder.
 Qed.
@@ -150,7 +148,7 @@ Proof.
       destruct hi as [sp'' [hi heq]].
       eexists; split; [apply in_cons; eauto | auto].
 Qed.
-*)
+
 Definition move (g : grammar) (tok : token) (sps : list subparser) : move_result :=
   aggrMoveResults (map (moveSp g tok) sps).
 (*

@@ -13,6 +13,7 @@
 
 01_22_20_benchmark_results_after_stack_sep.eps
 ==============================================
+- two stacks: grammar locations and semantic values
 - average of 3 parser runs on each Nobel file
 - runtime on largest file dropped from 20s to 4s
 
@@ -20,3 +21,19 @@
 ========================================
 - most expensive operations are spClosureStep, add (maybe from adding to av
 set), and app
+
+
+
+01_27_20_benchmark_results_prefix_and_suffix_stacks.eps
+=======================================================
+- two stacks: gamma prefixes / semantic values, unprocessed suffixes
+- time drops to 2.5 seconds on largest file
+
+
+
+01_28_20_remove_parser_appends.eps
+==================================
+- consing instead of semantic values maybe gives a (very slight) improvement
+
+
+
