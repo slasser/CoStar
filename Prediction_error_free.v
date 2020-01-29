@@ -10,19 +10,7 @@ Import ListNotations.
    FOR THE TWO TYPES OF PREDICTION ERRORS *)
 
 (* SP INVALID STATE CASE *)
-(*
-Definition sp_ready_for_move (sp : subparser) : Prop :=
-  match sp with
-  | Sp _ _ (loc, locs) =>
-    (loc = SF [] /\ locs = [])
-    \/ exists a suf, loc = SF (T a :: suf)
-  end.
 
-Definition all_sps_ready_for_move (sps : list subparser) : Prop :=
-  forall sp, In sp sps -> sp_ready_for_move sp.
- *)
-
-(* This definition can probably be merged with sp_ready_for_move *)
 Inductive stable_config : suffix_stack -> Prop :=
 | SC_empty :
     stable_config (SF [], [])
@@ -320,63 +308,6 @@ Proof.
   - apply NtSet.mem_spec; auto.
 Qed.
 
-(* to do : clean up the next few lemmas *)
-
-Lemma nullable_path_two_head_frames :
-  forall g x y pre' suf',
-    In (x, pre' ++ NT y :: suf') g
-    -> nullable_gamma g pre'
-    -> nullable_path g (NT x) (NT y).
-Proof.
-  eauto.
-Qed.
-(*
-Lemma nullable_path_two_head_frames :
-  forall g fr fr' frs y suf,
-    suffix_frames_wf g (fr :: fr' :: frs)
-    -> nullable_gamma g fr.(rpre)
-    -> fr.(rsuf) = NT y :: suf
-    -> exists x suf',
-        fr'.(rsuf) = NT x :: suf'
-        /\ nullable_path g (NT x) (NT y).
-Proof.
-  intros g fr fr' frs y suf hw hn heq.
-  inv hw; sis; subst; eauto.
-Qed.
- *)
-(*
-Lemma stack_configuration_repr_nullable_path :
-  forall g frs fr fr_cr x y suf suf',
-    suffix_frames_nullable_path g (fr :: frs ++ [fr_cr])
-    -> fr = SF (NT y :: suf)
-    -> fr_cr = SF (NT x :: suf')
-    -> nullable_path g (NT x) (NT y).
-Proof.
-  intros g frs.
-  induction frs as [| fr' frs IH]; intros fr fr_cr x y suf suf' hn heq heq'; subst.
-  - inv hn; sis.
-    eapply DirectPath; eauto.
-  - inv hn; eapply nullable_path_trans; eauto.
-Qed.
-*)
-(*Lemma invars_imply_head_nt_available :
-  forall g av pred fr frs suf x,
-    fr = SF (NT x :: suf)
-    -> no_left_recursion g
-(*    -> suffix_frames_wf g (fr :: frs) *)
-    -> unavailable_nts_invar g (Sp av pred (fr, frs))
-    -> NtSet.In x (allNts g)
-    -> NtSet.In x av.
-Proof.
-  intros g av pred fr frs suf x ? hn hu hi; subst.
-  destruct (In_dec x av) as [hi' | hn']; auto.
-  exfalso.
-  apply hu in hn'; auto.
-  destruct hn' as [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]; subst.
-  eapply stack_configuration_repr_nullable_path in hp; eauto.
-  eapply hn; eauto.
-Qed.
- *)
 Lemma spClosureStep_never_finds_left_recursion :
   forall g sp x,
     no_left_recursion g
