@@ -895,43 +895,50 @@ Proof.
   apply rhssForNt_in_iff.
   eapply llPredict_ambig_in_rhssForNt; eauto.
 Qed.
-(*
-(* A WELL-FORMEDNESS PREDICATE OVER A LOCATION STACK *)
+
+(* A WELL-FORMEDNESS PREDICATE OVER A SUFFIX STACK *)
 
 (* The stack predicate is defined in terms of the following
    predicate over a list of locations *)
-Inductive locations_wf (g : grammar) : list location -> Prop :=
+Inductive suffix_frames_wf (g : grammar) : list suffix_frame -> Prop :=
 | WF_nil :
-    locations_wf g []
+    suffix_frames_wf g []
 | WF_bottom :
-    forall pre suf,
-      locations_wf g [Loc pre suf]
+    forall suf,
+     suffix_frames_wf g [SF suf]
 | WF_upper :
-    forall x pre pre' suf suf' locs,
+    forall x pre' suf suf' frs,
       In (x, pre' ++ suf') g
-      -> locations_wf g (Loc pre (NT x :: suf) :: locs)
-      -> locations_wf g (Loc pre' suf' :: Loc pre (NT x :: suf) :: locs).
+      -> suffix_frames_wf g (SF (NT x :: suf) :: frs)
+      -> suffix_frames_wf g (SF suf' :: SF (NT x :: suf) :: frs).
 
-Hint Constructors locations_wf.
+Hint Constructors suffix_frames_wf.
+
+(* invert a suffix_frames_wf judgment, naming the hypotheses hi and hw' *)
+Ltac inv_suffix_frames_wf hw hi hw' :=
+  inversion hw as [ | ? | ? ? ? ? ? hi hw']; subst; clear hw.
+
+Ltac wf_upper_nil := eapply WF_upper with (pre' := []); sis; eauto. 
 
 (* The stack well-formedness predicate *)
-Definition lstack_wf (g : grammar) (stk : location_stack) : Prop :=
+Definition suffix_stack_wf (g : grammar) (stk : suffix_stack) : Prop :=
   match stk with
-  | (loc, locs) => locations_wf g (loc :: locs)
+  | (fr, frs) =>
+    suffix_frames_wf g (fr :: frs)
   end.
 
 (* Lift the predicate to a list of subparsers *)
-Definition all_sp_stacks_wf (g : grammar) (sps : list subparser) : Prop :=
-  forall sp, In sp sps -> lstack_wf g sp.(stack).
+Definition all_suffix_stacks_wf (g : grammar) (sps: list subparser) : Prop :=
+  forall sp, In sp sps -> suffix_stack_wf g sp.(stack).
 
 (* Lemmas about the well-formedness predicate *)
 
-Lemma locations_wf_app :
+Lemma suffix_frames_wf_app' :
   forall g l,
-    locations_wf g l
+    suffix_frames_wf g l
     -> forall p s,
       l = p ++ s
-      -> locations_wf g p /\ locations_wf g s.
+      -> suffix_frames_wf g p /\ suffix_frames_wf g s.
 Proof.
   intros g l hw.
   induction hw; intros p s heq.
@@ -941,105 +948,268 @@ Proof.
     apply cons_inv_eq in heq.
     destruct heq as [hh ht].
     apply app_eq_nil in ht; destruct ht; subst; auto.
-  - destruct p as [| fr  p]; sis; subst; auto.
+  - destruct p as [| fr  p]; sis; subst; eauto.
     destruct p as [| fr' p]; sis; subst; inv heq; auto.
-    specialize (IHhw (Loc pre (NT x :: suf):: p) s).
-    destruct IHhw as [hs hp]; auto.
+    specialize (IHhw (SF (NT x :: suf):: p) s).
+    destruct IHhw as [hs hp]; eauto.
 Qed.
 
-Lemma locations_wf_app_l :
+Lemma suffix_frames_wf_app :
   forall g p s,
-    locations_wf g (p ++ s)
-    -> locations_wf g p.
+    suffix_frames_wf g (p ++ s)
+    -> suffix_frames_wf g p /\ suffix_frames_wf g s.
 Proof.
-  intros g p s hw.
-  eapply locations_wf_app in hw; eauto.
-  firstorder.
+  intros; eapply suffix_frames_wf_app'; eauto.
 Qed.
 
-Lemma locations_wf_tl :
+Lemma suffix_frames_wf_app_l :
+  forall g p s,
+    suffix_frames_wf g (p ++ s)
+    -> suffix_frames_wf g p.
+Proof.
+  intros g p s hw; eapply suffix_frames_wf_app in hw; firstorder.
+Qed.
+
+Lemma suffix_frames_wf_tl :
   forall g h t,
-    locations_wf g (h :: t)
-    -> locations_wf g t.
+    suffix_frames_wf g (h :: t)
+    -> suffix_frames_wf g t.
 Proof.
   intros g h t hw.
   rewrite cons_app_singleton in hw.
-  eapply locations_wf_app in hw; eauto.
-  firstorder.
+  eapply suffix_frames_wf_app in hw; firstorder.
 Qed.
 
-Lemma return_preserves_locations_wf_invar :
-  forall g pre pre_cr suf_cr x locs,
-    locations_wf g (Loc pre [] :: Loc pre_cr (NT x :: suf_cr) :: locs)
-    -> locations_wf g (Loc (pre_cr ++ [NT x]) suf_cr :: locs).
+Lemma return_preserves_suffix_frames_wf_invar :
+  forall g suf_cr x frs,
+    suffix_frames_wf g (SF [] :: SF (NT x :: suf_cr) :: frs)
+    -> suffix_frames_wf g (SF suf_cr :: frs).
 Proof.
-  intros g pre pre_cr suf_cr x locs hw.
-  inversion hw as [ | pre' suf' hw' | x' pre' pre'' suf suf' locs' hi hw']; subst; clear hw.
-  inv hw'; constructor; auto.
-  rewrite <- app_assoc; auto.
+  intros g suf_cr x locs hw.
+  inv_suffix_frames_wf hw hi hw'.
+  inv_suffix_frames_wf hw' hi' hw''; auto.
+  rewrite app_cons_group_l in hi'; eauto.
 Qed.
 
-Lemma push_preserves_locations_wf_invar :
-  forall g pre suf x rhs locs,
+Lemma push_preserves_suffix_frames_wf_invar :
+  forall g suf x rhs frs,
     In rhs (rhssForNt g x)
-    -> locations_wf g (Loc pre (NT x :: suf) :: locs)
-    -> locations_wf g (Loc [] rhs :: Loc pre (NT x :: suf) :: locs).
+    -> suffix_frames_wf g (SF (NT x :: suf) :: frs)
+    -> suffix_frames_wf g (SF rhs :: SF (NT x :: suf) :: frs).
 Proof.
-  intros; constructor; auto.
+  intros; wf_upper_nil. 
   apply rhssForNt_in_iff; auto.
 Qed.
 
-Lemma consume_preserves_locations_wf_invar :
-  forall g pre suf a locs,
-    locations_wf g (Loc pre (T a :: suf) :: locs)
-    -> locations_wf g (Loc (pre ++ [T a]) suf :: locs).
+Lemma consume_preserves_suffix_frames_wf_invar :
+  forall g suf a frs,
+    suffix_frames_wf g (SF (T a :: suf) :: frs)
+    -> suffix_frames_wf g (SF suf :: frs).
 Proof.
-  intros g pre suf a locs hw.
-  inversion hw as [
-                  | pre' suf' hw'
-                  | x pre' pre'' suf' suf'' locs' hi hw']; subst; clear hw; auto.
-  rewrite cons_app_singleton in hi.
-  rewrite app_assoc in hi; auto.
+  intros g suf a frs hw.
+  inv_suffix_frames_wf hw hi hw'; auto.
+  rewrite app_cons_group_l in hi; eauto.
 Qed.
 
-Lemma spClosureStep_preserves_lstack_wf_invar :
+Lemma spClosureStep_preserves_suffix_stack_wf_invar :
   forall g sp sp' sps',
-    lstack_wf g sp.(stack)
+    suffix_stack_wf g sp.(stack)
     -> spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
-    -> lstack_wf g sp'.(stack).
+    -> suffix_stack_wf g sp'.(stack).
 Proof.
   intros g sp sp' sps' hw hs hi.
   unfold spClosureStep in hs; dms; tc; sis; inv hs.
   - apply in_singleton_eq in hi; subst; sis.
-    eapply return_preserves_locations_wf_invar; eauto.
+    eapply return_preserves_suffix_frames_wf_invar; eauto.
   - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
-    apply push_preserves_locations_wf_invar; auto.
+    apply push_preserves_suffix_frames_wf_invar; auto.
   - inv hi.
 Qed.
 
-Lemma initSps_preserves_lstack_wf_invar :
-  forall g fr pre x suf frs sp,
-    fr = Loc pre (NT x :: suf)
-    -> lstack_wf g (fr, frs)
+Lemma initSps_preserves_suffix_stack_wf_invar :
+  forall g fr x suf frs sp,
+    fr = SF (NT x :: suf)
+    -> suffix_stack_wf g (fr, frs)
     -> In sp (initSps g x (fr, frs))
-    -> lstack_wf g sp.(stack).
+    -> suffix_stack_wf g sp.(stack).
 Proof.
-  intros g fr pre x suf frs sp ? hw hi; subst; unfold initSps in hi.
+  intros g fr x suf frs sp ? hw hi; subst; unfold initSps in hi.
   apply in_map_iff in hi.
   destruct hi as [rhs [? hi]]; subst; sis.
-  apply push_preserves_locations_wf_invar; eauto.
+  apply push_preserves_suffix_frames_wf_invar; eauto.
 Qed.
 
 (* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
    TO THE SHAPE OF THE STACK *)
 
 (* Auxiliary definition *)
+Inductive frames_repr_nullable_path (g : grammar) : list suffix_frame -> Prop :=
+| FR_direct :
+    forall x pre' suf suf',
+      In (x, pre' ++ suf') g
+      -> nullable_gamma g pre'
+      -> frames_repr_nullable_path g [SF suf' ; SF (NT x :: suf)]
+| FR_indirect :
+    forall x pre' suf suf' frs,
+      In (x, pre' ++ suf') g
+      -> nullable_gamma g pre'
+      -> frames_repr_nullable_path g (SF (NT x :: suf) :: frs)
+      -> frames_repr_nullable_path g (SF suf' :: SF (NT x :: suf) :: frs).
+
+Hint Constructors frames_repr_nullable_path.
+
+Ltac inv_frnp hf hi hn hf' :=
+  inversion hf as [? ? ? ? hi hn | ? ? ? ? ? hi hn hf']; subst; clear hf.
+
+Lemma frames_repr_np_inv_two_head_frames :
+  forall g fr fr' fr'' frs,
+    frames_repr_nullable_path g (fr'' :: fr' :: frs ++ [fr])
+    -> frames_repr_nullable_path g (fr' :: frs ++ [fr]).
+Proof.
+  intros g fr fr'' fr''' frs hf.
+  destruct frs as [| fr' frs]; sis; inv hf; auto.
+Qed.
+
+Lemma frames_repr_np_second_frame_nt_head :
+  forall g fr fr' frs,
+    frames_repr_nullable_path g (fr' :: fr :: frs)
+    -> exists x suf,
+      fr = SF (NT x :: suf).
+Proof.
+  intros g fr fr' frs hf; inv hf; eauto.
+Qed.
+
+Lemma frames_repr_np_shift_head_frame :
+  forall g frs pre suf,
+    nullable_gamma g pre
+    -> frames_repr_nullable_path g (SF (pre ++ suf) :: frs)
+    -> frames_repr_nullable_path g (SF suf :: frs).
+Proof.
+  intros g frs pre suf hn hf; destruct frs as [| fr frs]; inv_frnp hf hi hn' hf'.
+  - rewrite app_assoc in hi; econstructor; eauto.
+    apply nullable_app; auto.
+  - rewrite app_assoc in hi; econstructor; eauto.
+    apply nullable_app; auto.
+Qed.
+  
+Lemma frames_repr_grammar_nullable_path :
+  forall g frs fr fr_cr x y suf suf',
+    fr       = SF (NT y :: suf')
+    -> fr_cr = SF (NT x :: suf)
+    -> frames_repr_nullable_path g (fr :: frs ++ [fr_cr])
+    -> nullable_path g (NT x) (NT y).
+Proof.
+  intros g frs.
+  induction frs as [| fr' frs IH]; intros fr fr_cr x z suf suf'' ? ? hf; subst; sis.
+  - inv_frnp hf hi hn hf'.
+    + eapply DirectPath; eauto.
+    + inv hf'.
+  - pose proof hf as hf'; apply frames_repr_np_second_frame_nt_head in hf'.
+    destruct hf' as (y & suf' & ?); subst.
+    apply nullable_path_trans with (y := NT y).
+    + apply frames_repr_np_inv_two_head_frames in hf; eauto.
+    + inv_frnp hf hi hn hf'; eauto.
+Qed.
+
+Lemma frnp_caller_nt_nullable :
+  forall g x suf suf' frs,
+    frames_repr_nullable_path g (SF suf' :: SF (NT x :: suf) :: frs)
+    -> nullable_gamma g suf'
+    -> nullable_sym g (NT x).
+Proof.
+  intros g x suf suf' frs hf hng.
+  inv_frnp hf hi hn hf'.
+  - econstructor; eauto.
+    apply nullable_app; auto.
+  - econstructor; eauto.
+    apply nullable_app; auto.
+Qed.
+(*
+Lemma frames_repr_np_shift_head_frame :
+  forall g fr frs pre suf,
+    frames_repr_nullable_path g (SF (pre ++ suf) :: frs ++ [fr])
+    -> frames_repr_nullable_path g (SF suf :: frs ++ [fr]).
+Proof.
+  intros g fr frs; destruct frs as [| fr' frs]; intros pre suf hf; sis.
+  - inv hf.
+    + rewrite app_assoc in H0; eauto. 
+    + inv H3.
+  - inv hf.
+    + apply app_cons_not_nil in H2; inv H2.
+    + rewrite app_assoc in H1; info_eauto.
+Qed.
+
+
+Lemma frames_repr_np_shift_head_frame :
+  forall g fr frs pre suf,
+    frames_repr_nullable_path g (SF (pre ++ suf) :: frs ++ [fr])
+    -> frames_repr_nullable_path g (SF suf :: frs ++ [fr]).
+Proof.
+  intros g fr frs; induction frs as [| fr' frs IH]; intros pre suf hf; sis.
+  - inv hf.
+    + rewrite app_assoc in H0; eauto. 
+    + inv H3.
+  - inv hf.
+    + apply app_cons_not_nil in H2; inv H2.
+    + rewrite app_assoc in H1; info_eauto.
+      econstructor; eauto.
+ *)
+
+(*Lemma suffix_frames_np_app' :
+  forall g l,
+    suffix_frames_nullable_path g l
+    -> forall p s,
+      l = p ++ s
+      -> suffix_frames_nullable_path g p /\ suffix_frames_nullable_path g s.
+Proof.
+  intros g l hw.
+  induction hw; intros p s heq.
+  - symmetry in heq; apply app_eq_nil in heq.
+    destruct heq; subst; auto.
+  - destruct p as [| fr p]; sis; subst; auto.
+    apply cons_inv_eq in heq.
+    destruct heq as [hh ht].
+    apply app_eq_nil in ht; destruct ht; subst; auto.
+  - destruct p as [| fr  p]; sis; subst; eauto.
+    destruct p as [| fr' p]; sis; subst; inv heq; auto.
+    specialize (IHhw (SF (NT x :: suf):: p) s).
+    destruct IHhw as [hs hp]; eauto.
+Qed.
+
+Lemma suffix_frames_np_app :
+  forall g p s,
+    suffix_frames_nullable_path g (p ++ s)
+    -> suffix_frames_nullable_path g p /\ suffix_frames_nullable_path g s.
+Proof.
+  intros; eapply suffix_frames_np_app'; eauto.
+Qed.
+
+Lemma suffix_frames_np_app_l :
+  forall g p s,
+    suffix_frames_nullable_path g (p ++ s)
+    -> suffix_frames_nullable_path g p.
+Proof.
+  intros g p s hw; eapply suffix_frames_np_app in hw; firstorder.
+Qed.
+
+Lemma suffix_frames_np_tl :
+  forall g h t,
+    suffix_frames_nullable_path g (h :: t)
+    -> suffix_frames_nullable_path g t.
+Proof.
+  intros g h t hw.
+  rewrite cons_app_singleton in hw.
+  eapply suffix_frames_np_app in hw; firstorder.
+Qed.
+*)
+(*
 Definition processed_symbols_all_nullable (g : grammar) (frs : list location) : Prop :=
   Forall (fun fr => nullable_gamma g fr.(rpre)) frs.
 
 Hint Unfold processed_symbols_all_nullable.
 Hint Constructors Forall.
+ *)
 
 (* The invariant itself *)
 Definition unavailable_nts_are_open_calls g av stk : Prop :=
@@ -1048,11 +1218,10 @@ Definition unavailable_nts_are_open_calls g av stk : Prop :=
     forall (x : nonterminal),
       NtSet.In x (allNts g)
       -> ~ NtSet.In x av
-      -> nullable_gamma g fr.(rpre)
-         /\ (exists frs_pre fr_cr frs_suf suf,
-                frs = frs_pre ++ fr_cr :: frs_suf
-                /\ processed_symbols_all_nullable g frs_pre
-                /\ fr_cr.(rsuf) = NT x :: suf)
+      -> exists frs_pre fr_cr frs_suf suf,
+          frs = frs_pre ++ fr_cr :: frs_suf
+          /\ fr_cr = SF (NT x :: suf)
+          /\ frames_repr_nullable_path g (fr :: frs_pre ++ [fr_cr])
   end.
 
 (* Lift the invariant to a subparser *)
@@ -1066,59 +1235,60 @@ Definition sps_unavailable_nts_invar g sps : Prop :=
   forall sp, In sp sps -> unavailable_nts_invar g sp.
 
 Lemma return_preserves_unavailable_nts_invar :
-  forall g av pr pre pre' suf' x fr cr cr' frs,
-    fr     = Loc pre []
-    -> cr  = Loc pre' (NT x :: suf')
-    -> cr' = Loc (pre' ++ [NT x]) suf'
-    -> lstack_wf g (fr, cr :: frs)
+  forall g av pr suf x fr cr cr' frs,
+    fr     = SF []
+    -> cr  = SF (NT x :: suf)
+    -> cr' = SF suf
     -> unavailable_nts_invar g (Sp av pr (fr, cr :: frs))
     -> unavailable_nts_invar g (Sp (NtSet.add x av) pr (cr', frs)). 
 Proof.
-  intros g av pr pre pre' suf' x' fr cr cr' frs hfr hcr hcr' hw hu; subst.
-  intros x hi hn; simpl.
+  intros g av pr suf' x' fr cr cr' frs ? ? ? hu; subst.
+  intros x hi hn.
   assert (hn' : ~ NtSet.In x av) by ND.fsetdec.
-  apply hu in hn'; clear hu; auto.
-  destruct hn' as [hng [frs_pre [fr_cr [frs_suf [suf [heq [hp heq']]]]]]].
-  destruct frs_pre as [| fr' frs_pre]; sis.
-  - inv heq; inv heq'; ND.fsetdec.
-  - inv heq; inv hp; sis; split; eauto 8.
-    apply nullable_app; auto.
-    inv hw; rewrite app_nil_r in *; eauto.
+  apply hu in hn'; auto.
+  destruct hn' as (frs_pre & fr_cr & frs_suf & suf & heq & ? & hf); subst.
+  destruct frs_pre as [| fr' frs_pre]; sis; inv heq.
+  - ND.fsetdec.
+  - pose proof hf as hf'; apply frames_repr_np_inv_two_head_frames in hf'.
+    apply frames_repr_np_shift_head_frame with (pre := [NT x']) in hf'; eauto 8.
+    constructor; auto.
+    apply frnp_caller_nt_nullable in hf; auto.
 Qed.
 
 Lemma push_preserves_unavailable_nts_invar :
-  forall g cr ce av pr pre suf x rhs frs,
-    cr = Loc pre (NT x :: suf)
-    -> ce = Loc [] rhs
+  forall g cr ce av pr suf x rhs frs,
+    cr = SF (NT x :: suf)
+    -> ce = SF rhs
+    -> In (x, rhs) g
     -> unavailable_nts_invar g (Sp av pr (cr, frs))
     -> unavailable_nts_invar g (Sp (NtSet.remove x av) pr (ce, cr :: frs)).
 Proof.
-  intros g cr ce av pr pre suf x rhs frs hcr hce hu; subst.
-  intros x' hi hn; simpl; split; auto.
-  unfold processed_symbols_all_nullable.
+  intros g cr ce av pr suf' x' rhs frs ? ? hi hu; subst. 
+  intros x hi' hn.
   destruct (NF.eq_dec x' x); subst.
-  - exists []; repeat eexists; eauto.
-  - assert (hn' : ~ NtSet.In x' av) by ND.fsetdec.
+  - exists []; repeat eexists; eauto; sis.
+    eapply FR_direct with (pre' := []); auto.
+  - assert (hn' : ~ NtSet.In x av) by ND.fsetdec.
     apply hu in hn'; simpl in hn'; clear hu; auto.
-    destruct hn' as
-        [hng [frs_pre [fr_cr [frs_suf [suf' [heq [hp heq']]]]]]]; subst.
-    exists (Loc pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
+    destruct hn' as (frs_pre & fr_cr & frs_suf & suf & heq & heq' & hf); subst.
+    exists (SF (NT x' :: suf') :: frs_pre); repeat eexists; eauto.
+    eapply FR_indirect with (pre' := []); eauto.
 Qed.
 
 Lemma spClosureStep_preserves_unavailable_nts_invar :
   forall g sp sp' sps',
-    lstack_wf g sp.(stack)
-    -> unavailable_nts_invar g sp
+    unavailable_nts_invar g sp
     -> spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
     -> unavailable_nts_invar g sp'.
 Proof.
-  intros g sp sp' sps' hw hu hs hi.
-  unfold spClosureStep in hs; dmeqs h; inv hs; tc; simpl in hw.
+  intros g sp sp' sps' hu hs hi.
+  unfold spClosureStep in hs; dmeqs h; inv hs; tc.
   - apply in_singleton_eq in hi; subst.
     eapply return_preserves_unavailable_nts_invar; eauto.
   - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
     eapply push_preserves_unavailable_nts_invar; eauto.
+    apply rhssForNt_in_iff; auto.
   - inv hi.
 Qed.
 
@@ -1130,12 +1300,11 @@ Proof.
 Qed.
 
 Lemma initSps_sat_unavailable_nts_invar :
-  forall g x pre suf frs sp,
-    In sp (initSps g x (Loc pre (NT x :: suf), frs))
+  forall g x suf frs sp,
+    In sp (initSps g x (SF (NT x :: suf), frs))
     -> unavailable_nts_invar g sp.
 Proof.
-  intros g x pre suf frs sp hi; unfold initSps in hi.
+  intros g x suf frs sp hi; unfold initSps in hi.
   apply in_map_iff in hi; destruct hi as [rhs [? hi]]; subst.
   apply unavailable_nts_allNts.
 Qed.
-*)

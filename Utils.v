@@ -167,6 +167,13 @@ Proof.
   intros; apply filter_In; auto.
 Qed.
 
+Lemma app_cons_group_l :
+  forall A (xs zs : list A) (y : A),
+    xs ++ y :: zs = (xs ++ [y]) ++ zs.
+Proof.
+  intros A xs zs y; rewrite <- app_assoc; auto.
+Qed.
+
 Lemma app_group_endpoints_l :
   forall A (x y : A) (xs ys : list A),
     x :: xs ++ y :: ys = (x :: xs ++ [y]) ++ ys.
