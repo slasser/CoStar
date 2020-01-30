@@ -10,15 +10,15 @@ Import ListNotations.
 Inductive move_step (g : grammar) :
   subparser -> list token -> subparser -> list token -> Prop :=
 | MV_consume :
-    forall av pred pre suf a l ts frs,
+    forall av pred suf a l ts frs,
       move_step g
                 (Sp av
                     pred
-                    (Loc pre (T a :: suf), frs))
+                    (SF (T a :: suf), frs))
                 ((a, l) :: ts)
                 (Sp (allNts g)
                     pred
-                    (Loc (pre ++ [T a]) suf, frs))
+                    (SF suf, frs))
                 ts.
 
 Hint Constructors move_step.
@@ -65,8 +65,8 @@ Lemma move_step_moveSp :
     moveSp g t sp = SpMoveSucc sp'
     -> move_step g sp (t :: w') sp' w'.
 Proof.
-  intros g t w' [av pred ([pre suf], frs)]
-                [av' pred' ([pre' suf'], frs')] hm.
+  intros g t w' [av pred (suf, frs)]
+                [av' pred' (suf', frs')] hm.
   unfold moveSp in hm.
   destruct suf as [| [a | x] suf]; try (dms; tc); subst.
   inv hm; constructor.
@@ -1102,9 +1102,6 @@ Qed.
 
 (* Now some facts about how prediction doesn't return Reject when the initial
    stack's unprocessed symbols recognize the input *)
-
-Definition all_stacks_stable sps :=
-  forall sp, In sp sps -> stable_config sp.(stack).
 
 Definition exists_successful_sp g sps w :=
   exists sp, In sp sps /\ gamma_recognize g (unprocStackSyms sp.(stack)) w.

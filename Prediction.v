@@ -900,45 +900,45 @@ Qed.
 
 (* The stack predicate is defined in terms of the following
    predicate over a list of locations *)
-Inductive suffix_frames_wf (g : grammar) : list suffix_frame -> Prop :=
+Inductive frames_wf (g : grammar) : list suffix_frame -> Prop :=
 | WF_nil :
-    suffix_frames_wf g []
+    frames_wf g []
 | WF_bottom :
     forall suf,
-     suffix_frames_wf g [SF suf]
+     frames_wf g [SF suf]
 | WF_upper :
     forall x pre' suf suf' frs,
       In (x, pre' ++ suf') g
-      -> suffix_frames_wf g (SF (NT x :: suf) :: frs)
-      -> suffix_frames_wf g (SF suf' :: SF (NT x :: suf) :: frs).
+      -> frames_wf g (SF (NT x :: suf) :: frs)
+      -> frames_wf g (SF suf' :: SF (NT x :: suf) :: frs).
 
-Hint Constructors suffix_frames_wf.
+Hint Constructors frames_wf.
 
 (* invert a suffix_frames_wf judgment, naming the hypotheses hi and hw' *)
-Ltac inv_suffix_frames_wf hw hi hw' :=
+Ltac inv_frames_wf hw hi hw' :=
   inversion hw as [ | ? | ? ? ? ? ? hi hw']; subst; clear hw.
 
 Ltac wf_upper_nil := eapply WF_upper with (pre' := []); sis; eauto. 
 
 (* The stack well-formedness predicate *)
-Definition suffix_stack_wf (g : grammar) (stk : suffix_stack) : Prop :=
+Definition stack_wf (g : grammar) (stk : suffix_stack) : Prop :=
   match stk with
   | (fr, frs) =>
-    suffix_frames_wf g (fr :: frs)
+    frames_wf g (fr :: frs)
   end.
 
 (* Lift the predicate to a list of subparsers *)
-Definition all_suffix_stacks_wf (g : grammar) (sps: list subparser) : Prop :=
-  forall sp, In sp sps -> suffix_stack_wf g sp.(stack).
+Definition all_stacks_wf (g : grammar) (sps: list subparser) : Prop :=
+  forall sp, In sp sps -> stack_wf g sp.(stack).
 
 (* Lemmas about the well-formedness predicate *)
 
-Lemma suffix_frames_wf_app' :
+Lemma frames_wf_app' :
   forall g l,
-    suffix_frames_wf g l
+    frames_wf g l
     -> forall p s,
       l = p ++ s
-      -> suffix_frames_wf g p /\ suffix_frames_wf g s.
+      -> frames_wf g p /\ frames_wf g s.
 Proof.
   intros g l hw.
   induction hw; intros p s heq.
@@ -954,90 +954,90 @@ Proof.
     destruct IHhw as [hs hp]; eauto.
 Qed.
 
-Lemma suffix_frames_wf_app :
+Lemma frames_wf_app :
   forall g p s,
-    suffix_frames_wf g (p ++ s)
-    -> suffix_frames_wf g p /\ suffix_frames_wf g s.
+    frames_wf g (p ++ s)
+    -> frames_wf g p /\ frames_wf g s.
 Proof.
-  intros; eapply suffix_frames_wf_app'; eauto.
+  intros; eapply frames_wf_app'; eauto.
 Qed.
 
-Lemma suffix_frames_wf_app_l :
+Lemma frames_wf_app_l :
   forall g p s,
-    suffix_frames_wf g (p ++ s)
-    -> suffix_frames_wf g p.
+    frames_wf g (p ++ s)
+    -> frames_wf g p.
 Proof.
-  intros g p s hw; eapply suffix_frames_wf_app in hw; firstorder.
+  intros g p s hw; eapply frames_wf_app in hw; firstorder.
 Qed.
 
-Lemma suffix_frames_wf_tl :
+Lemma frames_wf_tl :
   forall g h t,
-    suffix_frames_wf g (h :: t)
-    -> suffix_frames_wf g t.
+    frames_wf g (h :: t)
+    -> frames_wf g t.
 Proof.
   intros g h t hw.
   rewrite cons_app_singleton in hw.
-  eapply suffix_frames_wf_app in hw; firstorder.
+  eapply frames_wf_app in hw; firstorder.
 Qed.
 
-Lemma return_preserves_suffix_frames_wf_invar :
+Lemma return_preserves_frames_wf_invar :
   forall g suf_cr x frs,
-    suffix_frames_wf g (SF [] :: SF (NT x :: suf_cr) :: frs)
-    -> suffix_frames_wf g (SF suf_cr :: frs).
+    frames_wf g (SF [] :: SF (NT x :: suf_cr) :: frs)
+    -> frames_wf g (SF suf_cr :: frs).
 Proof.
   intros g suf_cr x locs hw.
-  inv_suffix_frames_wf hw hi hw'.
-  inv_suffix_frames_wf hw' hi' hw''; auto.
+  inv_frames_wf hw hi hw'.
+  inv_frames_wf hw' hi' hw''; auto.
   rewrite app_cons_group_l in hi'; eauto.
 Qed.
 
-Lemma push_preserves_suffix_frames_wf_invar :
+Lemma push_preserves_frames_wf_invar :
   forall g suf x rhs frs,
     In rhs (rhssForNt g x)
-    -> suffix_frames_wf g (SF (NT x :: suf) :: frs)
-    -> suffix_frames_wf g (SF rhs :: SF (NT x :: suf) :: frs).
+    -> frames_wf g (SF (NT x :: suf) :: frs)
+    -> frames_wf g (SF rhs :: SF (NT x :: suf) :: frs).
 Proof.
   intros; wf_upper_nil. 
   apply rhssForNt_in_iff; auto.
 Qed.
 
-Lemma consume_preserves_suffix_frames_wf_invar :
+Lemma consume_preserves_frames_wf_invar :
   forall g suf a frs,
-    suffix_frames_wf g (SF (T a :: suf) :: frs)
-    -> suffix_frames_wf g (SF suf :: frs).
+    frames_wf g (SF (T a :: suf) :: frs)
+    -> frames_wf g (SF suf :: frs).
 Proof.
   intros g suf a frs hw.
-  inv_suffix_frames_wf hw hi hw'; auto.
+  inv_frames_wf hw hi hw'; auto.
   rewrite app_cons_group_l in hi; eauto.
 Qed.
 
-Lemma spClosureStep_preserves_suffix_stack_wf_invar :
+Lemma spClosureStep_preserves_stack_wf_invar :
   forall g sp sp' sps',
-    suffix_stack_wf g sp.(stack)
+    stack_wf g sp.(stack)
     -> spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
-    -> suffix_stack_wf g sp'.(stack).
+    -> stack_wf g sp'.(stack).
 Proof.
   intros g sp sp' sps' hw hs hi.
   unfold spClosureStep in hs; dms; tc; sis; inv hs.
   - apply in_singleton_eq in hi; subst; sis.
-    eapply return_preserves_suffix_frames_wf_invar; eauto.
+    eapply return_preserves_frames_wf_invar; eauto.
   - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
-    apply push_preserves_suffix_frames_wf_invar; auto.
+    apply push_preserves_frames_wf_invar; auto.
   - inv hi.
 Qed.
 
-Lemma initSps_preserves_suffix_stack_wf_invar :
+Lemma initSps_preserves_stack_wf_invar :
   forall g fr x suf frs sp,
     fr = SF (NT x :: suf)
-    -> suffix_stack_wf g (fr, frs)
+    -> stack_wf g (fr, frs)
     -> In sp (initSps g x (fr, frs))
-    -> suffix_stack_wf g sp.(stack).
+    -> stack_wf g sp.(stack).
 Proof.
   intros g fr x suf frs sp ? hw hi; subst; unfold initSps in hi.
   apply in_map_iff in hi.
   destruct hi as [rhs [? hi]]; subst; sis.
-  apply push_preserves_suffix_frames_wf_invar; eauto.
+  apply push_preserves_frames_wf_invar; eauto.
 Qed.
 
 (* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
@@ -1062,7 +1062,7 @@ Hint Constructors frames_repr_nullable_path.
 Ltac inv_frnp hf hi hn hf' :=
   inversion hf as [? ? ? ? hi hn | ? ? ? ? ? hi hn hf']; subst; clear hf.
 
-Lemma frames_repr_np_inv_two_head_frames :
+Lemma frnp_inv_two_head_frames :
   forall g fr fr' fr'' frs,
     frames_repr_nullable_path g (fr'' :: fr' :: frs ++ [fr])
     -> frames_repr_nullable_path g (fr' :: frs ++ [fr]).
@@ -1071,7 +1071,7 @@ Proof.
   destruct frs as [| fr' frs]; sis; inv hf; auto.
 Qed.
 
-Lemma frames_repr_np_second_frame_nt_head :
+Lemma frnp_second_frame_nt_head :
   forall g fr fr' frs,
     frames_repr_nullable_path g (fr' :: fr :: frs)
     -> exists x suf,
@@ -1080,7 +1080,7 @@ Proof.
   intros g fr fr' frs hf; inv hf; eauto.
 Qed.
 
-Lemma frames_repr_np_shift_head_frame :
+Lemma frnp_shift_head_frame :
   forall g frs pre suf,
     nullable_gamma g pre
     -> frames_repr_nullable_path g (SF (pre ++ suf) :: frs)
@@ -1093,7 +1093,7 @@ Proof.
     apply nullable_app; auto.
 Qed.
   
-Lemma frames_repr_grammar_nullable_path :
+Lemma frnp_grammar_nullable_path :
   forall g frs fr fr_cr x y suf suf',
     fr       = SF (NT y :: suf')
     -> fr_cr = SF (NT x :: suf)
@@ -1105,10 +1105,10 @@ Proof.
   - inv_frnp hf hi hn hf'.
     + eapply DirectPath; eauto.
     + inv hf'.
-  - pose proof hf as hf'; apply frames_repr_np_second_frame_nt_head in hf'.
+  - pose proof hf as hf'; apply frnp_second_frame_nt_head in hf'.
     destruct hf' as (y & suf' & ?); subst.
     apply nullable_path_trans with (y := NT y).
-    + apply frames_repr_np_inv_two_head_frames in hf; eauto.
+    + apply frnp_inv_two_head_frames in hf; eauto.
     + inv_frnp hf hi hn hf'; eauto.
 Qed.
 
@@ -1164,8 +1164,8 @@ Proof.
   destruct hn' as (frs_pre & fr_cr & frs_suf & suf & heq & ? & hf); subst.
   destruct frs_pre as [| fr' frs_pre]; sis; inv heq.
   - ND.fsetdec.
-  - pose proof hf as hf'; apply frames_repr_np_inv_two_head_frames in hf'.
-    apply frames_repr_np_shift_head_frame with (pre := [NT x']) in hf'; eauto 8.
+  - pose proof hf as hf'; apply frnp_inv_two_head_frames in hf'.
+    apply frnp_shift_head_frame with (pre := [NT x']) in hf'; eauto 8.
     constructor; auto.
     apply frnp_caller_nt_nullable in hf; auto.
 Qed.
