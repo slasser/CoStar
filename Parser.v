@@ -102,36 +102,37 @@ Definition step (g      : grammar)
     end
   end.
 
-(*
 Lemma step_StepAccept_facts :
-  forall g av stk ts u v,
-    step g (Pst av stk ts u) = StepAccept v
-    -> (exists xo rpre v',
-           stk = (Fr (Loc xo rpre []) v', [])
-           /\ v' = v)
-       /\ ts = [].
+  forall g p_stk s_stk ts av u v,
+    step g p_stk s_stk ts av u = StepAccept v
+    -> ts = []
+       /\ s_stk = (SF [], [])
+       /\ exists pre,
+           p_stk = (PF pre v, []).
 Proof.
-  intros g av stk ts u v hs.
+  intros g pstk sstk ts av u v hs.
   unfold step in hs; dms; tc.
-  inv hs; repeat eexists; eauto.
+  inv hs; eauto.
 Qed.
 
 Lemma step_LeftRecursion_facts :
-  forall g av fr frs ts u x,
-    step g (Pst av (fr, frs) ts u) = StepError (LeftRecursion x)
+  forall g p_stk s_stk ts av u x,
+    step g p_stk s_stk ts av u = StepError (LeftRecursion x)
     -> ~ NtSet.In x av
        /\ NtSet.In x (allNts g)
-       /\ exists suf,
-           fr.(loc).(rsuf) = NT x :: suf.
+       /\ exists suf frs,
+           s_stk = (SF (NT x :: suf), frs).
 Proof.
-  intros g av fr frs ts u x hs.
+  intros g pstk sstk ts av u x hs.
   unfold step in hs; repeat dmeq h; tc; inv hs; sis;
   repeat split; eauto.
   - unfold not; intros hi.
     apply NtSet.mem_spec in hi; tc.
   - apply NtSet.mem_spec; auto.
 Qed.
-*)
+
+(* to do : move this meas function to Prediction,
+   define subparser measure in terms of meas *)
 Definition meas (g   : grammar)
                 (stk : suffix_stack)
                 (ts  : list token)

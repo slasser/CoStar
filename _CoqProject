@@ -12,7 +12,7 @@ Prediction_error_free.v
 Prediction_complete.v
 
 Parser.v
-#Parser_sound.v
+Parser_sound.v
 #Parser_error_free.v
 #Parser_complete.v
 
