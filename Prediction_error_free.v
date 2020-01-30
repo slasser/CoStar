@@ -25,7 +25,7 @@ Definition all_stacks_stable sps :=
 
 Lemma spClosureStep_never_returns_SpInvalidState :
   forall g sp,
-    suffix_stack_wf g sp.(stack)
+    stack_wf g sp.(stack)
     -> spClosureStep g sp <> SpClosureStepError SpInvalidState.
 Proof.
   intros g sp hw; unfold not; intros hs.
@@ -39,7 +39,7 @@ Lemma spClosure_never_returns_SpInvalidState :
          (sp   : subparser)
          (a'   : Acc lex_nat_pair (meas g sp)),
     pair = meas g sp
-    -> suffix_stack_wf g sp.(stack)
+    -> stack_wf g sp.(stack)
     -> spClosure g sp a' <> inl SpInvalidState.
 Proof.
   intros g pair a'.
@@ -53,12 +53,12 @@ Proof.
     destruct heq' as [sp' [hi [hi' heq]]].
     eapply IH with (sp := sp'); eauto.
     + eapply spClosureStep_meas_lt; eauto.
-    + eapply spClosureStep_preserves_suffix_stack_wf_invar; eauto.
+    + eapply spClosureStep_preserves_stack_wf_invar; eauto.
 Qed.
     
 Lemma closure_never_returns_SpInvalidState :
   forall g sps,
-    all_suffix_stacks_wf g sps
+    all_stacks_wf g sps
     -> closure g sps <> inl SpInvalidState.
 Proof.
   intros g sps hw; unfold not; intros hc.
@@ -71,7 +71,7 @@ Qed.
 
 Lemma startState_never_returns_SpInvalidState :
   forall g fr frs x suf,
-    suffix_stack_wf g (fr, frs)
+    stack_wf g (fr, frs)
     -> fr = SF (NT x :: suf)
     -> startState g x (fr, frs) <> inl SpInvalidState.
 Proof.
@@ -121,41 +121,41 @@ Proof.
   eapply moveSp_never_returns_SpInvalidState_for_ready_sp; eauto.
 Qed.
 
-Lemma moveSp_preserves_suffix_stack_wf_invar :
+Lemma moveSp_preserves_stack_wf_invar :
   forall g t sp sp',
-    suffix_stack_wf g sp.(stack)
+    stack_wf g sp.(stack)
     -> moveSp g t sp = SpMoveSucc sp'
-    -> suffix_stack_wf g sp'.(stack).
+    -> stack_wf g sp'.(stack).
 Proof.
   intros g t sp sp' hw hm.
   unfold moveSp in hm; dms; tc; inv hm; sis.
-  inv_suffix_frames_wf hw hi hw'; auto.
+  inv_frames_wf hw hi hw'; auto.
   rewrite app_cons_group_l in hi; eauto.
 Qed.
 
-Lemma move_preserves_suffix_stack_wf_invar :
+Lemma move_preserves_stack_wf_invar :
   forall g t sps sps',
-    all_suffix_stacks_wf g sps
+    all_stacks_wf g sps
     -> move g t sps = inr sps'
-    -> all_suffix_stacks_wf g sps'.
+    -> all_stacks_wf g sps'.
 Proof.
   intros g t sps sps' ha hm.
-  unfold all_suffix_stacks_wf.
+  unfold all_stacks_wf.
   intros sp' hi.
   unfold move in hm.
   eapply aggrMoveResults_succ_in_input in hm; eauto.
   apply in_map_iff in hm.
   destruct hm as [sp [hm hi']].
-  eapply moveSp_preserves_suffix_stack_wf_invar; eauto.
+  eapply moveSp_preserves_stack_wf_invar; eauto.
 Qed.
 
-Lemma spClosure_preserves_suffix_stack_wf_invar :
+Lemma spClosure_preserves_stack_wf_invar :
   forall g pr (a : Acc lex_nat_pair pr) sp sp' a' sps',
     pr = meas g sp
-    -> suffix_stack_wf g sp.(stack)
+    -> stack_wf g sp.(stack)
     -> spClosure g sp a' = inr sps'
     -> In sp' sps'
-    -> suffix_stack_wf g sp'.(stack).
+    -> stack_wf g sp'.(stack).
 Proof.
   intros g pr a'.
   induction a' as [pr hlt IH]; intros sp sp' a sps' heq hw hs hi; subst.
@@ -168,24 +168,24 @@ Proof.
     destruct hi' as [sp'' [hi' [hi''' heq]]].
     eapply IH in heq; eauto.
     + eapply spClosureStep_meas_lt; eauto.
-    + eapply spClosureStep_preserves_suffix_stack_wf_invar; eauto.
+    + eapply spClosureStep_preserves_stack_wf_invar; eauto.
 Qed.
   
-Lemma closure_preserves_suffix_stack_wf_invar :
+Lemma closure_preserves_stack_wf_invar :
   forall g sps sps',
-    all_suffix_stacks_wf g sps
+    all_stacks_wf g sps
     -> closure g sps = inr sps'
-    -> all_suffix_stacks_wf g sps'.
+    -> all_stacks_wf g sps'.
 Proof.
   intros g sps sps' ha hc.
   unfold closure in hc.
-  unfold all_suffix_stacks_wf.
+  unfold all_stacks_wf.
   intros sp' hi.
   eapply aggrClosureResults_succ_in_input in hc; eauto.
   destruct hc as [sps'' [hi' hi'']].
   apply in_map_iff in hi'.
   destruct hi' as [sp [hs hi']]; subst.
-  eapply spClosure_preserves_suffix_stack_wf_invar; eauto.
+  eapply spClosure_preserves_stack_wf_invar; eauto.
   apply lex_nat_pair_wf.
 Qed.
 
@@ -238,7 +238,7 @@ Qed.
 
 Lemma llPredict'_never_returns_SpInvalidState :
   forall g ts sps,
-    all_suffix_stacks_wf g sps
+    all_stacks_wf g sps
     -> all_stacks_stable sps
     -> llPredict' g sps ts <> PredError SpInvalidState.
 Proof.
@@ -252,30 +252,30 @@ Proof.
       eapply move_never_returns_SpInvalidState_for_ready_sps; eauto.
     + dmeq hc; tc.
       * inv hl.
-        eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
+        eapply move_preserves_stack_wf_invar in hm; eauto.
         eapply closure_never_returns_SpInvalidState; eauto.
       * eapply IH in hl; eauto.
-        -- eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-           eapply closure_preserves_suffix_stack_wf_invar; eauto.
+        -- eapply move_preserves_stack_wf_invar in hm; eauto.
+           eapply closure_preserves_stack_wf_invar; eauto.
         -- eapply all_stacks_stable_after_closure; eauto.
 Qed.
 
 Lemma stacks_wf_in_startState_result :
   forall g fr frs x suf sps,
-    suffix_stack_wf g (fr, frs)
+    stack_wf g (fr, frs)
     -> fr = SF (NT x :: suf)
     -> startState g x (fr, frs) = inr sps
-    -> all_suffix_stacks_wf g sps.
+    -> all_stacks_wf g sps.
 Proof.
   intros g [suf'] frs x suf sps hw heq hs; sis; subst.
-  eapply closure_preserves_suffix_stack_wf_invar; eauto.
-  unfold all_suffix_stacks_wf; intros sp hi.
-  eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+  eapply closure_preserves_stack_wf_invar; eauto.
+  unfold all_stacks_wf; intros sp hi.
+  eapply initSps_preserves_stack_wf_invar; eauto.
 Qed.
 
 Lemma llPredict_never_returns_SpInvalidState :
   forall g fr frs x suf ts,
-    suffix_stack_wf g (fr, frs)
+    stack_wf g (fr, frs)
     -> fr = SF (NT x :: suf)
     -> llPredict g x (fr, frs) ts <> PredError SpInvalidState.
 Proof.
@@ -320,7 +320,7 @@ Proof.
   destruct hs' as [hn' [hi [suf' heq]]]; subst.
   apply hu in hn'; auto.
   destruct hn' as (frs_pre & fr_cr & frs_suf & suf & ? & ? & hf); subst.
-  eapply frames_repr_grammar_nullable_path in hf; eauto.
+  eapply frnp_grammar_nullable_path in hf; eauto.
   firstorder.
 Qed.
 

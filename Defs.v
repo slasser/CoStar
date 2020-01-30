@@ -395,6 +395,8 @@ with gamma_recognize (g : grammar) : list symbol -> list token -> Prop :=
 
 Hint Constructors sym_recognize gamma_recognize.
 
+Ltac inv_gr hg hs hg' := inversion hg as [| ? ? ? ? hs hg']; subst; clear hg.
+
 Scheme sym_recognize_mutual_ind   := Induction for sym_recognize Sort Prop
   with gamma_recognize_mutual_ind := Induction for gamma_recognize Sort Prop.
 

@@ -993,12 +993,11 @@ Qed.
 
 Lemma push_preserves_frames_wf_invar :
   forall g suf x rhs frs,
-    In rhs (rhssForNt g x)
+    In (x, rhs) g
     -> frames_wf g (SF (NT x :: suf) :: frs)
     -> frames_wf g (SF rhs :: SF (NT x :: suf) :: frs).
 Proof.
   intros; wf_upper_nil. 
-  apply rhssForNt_in_iff; auto.
 Qed.
 
 Lemma consume_preserves_frames_wf_invar :
@@ -1024,6 +1023,7 @@ Proof.
     eapply return_preserves_frames_wf_invar; eauto.
   - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
     apply push_preserves_frames_wf_invar; auto.
+    apply rhssForNt_in_iff; auto.
   - inv hi.
 Qed.
 
@@ -1038,6 +1038,7 @@ Proof.
   apply in_map_iff in hi.
   destruct hi as [rhs [? hi]]; subst; sis.
   apply push_preserves_frames_wf_invar; eauto.
+  apply rhssForNt_in_iff; auto.
 Qed.
 
 (* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
