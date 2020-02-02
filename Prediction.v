@@ -433,7 +433,7 @@ Lemma meas_lt_after_push :
     -> fr  = SF (NT x :: suf)
     -> fr' = SF rhs
     -> NtSet.In x av
-    -> In rhs (rhssForNt g x)
+    -> In (x, rhs) g
     -> lex_nat_pair (meas g sp') (meas g sp).
 Proof.
   intros g sp sp' fr fr' av pred suf x rhs frs ? ? ? ? hi hi'; subst.
@@ -456,7 +456,8 @@ Proof.
   - apply in_map_iff in hi.
     destruct hi as [rhs [heq hi]]; subst.
     eapply meas_lt_after_push; eauto.
-    apply NtSet.mem_spec; auto.
+    + apply NtSet.mem_spec; auto.
+    + apply rhssForNt_in_iff; auto.
 Defined.
 
 Lemma acc_after_step :

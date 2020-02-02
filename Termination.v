@@ -203,7 +203,7 @@ Lemma stackScore_lt_after_push :
     callee = SF rhs
     -> caller = SF (NT x :: suf')
     -> NtSet.In x av
-    -> In rhs (rhssForNt g x)
+    -> In (x, rhs) g
     -> stackScore (callee, caller :: locs)
                   (1 + maxRhsLength g)
                   (NtSet.cardinal (NtSet.remove x av))
@@ -228,7 +228,7 @@ Qed.
 Lemma stackScore_lt_after_push' :
   forall g suf_cr rhs x av locs,
     NtSet.In x av
-    -> In rhs (rhssForNt g x)
+    -> In (x, rhs) g
     -> stackScore (SF rhs, SF (NT x :: suf_cr) :: locs)
                   (1 + maxRhsLength g)
                   (NtSet.cardinal (NtSet.remove x av))

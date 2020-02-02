@@ -394,7 +394,6 @@ Proof.
                                            (SF (NT x :: suf) :: frs))).
     edestruct IH as [sp' [hcm hg'']]; eauto.
     + eapply meas_lt_after_push; eauto.
-      apply rhssForNt_in_iff; auto.
     + apply lex_nat_pair_wf.
     + eapply push_preserves_frames_wf_invar; eauto. 
     + eapply push_preserves_unavailable_nts_invar; eauto.

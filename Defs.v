@@ -129,18 +129,19 @@ Definition maxRhsLength (g : grammar) : nat :=
 
 Lemma grammar_rhs_length_le_max :
   forall g x rhs,
-    In rhs (rhssForNt g x)
+    In (x, rhs) g
     -> List.length rhs <= maxRhsLength g.
 Proof.
   intros; unfold maxRhsLength.
   apply listMax_in_le.
   apply rhss_rhsLengths_in.
-  eapply rhssForNt_rhss; eauto.
+  eapply rhssForNt_rhss.
+  eapply rhssForNt_in_iff; eauto.
 Qed.
 
 Lemma grammar_rhs_length_lt_max_plus_1 :
   forall g x rhs,
-    In rhs (rhssForNt g x)
+    In (x, rhs) g
     -> List.length rhs < 1 + maxRhsLength g.
 Proof.
   intros g x rhs Hin.

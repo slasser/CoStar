@@ -131,8 +131,6 @@ Proof.
   - apply NtSet.mem_spec; auto.
 Qed.
 
-(* to do : move this meas function to Prediction,
-   define subparser measure in terms of meas *)
 Definition meas (g   : grammar)
                 (stk : suffix_stack)
                 (ts  : list token)
@@ -140,63 +138,31 @@ Definition meas (g   : grammar)
   let m := maxRhsLength g    in
   let e := NtSet.cardinal av in
   (List.length ts, stackScore stk (1 + m) e, stackHeight stk).
-(*
-(* It might be possible to delete this lemma and replace it
-   with the primed version, or at least remove the
-   specialization after pose proof by using stackScore_le_after_return' *)
-Lemma state_lt_after_return :
-  forall g st st' ts callee caller caller' frs x x' suf_cr_tl av u,
-    st = Pst av (callee, caller :: frs) ts u
-    -> st' = Pst (NtSet.add x av) (caller', frs) ts u
-    -> callee.(loc).(rsuf)  = []
-    -> caller.(loc).(rsuf)  = NT x' :: suf_cr_tl
-    -> caller'.(loc).(rsuf) = suf_cr_tl
-    -> lex_nat_triple (meas g st') (meas g st).
-Proof.
-  intros g st st' ts ce cr cr' frs x x' suf_cr_tl av u
-         Hst hst' Hce Hcr Hcr'; subst.
-  unfold meas. unfold lstackOf.
-  pose proof (stackScore_le_after_return (loc ce) (loc cr) (loc cr')
-                                         x x' (rsuf (loc cr')) av (map loc frs)
-                                         (1 + maxRhsLength g)) as Hle.
-  apply le_lt_or_eq in Hle; auto; destruct Hle as [Hlt | Heq].
-  - apply triple_snd_lt; auto.
-  - rewrite Heq; apply triple_thd_lt; auto.
-Defined.
 
-Lemma loc_proj_eq :
-  forall l v, loc (Fr l v) = l.
+Lemma meas_lt_after_return :
+  forall g ce cr cr' x suf frs ts av,
+    ce  = SF []
+    -> cr  = SF (NT x :: suf)
+    -> cr' = SF suf
+    -> lex_nat_triple (meas g (cr', frs) ts (NtSet.add x av))
+                      (meas g (ce, cr :: frs) ts av).
 Proof.
-  auto.
-Qed.
-
-Lemma state_lt_after_return' :
-  forall g st st' av u ts fr cr cr' frs o o' pre pre' suf' x v v' v'',
-    st = Pst av (fr, cr :: frs) ts u
-    -> st' = Pst (NtSet.add x av) (cr', frs) ts u
-    -> fr  = Fr (Loc o pre []) v
-    -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
-    -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') v''
-    -> lex_nat_triple (meas g st') (meas g st).
-Proof.
-  intros; subst; unfold meas; unfold lstackOf.
-  pose proof stackScore_le_after_return' as hs.
+  intros; subst; unfold meas.
+  pose proof stackScore_le_after_return as hs.
   eapply le_lt_or_eq in hs; eauto.
   destruct hs as [hlt | heq].
-  - apply triple_snd_lt; eauto.
-  - repeat rewrite loc_proj_eq; rewrite heq.
-    apply triple_thd_lt; auto.
+  - apply triple_snd_lt; eauto. 
+  - rewrite heq. apply triple_thd_lt; auto. 
 Defined.
 
-Lemma state_lt_after_push :
-  forall g st st' ts callee caller frs x suf_tl gamma av u u',
-    st = Pst av (caller, frs) ts u
-    -> st' = Pst (NtSet.remove x av) (callee, caller :: frs) ts u'
-    -> caller.(loc).(rsuf) = NT x :: suf_tl
-    -> callee.(loc).(rsuf) = gamma
-    -> In gamma (rhssForNt g x)
+Lemma meas_lt_after_push :
+  forall g cr ce x suf rhs frs ts av,
+    cr = SF (NT x :: suf)
+    -> ce = SF rhs
+    -> In (x, rhs) g 
     -> NtSet.In x av
-    -> lex_nat_triple (meas g st') (meas g st).
+    -> lex_nat_triple (meas g (ce, cr :: frs) ts (NtSet.remove x av))
+                      (meas g (cr, frs) ts av).
 Proof.
   intros; subst.
   apply triple_snd_lt.
@@ -204,45 +170,25 @@ Proof.
 Defined.
 
 Lemma step_meas_lt :
-  forall g st st',
-    step g st = StepK st'
-    -> lex_nat_triple (meas g st') (meas g st).
+  forall g p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
+    step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
+    -> lex_nat_triple (meas g s_stk' ts' av') (meas g s_stk ts av).
 Proof.
-  intros g st st' Hs.
-  unfold step in Hs.
-  destruct st as [av [fr frs] ts u].
-  destruct fr as [[xo pre suf] sv].
-  destruct suf as [| [a | y] suf_tl].
-  - (* return from the current frame *)
-    destruct frs as [| caller frs_tl].
-    + destruct ts; tc.
-    + destruct caller as [[xo_cr pre_cr suf_cr] sv_cr].
-      destruct suf_cr as [| [a | x] suf_cr_tl]; tc.
-      inv Hs.
-      eapply state_lt_after_return; simpl; eauto.
-      simpl; auto.
-  - (* terminal case *) 
-    destruct ts as [| (a', l) ts_tl]; tc.
-    destruct (t_eq_dec a' a); tc; subst.
-    inv Hs.
-    apply triple_fst_lt; simpl; auto.
-  - (* nonterminal case -- push a new frame onto the stack *)
-    destruct (NtSet.mem y av) eqn:Hm; tc.
-    apply NtSet.mem_spec in Hm.
-    destruct (llPredict g y _ ts) as [gamma|gamma| |msg] eqn:Hp; tc.
-    + inv Hs.
-      apply llPredict_succ_in_rhssForNt in Hp.
-      eapply state_lt_after_push; eauto.
-      simpl; auto.
-    + inv Hs.
-      apply llPredict_ambig_in_rhssForNt in Hp.
-      eapply state_lt_after_push; eauto.
-      simpl; auto.
-    + destruct (NtSet.mem y (allNts g)); tc.
-Defined.
- *)
-
-Axiom magic : forall A, A.
+  intros g pstk pstk' sstk stk' ts ts' av av' u u' hs; unfold step in hs.
+  destruct sstk as ([ [| [a|x] suf] ], frs).
+  - dms; tc; inv hs.
+    eapply meas_lt_after_return; eauto.
+  - dms; tc; inv hs.
+    apply triple_fst_lt; auto.
+  - destruct pstk as ([pre v], p_frs).
+    destruct (NtSet.mem x av) eqn:hm; [.. | dms; tc].
+    apply NtSet.mem_spec in hm.
+    destruct (llPredict _ _ _ _) eqn:hp; dms; tc; inv hs.
+    + apply llPredict_succ_in_grammar in hp.
+      eapply meas_lt_after_push; eauto.
+    + apply llPredict_ambig_in_grammar in hp.
+      eapply meas_lt_after_push; eauto.
+Qed.
 
 Lemma StepK_result_acc :
   forall g ps ps' ss ss' ts ts' av av' u u' (a : Acc lex_nat_triple (meas g ss ts av)),
@@ -250,7 +196,7 @@ Lemma StepK_result_acc :
     -> Acc lex_nat_triple (meas g ss' ts' av').
 Proof.
   intros; eapply Acc_inv; eauto.
-  apply magic.
+  eapply step_meas_lt; eauto.
 Defined.
 
 Fixpoint multistep (g  : grammar)
@@ -270,31 +216,39 @@ Fixpoint multistep (g  : grammar)
     fun hs => multistep g ps' ss' ts' av' u'
                         (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
   end eq_refl.
-(*
+
 Lemma multistep_unfold :
-  forall g st a,
-    multistep g st a = 
-    match step g st as res return (step g st = res -> parse_result) with
-    | StepAccept sv => fun _  => if st.(unique) then Accept sv else Ambig sv
-    | StepReject s  => fun _  => Reject s
-    | StepK st'     => fun hs =>
-                         multistep g st' (StepK_st_acc g st st' a hs)
-    | StepError s   => fun _  => Error s
+  forall g ps ss ts av u a,
+    multistep g ps ss ts av u a = 
+    match step g ps ss ts av u
+    as res return (step g ps ss ts av u = res -> parse_result)
+    with
+    | StepAccept sv            => fun _ => if u then Accept sv else Ambig sv
+    | StepReject s             => fun _ => Reject s
+    | StepK ps' ss' ts' av' u' =>
+      fun hs =>
+        multistep g ps' ss' ts' av' u'
+                  (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
+    | StepError s              => fun _ => Error s
     end eq_refl.
 Proof.
   intros; destruct a; auto.
 Qed.
 
 Lemma multistep_unfold_ex :
-  forall g st a,
+  forall g ps ss ts av u a,
   exists heq,
-    multistep g st a =
-    match step g st as res return (step g st = res -> parse_result) with
-    | StepAccept sv => fun _  => if st.(unique) then Accept sv else Ambig sv
-    | StepReject s  => fun _  => Reject s
-    | StepK st'     => fun hs =>
-                         multistep g st' (StepK_st_acc g st st' a hs)
-    | StepError s   => fun _  => Error s
+    multistep g ps ss ts av u a =
+    match step g ps ss ts av u
+    as res return (step g ps ss ts av u = res -> parse_result)
+    with
+    | StepAccept sv            => fun _ => if u then Accept sv else Ambig sv
+    | StepReject s             => fun _ => Reject s
+    | StepK ps' ss' ts' av' u' =>
+      fun hs =>
+        multistep g ps' ss' ts' av' u'
+                  (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
+    | StepError s              => fun _ => Error s
     end heq.
 Proof.
   intros; eexists; apply multistep_unfold.
@@ -302,147 +256,195 @@ Qed.
 
 Lemma multistep_cases' :
   forall (g   : grammar)
-         (st  : parser_state)
-         (a   : Acc lex_nat_triple (meas g st))
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g ss ts av))
          (sr  : step_result)
          (pr  : parse_result)
-         (heq : step g st = sr),
-    match sr as res return (step g st = res -> parse_result) with
-    | StepAccept sv => fun _ => if st.(unique) then Accept sv else Ambig sv
-    | StepReject s => fun _  => Reject s
-    | StepK st' => fun hs => multistep g st' (StepK_st_acc g st st' a hs)
-    | StepError s => fun _ => Error s
+         (heq : step g ps ss ts av u = sr),
+    match sr as res return (step g ps ss ts av u = res -> parse_result) with
+    | StepAccept sv            => fun _ => if u then Accept sv else Ambig sv
+    | StepReject s             => fun _  => Reject s
+    | StepK ps' ss' ts' av' u' =>
+      fun hs => multistep g ps' ss' ts' av' u'
+                          (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
+    | StepError s              => fun _ => Error s
     end heq = pr
     -> match pr with
-       | Accept f => (sr = StepAccept f /\ st.(unique) = true)
-                     \/ exists st' a', sr = StepK st' 
-                                       /\ multistep g st' a' = Accept f
-       | Ambig f  => (sr = StepAccept f /\ st.(unique) = false)
-                     \/ exists st' a', sr = StepK st' 
-                                       /\ multistep g st' a' = Ambig f
+       | Accept f => (sr = StepAccept f /\ u = true)
+                     \/ (exists ps' ss' ts' av' u' a',
+                            sr = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Accept f)
+       | Ambig f  => (sr = StepAccept f /\ u = false)
+                     \/ (exists ps' ss' ts' av' u' a',
+                            sr = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Ambig f)
        | Reject s => sr = StepReject s
-                     \/ exists st' a', sr = StepK st'
-                                       /\ multistep g st' a' = Reject s
+                     \/ (exists ps' ss' ts' av' u' a',
+                            sr = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Reject s)
        | Error s  => sr = StepError s
-                     \/ exists st' a', sr = StepK st'
-                                       /\ multistep g st' a' = Error s
+                     \/ (exists ps' ss' ts' av' u' a',
+                            sr = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Error s)
        end.
 Proof.
-  intros g st a sr pr heq.
-  destruct pr; destruct sr; destruct (unique st);
-    try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto ].
+  intros g ps ss ts av u a sr pr heq.
+  destruct pr; destruct sr; destruct u;
+  try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 8].
 Qed.
 
 Lemma multistep_cases :
-  forall (g : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (meas g st))
+  forall (g   : grammar)
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g ss ts av))
          (pr  : parse_result),
-    multistep g st a = pr
+    multistep g ps ss ts av u a = pr
     -> match pr with
-       | Accept f => (step g st = StepAccept f /\ st.(unique) = true)
-                     \/ exists st' a', step g st = StepK st' 
-                                       /\ multistep g st' a' = Accept f
-       | Ambig f  => (step g st = StepAccept f /\ st.(unique) = false)
-                     \/ exists st' a', step g st = StepK st' 
-                                       /\ multistep g st' a' = Ambig f
-       | Reject s => step g st = StepReject s
-                     \/ exists st' a', step g st = StepK st'
-                                       /\ multistep g st' a' = Reject s
-       | Error s  => step g st = StepError s
-                     \/ exists st' a', step g st = StepK st'
-                                       /\ multistep g st' a' = Error s
+       | Accept f => (step g ps ss ts av u = StepAccept f /\ u = true)
+                     \/ (exists ps' ss' ts' av' u' a',
+                            step g ps ss ts av u = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Accept f)
+       | Ambig f  => (step g ps ss ts av u = StepAccept f /\ u = false)
+                     \/ (exists ps' ss' ts' av' u' a',
+                            step g ps ss ts av u = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Ambig f)
+       | Reject s => step g ps ss ts av u = StepReject s
+                     \/ (exists ps' ss' ts' av' u' a',
+                            step g ps ss ts av u = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Reject s)
+       | Error s  => step g ps ss ts av u = StepError s
+                     \/ (exists ps' ss' ts' av' u' a',
+                            step g ps ss ts av u = StepK ps' ss' ts' av' u'
+                            /\ multistep g ps' ss' ts' av' u' a' = Error s)
        end.
 Proof.
-  intros g st a pr hm; subst.
+  intros g ps ss ts av u a pr hm; subst.
   rewrite multistep_unfold.
   eapply multistep_cases'; eauto.
 Qed.
 
 Lemma multistep_accept_cases :
   forall (g  : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (meas g st))
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a  : Acc lex_nat_triple (meas g ss ts av))
          (f  : forest),
-    multistep g st a = Accept f
-    -> (step g st = StepAccept f /\ st.(unique) = true)
-       \/ exists st' a', step g st = StepK st' 
-                         /\ multistep g st' a' = Accept f.
+    multistep g ps ss ts av u a = Accept f
+    -> (step g ps ss ts av u = StepAccept f /\ u = true)
+       \/ (exists ps' ss' ts' av' u' a',
+              step g ps ss ts av u = StepK ps' ss' ts' av' u'
+              /\ multistep g ps' ss' ts' av' u' a' = Accept f).
 Proof.
-  intros g st a f hm; subst.
-  destruct (multistep_cases g st a (Accept f)); auto.
+  intros ? ? ? ? ? ? a f hm; subst. 
+  destruct (multistep_cases _ _ _ _ _ _ a (Accept f) hm); auto.
 Qed.
 
 Lemma multistep_ambig_cases :
   forall (g  : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (meas g st))
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a  : Acc lex_nat_triple (meas g ss ts av))
          (f  : forest),
-    multistep g st a = Ambig f
-    -> (step g st = StepAccept f /\ st.(unique) = false)
-       \/ exists st' a', step g st = StepK st' 
-                         /\ multistep g st' a' = Ambig f.
+    multistep g ps ss ts av u a = Ambig f
+    -> (step g ps ss ts av u = StepAccept f /\ u = false)
+       \/ (exists ps' ss' ts' av' u' a',
+              step g ps ss ts av u = StepK ps' ss' ts' av' u'
+              /\ multistep g ps' ss' ts' av' u' a' = Ambig f).
 Proof.
-  intros g st a f hm; subst.
-  destruct (multistep_cases g st a (Ambig f)); auto.
+  intros ? ? ? ? ? ? a f hm; subst. 
+  destruct (multistep_cases _ _ _ _ _ _ a (Ambig f) hm); auto.
 Qed.
 
 Lemma multistep_reject_cases :
   forall (g  : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (meas g st))
-         (s  : string),
-    multistep g st a = Reject s
-    -> step g st = StepReject s
-       \/ exists st' a', step g st = StepK st' 
-                         /\ multistep g st' a' = Reject s.
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g ss ts av))
+         (s   : string),
+    multistep g ps ss ts av u a = Reject s
+    -> step g ps ss ts av u = StepReject s
+       \/ (exists ps' ss' ts' av' u' a',
+              step g ps ss ts av u = StepK ps' ss' ts' av' u'
+              /\ multistep g ps' ss' ts' av' u' a' = Reject s).
 Proof.
-  intros g st a s hm; subst.
-  destruct (multistep_cases g st a (Reject s)); auto.
+  intros ? ? ? ? ? ? a s hm; subst. 
+  destruct (multistep_cases _ _ _ _ _ _ a (Reject s) hm); auto.
 Qed.
 
 Lemma multistep_invalid_state_cases :
-  forall (g : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (meas g st)),
-    multistep g st a = Error InvalidState
-    -> step g st = StepError InvalidState
-       \/ exists st' a', step g st = StepK st' 
-                         /\ multistep g st' a' = Error InvalidState.
+  forall (g  : grammar)
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g ss ts av)),
+    multistep g ps ss ts av u a = Error InvalidState
+    -> step g ps ss ts av u = StepError InvalidState
+       \/ (exists ps' ss' ts' av' u' a',
+              step g ps ss ts av u = StepK ps' ss' ts' av' u'
+              /\ multistep g ps' ss' ts' av' u' a' = Error InvalidState).
 Proof.
-  intros g st a hm; subst.
-  destruct (multistep_cases g st a (Error InvalidState)); auto.
+  intros ? ? ? ? ? ? a hm; subst.
+  destruct (multistep_cases _ _ _ _ _ _ a (Error InvalidState) hm); auto.
 Qed.
 
 Lemma multistep_left_recursion_cases :
   forall (g  : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (meas g st))
-         (x  : nonterminal),
-    multistep g st a = Error (LeftRecursion x)
-    -> step g st = StepError (LeftRecursion x)
-       \/ exists st' a', step g st = StepK st' 
-                         /\ multistep g st' a' = Error (LeftRecursion x).
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g ss ts av))
+         (x   : nonterminal),
+    multistep g ps ss ts av u a = Error (LeftRecursion x)
+    -> step g ps ss ts av u = StepError (LeftRecursion x)
+       \/ (exists ps' ss' ts' av' u' a',
+              step g ps ss ts av u = StepK ps' ss' ts' av' u'
+              /\ multistep g ps' ss' ts' av' u' a' = Error (LeftRecursion x)).
 Proof.
-  intros g st a x hm; subst.
-  destruct (multistep_cases g st a (Error (LeftRecursion x))); auto.
+  intros ? ? ? ? ? ? a x hm; subst.
+  destruct (multistep_cases _ _ _ _ _ _ a (Error (LeftRecursion x)) hm); auto.
 Qed.
 
 Lemma multistep_prediction_error_cases :
   forall (g  : grammar)
-         (st : parser_state)
-         (a  : Acc lex_nat_triple (meas g st))
-         (e  : prediction_error),
-    multistep g st a = Error (PredictionError e)
-    -> step g st = StepError (PredictionError e)
-       \/ exists st' a', step g st = StepK st' 
-                         /\ multistep g st' a' = Error (PredictionError e).
+         (ps  : prefix_stack)
+         (ss  : suffix_stack)
+         (ts  : list token)
+         (av  : NtSet.t)
+         (u   : bool)
+         (a   : Acc lex_nat_triple (meas g ss ts av))
+         (e   : prediction_error),
+    multistep g ps ss ts av u a = Error (PredictionError e)
+    -> step g ps ss ts av u = StepError (PredictionError e)
+       \/ (exists ps' ss' ts' av' u' a',
+              step g ps ss ts av u = StepK ps' ss' ts' av' u'
+              /\ multistep g ps' ss' ts' av' u' a' = Error (PredictionError e)).
 Proof.
-  intros g st a e hm; subst.
-  destruct (multistep_cases g st a (Error (PredictionError e))); auto.
+  intros ? ? ? ? ? ? a e hm; subst.
+  destruct (multistep_cases _ _ _ _ _ _ a (Error (PredictionError e)) hm); auto.
 Qed.
- *)
 
+(* May be deprecated -- initial stacks are created in the body of parse *)
 Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) :
   prefix_stack * suffix_stack * list token * NtSet.t * bool :=
   ( (PF [] [], []),
@@ -452,9 +454,10 @@ Definition mkInitState (g : grammar) (gamma : list symbol) (ts : list token) :
     true ). 
 
 Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-  match mkInitState g gamma ts with
-  | (ps, ss, ts, av, u) => multistep g ps ss ts av u (lex_nat_triple_wf _)
-  end.
+  let p_stk0 := (PF [] [], []) in
+  let s_stk0 := (SF gamma, []) in
+  multistep g p_stk0 s_stk0 ts (allNts g) true (lex_nat_triple_wf _). 
+
 (*
 (* A WELL-FORMEDNESS INVARIANT FOR THE PARSER STACK *)
 
