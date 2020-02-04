@@ -14,22 +14,22 @@ Import ListNotations.
    ambiguous derivations, appear below. *)
 
 Inductive frames_derivation (g : grammar) :
-  list prefix_frame -> list suffix_frame -> list token -> list token -> Prop :=
+  list prefix_frame -> list suffix_frame -> list token -> Prop :=
 | FD_bottom  :
-    forall pre suf wpre wsuf v,
+    forall pre suf wpre v,
       gamma_derivation g (rev pre) wpre (rev v)
-      -> frames_derivation g [PF pre v] [SF suf] wpre wsuf
+      -> frames_derivation g [PF pre v] [SF suf] wpre
 | FD_upper :
-    forall p_cr p_frs s_cr s_frs x pre' suf suf' v' wpre wmid wsuf,
+    forall p_cr p_frs s_cr s_frs x pre' suf suf' v' wpre wmid,
       SF (NT x :: suf) = s_cr
       -> In (x, rev pre' ++ suf') g
       -> gamma_derivation g (rev pre') wmid (rev v')
       -> frames_derivation g (p_cr :: p_frs)
                              (s_cr :: s_frs)
-                             wpre (wmid ++ wsuf)
+                             wpre
       -> frames_derivation g (PF pre' v' :: p_cr :: p_frs)
                              (SF suf'    :: s_cr :: s_frs)
-                             (wpre ++ wmid) wsuf.
+                             (wpre ++ wmid).
 
 Hint Constructors frames_derivation.
 
@@ -37,22 +37,11 @@ Ltac inv_fd hf hf':=
   let heq := fresh "heq" in
   let hi  := fresh "hi"  in
   let hg  := fresh "hg"  in
-  inversion hf as [? ? ? ? ? hg | ? ? ? ? ? ? ? ? ? ? ? ? heq hi hg hf']; subst; clear hf.
-
-(*Lemma fd_inv_cons :
-  forall 
-    frames_derivation g (PF pre v :: p_frs) (SF suf :: s_frs) w wsuf,
-    -> exists wpre wmid,
-      w = wpre ++ wmid
-      /\ frames_derivation g frs wpre (wmid ++ wsuf)
-      /\ gamma_derivation g pre wmid v.
-Proof.
-  intros g o pre suf v frs w wsuf hf; inv hf; eauto.
-Qed.
- *)
+  inversion hf as [ ? ? ? ? hg 
+                  | ? ? ? ? ? ? ? ? ? ? ? heq hi hg hf']; subst; clear hf.
 
 Lemma return_preserves_frames_derivation :
-  forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x v v' wpre wsuf,
+  forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x v v' wpre,
     p_ce     = PF pre' v'
     -> s_ce  = SF []
     -> p_cr  = PF pre v
@@ -61,13 +50,13 @@ Lemma return_preserves_frames_derivation :
     -> s_cr' = SF suf
     -> frames_derivation g (p_ce :: p_cr :: p_frs)
                            (s_ce :: s_cr :: s_frs)
-                            wpre wsuf
+                            wpre
     -> frames_derivation g (p_cr' :: p_frs)
                            (s_cr' :: s_frs)
-                            wpre wsuf.
+                            wpre.
 Proof.
-  intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x v v' wpre wsuf ? ? ? ? ? ? hf; subst.
-  inv_fd hf hf'.
+  intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x v v' wpre
+         ? ? ? ? ? ? hf; subst; inv_fd hf hf'.
   inv heq; rewrite app_nil_r in *; inv_fd hf' hf''.
   - constructor; sis.
     apply gamma_derivation_app; auto.
@@ -78,15 +67,18 @@ Proof.
 Qed.
 
 Lemma consume_preserves_frames_derivation :
-  forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v wpre wsuf,
+  forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v wpre,
     p_fr     = PF pre v
     -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
     -> s_fr  = SF (T a :: suf)
     -> s_fr' = SF suf
-    -> frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre ((a, l) :: wsuf)
-    -> frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs) (wpre ++ [(a, l)]) wsuf.
+    -> frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
+                            wpre
+    -> frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs) 
+                           (wpre ++ [(a, l)]).
 Proof.
-  intros g ? ? ? ? p_frs s_frs pre suf a l v wpre wsuf ? ? ? ? hf; subst; inv hf.
+  intros g ? ? ? ? p_frs s_frs pre suf a l v wpre
+         ? ? ? ? hf; subst; inv hf.
   - constructor; sis.
     apply gamma_derivation_app; auto.
     rew_nil_r [(a,l)]; auto.
@@ -96,16 +88,18 @@ Proof.
 Qed.
 
 Lemma push_preserves_frames_derivation :
-  forall g p_cr p_ce s_cr s_ce p_frs s_frs x rhs pre suf wpre wsuf v,
+  forall g p_cr p_ce s_cr s_ce p_frs s_frs x rhs pre suf wpre v,
     p_cr     = PF pre v
     -> p_ce  = PF [] []
     -> s_cr  = SF (NT x :: suf)
     -> s_ce  = SF rhs
     -> In (x, rhs) g
-    -> frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) wpre wsuf
-    -> frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) wpre wsuf.
+    -> frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) 
+                            wpre
+    -> frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) 
+                            wpre.
 Proof.
-  intros g ? ? ? ? p_frs s_frs x rhs pre suf wpre wsuf v ? ? ? ? hi hf; subst.
+  intros g ? ? ? ? p_frs s_frs x rhs pre suf wpre v ? ? ? ? hi hf; subst.
   rew_nil_r wpre; eauto.
 Qed.    
 
@@ -114,7 +108,7 @@ Definition frames_prefix_derivation g w p_stk s_stk wsuf :=
   | (p_fr, p_frs), (s_fr, s_frs) =>
     exists wpre,
     w = wpre ++ wsuf
-    /\ frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre wsuf
+    /\ frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre
   end.
 
 Lemma step_preserves_frames_prefix_derivation :
@@ -144,162 +138,157 @@ Qed.
    lemma. The processed stack symbols and the semantic values stored
    in each frame comprise a unique partial derivation for the tokens that
    have been consumed. *)
+
 Inductive unique_frames_derivation (g : grammar) :
-  list frame -> list token -> list token -> Prop :=
-| USD_empty :
-    forall w,
-      unique_frames_derivation g [] [] w
+  list prefix_frame -> list suffix_frame -> list token -> list token -> Prop :=
 | USD_bottom :
-    forall o pre suf v wpre wsuf,
-      gamma_derivation g pre wpre v
+    forall pre suf wpre wsuf v,
+      gamma_derivation g (rev pre) wpre (rev v)
       -> (forall wpre' wsuf' v',
              wpre' ++ wsuf' = wpre ++ wsuf
-             -> gamma_derivation g pre wpre' v'
+             -> gamma_derivation g (rev pre) wpre' (rev v')
              -> gamma_recognize g suf wsuf'
-             -> wpre' = wpre /\ wsuf' = wsuf /\ v' = v)
-      -> unique_frames_derivation g [Fr (Loc o pre suf) v] wpre wsuf
+             -> wpre' = wpre /\ wsuf' = wsuf /\ rev v' = rev v)
+      -> unique_frames_derivation g [PF pre v] [SF suf] wpre wsuf
 | USD_upper :
-    forall cr ce o o' pre pre' x suf suf' frs wpre wmid wsuf v v',
-      cr = Fr (Loc o pre (NT x :: suf)) v
-      -> ce = Fr (Loc o' pre' suf') v'
-      -> unique_frames_derivation g (cr :: frs) wpre (wmid ++ wsuf)
-      -> gamma_derivation g pre' wmid v'
+    forall p_cr p_ce s_cr s_ce p_frs s_frs pre pre' suf suf' x wpre wmid wsuf v v',
+      PF pre v            = p_cr
+      -> SF (NT x :: suf) = s_cr
+      -> PF pre' v'       = p_ce 
+      -> SF suf'          = s_ce
+      -> unique_frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) 
+                                     wpre (wmid ++ wsuf)
+      -> In (x, rev pre' ++ suf') g
+      -> gamma_derivation g (rev pre') wmid (rev v')
       -> (forall wmid' wsuf' v'',
              wmid' ++ wsuf' = wmid ++ wsuf
-             -> gamma_derivation g pre' wmid' v''
-             -> gamma_recognize g (suf' ++ suf ++ unprocTailSyms' frs) wsuf'
-             -> wmid' = wmid /\ wsuf' = wsuf /\ v'' = v')
+             -> gamma_derivation g (rev pre') wmid' (rev v'')
+             -> gamma_recognize g (suf' ++ suf ++ unprocTailSyms s_frs) wsuf'
+             -> wmid' = wmid /\ wsuf' = wsuf /\ rev v'' = rev v')
       (* Here's the interesting part -- all pushes are unique *)
       -> (forall rhs,
              In (x, rhs) g
-             -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms' frs) (wmid ++ wsuf)
-             -> rhs = pre' ++ suf')
-      -> unique_frames_derivation g (ce :: cr :: frs) (wpre ++ wmid) wsuf.
+             -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms s_frs) (wmid ++ wsuf)
+             -> rhs = rev pre' ++ suf')
+      -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
+                                     (wpre ++ wmid) wsuf.
+ 
+Hint Constructors unique_frames_derivation.
 
+Ltac inv_ufd hu  ha hg hi hpu hu' :=
+  let hp  := fresh "hp"  in
+  let hp' := fresh "hp'" in
+  let hs  := fresh "hs"  in
+  let hs' := fresh "hs'" in
+  inversion hu as [ ? ? ? ? ? hg ha 
+                  | ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 
+                    hp hs hp' hs' hu' hi hg ha hpu
+                  ]; subst; clear hu.
+
+(* factor out repetition *)
 Lemma return_preserves_unique_frames_derivation :
-  forall g ce cr cr' frs x o o' pre pre' suf' wpre wsuf v v',
-    ce  = Fr (Loc o pre []) v
-    -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
-    -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') (v' ++ [Node x v])
-    -> stack_wf g (ce, cr :: frs)
-    -> unique_frames_derivation g (ce :: cr :: frs) wpre wsuf
-    -> unique_frames_derivation g (cr' :: frs) wpre wsuf.
+  forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x wpre wsuf v v',
+    p_ce     = PF pre' v'
+    -> s_ce  = SF []
+    -> p_cr  = PF pre v
+    -> p_cr' = PF (NT x :: pre) (Node x (rev v') :: v)
+    -> s_cr  = SF (NT x :: suf)
+    -> s_cr' = SF suf
+    -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
+                                   wpre wsuf
+    -> unique_frames_derivation g (p_cr' :: p_frs) (s_cr' :: s_frs) wpre wsuf.
 Proof.
-  intros g ce cr cr' frs x o o' pre pre' suf' wpre wsuf v v'
-         ? ? ? hw hu; subst; sis.
-  inversion hu as [ ?
-                  | ? ? ? ? ? ? ? ?
-                  | ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?
-                    heq heq' htl hg hder hpush]; subst; clear hu.
-  inv heq; inv heq'.
-  destruct frs.
-  - inv htl.
-    apply USD_bottom.
+  intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x wpre wsuf v v' 
+         ? ? ? ? ? ? hu; subst. 
+  inv_ufd hu ha hg hi hpu hu'; inv hp; inv hs; inv hp'; inv hs'; sis; 
+    rewrite app_nil_r in *.
+  inv_ufd hu' ha' hg' hi' hpu' hu''; sis; try rewrite app_nil_r in *.
+  - apply USD_bottom; sis.
     + apply gamma_derivation_app; auto.
-      inv hw; rewrite app_nil_r in *.
-      rew_nil_r wmid; eauto.
-    + intros wpre' wsuf' v' heq hd hr; subst; sis.
-      apply gamma_derivation_split in hd.
-      destruct hd as [w [w' [vs [vs' [? [? [hd hd']]]]]]]; subst.
-      repeat rewrite <- app_assoc in heq.
-      inv hd'.
-      inv H4. rewrite app_nil_r in *.
-      inv H1.
-      eapply H6 in heq; eauto.
-      * destruct heq as [? [? ?]]; subst.
-        assert (ys = pre'0).
-        { rewrite <- H1 in hpush.
-          apply hpush in H0; auto.
-          - rewrite app_nil_r in *; subst; auto.
-          - apply gamma_recognize_app; auto.
-            eapply gamma_derivation__gamma_recognize; eauto. }
-        subst.
-        eapply hder with (v'' := sts) in H1; eauto.
-        destruct H1 as [? [? ?]]; subst.
-        repeat split; auto.
-      * econstructor; eauto.
-        econstructor; eauto.
-        eapply gamma_derivation__gamma_recognize; eauto.
-  - inv htl.
-    inv H3.
-    rewrite <- app_assoc.
-    eapply USD_upper; eauto.
-    + rewrite <- app_assoc; auto.
-    + eapply gamma_derivation_app; auto.
-      inv hw. rewrite app_nil_r in *.
       rew_nil_r wmid; eauto.
     + intros wpre' wsuf' v'' heq hd hr; subst; sis.
       apply gamma_derivation_split in hd.
-      destruct hd as [w [w' [vs [vs' [? [? [hd hd']]]]]]]; subst.
+      destruct hd as (w & w' & v''' & v'''' & ? & heq' & hd & hd'); subst.
       repeat rewrite <- app_assoc in heq.
-      inv hd'.
-      inv H6. rewrite app_nil_r in *.
-      inv H1.
-      eapply H8 in heq; eauto.
-      * destruct heq as [? [? ?]]; subst.
-        assert (ys = pre'0).
-        { rewrite <- H1 in hpush.
-          apply hpush in H0; auto.
-          unfold unprocTailSyms'. simpl.
+      apply gamma_derivation_singleton_nt in hd'.
+      destruct hd' as (ys & sts & hi' & heq'' & hd'); subst.
+      eapply ha' with (v' := rev v''') in heq; 
+        try rewrite rev_involutive in *; subst; eauto.
+      * destruct heq as (? & heq & ?); subst.
+        assert (ys = rev pre').
+        { rewrite <- heq in hpu; apply hpu in hi'; auto.
           apply gamma_recognize_app; auto.
           eapply gamma_derivation__gamma_recognize; eauto. }
         subst.
-        eapply hder with (v'' := sts) in H1; eauto.
-        destruct H1 as [? [? ?]]; subst.
-        repeat split; auto.
-      * constructor; auto.
-        econstructor; eauto.
+        eapply ha with (v'' := rev sts) in heq; 
+          try rewrite rev_involutive in *; eauto.
+        destruct heq as (? & ? & ?); subst; auto.
+      * repeat (econstructor; eauto).
         eapply gamma_derivation__gamma_recognize; eauto.
-    + intros rhs hi hr; subst.
-      apply H9 in hi; auto.
-      * rewrite hi. apps.
-      * rewrite <- app_assoc in hr; auto.
+  - inv hp'; inv hs'. 
+    rewrite <- app_assoc; eapply USD_upper; eauto; sis; apps.
+    + apply gamma_derivation_app; auto.
+      rew_nil_r wmid; eauto.
+    + intros wpre' wsuf' v'' heq hd hr; subst; sis.
+      apply gamma_derivation_split in hd.
+      destruct hd as (w & w' & v''' & v'''' & ? & ? & hd & hd'); subst.
+      apply gamma_derivation_singleton_nt in hd'.
+      destruct hd' as (ys & sts & hi'' & heq'' & hd'); subst.
+      repeat rewrite <- app_assoc in heq.
+      eapply ha' with (v'' := rev v''') in heq; 
+        try rewrite rev_involutive in *; subst; eauto.
+      * destruct heq as (? & heq & ?); subst.
+        assert (ys = rev pre').
+        { rewrite <- heq in hpu; apply hpu in hi''; auto.
+          apply gamma_recognize_app; auto.
+          eapply gamma_derivation__gamma_recognize; eauto. }
+        subst; eapply ha with (v'' := rev sts) in heq; 
+          try rewrite rev_involutive in *; eauto.
+        destruct heq as (? & ? & ?); subst; auto.
+      * repeat (econstructor; eauto).
+        eapply gamma_derivation__gamma_recognize; eauto.
 Qed.
 
+(* factor out repetition *)
 Lemma consume_preserves_unique_frames_derivation :
-  forall g fr fr' frs o pre a suf v l wpre wsuf,
-    fr = Fr (Loc o pre (T a :: suf)) v
-    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf a l])
-    -> unique_frames_derivation g (fr :: frs) wpre ((a,l) :: wsuf)
-    -> unique_frames_derivation g (fr' :: frs) (wpre ++ [(a,l)]) wsuf.
+  forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l wpre wsuf v,
+    p_fr     = PF pre v
+    -> s_fr  = SF (T a :: suf)
+    -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
+    -> s_fr' = SF suf
+    -> unique_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
+                                   wpre ((a, l) :: wsuf)
+    -> unique_frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs) 
+                                  (wpre ++ [(a, l)]) wsuf.
 Proof.
-  intros g fr fr' frs o pre a suf v l wpre wsuf ? ? hu; subst.
-  inv hu.
+  intros g ? ? ? ? p_frs s_frs pre suf a l wpre wsuf v ? ? ? ? hu; subst.
+  inv_ufd hu ha hg hi hpu hu'.
   - constructor.
     + apply gamma_derivation_app; auto.
-      assert ([(a,l)] = [(a,l)] ++ []) by apps.
-      rewrite H; eauto.
-    + intros wpre' wsuf' v' heq hd hr; subst.
+      rew_nil_r [(a, l)]; eauto.
+    + intros wpre' wsuf' v' heq hd hr; subst; sis.
       apply gamma_derivation_split in hd.
-      destruct hd as [w [w' [v'' [v''' [? [? [hd hd']]]]]]]; subst.
-      inv hd'.
-      inv H1. inv H4. rewrite app_nil_r in*.
+      destruct hd as [w [w' [v'' [v''' [? [heq' [hd hd']]]]]]]; subst.
+      apply gamma_derivation_singleton_t in hd'. 
+      destruct hd' as (l' & ? & ?); subst.
       repeat rewrite <- app_assoc in heq.
-      eapply H7 in heq; eauto.
-      destruct heq as [? [? ?]]; subst.
-      inv H0. repeat split; auto.
-  - inv H2.
-    rewrite <- app_assoc.
-    econstructor; eauto.
-    + rewrite <- app_assoc; auto.
+      eapply ha with (v' := rev v'') in heq; 
+        try rewrite rev_involutive in *; eauto.
+      destruct heq as [? [heq'' ?]]; subst.
+      inv heq''; auto. 
+  - inv hp'; inv hs'; rewrite <- app_assoc; econstructor; eauto; sis; apps.
     + apply gamma_derivation_app; auto.
-      assert ([(a,l)] = [(a,l)] ++ []) by apps.
-      rewrite H; eauto.
-    + intros wpre' wsuf' v'' heq hd hr; subst.
+      rew_nil_r [(a, l)]; eauto.
+    + intros wpre' wsuf' v' heq hd hr; subst; sis.
       apply gamma_derivation_split in hd.
-      destruct hd as [w [w' [v''' [v'''' [? [? [hd hd']]]]]]]; subst.
-      inv hd'.
-      inv H1. inv H7. rewrite app_nil_r in*.
+      destruct hd as [w [w' [v'' [v''' [? [heq' [hd hd']]]]]]]; subst.
+      apply gamma_derivation_singleton_t in hd'. 
+      destruct hd' as (l' & ? & ?); subst.
       repeat rewrite <- app_assoc in heq.
-      eapply H5 in heq; eauto.
-      * destruct heq as [? [? ?]]; subst.
-        inv H0. repeat split; auto.
-      * constructor; auto.
-    + intros rhs hi hr.
-      sis.
-      eapply H8 in hi; eauto.
-      * rewrite hi. apps.
-      * rewrite <- app_assoc in hr; auto.
+      eapply ha with (v'' := rev v'') in heq; 
+        try rewrite rev_involutive in *; eauto.
+      destruct heq as [? [heq'' ?]]; subst.
+      inv heq''; auto. 
 Qed.
 
 Lemma push_succ_preserves_usd :

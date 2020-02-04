@@ -246,6 +246,9 @@ Hint Constructors sym_derivation gamma_derivation.
 Scheme sym_derivation_mutual_ind   := Induction for sym_derivation Sort Prop
   with gamma_derivation_mutual_ind := Induction for gamma_derivation Sort Prop.
 
+Ltac inv_gd hg hs hg' :=
+  inversion hg as [| ? ? ? ? ? ? hs hg']; subst; clear hg.
+
 Lemma gamma_derivation_app' :
   forall g ys1 w1 v1,
     gamma_derivation g ys1 w1 v1
@@ -370,6 +373,31 @@ Lemma trees_eq__gammas_eq_words_eq :
     -> ys' = ys /\ w' = w.
 Proof.
   intros; eapply trees_eq__gammas_eq_words_eq'; eauto.
+Qed.
+
+Lemma gamma_derivation_singleton_t :
+  forall g a w v,
+    gamma_derivation g [T a] w v
+    -> exists l,
+      w = [(a, l)]
+      /\ v = [Leaf a l].
+Proof.
+  intros g a w v hg.
+  inv_gd hg hs hg'.
+  inv hs; inv hg'; rewrite app_nil_r; eauto.
+Qed.
+
+Lemma gamma_derivation_singleton_nt :
+  forall g x w v,
+    gamma_derivation g [NT x] w v
+    -> exists ys v',
+      In (x, ys) g
+      /\ v = [Node x v']
+      /\ gamma_derivation g ys w v'.
+Proof.
+  intros g x w v hg.
+  inv_gd hg hs hg'.
+  inv hs; inv hg'; rewrite app_nil_r; eauto.
 Qed.
 
 Definition unique_gamma_derivation g ss w v :=
