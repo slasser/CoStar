@@ -51,7 +51,7 @@ Definition step (g      : grammar)
       (* empty stacks --> terminate *)
       | [], [] => 
         match ts with
-        | []     => StepAccept v
+        | []     => StepAccept (rev v)
         | _ :: _ => StepReject "stack exhausted, tokens remain"
         end
       (* nonempty stacks --> return to caller frames *)
@@ -108,11 +108,11 @@ Lemma step_StepAccept_facts :
     -> ts = []
        /\ s_stk = (SF [], [])
        /\ exists pre,
-           p_stk = (PF pre v, []).
+           p_stk = (PF pre (rev v), []).
 Proof.
   intros g pstk sstk ts av u v hs.
   unfold step in hs; dms; tc.
-  inv hs; eauto.
+  inv hs; rewrite rev_involutive; eauto.
 Qed.
 
 Lemma step_LeftRecursion_facts :

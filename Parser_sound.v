@@ -10,26 +10,128 @@ Require Import GallStar.Termination.
 Require Import GallStar.Utils.
 Import ListNotations.
 
+Inductive frames_wf (g : grammar) : list prefix_frame -> list suffix_frame -> Prop :=
+| WF_bottom :
+    forall pre suf v,
+      frames_wf g [PF pre v] [SF suf]
+| WF_upper :
+    forall x pre pre' suf suf' p_frs s_frs v v',
+    In (x, rev pre' ++ suf') g
+    -> frames_wf g (PF pre v :: p_frs) 
+                   (SF (NT x :: suf) :: s_frs)
+    -> frames_wf g (PF pre' v' :: PF pre v :: p_frs) 
+                   (SF suf' :: SF (NT x :: suf) :: s_frs).
+
+Hint Constructors frames_wf.
+
+Ltac inv_fw hw  hi hw' := 
+  inversion hw as [? ? ? | ? ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
+
+Lemma frames_wf__suffix_frames_wf :
+  forall g p_frs s_frs,
+    frames_wf g p_frs s_frs
+    -> Prediction.frames_wf g s_frs.
+Proof.
+  intros g pfrs sfrs hw; induction hw; eauto.
+Qed.
+
+Lemma return_preserves_frames_wf_invar :
+  forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x v v',
+    p_ce     = PF pre' v'
+    -> s_ce  = SF []
+    -> p_cr  = PF pre v
+    -> p_cr' = PF (NT x :: pre) (Node x (rev v') :: v)
+    -> s_cr  = SF (NT x :: suf)
+    -> s_cr' = SF suf
+    -> frames_wf g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
+    -> frames_wf g (p_cr' :: p_frs) (s_cr' :: s_frs).
+Proof.
+  intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x v v'
+         ? ? ? ? ? ? hw; subst; inv_fw hw hi hw'; rew_anr.
+  inv_fw hw' hi' hw''; auto.
+  econstructor; eauto; sis; apps.
+Qed.
+
+Lemma consume_preserves_frames_wf_invar :
+  forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v,
+    p_fr     = PF pre v
+    -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
+    -> s_fr  = SF (T a :: suf)
+    -> s_fr' = SF suf
+    -> frames_wf g (p_fr :: p_frs) (s_fr :: s_frs) 
+    -> frames_wf g (p_fr' :: p_frs) (s_fr' :: s_frs).
+Proof.
+  intros g ? ? ? ? p_frs s_frs pre suf a l v ? ? ? ? hw; subst; 
+    inv_fw hw hi hw'; auto.
+  econstructor; eauto; sis; apps.
+Qed.
+
+Lemma push_preserves_frames_wf_invar :
+  forall g p_cr p_ce s_cr s_ce p_frs s_frs x rhs pre suf v,
+    p_cr     = PF pre v
+    -> p_ce  = PF [] []
+    -> s_cr  = SF (NT x :: suf)
+    -> s_ce  = SF rhs
+    -> In (x, rhs) g
+    -> frames_wf g (p_cr :: p_frs) (s_cr :: s_frs) 
+    -> frames_wf g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs).
+Proof.
+  intros g ? ? ? ? p_frs s_frs x rhs pre suf v ? ? ? ? hi hf; subst; auto.
+Qed.    
+
+Definition stacks_wf g p_stk s_stk := 
+  match p_stk, s_stk with
+  | (p_fr, p_frs), (s_fr, s_frs) => frames_wf g (p_fr :: p_frs) (s_fr :: s_frs)
+  end.
+
+Lemma step_preserves_stacks_wf_invar :
+  forall g ps ps' ss ss' ts ts' av av' u u',
+    stacks_wf g ps ss
+    -> step g ps ss ts av u = StepK ps' ss' ts' av' u'
+    -> stacks_wf g ps' ss'.
+Proof.
+  intros g (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
+         ts ts' av av' u u' hw hs; red; red in hw.
+  unfold step in hs; dmeqs h; tc; inv hs.
+  - eapply return_preserves_frames_wf_invar; eauto. 
+  - eapply consume_preserves_frames_wf_invar; eauto. 
+  - eapply push_preserves_frames_wf_invar; eauto. 
+    eapply llPredict_succ_in_grammar; eauto.
+  - eapply push_preserves_frames_wf_invar; eauto.
+    eapply llPredict_ambig_in_grammar; eauto.
+Qed.
+
+Lemma step_preserves_bottomFrameSyms_invar :
+  forall g p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
+    stacks_wf g p_stk s_stk
+    -> step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
+    -> bottomFrameSyms p_stk s_stk = bottomFrameSyms p_stk' s_stk'.
+Proof.
+  intros g (p_fr, p_frs) p_stk' (s_fr, s_frs) s_stk' ts ts' av av' u u' hw hs.
+  unfold step in hs; dms; inv hs; tc; unfold bottomFrameSyms;
+    destruct p_frs; destruct s_frs; sis; apps; inv_fw hw hi hw'; inv hw'. 
+Qed.
+
 (* The stronger parser soundness theorems -- one for unique derivations, one for
    ambiguous derivations, appear below. *)
 
 Inductive frames_derivation (g : grammar) :
-  list prefix_frame -> list suffix_frame -> list token -> Prop :=
+  list prefix_frame -> list suffix_frame -> list token -> list token -> Prop :=
 | FD_bottom  :
-    forall pre suf wpre v,
+    forall pre suf wpre wsuf v,
       gamma_derivation g (rev pre) wpre (rev v)
-      -> frames_derivation g [PF pre v] [SF suf] wpre
+      -> frames_derivation g [PF pre v] [SF suf] wpre wsuf
 | FD_upper :
-    forall p_cr p_frs s_cr s_frs x pre' suf suf' v' wpre wmid,
+    forall p_cr p_frs s_cr s_frs x pre' suf suf' v' wpre wmid wsuf,
       SF (NT x :: suf) = s_cr
       -> In (x, rev pre' ++ suf') g
       -> gamma_derivation g (rev pre') wmid (rev v')
       -> frames_derivation g (p_cr :: p_frs)
                              (s_cr :: s_frs)
-                             wpre
+                             wpre (wmid ++ wsuf)
       -> frames_derivation g (PF pre' v' :: p_cr :: p_frs)
                              (SF suf'    :: s_cr :: s_frs)
-                             (wpre ++ wmid).
+                             (wpre ++ wmid) wsuf.
 
 Hint Constructors frames_derivation.
 
@@ -37,11 +139,11 @@ Ltac inv_fd hf hf':=
   let heq := fresh "heq" in
   let hi  := fresh "hi"  in
   let hg  := fresh "hg"  in
-  inversion hf as [ ? ? ? ? hg 
-                  | ? ? ? ? ? ? ? ? ? ? ? heq hi hg hf']; subst; clear hf.
+  inversion hf as [ ? ? ? ? ? hg 
+                  | ? ? ? ? ? ? ? ? ? ? ? ? heq hi hg hf']; subst; clear hf.
 
 Lemma return_preserves_frames_derivation :
-  forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x v v' wpre,
+  forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x v v' wpre wsuf,
     p_ce     = PF pre' v'
     -> s_ce  = SF []
     -> p_cr  = PF pre v
@@ -50,12 +152,12 @@ Lemma return_preserves_frames_derivation :
     -> s_cr' = SF suf
     -> frames_derivation g (p_ce :: p_cr :: p_frs)
                            (s_ce :: s_cr :: s_frs)
-                            wpre
+                            wpre wsuf
     -> frames_derivation g (p_cr' :: p_frs)
                            (s_cr' :: s_frs)
-                            wpre.
+                            wpre wsuf.
 Proof.
-  intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x v v' wpre
+  intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x v v' wpre wsuf
          ? ? ? ? ? ? hf; subst; inv_fd hf hf'.
   inv heq; rewrite app_nil_r in *; inv_fd hf' hf''.
   - constructor; sis.
@@ -67,17 +169,17 @@ Proof.
 Qed.
 
 Lemma consume_preserves_frames_derivation :
-  forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v wpre,
+  forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v wpre wsuf,
     p_fr     = PF pre v
     -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
     -> s_fr  = SF (T a :: suf)
     -> s_fr' = SF suf
     -> frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
-                            wpre
+                            wpre ((a, l) :: wsuf)
     -> frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs) 
-                           (wpre ++ [(a, l)]).
+                           (wpre ++ [(a, l)]) wsuf.
 Proof.
-  intros g ? ? ? ? p_frs s_frs pre suf a l v wpre
+  intros g ? ? ? ? p_frs s_frs pre suf a l v wpre wsuf
          ? ? ? ? hf; subst; inv hf.
   - constructor; sis.
     apply gamma_derivation_app; auto.
@@ -88,34 +190,34 @@ Proof.
 Qed.
 
 Lemma push_preserves_frames_derivation :
-  forall g p_cr p_ce s_cr s_ce p_frs s_frs x rhs pre suf wpre v,
+  forall g p_cr p_ce s_cr s_ce p_frs s_frs x rhs pre suf wpre wsuf v,
     p_cr     = PF pre v
     -> p_ce  = PF [] []
     -> s_cr  = SF (NT x :: suf)
     -> s_ce  = SF rhs
     -> In (x, rhs) g
     -> frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) 
-                            wpre
+                            wpre wsuf
     -> frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) 
-                            wpre.
+                            wpre wsuf.
 Proof.
-  intros g ? ? ? ? p_frs s_frs x rhs pre suf wpre v ? ? ? ? hi hf; subst.
+  intros g ? ? ? ? p_frs s_frs x rhs pre suf wpre wsuf v ? ? ? ? hi hf; subst.
   rew_nil_r wpre; eauto.
 Qed.    
 
-Definition frames_prefix_derivation g w p_stk s_stk wsuf :=
+Definition stack_prefix_derivation g w p_stk s_stk wsuf :=
   match p_stk, s_stk with
   | (p_fr, p_frs), (s_fr, s_frs) =>
     exists wpre,
     w = wpre ++ wsuf
-    /\ frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre
+    /\ frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre wsuf
   end.
 
-Lemma step_preserves_frames_prefix_derivation :
+Lemma step_preserves_stack_prefix_derivation :
   forall g w ps ps' ss ss' ts ts' av av' u u',
-    frames_prefix_derivation g w ps ss ts
+    stack_prefix_derivation g w ps ss ts
     -> step g ps ss ts av u = StepK ps' ss' ts' av' u'
-    -> frames_prefix_derivation g w ps' ss' ts'.
+    -> stack_prefix_derivation g w ps' ss' ts'.
 Proof.
   intros g w (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
          ts ts' av av' u u' hf hs; red; red in hf.
@@ -138,7 +240,6 @@ Qed.
    lemma. The processed stack symbols and the semantic values stored
    in each frame comprise a unique partial derivation for the tokens that
    have been consumed. *)
-
 Inductive unique_frames_derivation (g : grammar) :
   list prefix_frame -> list suffix_frame -> list token -> list token -> Prop :=
 | USD_bottom :
@@ -291,62 +392,63 @@ Proof.
       inv heq''; auto. 
 Qed.
 
-Lemma push_succ_preserves_usd :
-  forall g fr o pre x suf v frs wpre wsuf rhs,
-    fr = Fr (Loc o pre (NT x :: suf)) v
+Lemma push_succ_preserves_unique_frames_derivation :
+  forall g p_cr p_ce s_cr s_ce p_frs s_frs x pre suf rhs wpre wsuf v,
+    p_cr    = PF pre v
+    -> s_cr = SF (NT x :: suf)
+    -> p_ce = PF [] []
+    -> s_ce = SF rhs
     -> no_left_recursion g
-    -> stack_wf g (fr, frs)
-    -> llPredict g x (lstackOf (fr, frs)) wsuf = PredSucc rhs
-    -> unique_frames_derivation g (fr :: frs) wpre wsuf
-    -> unique_frames_derivation g (Fr (Loc (Some x) [] rhs) [] :: fr :: frs) wpre wsuf.
+    -> stacks_wf g (p_cr, p_frs) (s_cr, s_frs)
+    -> llPredict g x (s_cr, s_frs) wsuf = PredSucc rhs
+    -> unique_frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) wpre wsuf
+    -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) wpre wsuf.
 Proof.
-  intros g fr o pre x suf v frs wpre wsuf rhs ? hn hw hl hu; subst; sis.
-  assert (wpre = wpre ++ []) by apps. rewrite H.
-  econstructor; eauto.
-  - intros wmid' wsuf' v'' heq hd hr; sis; subst.
+  intros g ? ? ? ? p_frs s_frs x pre suf rhs wpre wsuf v ? ? ? ? hn hw hl hu; subst.
+  assert (heq: wpre = wpre ++ []) by apps; rewrite heq.
+  econstructor; eauto; sis.
+  - eapply llPredict_succ_in_grammar; eauto.
+  - intros wmid' wsuf' v'' heq' hd hr; sis; subst.
     inv hd; auto.
-  - intros rhs' hi hr; sis.
-    eapply llPredict_succ_at_most_one_rhs_applies in hl; eauto.
-Qed.    
+  - intros; eapply llPredict_succ_at_most_one_rhs_applies in hl; eauto.
+    red. eapply frames_wf__suffix_frames_wf; eauto.
+Qed.
 
-Definition unique_prefix_derivation g w st :=
-  match st with
-  | Pst _ (fr, frs) wsuf u =>
+Definition unique_stack_prefix_derivation g w p_stk s_stk wsuf u :=
+  match p_stk, s_stk with
+  | (p_fr, p_frs), (s_fr, s_frs) =>
     u = true
     -> exists wpre,
         w = wpre ++ wsuf
-        /\ unique_frames_derivation g (fr :: frs) wpre wsuf
+        /\ unique_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre wsuf
   end.
 
-Lemma step_preserves_upd :
-  forall g w st st',
+Lemma step_preserves_unique_stack_prefix_derivation_invar :
+  forall g w p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
     no_left_recursion g
-    -> stack_wf g (Parser.stack st)
-    -> unique_prefix_derivation g w st
-    -> step g st = StepK st'
-    -> unique_prefix_derivation g w st'.
+    -> stacks_wf g p_stk s_stk
+    -> unique_stack_prefix_derivation g w p_stk s_stk ts u
+    -> step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
+    -> unique_stack_prefix_derivation g w p_stk' s_stk' ts' u'.
 Proof.
-  intros g w [av (fr,frs) wsuf u] [av' (fr',frs') wsuf' u'] hn hw hu hs.
-  red; red in hu.
-  intros hu'.
+  intros g w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
+         ts ts' av av' u u' hn hw hu hs; red; red in hu; intros hu'.
   unfold step in hs; dmeqs h; inv hs; tc;
-  destruct hu as [wpre [heq hu]]; subst; auto.
+    destruct hu as (wpre & heq & hu); subst; auto. 
   - exists wpre; split; auto.
     eapply return_preserves_unique_frames_derivation; eauto.
-  - exists (wpre ++ [(t,l1)]); split.
-    + apps.
+  - eexists; split.
+    + rewrite cons_app_singleton; rewrite app_assoc; eauto.
     + eapply consume_preserves_unique_frames_derivation; eauto.
   - exists wpre; split; auto.
-    eapply push_succ_preserves_usd; eauto.
+    eapply push_succ_preserves_unique_frames_derivation; eauto.
 Qed.
 
-Lemma upd_starts_true :
+Lemma unique_stack_prefix_derivation_invar_starts_true :
   forall g ys ts,
-    unique_prefix_derivation g ts (mkInitState g ys ts).
+    unique_stack_prefix_derivation g ts (PF [] [], []) (SF ys, []) ts true. 
 Proof.
-  intros g ys ts.
-  unfold mkInitState; sis.
-  intros _.
+  intros g ys ts; red; intros _.
   exists []; split; auto.
   constructor; auto.
   intros wpre' wsuf' v' heq hd hr; sis.
@@ -359,63 +461,62 @@ Lemma multistep_sound_unambig' :
          (a      : Acc lex_nat_triple tri)
          (w wsuf : list token)
          (av     : NtSet.t)
-         (stk    : parser_stack)
+         (p_stk  : prefix_stack)
+         (s_stk  : suffix_stack)
          (u      : bool)
-         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf u)))
+         (a'     : Acc lex_nat_triple (meas g s_stk wsuf av))
          (v      : forest),
-    tri = Parser.meas g (Pst av stk wsuf u)
+    tri = meas g s_stk wsuf av
     -> no_left_recursion g
-    -> stack_wf g stk
-    -> unique_prefix_derivation g w (Pst av stk wsuf u)
-    -> multistep g (Pst av stk wsuf u) a' = Accept v
-    -> gamma_derivation g (bottomFrameSyms stk) w v
+    -> stacks_wf g p_stk s_stk
+    -> unique_stack_prefix_derivation g w p_stk s_stk wsuf u
+    -> multistep g p_stk s_stk wsuf av u a' = Accept v
+    -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
        /\ (forall v',
-              gamma_derivation g (bottomFrameSyms stk) w v'
+              gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
               -> v' = v).
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros w wsuf av stk u a' v heq hn hw hi hm; subst.
+  intros w wsuf av p_stk s_stk u a' v ? hn hw hu hm; subst.
   apply multistep_accept_cases in hm.
-  destruct hm as [[hf hu] | he].
-  - simpl in hu; subst.
-    apply step_StepAccept_facts in hf.
-    destruct hf as [[xo [rpre [v' [heq]]]] heq']; subst.
+  destruct hm as [[hf hu'] | he]; subst.
+  - apply step_StepAccept_facts in hf.
+    destruct hf as (? & ? & (pre & ?)); subst.
     unfold bottomFrameSyms; simpl; rewrite app_nil_r.
-    red in hi.
-    destruct hi as [wpre [heq hu]]; subst; auto.
-    inv hu.
-    rewrite app_nil_r in *.
-    split; auto.
+    red in hu.
+    destruct hu as (wpre & ? & hu); subst; auto.
+    inv_ufd hu ha hg hi hpu hu'; try rewrite rev_involutive in hg; 
+      rewrite app_nil_r in *; split; auto.
     intros v' hd.
-    eapply H6 in hd; eauto.
-    + destruct hd as [? [? ?]]; auto.
-    + apps.
-  - destruct he as [st' [a'' [hf hm]]].
-    destruct st' as [av' stk' wsuf'].
-    eapply IH with (w := w) in hm; eauto. 
+    assert (heq : v' = rev (rev v')) by (rewrite rev_involutive; auto).
+    rewrite heq in hd. 
+    eapply ha in hd; eauto; apps.
+    destruct hd as (? & ? & heq'); repeat rewrite rev_involutive in heq'; auto.
+  - destruct he as (ps' & ss' & ts' & av' & u' & a'' & hs & hm).
+    eapply IH with (w := w) in hm; eauto.
     + erewrite step_preserves_bottomFrameSyms_invar; eauto.
-    + apply step_meas_lt; auto.
-    + eapply step_preserves_stack_wf_invar; eauto.
-    + eapply step_preserves_upd; eauto.
-      simpl; auto.
+    + eapply step_meas_lt; eauto.
+    + eapply step_preserves_stacks_wf_invar; eauto. 
+    + eapply step_preserves_unique_stack_prefix_derivation_invar; eauto.
 Qed.
 
 Lemma multistep_sound_unambig :
   forall (g      : grammar)
          (w wsuf : list token)
          (av     : NtSet.t)
-         (stk    : parser_stack)
+         (p_stk  : prefix_stack)
+         (s_stk  : suffix_stack)
          (u      : bool)
-         (a      : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf u)))
+         (a      : Acc lex_nat_triple (meas g s_stk wsuf av))
          (v      : forest),
     no_left_recursion g
-    -> stack_wf g stk
-    -> unique_prefix_derivation g w (Pst av stk wsuf u)
-    -> multistep g (Pst av stk wsuf u) a = Accept v
-    -> gamma_derivation g (bottomFrameSyms stk) w v
+    -> stacks_wf g p_stk s_stk
+    -> unique_stack_prefix_derivation g w p_stk s_stk wsuf u
+    -> multistep g p_stk s_stk wsuf av u a = Accept v
+    -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
        /\ (forall v',
-              gamma_derivation g (bottomFrameSyms stk) w v'
+              gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
               -> v' = v).
 Proof.
   intros; eapply multistep_sound_unambig'; eauto.
@@ -435,110 +536,11 @@ Theorem parse_sound_unambig :
 Proof.
   intros g ys ts v hn hp.
   unfold parse in hp.
-  eapply multistep_sound_unambig in hp; eauto.
-  - constructor.
-  - apply upd_starts_true.
+  eapply multistep_sound_unambig in hp; try red; eauto.
+  apply unique_stack_prefix_derivation_invar_starts_true.
 Qed.
 
 (* now for the ambiguous case *)
-
-Inductive frames_derivation (g : grammar) :
-  list frame -> list token -> list token -> Prop :=
-| FD_nil  :
-    forall wsuf,
-      frames_derivation g [] [] wsuf
-| FD_cons :
-    forall o pre suf v frs wpre wmid wsuf,
-      gamma_derivation g pre wmid v
-    -> frames_derivation g frs wpre (wmid ++ wsuf) 
-    -> frames_derivation g (Fr (Loc o pre suf) v :: frs) (wpre ++ wmid) wsuf.
-
-Hint Constructors frames_derivation.
-
-Lemma fd_inv_cons :
-  forall g o pre suf v frs w wsuf,
-    frames_derivation g (Fr (Loc o pre suf) v :: frs) w wsuf
-    -> exists wpre wmid,
-      w = wpre ++ wmid
-      /\ frames_derivation g frs wpre (wmid ++ wsuf)
-      /\ gamma_derivation g pre wmid v.
-Proof.
-  intros g o pre suf v frs w wsuf hf; inv hf; eauto.
-Qed.
-
-Lemma return_preserves_frames_derivation :
-  forall g ce cr cr' o o' pre pre' x suf v v' wpre wsuf frs,
-    ce = Fr (Loc o' pre' []) v'
-    -> cr = Fr (Loc o pre (NT x :: suf)) v
-    -> cr' = Fr (Loc o (pre ++ [NT x]) suf) (v ++ [Node x v'])
-    -> stack_wf g (ce, cr :: frs)
-    -> frames_derivation g (ce :: cr :: frs) wpre wsuf
-    -> frames_derivation g (cr' :: frs) wpre wsuf.
-Proof.
-  intros g ce cr cr' o o' pre pre' x suf v v' w wsuf frs ? ? ? hw hf; subst.
-  apply fd_inv_cons in hf; destruct hf as [w' [wmid' [heq [hf hg']]]]; subst.
-  apply fd_inv_cons in hf; destruct hf as [wpre [wmid [heq [hf hg]]]]; subst.
-  rewrite <- app_assoc; econstructor; eauto.
-  - apply gamma_derivation_app; auto.
-    inv hw; rewrite app_nil_r in *.
-    rew_nil_r wmid'; eauto.
-  - rewrite <- app_assoc; auto.
-Qed.
-
-Lemma consume_preserves_frames_derivation :
-  forall g fr fr' frs o pre suf v a l wpre wsuf,
-    fr = Fr (Loc o pre (T a :: suf)) v
-    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf a l])
-    -> frames_derivation g (fr :: frs) wpre ((a,l) :: wsuf)
-    -> frames_derivation g (fr' :: frs) (wpre ++ [(a,l)]) wsuf.
-Proof.
-  intros g fr fr' frs o pre suf v a l wpre wsuf ? ? hf; subst; inv hf.
-  rewrite <- app_assoc; econstructor.
-  - apply gamma_derivation_app; auto.
-    rew_nil_r [(a,l)]; eauto.
-  - rewrite <- app_assoc; auto.
-Qed.
-
-Lemma push_preserves_frames_derivation :
-  forall g cr ce frs o o' pre suf v x rhs wpre wsuf,
-    cr = Fr (Loc o pre (NT x :: suf)) v
-    -> ce = Fr (Loc o' [] rhs) []
-    -> frames_derivation g (cr :: frs) wpre wsuf
-    -> frames_derivation g (ce :: cr :: frs) wpre wsuf.
-Proof.
-  intros g cr ce frs o o' pre suf v x rhs w wsuf ? ? hf; subst.
-  apply fd_inv_cons in hf; destruct hf as [wpre [wmid [heq [hf hg]]]]; subst.
-  rew_nil_r (wpre ++ wmid); eauto.
-Qed.
-
-Definition frames_prefix_derivation g w st :=
-  match st with
-  | Pst _ (fr, frs) wsuf _ =>
-    exists wpre,
-    w = wpre ++ wsuf
-    /\ frames_derivation g (fr :: frs) wpre wsuf
-  end.
-
-Lemma step_preserves_frames_prefix_derivation :
-  forall g w st st',
-    stack_wf g (Parser.stack st)
-    -> frames_prefix_derivation g w st
-    -> step g st = StepK st'
-    -> frames_prefix_derivation g w st'.
-Proof.
-  intros g w [av (fr,frs) ts u] [av' (fr',frs') ts' u'] hw hf hs.
-  red; red in hf.
-  destruct hf as [wpre [heq hf]]; subst.
-  unfold step in hs; dmeqs h; tc; inv hs.
-  - eexists; split; eauto.
-    eapply return_preserves_frames_derivation; eauto.
-  - exists (wpre ++ [(t,l1)]); split; apps.
-    eapply consume_preserves_frames_derivation; eauto.
-  - eexists; split; eauto.
-    eapply push_preserves_frames_derivation; eauto.
-  - eexists; split; eauto.
-    eapply push_preserves_frames_derivation; eauto.
-Qed.
 
 (* Invariant for proving the "ambiguous" version of the parser soundness
    theorem. The processed stack symbols and semantic values constructed

@@ -221,6 +221,22 @@ Definition unprocStackSyms (stk : suffix_stack) : list symbol :=
   | (SF suf, frs) => suf ++ unprocTailSyms frs
   end.
 
+(*
+Definition bottomFramePrefix (p_stk : prefix_stack) : list symbol :=
+  match bottomElt p_stk with
+  | PF pre _ => pre
+  end.
+
+Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
+  match bottomElt s_stk with
+  | SF suf => suf
+  end.
+*)
+Definition bottomFrameSyms p_stk s_stk := 
+  match bottomElt p_stk, bottomElt s_stk with
+  | PF pre _, SF suf => rev pre ++ suf
+  end.
+
 (* Grammatical derivation relation *)
 Inductive sym_derivation (g : grammar) : symbol -> list token -> tree -> Prop :=
 | T_der  : 
