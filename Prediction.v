@@ -901,45 +901,43 @@ Qed.
 
 (* The stack predicate is defined in terms of the following
    predicate over a list of locations *)
-Inductive frames_wf (g : grammar) : list suffix_frame -> Prop :=
-| WF_nil :
-    frames_wf g []
+Inductive suffix_frames_wf (g : grammar) : list suffix_frame -> Prop :=
 | WF_bottom :
     forall suf,
-     frames_wf g [SF suf]
+     suffix_frames_wf g [SF suf]
 | WF_upper :
     forall x pre' suf suf' frs,
       In (x, pre' ++ suf') g
-      -> frames_wf g (SF (NT x :: suf) :: frs)
-      -> frames_wf g (SF suf' :: SF (NT x :: suf) :: frs).
+      -> suffix_frames_wf g (SF (NT x :: suf) :: frs)
+      -> suffix_frames_wf g (SF suf' :: SF (NT x :: suf) :: frs).
 
-Hint Constructors frames_wf.
+Hint Constructors suffix_frames_wf.
 
-(* invert a suffix_frames_wf judgment, naming the hypotheses hi and hw' *)
-Ltac inv_frames_wf hw hi hw' :=
-  inversion hw as [ | ? | ? ? ? ? ? hi hw']; subst; clear hw.
+(* invert a suffix_suffix_frames_wf judgment, naming the hypotheses hi and hw' *)
+Ltac inv_suffix_frames_wf hw hi hw' :=
+  inversion hw as [ ? | ? ? ? ? ? hi hw']; subst; clear hw.
 
 Ltac wf_upper_nil := eapply WF_upper with (pre' := []); sis; eauto. 
 
 (* The stack well-formedness predicate *)
-Definition stack_wf (g : grammar) (stk : suffix_stack) : Prop :=
+Definition suffix_stack_wf (g : grammar) (stk : suffix_stack) : Prop :=
   match stk with
   | (fr, frs) =>
-    frames_wf g (fr :: frs)
+    suffix_frames_wf g (fr :: frs)
   end.
 
 (* Lift the predicate to a list of subparsers *)
-Definition all_stacks_wf (g : grammar) (sps: list subparser) : Prop :=
-  forall sp, In sp sps -> stack_wf g sp.(stack).
+Definition all_suffix_stacks_wf (g : grammar) (sps: list subparser) : Prop :=
+  forall sp, In sp sps -> suffix_stack_wf g sp.(stack).
 
 (* Lemmas about the well-formedness predicate *)
 
-Lemma frames_wf_app' :
+(*Lemma suffix_frames_wf_app' :
   forall g l,
-    frames_wf g l
+    suffix_frames_wf g l
     -> forall p s,
       l = p ++ s
-      -> frames_wf g p /\ frames_wf g s.
+      -> suffix_frames_wf g p /\ suffix_frames_wf g s.
 Proof.
   intros g l hw.
   induction hw; intros p s heq.
@@ -955,90 +953,91 @@ Proof.
     destruct IHhw as [hs hp]; eauto.
 Qed.
 
-Lemma frames_wf_app :
+Lemma suffix_frames_wf_app :
   forall g p s,
-    frames_wf g (p ++ s)
-    -> frames_wf g p /\ frames_wf g s.
+    suffix_frames_wf g (p ++ s)
+    -> suffix_frames_wf g p /\ suffix_frames_wf g s.
 Proof.
-  intros; eapply frames_wf_app'; eauto.
+  intros; eapply suffix_frames_wf_app'; eauto.
 Qed.
 
-Lemma frames_wf_app_l :
+Lemma suffix_frames_wf_app_l :
   forall g p s,
-    frames_wf g (p ++ s)
-    -> frames_wf g p.
+    suffix_frames_wf g (p ++ s)
+    -> suffix_frames_wf g p.
 Proof.
-  intros g p s hw; eapply frames_wf_app in hw; firstorder.
+  intros g p s hw; eapply suffix_frames_wf_app in hw; firstorder.
 Qed.
 
-Lemma frames_wf_tl :
+Lemma suffix_frames_wf_tl :
   forall g h t,
-    frames_wf g (h :: t)
-    -> frames_wf g t.
+    suffix_frames_wf g (h :: t)
+    -> suffix_frames_wf g t.
 Proof.
   intros g h t hw.
   rewrite cons_app_singleton in hw.
-  eapply frames_wf_app in hw; firstorder.
+  eapply suffix_frames_wf_app in hw; firstorder.
 Qed.
+*)
 
-Lemma return_preserves_frames_wf_invar :
+Lemma return_preserves_suffix_frames_wf_invar :
   forall g suf_cr x frs,
-    frames_wf g (SF [] :: SF (NT x :: suf_cr) :: frs)
-    -> frames_wf g (SF suf_cr :: frs).
+    suffix_frames_wf g (SF [] :: SF (NT x :: suf_cr) :: frs)
+    -> suffix_frames_wf g (SF suf_cr :: frs).
 Proof.
   intros g suf_cr x locs hw.
-  inv_frames_wf hw hi hw'.
-  inv_frames_wf hw' hi' hw''; auto.
+  inv_suffix_frames_wf hw hi hw'.
+  inv_suffix_frames_wf hw' hi' hw''; auto.
   rewrite app_cons_group_l in hi'; eauto.
 Qed.
 
-Lemma push_preserves_frames_wf_invar :
+Lemma push_preserves_suffix_frames_wf_invar :
   forall g suf x rhs frs,
     In (x, rhs) g
-    -> frames_wf g (SF (NT x :: suf) :: frs)
-    -> frames_wf g (SF rhs :: SF (NT x :: suf) :: frs).
+    -> suffix_frames_wf g (SF (NT x :: suf) :: frs)
+    -> suffix_frames_wf g (SF rhs :: SF (NT x :: suf) :: frs).
 Proof.
   intros; wf_upper_nil. 
 Qed.
 
-Lemma consume_preserves_frames_wf_invar :
+Lemma consume_preserves_suffix_frames_wf_invar :
   forall g suf a frs,
-    frames_wf g (SF (T a :: suf) :: frs)
-    -> frames_wf g (SF suf :: frs).
+    suffix_frames_wf g (SF (T a :: suf) :: frs)
+    -> suffix_frames_wf g (SF suf :: frs).
 Proof.
   intros g suf a frs hw.
-  inv_frames_wf hw hi hw'; auto.
+  inv_suffix_frames_wf hw hi hw'; auto.
   rewrite app_cons_group_l in hi; eauto.
 Qed.
 
-Lemma spClosureStep_preserves_stack_wf_invar :
+Lemma spClosureStep_preserves_suffix_stack_wf_invar :
   forall g sp sp' sps',
-    stack_wf g sp.(stack)
+    suffix_stack_wf g sp.(stack)
     -> spClosureStep g sp = SpClosureStepK sps'
     -> In sp' sps'
-    -> stack_wf g sp'.(stack).
+    -> suffix_stack_wf g sp'.(stack).
 Proof.
   intros g sp sp' sps' hw hs hi.
   unfold spClosureStep in hs; dms; tc; sis; inv hs.
   - apply in_singleton_eq in hi; subst; sis.
-    eapply return_preserves_frames_wf_invar; eauto.
+    eapply return_preserves_suffix_frames_wf_invar; eauto.
   - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
-    apply push_preserves_frames_wf_invar; auto.
+    apply push_preserves_suffix_frames_wf_invar; auto.
     apply rhssForNt_in_iff; auto.
   - inv hi.
 Qed.
 
-Lemma initSps_preserves_stack_wf_invar :
+Lemma initSps_preserves_suffix_stack_wf_invar :
   forall g fr x suf frs sp,
     fr = SF (NT x :: suf)
-    -> stack_wf g (fr, frs)
+    -> suffix_stack_wf g (fr, frs)
     -> In sp (initSps g x (fr, frs))
-    -> stack_wf g sp.(stack).
+    -> suffix_stack_wf g sp.(stack).
 Proof.
   intros g fr x suf frs sp ? hw hi; subst; unfold initSps in hi.
   apply in_map_iff in hi.
   destruct hi as [rhs [? hi]]; subst; sis.
-  apply push_preserves_frames_wf_invar; eauto.
+  apply push_preserves_suffix_frames_wf_invar; eauto.
   apply rhssForNt_in_iff; auto.
 Qed.
 

@@ -30,7 +30,7 @@ Ltac inv_fw hw  hi hw' :=
 Lemma frames_wf__suffix_frames_wf :
   forall g p_frs s_frs,
     frames_wf g p_frs s_frs
-    -> Prediction.frames_wf g s_frs.
+    -> suffix_frames_wf g s_frs.
 Proof.
   intros g pfrs sfrs hw; induction hw; eauto.
 Qed.
