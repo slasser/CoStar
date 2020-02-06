@@ -41,5 +41,5 @@ Ltac apps := try solve [ repeat rewrite app_assoc; auto
                        | repeat rewrite <- app_assoc; auto
                        | repeat rewrite app_nil_r; auto].
 
-Ltac rew_anr := rewrite app_nil_r in *.
+Ltac rew_anr := repeat rewrite app_nil_r in *.
 

@@ -262,7 +262,10 @@ Hint Constructors sym_derivation gamma_derivation.
 Scheme sym_derivation_mutual_ind   := Induction for sym_derivation Sort Prop
   with gamma_derivation_mutual_ind := Induction for gamma_derivation Sort Prop.
 
-Ltac inv_gd hg hs hg' :=
+Ltac inv_sd hs  hi hg:=
+  inversion hs as [ ? ? | ? ? ? ? hi hg]; subst; clear hs.
+
+Ltac inv_gd hg  hs hg' :=
   inversion hg as [| ? ? ? ? ? ? hs hg']; subst; clear hg.
 
 Lemma gamma_derivation_app' :
@@ -440,7 +443,11 @@ with gamma_recognize (g : grammar) : list symbol -> list token -> Prop :=
 
 Hint Constructors sym_recognize gamma_recognize.
 
-Ltac inv_gr hg hs hg' := inversion hg as [| ? ? ? ? hs hg']; subst; clear hg.
+Ltac inv_sr hs  hi hg :=
+  inversion hs as [ ? ? | ? ? ? hi hg ]; subst; clear hs.
+
+Ltac inv_gr hg  wpre wsuf hs hg' :=
+  inversion hg as [| ? ? wpre wsuf hs hg']; subst; clear hg.
 
 Scheme sym_recognize_mutual_ind   := Induction for sym_recognize Sort Prop
   with gamma_recognize_mutual_ind := Induction for gamma_recognize Sort Prop.

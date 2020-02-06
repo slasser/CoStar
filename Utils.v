@@ -190,3 +190,16 @@ Fixpoint bottomElt' {A} (h : A) (t : list A) : A :=
 
 Definition bottomElt {A} (stk : A * list A) : A :=
   let (h, t) := stk in bottomElt' h t.
+
+Lemma rev_eq__eq :
+  forall A (xs ys : list A),
+    rev xs = rev ys -> xs = ys.
+Proof.
+  intros A xs; induction xs as [| x xs IH]; intros ys heq; sis.
+  - destruct ys as [| y ys]; sis; auto.
+    apply app_cons_not_nil in heq; inv heq.
+  - destruct ys as [| y ys]; sis.
+    + symmetry in heq; apply app_cons_not_nil in heq; inv heq.
+    + apply app_inj_tail in heq; destruct heq as [heq ?]; subst.
+      apply IH in heq; subst; auto.
+Qed.
