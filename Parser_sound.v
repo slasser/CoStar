@@ -231,7 +231,7 @@ Definition stack_prefix_derivation g w p_stk s_stk wsuf :=
     /\ frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre wsuf
   end.
 
-Lemma step_preserves_stack_prefix_derivation :
+Lemma step_preserves_stack_prefix_derivation_invar :
   forall g w ps ps' ss ss' ts ts' av av' u u',
     stack_prefix_derivation g w ps ss ts
     -> step g ps ss ts av u = StepK ps' ss' ts' av' u'
@@ -614,7 +614,7 @@ Ltac inv_afd ha  ha' heq hf hg hg' hi hi' hneq hr :=
       | ? ? ? ? ? ? ? ? ? ? ? ? ? hp hs hf hg hd' hr heq hneq
       | ? ? ? ? ? ? ? ? ? ? hp hs ha' hg]; subst; clear ha.
 
-Lemma return_preserves_ambiguous_frames_derivation :
+Lemma return_preserves_ambiguous_frames_derivation_invar :
   forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x wpre wsuf v v',
     p_ce     = PF pre' v'
     -> s_ce  = SF []
@@ -702,46 +702,47 @@ Proof.
         inv hw; rew_anr; rew_nil_r wmid; eauto.
 Qed.
 
-Lemma consume_preserves_ambiguous_frames_derivation :
-  forall g fr fr' frs o pre suf v a l wpre wsuf,
-    fr = Fr (Loc o pre (T a :: suf)) v
-    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf a l])
-    -> ambiguous_frames_derivation g (fr :: frs) wpre ((a,l) :: wsuf)
-    -> ambiguous_frames_derivation g (fr' :: frs) (wpre ++ [(a,l)]) wsuf.
+Lemma consume_preserves_ambiguous_frames_derivation_invar :
+  forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v wpre wsuf,
+    p_fr     = PF pre v
+    -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
+    -> s_fr  = SF (T a :: suf)
+    -> s_fr' = SF suf
+    -> ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
+                            wpre ((a, l) :: wsuf)
+    -> ambiguous_frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs)
+                           (wpre ++ [(a, l)]) wsuf.
 Proof.
-  intros g fr fr' frs o pre suf v a l wpre wsuf ? ? ha; subst; inv ha.
+  intros g ? ? ? ? p_frs s_frs pre suf a l v wpre wsuf
+         ? ? ? ? ha; subst.
+  inv_afd ha ha' heq hf hg hg' hi hi' hneq hr; sis.
   - (* push case *)
-    inv H2.
-    rewrite <- app_assoc.
-    eapply AFD_push; eauto.
-    + rewrite <- app_assoc; auto.
-    + apply gamma_derivation_app; auto.
-      rew_nil_r ([(a,l)]); eauto.
-    + rewrite <- app_assoc; auto.
-    + rewrite <- app_assoc; auto.
+    inv hp'; inv hs'; rewrite <- app_assoc.
+    eapply AFD_push; eauto; sis; apps.
+    apply gamma_derivation_app; auto.
+    rew_nil_r ([(a, l)]); eauto.
   - (* sem case *)
-    inv H1.
-    inv H5.
-    inv H1; sis.
+    inv hp; inv hs.
+    inv_gr hr wmid'' wsuf'' hs hr'.
+    inversion hs as [a' l' |]; subst; clear hs.
     rewrite <- app_assoc.
-    eapply AFD_sem with (wmid' := wmid' ++ [(a,l0)])
-                        (v' := v' ++ [Leaf a l0]); eauto.
-    + rewrite <- app_assoc; auto.
+    eapply AFD_sem with
+        (wmid' := wmid' ++ [(a, l')])
+        (v'    := Leaf a l' :: v'); eauto; sis; apps.
     + apply gamma_derivation_app; auto.
-      rew_nil_r ([(a,l)]); eauto.
+      rew_nil_r ([(a, l)]); eauto.
     + apply gamma_derivation_app; auto.
-      rew_nil_r ([(a,l0)]); eauto.
-    + repeat rewrite <- app_assoc; auto.
-    + unfold not; intros.
-      apply app_inj_tail in H; destruct H; tc.
-  - inv H1.
-    rewrite <- app_assoc.
-    eapply AFD_tail; eauto.
-    + rewrite <- app_assoc; auto.
-    + apply gamma_derivation_app; auto.
-      rew_nil_r ([(a,l)]); eauto.
+      rew_nil_r ([(a, l')]); eauto.
+    + unfold not; intros heq'.
+      apply app_inj_tail in heq'; destruct heq'; tc.
+  - (* tail case *)
+    inv hp; inv hs; rewrite <- app_assoc.
+    eapply AFD_tail; eauto; sis; apps.
+    apply gamma_derivation_app; auto.
+    rew_nil_r ([(a, l)]); auto.
 Qed.
 
+(* to do : these next lemmas should probably be in Prediction *)
 Require Import GallStar.Prediction.
 
 Lemma allPredictionsEqual_false_exists_diff_rhs :
@@ -768,7 +769,7 @@ Qed.
 (* refactor *)
 Lemma llPredict'_ambig_rhs_leads_to_successful_parse' :
   forall g orig_sps wsuf wpre curr_sps rhs,
-    all_sp_stacks_wf g curr_sps
+    all_suffix_stacks_wf g curr_sps
     -> subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
     -> llPredict' g curr_sps wsuf = PredAmbig rhs
     -> exists orig_sp final_sp orig_sp' final_sp' rhs',
@@ -817,19 +818,17 @@ Proof.
     + destruct hl as [osp [fsp [osp' [fsp' [rhs' [hi' [heq [hm' [hf [hi'' [heq' [hm'' [hf' hn]]]]]]]]]]]]]; subst.
       rewrite <- app_assoc in *; sis.
       exists osp; exists fsp; exists osp'; exists fsp'; exists osp'.(prediction); repeat split; eauto.
-    + apply move_preserves_lstack_wf_invar in hm; auto.
-      apply closure_preserves_lstack_wf_invar in hc; auto.
+    + apply move_preserves_suffix_stack_wf_invar in hm; auto.
+      apply closure_preserves_suffix_stack_wf_invar in hc; auto.
     + eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
 Qed.
 
-(* okay, this version of the lemma is better because it doesn't
-   include unprocStackSyms in the conclusion *)
 Lemma llPredict_ambig_rhs_unproc_stack_syms' :
-  forall g cr ce o pre x suf frs w rhs,
-    cr = Loc o pre (NT x :: suf)
-    -> ce = Loc (Some x) [] rhs
+  forall g cr ce x suf frs w rhs,
+    cr    = SF (NT x :: suf)
+    -> ce = SF rhs
     -> no_left_recursion g
-    -> lstack_wf g (cr, frs)
+    -> suffix_stack_wf g (cr, frs)
     -> llPredict g x (cr, frs) w = PredAmbig rhs
     -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w
        /\ (exists rhs',
@@ -838,7 +837,7 @@ Lemma llPredict_ambig_rhs_unproc_stack_syms' :
               /\ gamma_recognize g (rhs' ++ suf ++ unprocTailSyms frs) w).
            
 Proof.
-  intros g cr ce o pre x suf frs w rhs ? ? hn hw hl; subst; sis.
+  intros g cr ce x suf frs w rhs ? ? hn hw hl; subst; sis.
   pose proof hl as hl'; apply llPredict_ambig_in_grammar in hl'.
   unfold llPredict in hl.
   destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
@@ -856,7 +855,7 @@ Proof.
       apply closure_multistep_preserves_label in hc; sis; subst; auto.
       * (* lemma *)
         red. intros init_sp hi''.
-        eapply initSps_preserves_lstack_wf_invar; eauto.
+        eapply initSps_preserves_suffix_stack_wf_invar; eauto.
     + exists osp'.(prediction); repeat split; auto.
       * eapply startState_sp_prediction_in_rhssForNt
           with (sp' := osp') in hs; eauto.
@@ -870,82 +869,71 @@ Proof.
            destruct hi'' as [rhs [heq hi'']]; subst; sis.
            apply closure_multistep_preserves_label in hc; sis; subst; auto.
         -- red; intros init_sp hi''.
-           eapply initSps_preserves_lstack_wf_invar; eauto.
+           eapply initSps_preserves_suffix_stack_wf_invar; eauto.
   - eapply stacks_wf_in_startState_result; eauto.
-    simpl; auto.
   - red. intros sp' hi; sis.
     exists sp'; split; auto.
     eapply closure_func_refines_closure_multistep_backward in hi; eauto.
     + destruct hi as [sp [hi hc]].
       assert (hst : stable_config sp'.(stack)).
       { eapply stable_config_after_closure_multistep; eauto. }
-      destruct sp' as [av pred ([o' pre' suf'], frs')]; sis.
+      destruct sp' as [av pred ([suf'], frs')]; sis.
       inv hst; auto.
     + red.
       intros sp hi'.
-      eapply initSps_preserves_lstack_wf_invar; eauto.
+      eapply initSps_preserves_suffix_stack_wf_invar; eauto.
 Qed.
 
-Definition ambiguous_prefix_derivation g w st :=
-  match st with
-  | Pst _ (fr, frs) wsuf u =>
+Definition ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u :=
+  match p_stk, s_stk with
+  | (p_fr, p_frs), (s_fr, s_frs) =>
     u = false
     -> exists wpre,
         w = wpre ++ wsuf
-        /\ ambiguous_frames_derivation g (fr :: frs) wpre wsuf
+        /\ ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre wsuf
   end.
 
-Lemma apd_starts_true :
+Lemma ambiguous_stack_prefix_derivation_invar_starts_true :
   forall g ys ts,
-    ambiguous_prefix_derivation g ts (mkInitState g ys ts).
+    ambiguous_stack_prefix_derivation g ts (PF [] [], []) (SF ys, []) ts true.
 Proof.
-  intros g ys ts.
-  unfold mkInitState; simpl.
-  intros hc; inv hc.
+  intros g ys ts hc; inv hc.
 Qed.
 
-Lemma step_preserves_apd :
-  forall g w st st',
+Lemma step_preserves_ambiguous_stack_prefix_derivation_invar :
+  forall g w p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
     no_left_recursion g
-    -> stack_wf g (Parser.stack st)
-    -> frames_prefix_derivation g w st
-    -> ambiguous_prefix_derivation g w st
-    -> step g st = StepK st'
-    -> ambiguous_prefix_derivation g w st'.
+    -> stacks_wf g p_stk s_stk
+    -> stack_prefix_derivation g w p_stk s_stk ts
+    -> ambiguous_stack_prefix_derivation g w p_stk s_stk ts u
+    -> step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
+    -> ambiguous_stack_prefix_derivation g w p_stk' s_stk' ts' u'.
 Proof.
-  intros g w [av (fr,frs) wsuf u] [av' (fr',frs') wsuf' u'] hn hw hd ha hs.
-  red; red in ha.
-  intros hu.
+  intros g w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
+         ts ts' av av' u u' hn hw hp ha hs; red; red in ha; intros hu.
   unfold step in hs; dmeqs h; inv hs; tc.
   - (* return *)
-    destruct ha as [wpre [heq ha]]; subst; sis; auto.
-    exists wpre; eapply return_preserves_ambiguous_frames_derivation in ha; eauto.
+    destruct ha as (wpre & heq & ha); subst; sis; auto.
+    exists wpre.
+    eapply return_preserves_ambiguous_frames_derivation_invar in ha; eauto.
   - (* consume *)
-    destruct ha as [wpre [heq ha]]; subst; sis; auto.
-    exists (wpre ++ [(t,l1)]); split; auto.
-    + apps.
-    + eapply consume_preserves_ambiguous_frames_derivation; eauto.
+    destruct ha as (wpre & heq & ha); subst; sis; auto.
+    eexists; split.
+    + rewrite cons_app_singleton; rewrite app_assoc; eauto.
+    + eapply consume_preserves_ambiguous_frames_derivation_invar; eauto.
   - (* unambiguous push *)
-    destruct ha as [wpre [heq ha]]; subst; sis; auto.
+    destruct ha as (wpre & heq & ha); subst; sis; auto. 
     eexists; split; eauto.
-    rew_nil_r wpre.
-    eapply AFD_tail; eauto.
+    rew_nil_r wpre; eapply AFD_tail; eauto.
   - (* ambiguous push *)
-    destruct u.
-    + (* u is true -- stack derivation is unique up to this point *)
-      red in hd.
-      destruct hd as [wpre [heq hd]]; subst.
-      exists wpre; split; auto.
-      clear ha.
-      rew_nil_r wpre.
-      eapply llPredict_ambig_rhs_unproc_stack_syms' in h4; eauto.
-      destruct h4 as [hr [rhs' [hi [hneq hr']]]].
+    destruct hp as (wpre & heq & hd); subst.
+    exists wpre; split; auto.
+    rew_nil_r wpre.
+    pose proof h4 as h4'; apply llPredict_ambig_in_grammar in h4'.
+    eapply llPredict_ambig_rhs_unproc_stack_syms' in h4; eauto.
+    + destruct h4 as [hr [rhs' [hi [hneq hr']]]].
       eapply AFD_push; eauto.
-      simpl; auto.
-    + destruct ha as [wpre [heq ha]]; subst; sis; auto.
-      eexists; split; eauto.
-      rew_nil_r wpre.
-      eapply AFD_tail; eauto.
+    + eapply frames_wf__suffix_frames_wf; eauto.
 Qed.
 
 Lemma multistep_sound_ambig' :
@@ -954,69 +942,66 @@ Lemma multistep_sound_ambig' :
          (a      : Acc lex_nat_triple tri)
          (w wsuf : list token)
          (av     : NtSet.t)
-         (stk    : parser_stack)
+         (p_stk  : prefix_stack)
+         (s_stk  : suffix_stack)
          (u      : bool)
-         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf u)))
+         (a'     : Acc lex_nat_triple (Parser.meas g s_stk wsuf av))
          (v      : forest),
-    tri = Parser.meas g (Pst av stk wsuf u)
+    tri = Parser.meas g s_stk wsuf av
     -> no_left_recursion g
-    -> stack_wf g stk
-    -> frames_prefix_derivation g w (Pst av stk wsuf u)
-    -> ambiguous_prefix_derivation g w (Pst av stk wsuf u)
-    -> multistep g (Pst av stk wsuf u) a' = Ambig v
-    -> gamma_derivation g (bottomFrameSyms stk) w v
+    -> stacks_wf g p_stk s_stk
+    -> stack_prefix_derivation g w p_stk s_stk wsuf
+    -> ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u
+    -> multistep g p_stk s_stk wsuf av u a' = Ambig v
+    -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
        /\ (exists v',
-              gamma_derivation g (bottomFrameSyms stk) w v'
+              gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
               /\ v' <> v).
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros w wsuf av stk u a' v heq hn hw hf hi hm; subst.
+  intros w wsuf av p_stk s_stk u a' v ? hn hw hd ha hm; subst.
   apply multistep_ambig_cases in hm.
-  destruct hm as [[hs hu] | he].
-  - simpl in hu; subst.
-    apply step_StepAccept_facts in hs.
-    destruct hs as [[xo [rpre [v' [heq]]]] heq']; subst.
+  destruct hm as [[hs hu] | he]; subst.
+  - apply step_StepAccept_facts in hs.
+    destruct hs as (? & ? & (pre & ?)); subst.
     unfold bottomFrameSyms; simpl; rewrite app_nil_r.
-    red in hi.
-    destruct hi as [wpre [heq ha]]; subst; auto.
+    red in ha.
+    destruct ha as [wpre [heq ha]]; subst; auto; rew_anr.
     clear IH. clear a'. clear hlt.
-    inv ha.
-    + inv H1; sis. unfold unprocTailSyms' in *; sis.
-      rewrite app_nil_r in *; subst.
-      inv H2; sis.
-      inv H5; sis.
-      rewrite app_nil_r in *. 
+    (* lemma *)
+    inv_afd ha  ha' heq hf hg hg' hi hi' hneq hr.
+    + inv hp; inv hs; rew_anr; subst.
+      inv hr; inv hf; rew_anr; sis.
+      rewrite rev_involutive in *.
       firstorder.
-    + inv H2.
-  - destruct he as [st' [a'' [hf' hm]]].
-    destruct st' as [av' stk' wsuf'].
-    eapply IH with (w := w) in hm; eauto. 
+    + inv ha'.
+  - destruct he as (ps' & ss' & ts' & av' & u' & a'' & hs & hm).
+    eapply IH with (w := w) in hm; eauto.
     + erewrite step_preserves_bottomFrameSyms_invar; eauto.
-    + apply step_meas_lt; auto.
-    + eapply step_preserves_stack_wf_invar; eauto.
-    + eapply step_preserves_frames_prefix_derivation; eauto.
-      simpl; auto.
-    + eapply step_preserves_apd; eauto.
-      simpl; auto.
+    + eapply step_meas_lt; eauto.
+    + eapply step_preserves_stacks_wf_invar; eauto. 
+    + eapply step_preserves_stack_prefix_derivation_invar; eauto.
+    + eapply step_preserves_ambiguous_stack_prefix_derivation_invar; eauto.
 Qed.
 
 Lemma multistep_sound_ambig :
   forall (g      : grammar)
          (w wsuf : list token)
          (av     : NtSet.t)
-         (stk    : parser_stack)
+         (p_stk  : prefix_stack)
+         (s_stk  : suffix_stack)
          (u      : bool)
-         (a      : Acc lex_nat_triple (Parser.meas g (Pst av stk wsuf u)))
+         (a      : Acc lex_nat_triple (Parser.meas g s_stk wsuf av))
          (v      : forest),
     no_left_recursion g
-    -> stack_wf g stk
-    -> frames_prefix_derivation g w (Pst av stk wsuf u)
-    -> ambiguous_prefix_derivation g w (Pst av stk wsuf u)
-    -> multistep g (Pst av stk wsuf u) a = Ambig v
-    -> gamma_derivation g (bottomFrameSyms stk) w v
+    -> stacks_wf g p_stk s_stk
+    -> stack_prefix_derivation g w p_stk s_stk wsuf
+    -> ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u
+    -> multistep g p_stk s_stk wsuf av u a = Ambig v
+    -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
        /\ (exists v',
-              gamma_derivation g (bottomFrameSyms stk) w v'
+              gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
               /\ v' <> v).
 Proof.
   intros; eapply multistep_sound_ambig'; eauto.
@@ -1038,8 +1023,6 @@ Proof.
   unfold parse in hp.
   eapply multistep_sound_ambig in hp; eauto.
   - constructor.
-  - (* lemma *)
-    exists []; split; eauto.
-    rew_nil_r ([] : list token); eauto.
-  - apply apd_starts_true.
+  - exists []; eauto. 
+  - apply ambiguous_stack_prefix_derivation_invar_starts_true.
 Qed.
