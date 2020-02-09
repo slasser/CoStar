@@ -97,40 +97,33 @@ Proof.
 Qed.
 
 Lemma push_preserves_unavailable_nts_invar :
-  forall g av fr ce o o' pre suf suf' x v v' frs,
-    fr    = Fr (Loc o pre (NT x :: suf)) v
-    -> ce = Fr (Loc o' [] suf') v'
-    -> unavailable_nts_are_open_calls g av (lstackOf (fr, frs))
-    -> unavailable_nts_are_open_calls g (NtSet.remove x av) (lstackOf (ce, fr :: frs)).
+  forall g s_cr s_ce s_frs av x suf rhs,
+    s_cr = SF (NT x :: suf)
+    -> s_ce = SF rhs
+    -> In (x, rhs) g
+    -> unavailable_nts_are_open_calls g av (s_cr, s_frs)
+    -> unavailable_nts_are_open_calls g (NtSet.remove x av) (s_ce, s_cr :: s_frs).
 Proof.
-  intros g av fr ce o o' pre suf suf' x v v' frs ? ? hu; subst; sis.
-  intros x' hi hn; split; auto.
-  destruct (NF.eq_dec x' x); subst.
-  - exists []; repeat eexists; eauto.
-  - assert (hn' : ~ NtSet.In x' av) by ND.fsetdec.
-    apply hu in hn'; auto.
-    destruct hn' as [? [frs_pre [? [? [? [heq [? ?]]]]]]]; subst; rewrite heq.
-    exists (Loc o pre (NT x :: suf) :: frs_pre); repeat eexists; eauto.
-Qed.
-    
+  intros; subst.
+  pose proof push_preserves_unavailable_nts_invar as hp; sis.
+  eapply hp; eauto.
+Qed.  
+
 Lemma step_preserves_unavailable_nts_invar :
-  forall g st st',
-    step g st = StepK st'
-    -> stack_wf g st.(stack)
-    -> unavailable_nts_invar g st
-    -> unavailable_nts_invar g st'.
+  forall g p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
+    step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
+    -> unavailable_nts_are_open_calls g av s_stk
+    -> unavailable_nts_are_open_calls g av' s_stk'.
 Proof.
-  intros g [av stk ts] [av' stk' ts'] hs hw hu.
-  unfold unavailable_nts_invar in *.
+  intros g ps ps' ss ss' ts ts' av av' u u' hs hu.
   unfold step in hs; dmeqs h; tc; inv hs.
   - eapply return_preserves_unavailable_nts_invar; eauto. 
-  - intros x hi hn; ND.fsetdec.
+  - intros x hi hn; ND.fsetdec. 
   - eapply push_preserves_unavailable_nts_invar; eauto.
+    eapply llPredict_succ_in_grammar; eauto.
   - eapply push_preserves_unavailable_nts_invar; eauto.
+    eapply llPredict_ambig_in_grammar; eauto.
 Qed.
-
-step g pstk sstk ts av u = StepK ps' ss' ts' av' u'
-
 
 Lemma step_left_recursion_detection_sound :
   forall g p_stk s_stk ts av u x,
@@ -171,7 +164,6 @@ Proof.
   - destruct hm as (ps' & ss' & ts' & av' & u' & a'' & hs & hm).
     eapply IH with (y := meas g ss' ts' av'); eauto.
     + eapply step_meas_lt; eauto.
-    + admit.
     + eapply step_preserves_unavailable_nts_invar; eauto.
 Qed.
 
@@ -183,12 +175,7 @@ Proof.
   intros g ss ts x hp; unfold parse in hp.
   eapply multistep_left_recursion_detection_sound in hp; eauto.
   - apply lex_nat_triple_wf.
-  - (* lemma? *)
-    constructor.
-  - (* lemma *)
-    unfold mkInitState.
-    unfold unavailable_nts_invar; simpl.
-    intros; ND.fsetdec.
+  - intros x' hi hn; ND.fsetdec.
 Qed.
   
 Lemma parser_doesn't_find_left_recursion_in_non_left_recursive_grammar :
@@ -206,46 +193,46 @@ Qed.
 (* Errors never arise during prediction, given a non-left-recursive grammar *)
 
 Lemma step_never_returns_SpInvalidState :
-  forall g (st : parser_state),
-    stack_wf g st.(stack)
-    -> step g st <> StepError (PredictionError SpInvalidState).
+  forall g p_stk s_stk ts av u,
+    stacks_wf g p_stk s_stk
+    -> step g p_stk s_stk ts av u <> StepError (PredictionError SpInvalidState).
 Proof.
-  intros g st hw; unfold not; intros hs.
+  intros g ps ss ts av un hw; unfold not; intros hs. 
   unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
   eapply llPredict_never_returns_SpInvalidState; eauto.
-  simpl; eauto.
+  eapply frames_wf__suffix_frames_wf; eauto.
 Qed.
 
 Lemma step_never_returns_SpLeftRecursion :
-  forall g (st : parser_state) x,
+  forall g p_stk s_stk ts av u x,
     no_left_recursion g
-    -> stack_wf g st.(stack)
-    -> step g st <> StepError (PredictionError (SpLeftRecursion x)).
+    -> stacks_wf g p_stk s_stk
+    -> step g p_stk s_stk ts av u <> StepError (PredictionError (SpLeftRecursion x)).
 Proof.
-  intros g st x hn hw; unfold not; intros hs.
-  unfold step in hs; repeat dmeq h; tc; inv hs; sis.
+  intros g ps ss ts av un x hn hw; unfold not; intros hs. 
+  unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
   eapply llPredict_never_returns_SpLeftRecursion; eauto.
-  simpl; eauto.
 Qed.
 
 Lemma multistep_never_returns_prediction_error :
   forall (g      : grammar)
          (tri    : nat * nat * nat)
          (a      : Acc lex_nat_triple tri)
+         (p_stk  : prefix_stack)
+         (s_stk  : suffix_stack)
          (ts     : list token)
          (av     : NtSet.t)
-         (stk    : parser_stack)
          (u      : bool)
-         (a'     : Acc lex_nat_triple (Parser.meas g (Pst av stk ts u)))
+         (a'     : Acc lex_nat_triple (meas g s_stk ts av))
          (e      : prediction_error),
     no_left_recursion g
-    -> tri = Parser.meas g (Pst av stk ts u)
-    -> stack_wf g stk
-    -> multistep g (Pst av stk ts u) a' <> Error (PredictionError e).
+    -> tri = meas g s_stk ts av
+    -> stacks_wf g p_stk s_stk
+    -> multistep g p_stk s_stk ts av u a' <> Error (PredictionError e).
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros ts av (fr, frs) u a' e hn heq hw; unfold not; intros hm; subst.
+  intros ps ss ts av un a' e hn ? hw; unfold not; intros hm; subst. 
   apply multistep_prediction_error_cases in hm.
   destruct hm as [hs | hm].
   - destruct e as [ | x].
@@ -253,37 +240,36 @@ Proof.
       eapply step_never_returns_SpInvalidState in hs; eauto.
     + (* LeftRecursion case *)
       eapply step_never_returns_SpLeftRecursion in hs; eauto.
-  - destruct hm as [[av' stk' ts'] [a'' [hs hm]]].
+  - destruct hm as (ps' & ss' & ts' & av' & un' & a'' & hs & hm). 
     eapply IH in hm; eauto.
-    + apply step_meas_lt; auto.
-    + eapply step_preserves_stack_wf_invar; eauto.
+    + eapply step_meas_lt; eauto.
+    + eapply step_preserves_stacks_wf_invar; eauto.
 Qed.
 
 Lemma parse_never_returns_prediction_error :
   forall (g : grammar)
-         (ss : list symbol)
+         (ys : list symbol)
          (ts : list token)
          (e  : prediction_error),
     no_left_recursion g
-    -> parse g ss ts <> Error (PredictionError e).
+    -> parse g ys ts <> Error (PredictionError e).
 Proof.
-  intros g ss ts e hn; unfold not; intros hp.
+  intros g ys ts e hn; unfold not; intros hp.
   unfold parse in hp.
-  apply multistep_never_returns_prediction_error
-    with (tri := meas g (mkInitState g ss ts)) in hp; auto.
+  eapply multistep_never_returns_prediction_error in hp; eauto.
   - apply lex_nat_triple_wf.
   - constructor.
 Qed.
 
 Theorem parser_terminates_without_error :
   forall (g  : grammar)
-         (ss : list symbol)
+         (ys : list symbol)
          (ts : list token)
          (e  : parse_error),
     no_left_recursion g
-    -> parse g ss ts <> Error e.
+    -> parse g ys ts <> Error e.
 Proof.
-  intros g ss ts e; unfold not; intros hp; destruct e.
+  intros g ys ts e; unfold not; intros hp; destruct e.
   - (* invalid state case *)
     eapply parser_never_reaches_invalid_state; eauto.
   - (* left recursion case *)
