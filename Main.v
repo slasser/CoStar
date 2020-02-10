@@ -1,9 +1,9 @@
 Require Import List String.
 Require Import GallStar.Defs.
 Require Import GallStar.Parser.
-(*Require Import GallStar.Parser_sound.
+Require Import GallStar.Parser_sound.
 Require Import GallStar.Parser_error_free.
-Require Import GallStar.Parser_complete.*)
+Require Import GallStar.Parser_complete.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
         Import ListNotations.
@@ -26,7 +26,7 @@ Definition parseSymbol (g : grammar)
   end.
 
 (* Soundness theorems for unambiguous and ambiguous derivations *)
-(*
+
 Theorem parseSymbol_sound_unambig :
   forall (g : grammar)
          (s : symbol)
@@ -105,7 +105,7 @@ Qed.
 
 (* Completeness theorems for unambiguous and ambiguous derivations *)
 
-Theorem parseSymbol_complete_unambig :
+Theorem parseSymbol_complete_unique_derivation :
   forall (g : grammar)
          (s : symbol)
          (w : list token)
@@ -118,7 +118,7 @@ Proof.
   intros g s w t hn hs ha.
   assert (hg : gamma_derivation g [s] w [t]).
   { rew_nil_r w; eauto. }
-  apply parse_complete_unambig in hg; auto.
+  apply parse_complete_unique_derivation in hg; auto.
   - unfold parseSymbol; rewrite hg; auto.
   - (* lemma *)
     inv hg.
@@ -129,7 +129,7 @@ Proof.
     apply ha in H1; subst; auto.
 Qed.
 
-Theorem parseSymbol_complete_ambig :
+Theorem parseSymbol_complete_ambiguous_derivations :
   forall (g    : grammar)
          (s    : symbol)
          (w    : list token)
@@ -147,7 +147,7 @@ Proof.
   { rew_nil_r w; eauto. }
   assert (hneq' : [t] <> [t']).
   { unfold not; intros ?; subst; tc. }
-  eapply parse_complete_ambig in hg; eauto.
+  eapply parse_complete_ambiguous_derivations in hg; eauto.
   destruct hg as (v'' & hp).
   pose proof hp as hp'.
   apply Parser_sound.parse_sound_ambig in hp; auto.
@@ -157,4 +157,3 @@ Proof.
   unfold parseSymbol.
   rewrite hp'; eauto.
 Qed.
- *)

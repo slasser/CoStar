@@ -12,75 +12,71 @@ Require Import GallStar.Utils.
 Import ListNotations.
 
 (* To do: encapsulate "gamma_recognize unprocStackSyms..." in a definition *)
-Fixpoint unprocStackSyms' (stk : parser_stack) : list symbol :=
-  unprocStackSyms (lstackOf stk).
-
 Lemma return_preserves_ussr :
-  forall g ce cr cr' frs x o o' pre pre' suf' v v' w,
-    ce = Fr (Loc o pre []) v
-    -> cr  = Fr (Loc o' pre' (NT x :: suf')) v'
-    -> cr' = Fr (Loc o' (pre' ++ [NT x]) suf') (v' ++ [Node x v])
-    -> gamma_recognize g (unprocStackSyms' (ce, cr :: frs)) w
-    -> gamma_recognize g (unprocStackSyms' (cr', frs)) w.
+    forall g ce cr cr' frs x suf w,
+    ce     = SF []
+    -> cr  = SF (NT x :: suf)
+    -> cr' = SF suf
+    -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
+    -> gamma_recognize g (unprocStackSyms (cr', frs)) w.
 Proof.
-  intros g ce cr cr' frs x o o' pre pre' suf' v v' w
-         ? ? ? hs; subst; auto.
+  intros; subst; auto.
 Qed.
 
 Lemma consume_preserves_ussr :
-  forall g fr fr' frs o pre suf a l v w,
-    fr = Fr (Loc o pre (T a :: suf)) v
-    -> fr' = Fr (Loc o (pre ++ [T a]) suf) (v ++ [Leaf a l])
-    -> gamma_recognize g (unprocStackSyms' (fr, frs)) ((a, l) :: w)
-    -> gamma_recognize g (unprocStackSyms' (fr', frs)) w.
+  forall g fr fr' frs suf a l w,
+    fr     = SF (T a :: suf)
+    -> fr' = SF suf
+    -> gamma_recognize g (unprocStackSyms (fr, frs)) ((a, l) :: w)
+    -> gamma_recognize g (unprocStackSyms (fr', frs)) w.
 Proof.
-  intros g fr fr' frs o pre suf a l v w ? ? hs; subst; sis.
-  apply gamma_recognize_terminal_head in hs.
-  destruct hs as [l' [w' [heq hg]]]. 
-  inv heq; auto.
+  intros g ? ? frs suf a l w ? ? hg; subst; sis.
+  apply gamma_recognize_terminal_head in hg.
+  destruct hg as (? & ? & heq & ?); inv heq; auto.
 Qed.
 
 Lemma push_succ_preserves_ussr :
-  forall g fr o pre x suf v frs w rhs,
-    fr = Fr (Loc o pre (NT x :: suf)) v
+  forall g cr ce frs x suf rhs w,
+    cr    = SF (NT x :: suf)
+    -> ce = SF rhs
     -> no_left_recursion g
-    -> stack_wf g (fr, frs)
-    -> llPredict g x (lstackOf (fr, frs)) w = PredSucc rhs
-    -> gamma_recognize g (unprocStackSyms' (fr, frs)) w
-    -> gamma_recognize g (unprocStackSyms' (Fr (Loc (Some x) [] rhs) [], fr :: frs)) w.
+    -> suffix_stack_wf g (cr, frs)
+    -> llPredict g x (cr, frs) w = PredSucc rhs
+    -> gamma_recognize g (unprocStackSyms (cr, frs)) w
+    -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
 Proof.
-  intros g fr o pre x suf v frs w rhs heq hn hw hl hu; subst; sis.
-  apply gamma_recognize_nonterminal_head in hu.
-  destruct hu as [rhs' [wpre [wmidsuf [heq [hin [hg hg']]]]]]; subst.
+  intros g ? ? frs x suf rhs w ? ? hn hw hl hg; subst; sis.
+  apply gamma_recognize_nonterminal_head in hg.
+  destruct hg as (rhs' & wp & wms & ? & hi' & hg & hg'); subst.
   apply gamma_recognize_split in hg'.
-  destruct hg' as [wmid [wsuf [? [hg' hg'']]]]; subst.
-  eapply llPredict_succ_at_most_one_rhs_applies in hl; eauto; sis; subst;
-  (do 2 (apply gamma_recognize_app; auto)).
+  destruct hg' as (wm & ws & ? & hg' & hg''); subst.
+  eapply llPredict_succ_at_most_one_rhs_applies in hl; eauto; subst; sis; repeat (apply gamma_recognize_app; auto).
 Qed.
 
 Lemma push_ambig_preserves_ussr :
-  forall g fr o pre x suf v frs w rhs,
-    fr = Fr (Loc o pre (NT x :: suf)) v
+  forall g cr ce frs x suf rhs w,
+    cr    = SF (NT x :: suf)
+    -> ce = SF rhs
     -> no_left_recursion g
-    -> stack_wf g (fr, frs)
-    -> llPredict g x (lstackOf (fr, frs)) w = PredAmbig rhs
-    -> gamma_recognize g (unprocStackSyms' (fr, frs)) w
-    -> gamma_recognize g (unprocStackSyms' (Fr (Loc (Some x) [] rhs) [], fr :: frs)) w.
+    -> suffix_stack_wf g (cr, frs)
+    -> llPredict g x (cr, frs) w = PredAmbig rhs
+    -> gamma_recognize g (unprocStackSyms (cr, frs)) w
+    -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
 Proof.
-  intros g fr o pre x suf v frs w rhs ? hn hw hl hu; subst; sis.
+  intros g ? ? frs x suf rhs w ? ? hn hw hl hg; subst; sis.
   eapply llPredict_ambig_rhs_unproc_stack_syms in hl; eauto.
   sis; auto.
 Qed.
 
 Lemma step_preserves_ussr :
-  forall g av av' stk stk' w w' u u',
+  forall g ps ps' ss ss' ts ts' av av' un un',
     no_left_recursion g
-    -> stack_wf g stk
-    -> gamma_recognize g (unprocStackSyms' stk) w
-    -> step g (Pst av stk w u) = StepK (Pst av' stk' w' u')
-    -> gamma_recognize g (unprocStackSyms' stk') w'.
+    -> suffix_stack_wf g ss
+    -> gamma_recognize g (unprocStackSyms ss) ts
+    -> step g ps ss ts av un = StepK ps' ss' ts' av' un'
+    -> gamma_recognize g (unprocStackSyms ss') ts'.
 Proof.
-  intros g av av' stk stk' w w' u u' hn hw hu hs.
+  intros g ps ps' ss ss' ts ts' av av' un un' hn hw hr hs.
   unfold step in hs; dmeqs h; tc; inv hs.
   - eapply return_preserves_ussr; eauto.
   - eapply consume_preserves_ussr; eauto.
@@ -88,64 +84,67 @@ Proof.
   - eapply push_ambig_preserves_ussr; eauto.
 Qed.
 
-Lemma ussr_implies_multistep_doesn't_reject' :
-  forall (g : grammar) 
-         (tri : nat * nat * nat)
-         (a   : Acc lex_nat_triple tri)
-         (av  : NtSet.t)
-         (stk : parser_stack)
-         (w   : list token)
-         (u   : bool)
-         (a   : Acc lex_nat_triple (meas g (Pst av stk w u)))
-         (s   : string),
-    tri = meas g (Pst av stk w u)
+Lemma ussr__multistep_doesn't_reject' :
+  forall (g      : grammar)
+         (tri    : nat * nat * nat)
+         (a      : Acc lex_nat_triple tri)
+         (p_stk  : prefix_stack)
+         (s_stk  : suffix_stack)
+         (ts     : list token)
+         (av     : NtSet.t)
+         (u      : bool)
+         (a'     : Acc lex_nat_triple (meas g s_stk ts av))
+         (s      : string),
+    tri = meas g s_stk ts av
     -> no_left_recursion g
-    -> stack_wf g stk
-    -> gamma_recognize g (unprocStackSyms' stk) w
-    -> multistep g (Pst av stk w u) a <> Reject s.
+    -> stacks_wf g p_stk s_stk
+    -> gamma_recognize g (unprocStackSyms s_stk) ts
+    -> multistep g p_stk s_stk ts av u a' <> Reject s.
 Proof.
   intros g tri a.
   induction a as [tri hlt IH].
-  intros av stk w u a s heq hn hw hu; unfold not; intros hm; subst.
+  intros ps ss ts av u a' s ? hn hw hg; unfold not; intros hm; subst.
   apply multistep_reject_cases in hm.
-  destruct hm as [hs | [st' [a' [hs hm]]]]. 
+  destruct hm as [hs | (ps' & ss' & ts' & av' & u' & a'' & hs & hm)]. 
   - (* lemma *)
-    clear a hlt IH.
+    clear hlt IH.
     unfold step in hs; dmeqs h; tc; inv hs; sis.
-    + inv hu.
-    + inv hu. 
+    + inv hg.
+    + inv hg.
       inv H2.
       inv H1.
-    + inv hu. 
+    + inv hg. 
       inv H2. 
       inv H1. 
       tc.
     + eapply ussr_llPredict_neq_reject; eauto.
-    + inv hu. 
+      eapply frames_wf__suffix_frames_wf; eauto.
+    + inv hg. 
       inv H1.
       apply lhs_mem_allNts_true in H0. 
       tc.
-  - destruct st' as [av' stk' w' u']. 
-    eapply IH with (y := meas g (Pst av' stk' w' u')); eauto.
-    + apply step_meas_lt; auto.
-    + eapply step_preserves_stack_wf_invar; eauto. 
+  - eapply IH with (y := meas g ss' ts' av'); eauto. 
+    + eapply step_meas_lt; eauto.
+    + eapply step_preserves_stacks_wf_invar; eauto.
     + eapply step_preserves_ussr; eauto.
+      eapply stacks_wf__suffix_stack_wf; eauto.
 Qed.
 
 Lemma ussr_implies_multistep_doesn't_reject :
-  forall (g : grammar) 
-         (av  : NtSet.t)
-         (stk : parser_stack)
-         (w   : list token)
-         (u   : bool)
-         (a   : Acc lex_nat_triple (meas g (Pst av stk w u)))
-         (s   : string),
+  forall (g      : grammar)
+         (p_stk  : prefix_stack)
+         (s_stk  : suffix_stack)
+         (ts     : list token)
+         (av     : NtSet.t)
+         (u      : bool)
+         (a      : Acc lex_nat_triple (meas g s_stk ts av))
+         (s      : string),
     no_left_recursion g
-    -> stack_wf g stk
-    -> gamma_recognize g (unprocStackSyms' stk) w
-    -> multistep g (Pst av stk w u) a <> Reject s.
+    -> stacks_wf g p_stk s_stk
+    -> gamma_recognize g (unprocStackSyms s_stk) ts
+    -> multistep g p_stk s_stk ts av u a <> Reject s.
 Proof.
-  intros; eapply ussr_implies_multistep_doesn't_reject'; eauto.
+  intros; eapply ussr__multistep_doesn't_reject'; eauto.
 Qed.
 
 Theorem valid_derivation_implies_parser_doesn't_reject :
@@ -157,9 +156,7 @@ Proof.
   intros g ys w s hn hg; unfold not; intros hp.
   unfold parse in hp.
   unfold mkInitState in hp.
-  eapply ussr_implies_multistep_doesn't_reject; eauto.
-  - constructor. 
-  - simpl; rewrite app_nil_r; auto.
+  eapply ussr_implies_multistep_doesn't_reject; eauto; simpl; apps.
 Qed.
 
 Theorem parse_complete :
@@ -183,7 +180,7 @@ Proof.
 Qed.
 
 (* Completeness theorem for unambiguous derivations *)
-Theorem parse_complete_unambig :
+Theorem parse_complete_unique_derivation :
   forall (g  : grammar)
          (ys : list symbol)
          (w  : list token)
@@ -206,7 +203,7 @@ Proof.
 Qed.
 
 (* Completeness theorem for ambiguous derivations *)
-Theorem parse_complete_ambig :
+Theorem parse_complete_ambiguous_derivations :
   forall (g    : grammar)
          (ys   : list symbol)
          (w    : list token)

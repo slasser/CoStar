@@ -101,6 +101,15 @@ Proof.
     eapply llPredict_ambig_in_grammar; eauto.
 Qed.
 
+Lemma stacks_wf__suffix_stack_wf :
+  forall g p_stk s_stk,
+    stacks_wf g p_stk s_stk
+    -> suffix_stack_wf g s_stk. 
+Proof.
+  intros g (pfr, pfrs) (sfr, sfrs) hw.
+  eapply frames_wf__suffix_frames_wf; eauto.
+Qed.
+
 Lemma step_preserves_bottomFrameSyms_invar :
   forall g p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
     stacks_wf g p_stk s_stk
