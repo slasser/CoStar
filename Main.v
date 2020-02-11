@@ -8,9 +8,9 @@ Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
         Import ListNotations.
 
-Module Make (Import D : Defs.T).
+Module Make (Export D : Defs.T).
 
-  Module Import ParserAndProofs := ParserCompleteFn D.
+  Module Export ParserAndProofs := ParserCompleteFn D.
 
   Inductive parse_result :=
   | Acc : tree -> parse_result

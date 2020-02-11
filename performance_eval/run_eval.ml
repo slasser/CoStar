@@ -70,20 +70,20 @@ let vtoken_of_mtoken t =
 
 (* Convert the tokens that the Menhir lexer generates
    to the tokens that GallStar expects *)
-let gtoken_of_token (t : JsonTokenizer.token) : MyJsonParser.token =
+let gtoken_of_token (t : JsonTokenizer.token) : MyJsonParser.D.Defs.token =
   match t with
-  | INT i       -> (jInt, chars_of_int i)
-  | FLOAT f     -> (float, chars_of_float f)
-  | STRING s    -> (str, chars_of_string s)
-  | TRUE        -> (tru, [])
-  | FALSE       -> (fls, [])
-  | NULL        -> (null, [])
-  | LEFT_BRACE  -> (leftBrace, [])
-  | RIGHT_BRACE -> (rightBrace, [])
-  | LEFT_BRACK  -> (leftBrack, [])
-  | RIGHT_BRACK -> (rightBrack, [])
-  | COLON       -> (colon, [])
-  | COMMA       -> (comma, [])
+  | INT i       -> (Int, chars_of_int i)
+  | FLOAT f     -> (Float, chars_of_float f)
+  | STRING s    -> (Str, chars_of_string s)
+  | TRUE        -> (Tru, [])
+  | FALSE       -> (Fls, [])
+  | NULL        -> (Null, [])
+  | LEFT_BRACE  -> (LeftBrace, [])
+  | RIGHT_BRACE -> (RightBrace, [])
+  | LEFT_BRACK  -> (LeftBrack, [])
+  | RIGHT_BRACK -> (RightBrack, [])
+  | COLON       -> (Colon, [])
+  | COMMA       -> (Comma, [])
   | EOF         -> failwith "GallStar doesn't treat EOF as a token"
                              
 let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
@@ -120,7 +120,7 @@ let run_gparser_trial (fname : string) : float * float =
   let lexbuf         = Lexing.from_channel (open_in fname) in
   let (lextime, ts) = benchmark (JsonTokenizer.top Lexer.vread) lexbuf in
   let ts'           = map gtoken_of_token ts in
-  let (parsetime, v) = benchmark (parseSymbol jsonGrammar (NT value)) ts' in
+  let (parsetime, v) = benchmark (PG.parseSymbol jsonGrammar (NT Value)) ts' in
   (lextime, parsetime)
 
 (*

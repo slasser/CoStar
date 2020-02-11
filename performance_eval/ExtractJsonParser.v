@@ -5,27 +5,82 @@ Require Import GallStar.Main.
 Import ListNotations.
 Open Scope string_scope.
 
-(* JSON terminals *)
-Definition JInt       := "Int".
-Definition Float      := "Float".
-Definition Str        := "Str".
-Definition Tru        := "Tru".
-Definition Fls        := "Fls".
-Definition Null       := "Null".
-Definition LeftBrace  := "LeftBrace".
-Definition RightBrace := "RightBrace".
-Definition LeftBrack  := "LeftBrack".
-Definition RightBrack := "RightBrack".
-Definition Colon      := "Colon".
-Definition Comma      := "Comma".
+(* First, we provide the types of grammar symbols 
+   and their decidable equalities. *)
+Module Json_Types <: SYMBOL_TYPES.
+  
+  Inductive terminal' :=
+  | Int 
+  | Float 
+  | Str 
+  | Tru 
+  | Fls 
+  | Null 
+  | LeftBrace 
+  | RightBrace 
+  | LeftBrack
+  | RightBrack
+  | Colon
+  | Comma.
+  
+  Definition terminal := terminal'.
+  
+  Inductive nonterminal' :=
+  | Value 
+  | Pairs
+  | PairsTl
+  | Pair 
+  | Elts
+  | EltsTl.
+  
+  Definition nonterminal := nonterminal'.
 
-(* JSON nonterminals *)
-Definition Value   := 1.
-Definition Pairs   := 2.
-Definition PairsTl := 3.
-Definition Pair    := 4.
-Definition Elts    := 5.
-Definition EltsTl  := 6.
+  Lemma t_eq_dec : forall (t t' : terminal),
+      {t = t'} + {t <> t'}.
+  Proof. decide equality. Defined.
+  
+  Lemma nt_eq_dec : forall (nt nt' : nonterminal),
+      {nt = nt'} + {nt <> nt'}.
+  Proof. decide equality. Defined.
+
+  Definition showT (a : terminal) : string :=
+    match a with
+    | Int        => "Int"
+    | Float      => "Float"
+    | Str        => "String"
+    | Tru        => "True"
+    | Fls        => "False"
+    | Null       => "Null"
+    | LeftBrace  => "{"
+    | RightBrace => "}" 
+    | LeftBrack  => "["
+    | RightBrack => "]"
+    | Colon      => ":"
+    | Comma      => ","
+    end.
+
+  Definition showNT (x : nonterminal) : string :=
+    match x with
+    | Value    => "value"
+    | Pairs    => "pairs"
+    | PairsTl  => "pairs_tl"
+    | Pair     => "pair"
+    | Elts     => "elts"
+    | EltsTl   => "elts_tl"
+    end.
+
+End Json_Types.
+
+(* Next, we generate grammar definitions for those types,
+   and we package the types and their accompanying defs
+   into a single module *)
+Module Export D <: Defs.T.
+  Module Export SymTy := Json_Types.
+  Module Export Defs  := DefsFn SymTy.
+End D.
+
+(* The parser generator itself. *)
+Module Export PG := Make D.
 
 Open Scope list_scope.
 
@@ -42,7 +97,7 @@ Definition jsonGrammar : grammar :=
     (Value, [T Str]);
     
     (* int rule *)
-    (Value, [T JInt]);
+    (Value, [T Int]);
 
     (* float rule *)
     (Value, [T Float]);
@@ -75,18 +130,4 @@ Definition jsonGrammar : grammar :=
     (EltsTl, [T Comma; NT Value; NT EltsTl])
   ].
 
-(* { "bateman":50, "alexander":60 } *)
-Definition tokens := [ (LeftBrace, "")
-                     ; (Str, "Bateman")
-                     ; (Colon, "")
-                     ; (JInt, "50")
-                     ; (Comma, "")
-                     ; (Str, "Alexander")
-                     ; (Colon, "")
-                     ; (JInt, "60")
-                     ; (RightBrace, "")
-                     ].
-
-Definition tokens' := [ (Tru, "")].
-
-Extraction "performance_eval/myJsonParser.ml" jsonGrammar parseSymbol.
+Extraction "performance_eval/myJsonParser.ml" D PG jsonGrammar.
