@@ -32,4 +32,5 @@ setup.log
 myJsonParser.ml
 myJsonParser.mli
 
+CoqMakefile
 CoqMakefile.conf
