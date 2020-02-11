@@ -20,7 +20,7 @@ Module Type SYMBOL_TYPES.
 End SYMBOL_TYPES.
 
 (* Core definitions, parameterized by grammar symbol types *)
-Module DefsFn (Import Ty : SYMBOL_TYPES).
+Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Inductive symbol       := T  : terminal -> symbol 
                           | NT : nonterminal -> symbol.
