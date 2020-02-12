@@ -37,3 +37,7 @@ set), and app
 
 
 
+02_12_20_user_defined_symbol_types.eps
+======================================
+- switching from nat nonterminals and string terminals to user-defined grammar
+  symbol types yields about a 10% improvement
