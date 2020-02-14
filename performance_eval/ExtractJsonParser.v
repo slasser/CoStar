@@ -7,7 +7,7 @@ Open Scope list_scope.
 
 (* First, we provide the types of grammar symbols 
    and their decidable equalities. *)
-Module Json_Types <: SYMBOL_TYPES.
+Module Export Json_Types <: SYMBOL_TYPES.
   
   Inductive terminal' :=
   | Int 
@@ -81,6 +81,11 @@ End D.
 
 (* The parser generator itself. *)
 Module Export PG := Make D.
+Print Assumptions parseSymbol_sound_unambig.
+Print Assumptions parseSymbol_sound_ambig.
+Print Assumptions parseSymbol_error_free.
+Print Assumptions parseSymbol_complete_unique_derivation.
+Print Assumptions parseSymbol_complete_ambiguous_derivations.
 
 (* The JSON grammar itself *)
 Definition jsonGrammar : grammar :=
