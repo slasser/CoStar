@@ -3,7 +3,7 @@ Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Main.
 Import ListNotations.
-Open Scope string_scope.
+Open Scope list_scope.
 
 (* First, we provide the types of grammar symbols 
    and their decidable equalities. *)
@@ -81,8 +81,6 @@ End D.
 
 (* The parser generator itself. *)
 Module Export PG := Make D.
-
-Open Scope list_scope.
 
 (* The JSON grammar itself *)
 Definition jsonGrammar : grammar :=

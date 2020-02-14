@@ -13,7 +13,7 @@ Section PairLT.
         forall x y y', 
           ltB y y' -> pair_lex (x, y) (x, y').
     
-    Hint Constructors pair_lex.
+    Hint Constructors pair_lex : core.
     
     Lemma pair_lex_trans :
       transitive _ ltA -> transitive _ ltB -> transitive _ pair_lex.
@@ -60,7 +60,7 @@ Section TripleLT.
         forall x y z z', 
           ltC z z' -> triple_lex (x, y, z) (x, y, z').
     
-    Hint Constructors triple_lex.
+    Hint Constructors triple_lex : core.
     
     Lemma triple_lex_trans :
       transitive _ ltA 

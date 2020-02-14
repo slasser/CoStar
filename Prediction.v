@@ -928,7 +928,7 @@ Module PredictionFn (Import D : Defs.T).
         -> suffix_frames_wf g (SF (NT x :: suf) :: frs)
         -> suffix_frames_wf g (SF suf' :: SF (NT x :: suf) :: frs).
 
-  Hint Constructors suffix_frames_wf.
+  Hint Constructors suffix_frames_wf : core.
 
   (* invert a suffix_suffix_frames_wf judgment, naming the hypotheses hi and hw' *)
   Ltac inv_suffix_frames_wf hw hi hw' :=
@@ -1075,7 +1075,7 @@ Qed.
         -> frames_repr_nullable_path g (SF (NT x :: suf) :: frs)
         -> frames_repr_nullable_path g (SF suf' :: SF (NT x :: suf) :: frs).
 
-  Hint Constructors frames_repr_nullable_path.
+  Hint Constructors frames_repr_nullable_path : core.
 
   Ltac inv_frnp hf hi hn hf' :=
     inversion hf as [? ? ? ? hi hn | ? ? ? ? ? hi hn hf']; subst; clear hf.

@@ -22,7 +22,7 @@ Module PredictionErrorFreeFn (Import D : Defs.T).
       forall a suf frs,
         stable_config (SF (T a :: suf), frs).
 
-  Hint Constructors stable_config.
+  Hint Constructors stable_config : core.
 
   Definition all_stacks_stable sps :=
     forall sp, In sp sps -> stable_config sp.(stack).

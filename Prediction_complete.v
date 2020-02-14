@@ -18,7 +18,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
         move_step g (Sp pred (SF (T a :: suf), frs)) ((a, l) :: ts)
                     (Sp pred (SF suf, frs)) ts.
 
-  Hint Constructors move_step.
+  Hint Constructors move_step : core.
 
   Lemma move_step_preserves_label :
     forall g sp sp' w w',
@@ -135,7 +135,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
                         (NtSet.remove x av)
                         (Sp pred (SF rhs, SF (NT x :: suf) :: frs)).
 
-  Hint Constructors closure_step.
+  Hint Constructors closure_step : core.
 
   Ltac inv_cs hs hi hi' :=
     inversion hs as [? ? ? ? ? | ? ? ? ? ? ? hi hi']; subst; clear hs.
@@ -196,7 +196,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
         -> closure_multistep g av' sp' av'' sp''
         -> closure_multistep g av sp av'' sp''.
 
-  Hint Constructors closure_multistep.
+  Hint Constructors closure_multistep : core.
 
   Ltac inv_cm hm hs hm' :=
     inversion hm as [? ? | ? ? ? ? ? | ? ? ? ? ? ? hs hm']; subst; clear hm.
@@ -500,7 +500,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
         -> move_closure_multistep g sp'' ts'' sp''' ts'''
         -> move_closure_multistep g sp ts sp''' ts'''.
 
-  Hint Constructors move_closure_multistep.
+  Hint Constructors move_closure_multistep : core.
 
   Ltac induct_mcms hm :=
     induction hm as [ ?
@@ -851,7 +851,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
         -> move_closure_multistep' g sp'' ts'' sp''' ts'''
         -> move_closure_multistep' g sp ts sp''' ts'''.
 
-  Hint Constructors move_closure_multistep'.
+  Hint Constructors move_closure_multistep' : core.
 
   Definition subparsers_sound_wrt_originals g sps wpre sps' wsuf :=
     forall sp',

@@ -26,7 +26,7 @@ Module ParserSoundFn (Import D : Defs.T).
         -> frames_wf g (PF pre' v' :: PF pre v :: p_frs) 
                      (SF suf' :: SF (NT x :: suf) :: s_frs).
 
-  Hint Constructors frames_wf.
+  Hint Constructors frames_wf : core.
 
   Ltac inv_fw hw  hi hw' := 
     inversion hw as [? ? ? | ? ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
@@ -149,7 +149,7 @@ Module ParserSoundFn (Import D : Defs.T).
                              (SF suf'    :: s_cr :: s_frs)
                              (wpre ++ wmid) wsuf.
 
-  Hint Constructors frames_derivation.
+  Hint Constructors frames_derivation : core.
 
   Ltac inv_fd hf hf':=
     let heq := fresh "heq" in
@@ -305,7 +305,7 @@ Module ParserSoundFn (Import D : Defs.T).
         -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
                                     (wpre ++ wmid) wsuf.
   
-  Hint Constructors unique_frames_derivation.
+  Hint Constructors unique_frames_derivation : core.
 
   Ltac inv_ufd hu  ha hg hi hpu hu' :=
     let hp  := fresh "hp"  in
@@ -615,7 +615,7 @@ Module ParserSoundFn (Import D : Defs.T).
         -> ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs)
                                        (wpre ++ wmid) wsuf.
 
-  Hint Constructors ambiguous_frames_derivation.
+  Hint Constructors ambiguous_frames_derivation : core.
 
   Ltac inv_afd ha  ha' heq hf hg hg' hi hi' hneq hr :=
     let hp  := fresh "hp"  in
@@ -859,7 +859,7 @@ Module ParserSoundFn (Import D : Defs.T).
       split.
       + eapply mcms'_final_config in hm; auto.
         eapply closure_ussr_backwards with (sp' := osp) (w := w) in hs; eauto.
-        * destruct hs as [init_sp [hi'' [hc hg]]].
+        * destruct hs as [init_sp [av' [hi'' [hc hg]]]].
           (* lemma? *)
           unfold initSps in hi''.
           apply in_map_iff in hi''.
@@ -874,7 +874,7 @@ Module ParserSoundFn (Import D : Defs.T).
           apply rhssForNt_in_iff in hs; auto.
         * eapply mcms'_final_config in hm'; auto.
           eapply closure_ussr_backwards with (sp' := osp') (w := w) in hs; auto.
-          -- destruct hs as [init_sp [hi'' [hc hg]]].
+          -- destruct hs as [init_sp [av' [hi'' [hc hg]]]].
              (* lemma? *)
              unfold initSps in hi''.
              apply in_map_iff in hi''.
@@ -886,14 +886,11 @@ Module ParserSoundFn (Import D : Defs.T).
     - red. intros sp' hi; sis.
       exists sp'; split; auto.
       eapply closure_func_refines_closure_multistep_backward in hi; eauto.
-      + destruct hi as [sp [hi hc]].
+      + destruct hi as [av'' [sp [hi hc]]].
         assert (hst : stable_config sp'.(stack)).
         { eapply stable_config_after_closure_multistep; eauto. }
-        destruct sp' as [av pred ([suf'], frs')]; sis.
-        inv hst; auto.
-      + red.
-        intros sp hi'.
-        eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+        destruct sp' as [pred ([suf'], frs')]; inv hst; auto.
+      + intros sp hi'; eapply initSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Definition ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u :=

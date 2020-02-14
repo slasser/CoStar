@@ -114,7 +114,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       + destruct (Ty.nt_eq_dec x' x); subst; auto.
         apply in_cons; auto.
   Qed.
-  Hint Resolve rhssForNt_in_iff.
+  Hint Resolve rhssForNt_in_iff : core.
 
   Lemma rhssForNt_rhss :
     forall g x rhs,
@@ -271,7 +271,7 @@ Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
              -> gamma_derivation g ss wsuf trs
              -> gamma_derivation g (s :: ss) (wpre ++ wsuf) (tr :: trs).
 
-  Hint Constructors sym_derivation gamma_derivation.
+  Hint Constructors sym_derivation gamma_derivation : core.
 
   Scheme sym_derivation_mutual_ind   := Induction for sym_derivation Sort Prop
     with gamma_derivation_mutual_ind := Induction for gamma_derivation Sort Prop.
@@ -455,7 +455,7 @@ Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
              -> gamma_recognize g ss wsuf
              -> gamma_recognize g (s :: ss) (wpre ++ wsuf).
 
-  Hint Constructors sym_recognize gamma_recognize.
+  Hint Constructors sym_recognize gamma_recognize : core.
 
   Ltac inv_sr hs  hi hg :=
     inversion hs as [ ? ? | ? ? ? hi hg ]; subst; clear hs.
@@ -565,7 +565,7 @@ Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
            -> nullable_gamma g tl
            -> nullable_gamma g (hd :: tl).
 
-  Hint Constructors nullable_sym nullable_gamma.
+  Hint Constructors nullable_sym nullable_gamma : core.
 
   Lemma nullable_split :
     forall g xs ys,
@@ -608,7 +608,7 @@ Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
       -> nullable_path g (NT y) (NT z)
       -> nullable_path g (NT x) (NT z).
 
-  Hint Constructors nullable_path.
+  Hint Constructors nullable_path : core.
 
   Lemma nullable_path_trans :
     forall g x y z,

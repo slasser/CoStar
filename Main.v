@@ -6,7 +6,7 @@ Require Import GallStar.Parser_error_free.
 Require Import GallStar.Parser_complete.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
-        Import ListNotations.
+Import ListNotations.
 
 Module Make (Export D : Defs.T).
 
