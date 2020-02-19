@@ -1,4 +1,4 @@
-Require Import Arith Bool List Omega PeanoNat Program.Wf String.
+Require Import Arith Bool FMaps List Omega PeanoNat Program.Wf String.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Tactics.
@@ -914,6 +914,187 @@ Module PredictionFn (Import D : Defs.T).
     eapply llPredict_ambig_in_rhssForNt; eauto.
   Qed.
 
+  (* SLL prediction *)
+
+  Definition cache_key := (list subparser * terminal)%type.
+
+  Lemma cache_key_eq_dec : 
+    forall k k' : cache_key,
+      {k = k'} + {k <> k'}.
+  Proof.
+    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
+  Defined.
+
+  Module MDT_CacheKey.
+    Definition t := cache_key.
+    Definition eq_dec := cache_key_eq_dec.
+  End MDT_CacheKey.
+  Module CacheKey_as_DT := Make_UDT(MDT_CacheKey).
+  Module Cache := FMapWeakList.Make CacheKey_as_DT.
+  Module CacheFacts := WFacts_fun CacheKey_as_DT Cache.
+  
+  (* A cache is a finite map with (list subparser * terminal) keys 
+     and (list subparser) values *)
+  Definition cache := Cache.t (list subparser).
+
+  (* "SLL closure" operation *)
+
+  Inductive SLL_sp_closure_step_result :=
+  | SLL_StepDone     : SLL_sp_closure_step_result
+  | SLL_StepK        : NtSet.t -> list subparser -> SLL_sp_closure_step_result
+  | SLL_StepError    : prediction_error -> SLL_sp_closure_step_result
+  | SLL_StepFailover : SLL_sp_closure_step_result.
+
+  Definition SLL_spClosureStep (g : grammar) (av : NtSet.t) (sp : subparser) : 
+    SLL_sp_closure_step_result :=
+    match sp with
+    | Sp pred (fr, frs) =>
+      match fr with
+      | SF [] =>
+        match frs with
+        | []                 => SLL_StepFailover (* stack-sensitive decision *)
+        | SF [] :: _         => SLL_StepError SpInvalidState
+        | SF (T _ :: _) :: _ => SLL_StepError SpInvalidState
+        | SF (NT x :: suf_cr) :: frs_tl =>
+          let stk':= (SF suf_cr, frs_tl) 
+          in  SLL_StepK (NtSet.add x av) [Sp pred stk'] 
+        end
+      | SF (T _ :: _)    => SLL_StepDone
+      | SF (NT x :: suf) =>
+        if NtSet.mem x av then
+          let sps' := map (fun rhs => Sp pred 
+                                         (SF rhs, fr :: frs))
+                          (rhssForNt g x)
+          in  SLL_StepK (NtSet.remove x av) sps' 
+        else if NtSet.mem x (allNts g) then
+               SLL_StepError (SpLeftRecursion x)
+             else
+               SLL_StepK NtSet.empty [] 
+      end
+    end.
+
+  Inductive SLL_closure_result :=
+  | SLL_closure_succ     : list subparser   -> SLL_closure_result
+  | SLL_closure_error    : prediction_error -> SLL_closure_result
+  | SLL_closure_failover :                     SLL_closure_result.
+
+  Fixpoint SLL_aggrClosureResults (rs : list SLL_closure_result) : SLL_closure_result :=
+    match rs with
+    | [] => SLL_closure_succ []
+    | SLL_closure_succ sps :: rs' =>
+      match SLL_aggrClosureResults rs' with
+      | SLL_closure_succ sps' => SLL_closure_succ (sps ++ sps')
+      | r' => r'
+      end
+    | r :: _ => r
+    end.
+
+  Lemma SLL_spClosureStep_meas_lt :
+    forall (g      : grammar)
+           (sp sp' : subparser)
+           (sps'   : list subparser)
+           (av av' : NtSet.t),
+      SLL_spClosureStep g av sp = SLL_StepK av' sps'
+      -> In sp' sps'
+      -> lex_nat_pair (meas g av' sp') (meas g av sp).
+  Proof.
+    intros g sp sp' sps' av av' hs hi. 
+    unfold SLL_spClosureStep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
+    - apply in_singleton_eq in hi; subst.
+      eapply meas_lt_after_return; eauto.
+    - apply in_map_iff in hi.
+      destruct hi as [rhs [heq hi]]; subst.
+      eapply meas_lt_after_push; eauto.
+      + apply NtSet.mem_spec; auto.
+      + apply rhssForNt_in_iff; auto.
+  Defined.
+
+  Lemma SLL_acc_after_step :
+    forall g sp sp' sps' av av',
+      SLL_spClosureStep g av sp = SLL_StepK av' sps'
+      -> In sp' sps'
+      -> Acc lex_nat_pair (meas g av sp)
+      -> Acc lex_nat_pair (meas g av' sp').
+  Proof.
+    intros g sp sp' sps' av av' heq hi ha.
+    eapply Acc_inv; eauto.
+    eapply SLL_spClosureStep_meas_lt; eauto.
+  Defined.
+
+  Fixpoint SLL_spClosure (g  : grammar)
+                         (av : NtSet.t)
+                         (sp : subparser)
+                         (a  : Acc lex_nat_pair (meas g av sp)) : SLL_closure_result :=
+    match SLL_spClosureStep g av sp as r return SLL_spClosureStep g av sp = r -> _ with
+    | SLL_StepDone       => fun _  => SLL_closure_succ [sp]
+    | SLL_StepFailover   => fun _  => SLL_closure_failover
+    | SLL_StepError e    => fun _  => SLL_closure_error e
+    | SLL_StepK av' sps' => 
+      fun hs => 
+        let crs := dmap sps' (fun sp' hin =>
+                                SLL_spClosure g av' sp'
+                                              (SLL_acc_after_step _ _ _ _ hs hin a))
+        in  SLL_aggrClosureResults crs
+    end eq_refl.
+  
+  Fixpoint SLL_closure (g : grammar) (sps : list subparser) : SLL_closure_result :=
+    SLL_aggrClosureResults (map (fun sp => SLL_spClosure g (allNts g) sp (lex_nat_pair_wf _)) sps).
+
+  Inductive SLL_prediction_result :=
+  | SLL_done     : cache -> prediction_result -> SLL_prediction_result
+  | SLL_failover : cache                      -> SLL_prediction_result.
+
+  Fixpoint SLL_predict' (g : grammar) (sps : list subparser) (ts : list token) (c : cache) : SLL_prediction_result :=
+    match sps with
+    | [] => SLL_done c PredReject
+    | sp :: sps' => 
+      if allPredictionsEqual sp sps' then
+        SLL_done c (PredSucc sp.(prediction))
+      else
+        match ts with
+        | [] => SLL_done c (handleFinalSubparsers sps)
+        | (a, l) :: ts' =>
+          match Cache.find (sps, a) c with
+          | Some sps' => SLL_predict' g sps' ts' c
+          | None =>
+            match move g (a, l) sps with
+            | inl msg => SLL_done c (PredError msg)
+            | inr mv  =>
+              match SLL_closure g mv with
+              | SLL_closure_error e => SLL_done c (PredError e)
+              | SLL_closure_failover => SLL_failover c
+              | SLL_closure_succ cl  => 
+                let c' := Cache.add (sps, a) cl c
+                in  SLL_predict' g cl ts' c'
+              end
+            end
+          end
+        end
+    end.
+
+  Definition SLL_initSps g x :=
+    map (fun rhs => Sp rhs (SF rhs, [])) (rhssForNt g x).
+
+  Definition SLL_startState g x :=
+    SLL_closure g (SLL_initSps g x).
+
+  Definition SLL_predict (g  : grammar) 
+                         (x  : nonterminal) 
+                         (ts : list token) 
+                         (c  : cache) : SLL_prediction_result :=
+    match SLL_startState g x with
+    | SLL_closure_succ sps => SLL_predict' g sps ts c
+    | SLL_closure_error e  => SLL_done c (PredError e)
+    | SLL_closure_failover => SLL_failover c
+    end.
+
+Definition adaptivePredict g x stk ts c : cache * prediction_result :=
+  match SLL_predict g x ts c with
+  | SLL_done c' r   => (c', r)
+  | SLL_failover c' => let r := llPredict g x stk ts 
+                       in  (c', r)
+  end.
+
   (* A WELL-FORMEDNESS PREDICATE OVER A SUFFIX STACK *)
 
   (* The stack predicate is defined in terms of the following
@@ -946,56 +1127,6 @@ Module PredictionFn (Import D : Defs.T).
   (* Lift the predicate to a list of subparsers *)
   Definition all_suffix_stacks_wf (g : grammar) (sps: list subparser) : Prop :=
     forall sp, In sp sps -> suffix_stack_wf g sp.(stack).
-
-  (* Lemmas about the well-formedness predicate *)
-
-  (*Lemma suffix_frames_wf_app' :
-  forall g l,
-    suffix_frames_wf g l
-    -> forall p s,
-      l = p ++ s
-      -> suffix_frames_wf g p /\ suffix_frames_wf g s.
-Proof.
-  intros g l hw.
-  induction hw; intros p s heq.
-  - symmetry in heq; apply app_eq_nil in heq.
-    destruct heq; subst; auto.
-  - destruct p as [| fr p]; sis; subst; auto.
-    apply cons_inv_eq in heq.
-    destruct heq as [hh ht].
-    apply app_eq_nil in ht; destruct ht; subst; auto.
-  - destruct p as [| fr  p]; sis; subst; eauto.
-    destruct p as [| fr' p]; sis; subst; inv heq; auto.
-    specialize (IHhw (SF (NT x :: suf):: p) s).
-    destruct IHhw as [hs hp]; eauto.
-Qed.
-
-Lemma suffix_frames_wf_app :
-  forall g p s,
-    suffix_frames_wf g (p ++ s)
-    -> suffix_frames_wf g p /\ suffix_frames_wf g s.
-Proof.
-  intros; eapply suffix_frames_wf_app'; eauto.
-Qed.
-
-Lemma suffix_frames_wf_app_l :
-  forall g p s,
-    suffix_frames_wf g (p ++ s)
-    -> suffix_frames_wf g p.
-Proof.
-  intros g p s hw; eapply suffix_frames_wf_app in hw; firstorder.
-Qed.
-
-Lemma suffix_frames_wf_tl :
-  forall g h t,
-    suffix_frames_wf g (h :: t)
-    -> suffix_frames_wf g t.
-Proof.
-  intros g h t hw.
-  rewrite cons_app_singleton in hw.
-  eapply suffix_frames_wf_app in hw; firstorder.
-Qed.
-   *)
 
   Lemma return_preserves_suffix_frames_wf_invar :
     forall g suf_cr x frs,
