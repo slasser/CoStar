@@ -120,7 +120,7 @@ let run_gparser_trial (fname : string) : float * float =
   let lexbuf         = Lexing.from_channel (open_in fname) in
   let (lextime, ts) = benchmark (JsonTokenizer.top Lexer.vread) lexbuf in
   let ts'           = map gtoken_of_token ts in
-  let (parsetime, v) = benchmark (PG.parseSymbol jsonGrammar (NT Value)) ts' in
+  let (parsetime, v) = benchmark (PG.parseSymbol_opt jsonGrammar (NT Value)) ts' in
   (lextime, parsetime)
 
 (*

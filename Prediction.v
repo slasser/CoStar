@@ -1095,6 +1095,11 @@ Definition adaptivePredict g x stk ts c : cache * prediction_result :=
                        in  (c', r)
   end.
 
+  (* next steps : 
+     - don't wrap prediction_result in SLL_prediction_result 
+     - write versions of step, multistep, and parse that use cache
+     - see if there's a performance improvement *) 
+
   (* A WELL-FORMEDNESS PREDICATE OVER A SUFFIX STACK *)
 
   (* The stack predicate is defined in terms of the following

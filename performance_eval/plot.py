@@ -14,9 +14,9 @@ with open(datafile, "r") as fh:
     lexerTimes = [float(s) for s in d["lexer_times"]]
     parserTimes = [float(s) for s in d["parser_times"]]
 
-print fileSizes
-print lexerTimes
-print parserTimes
+print(fileSizes)
+print(lexerTimes)
+print(parserTimes)
 
 N = len(fileSizes)
 

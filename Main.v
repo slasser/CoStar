@@ -29,6 +29,17 @@ Module Make (Export D : Defs.T).
     | _          => Err InvalidState
     end.
 
+  Definition parseSymbol_opt (g : grammar)
+                             (s : symbol)
+                             (w : list token) : parse_result :=
+    match parse_opt g [s] w with
+    | Accept [v] => Acc v
+    | Ambig  [v] => Amb v
+    | Reject str => Rej str
+    | Error e    => Err e
+    | _          => Err InvalidState
+    end.
+
   (* Soundness theorems for unambiguous and ambiguous derivations *)
 
   Theorem parseSymbol_sound_unambig :
