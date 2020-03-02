@@ -41,3 +41,18 @@ set), and app
 ======================================
 - switching from nat nonterminals and string terminals to user-defined grammar
   symbol types yields about a 10% improvement
+
+
+
+02_14_20_no_avail_set_in_subparser.eps
+======================================
+- remove available set from subparser record type, make it a separate parameter
+  to prediction-related functions; very little performance difference
+
+
+
+03_02_20_initial_cache_attempt.eps
+==================================
+- early version of DFA cache optimization is unsuccessful; failing over whenever
+  a subparser dips into the context results in a slow-growing cache and too many
+  failovers

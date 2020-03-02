@@ -16,6 +16,9 @@ let str_of_float_list fs = "[" ^ String.concat "," (List.map string_of_float fs)
 
 let str_of_int_list is   = "[" ^ String.concat "," (List.map string_of_int is) ^ "]"
 
+let sum_ints (xs : int list) : int =
+  List.fold_right (+) xs 0
+                                                                                   
 let sum_floats (fs : float list) : float =
   List.fold_right (+.) fs 0.0
 
@@ -28,6 +31,11 @@ let filenames_in_dir (dirname : string) : string list =
             
 let file_sizes (fnames : string list) : int list =
   List.map (fun fname -> (Unix.stat fname).st_size) fnames
+
+let rec countnodes (tr : D.Defs.tree) : int =
+  match tr with
+  | Leaf (a, l) -> 1
+  | Node (x, sts) -> 1 + sum_ints (List.map countnodes sts)
                                              
 (*
 let rec nat_of_int' (i : int) : nat =
@@ -121,6 +129,12 @@ let run_gparser_trial (fname : string) : float * float =
   let (lextime, ts) = benchmark (JsonTokenizer.top Lexer.vread) lexbuf in
   let ts'           = map gtoken_of_token ts in
   let (parsetime, v) = benchmark (PG.parseSymbol_opt jsonGrammar (NT Value)) ts' in
+  (match v with
+   | Acc t -> print_string "Acc tree "; print_int (countnodes t); print_string "\n";
+   | Amb t -> print_string "Amb tree"
+   | Rej l -> print_string "Rej l"
+   | Err e -> print_string "Err e");
+   (*  let (parsetime, v) = benchmark (PG.parseSymbol jsonGrammar (NT Value)) ts' in *)
   (lextime, parsetime)
 
 (*
