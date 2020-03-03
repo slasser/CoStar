@@ -1,4 +1,4 @@
-Require Import Arith Bool FMaps List Omega PeanoNat Program.Wf String.
+Require Import Arith Bool FMaps List MSets Omega PeanoNat Program.Wf String.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
 Require Import GallStar.Tactics.
@@ -916,8 +916,121 @@ Module PredictionFn (Import D : Defs.T).
 
   (* SLL prediction *)
 
-  Definition cache_key := (list subparser * terminal)%type.
+  (* First, some static analysis over a grammar *)
 
+  Definition pos  := (option nonterminal * list symbol)%type.
+
+  Lemma pos_eq_dec :
+    forall p p' : pos, {p = p'} + {p <> p'}.
+  Proof.
+    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
+  Qed.
+
+  Definition edge := (pos * pos)%type.
+
+  Definition src (e : edge) : pos := fst e.
+
+  Definition dst (e : edge) : pos := snd e.
+
+  Lemma edge_eq_dec :
+    forall e e' : edge, {e = e'} + {e <> e'}.
+  Proof.
+    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
+  Qed.
+
+  Module MDT_Edge.
+    Definition t := edge.
+    Definition eq_dec := edge_eq_dec.
+  End MDT_Edge.
+  Module Edge_as_DT   := Make_UDT(MDT_Edge).
+  Module E  := MSetWeakList.Make Edge_as_DT.
+  Module EF := WFactsOn Edge_as_DT E.
+
+  Definition oneToMany {A B : Type} (s : A) (ds : list B) : list (A * B) :=
+    map (pair s) ds.
+  
+  Definition beqNt x x' : bool :=
+    match nt_eq_dec x' x with
+    | left _ => true
+    | right _ => false
+    end.
+
+  Fixpoint prodsOf (x : nonterminal) (ps : list production) := 
+    filter (fun p => beqNt x (lhs p)) ps.
+
+  Fixpoint pushEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
+    match ys with 
+    | []          => []
+    | T _ :: ys'  => pushEdges' g x ys'
+    | NT y :: ys' =>
+      let es := map (fun rhs => ((Some x, ys), (Some y, rhs)))
+                    (rhssForNt g y)
+      in  es ++ pushEdges' g x ys'
+    end.
+
+  Definition pushEdges (g : grammar) : list edge :=
+    flat_map (fun p => pushEdges' g (lhs p) (rhs p)) g.
+
+  Fixpoint returnEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
+    match ys with
+    | []          => []
+    | T _ :: ys'  => returnEdges' g x ys'
+    | NT y :: ys' =>
+      ((Some y, []), (Some x, ys')) :: returnEdges' g x ys'
+    end.
+
+  Definition returnEdges (g : grammar) : list edge :=
+    flat_map (fun p => returnEdges' g (lhs p) (rhs p)) g.
+
+  Definition finalEdges g : list edge :=
+    map (fun x => ((Some x, []), (None, []))) (lhss g).
+
+  Definition fromlist (es : list edge) : E.t :=
+    fold_right E.add E.empty es.
+
+  Definition epsilonEdges g : list edge :=
+    pushEdges g ++ returnEdges g ++ finalEdges g.
+
+  Fixpoint children (es : list edge) (s : pos) : list pos :=
+    match es with
+    | []             => []
+    | (s', d) :: es' =>
+      if pos_eq_dec s' s then d :: children es' s else children es' s
+    end.
+
+  Definition mem (e : edge) (es : list edge) : bool :=
+    if in_dec edge_eq_dec e es then true else false.
+  
+  Definition grandchildren (es : list edge) (s : pos) : list pos :=
+    flat_map (children es) (children es s).
+
+  Definition newEdges' (es : list edge) (s : pos) : list edge :=
+    let ds := filter (fun d => negb (mem (s, d) es)) (grandchildren es s)
+    in  oneToMany s ds.
+
+  Definition newEdges (es : list edge) : list edge :=
+    flat_map (fun e => newEdges' es (src e)) es.
+
+  Axiom magic : forall A, A.
+
+  Definition allEdges : list edge := [].
+
+  Definition m (es : list edge) : nat :=
+    E.cardinal (E.diff (fromlist allEdges) (fromlist es)).
+
+  Program Fixpoint transClosure (es : list edge)
+                                { measure (m es) } : list edge :=
+    let es' := newEdges es in
+    match es' with
+    | []     => es
+    | _ :: _ => transClosure (es ++ es')
+    end.
+  Next Obligation.
+    unfold m.
+  Abort.
+  
+  Definition cache_key := (list subparser * terminal)%type.
+  
   Lemma cache_key_eq_dec : 
     forall k k' : cache_key,
       {k = k'} + {k <> k'}.
