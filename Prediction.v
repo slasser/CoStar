@@ -926,6 +926,15 @@ Module PredictionFn (Import D : Defs.T).
     repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
   Qed.
 
+  Module MDT_Pos.
+    Definition t := pos.
+    Definition eq_dec := pos_eq_dec.
+  End MDT_Pos.
+  Module Pos_as_DT   := Make_UDT(MDT_Pos).
+  Module Pset  := MSetWeakList.Make Pos_as_DT.
+  Module PsetF := WFactsOn Pos_as_DT Pset.
+  Module Pmap  := FMapWeakList.Make Pos_as_DT.
+
   Definition edge := (pos * pos)%type.
 
   Definition src (e : edge) : pos := fst e.
@@ -971,16 +980,16 @@ Module PredictionFn (Import D : Defs.T).
   Definition pushEdges (g : grammar) : list edge :=
     flat_map (fun p => pushEdges' g (lhs p) (rhs p)) g.
 
-  Fixpoint returnEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
+  Fixpoint returnEdges' (x : nonterminal) (ys : list symbol) : list edge :=
     match ys with
     | []          => []
-    | T _ :: ys'  => returnEdges' g x ys'
+    | T _ :: ys'  => returnEdges' x ys'
     | NT y :: ys' =>
-      ((Some y, []), (Some x, ys')) :: returnEdges' g x ys'
+      ((Some y, []), (Some x, ys')) :: returnEdges' x ys'
     end.
 
   Definition returnEdges (g : grammar) : list edge :=
-    flat_map (fun p => returnEdges' g (lhs p) (rhs p)) g.
+    flat_map (fun p => returnEdges' (lhs p) (rhs p)) g.
 
   Definition finalEdges g : list edge :=
     map (fun x => ((Some x, []), (None, []))) (lhss g).
@@ -991,44 +1000,96 @@ Module PredictionFn (Import D : Defs.T).
   Definition epsilonEdges g : list edge :=
     pushEdges g ++ returnEdges g ++ finalEdges g.
 
-  Fixpoint children (es : list edge) (s : pos) : list pos :=
+  Fixpoint dsts (es : list edge) (s : pos) : list pos :=
     match es with
     | []             => []
     | (s', d) :: es' =>
-      if pos_eq_dec s' s then d :: children es' s else children es' s
+      if pos_eq_dec s' s then d :: dsts es' s else dsts es' s
     end.
 
   Definition mem (e : edge) (es : list edge) : bool :=
     if in_dec edge_eq_dec e es then true else false.
   
-  Definition grandchildren (es : list edge) (s : pos) : list pos :=
-    flat_map (children es) (children es s).
-
-  Definition newEdges' (es : list edge) (s : pos) : list edge :=
-    let ds := filter (fun d => negb (mem (s, d) es)) (grandchildren es s)
-    in  oneToMany s ds.
+  Definition newEdges' (es : list edge) (e : edge) : list edge :=
+    let (a, b) := e in
+    let cs     := filter (fun c => negb (mem (a, c) es)) (dsts es b)
+    in  oneToMany a cs.
 
   Definition newEdges (es : list edge) : list edge :=
-    flat_map (fun e => newEdges' es (src e)) es.
+    flat_map (newEdges' es) es.
 
-  Axiom magic : forall A, A.
+  Definition sources es := map src es.
+  Definition dests   es := map dst es.
 
-  Definition allEdges : list edge := [].
+  Definition allEdges es := 
+    let ss := sources es in
+    let ds := dests   es in
+    flat_map (fun s => oneToMany s ds) ss.
+
+  Definition stable (p : pos) : bool :=
+    match p with
+    | (None, [])         => true
+    | (Some x, T _ :: _) => true
+    | _                  => false
+    end.
+
+  Fixpoint stablePositions' x ys : list pos :=
+    match ys with
+    | []          => []
+    | T a :: ys'  => (Some x, ys) :: stablePositions' x ys'
+    | NT _ :: ys' => stablePositions' x ys'
+    end.
+
+  Definition stablePositions (g : grammar) : list pos :=
+    (None, []) :: flat_map (fun p => stablePositions' (lhs p) (rhs p)) g.
+
+  Definition reflEdges (g : grammar) : list edge :=
+    map (fun p => (p, p)) (stablePositions g).
 
   Definition m (es : list edge) : nat :=
-    E.cardinal (E.diff (fromlist allEdges) (fromlist es)).
+    E.cardinal (E.diff (fromlist (allEdges es)) (fromlist es)).
+
+  Axiom magic : forall A, A.
 
   Program Fixpoint transClosure (es : list edge)
                                 { measure (m es) } : list edge :=
     let es' := newEdges es in
-    match es' with
-    | []     => es
-    | _ :: _ => transClosure (es ++ es')
-    end.
+    match es' as es'' return es' = es'' -> _ with
+    | []     => fun _   => es
+    | _ :: _ => fun heq => transClosure (es' ++ es)
+    end eq_refl.
   Next Obligation.
+    rewrite heq; simpl.
     unfold m.
-  Abort.
-  
+    apply magic.
+  Defined.
+
+  Definition destStable (e : edge) : bool :=
+    let (_, b) := e in stable b.
+
+  Definition stableEdges (es : list edge) : list edge :=
+    filter destStable es.
+
+  Definition mkGraphEdges (g : grammar) : list edge :=
+    stableEdges (transClosure (epsilonEdges g)) ++ (reflEdges g).
+
+  (* A closure graph is a map where each key K is a grammar position
+     and each value V is a set of positions that are epsilon-reachable from K *)
+  Definition closure_map := Pmap.t Pset.t.
+
+  Definition addEdge (e : edge) (m : closure_map) : closure_map :=
+    let (k, v) := e in
+    match Pmap.find k m with
+    | Some vs => Pmap.add k (Pset.add v vs) m
+    | None    => Pmap.add k (Pset.singleton v) m
+    end.
+
+  Definition fromEdges (es : list edge) : closure_map :=
+    fold_right addEdge (Pmap.empty Pset.t) es.
+
+  Definition mkGraph (g : grammar) : closure_map :=
+    fromEdges (mkGraphEdges g).
+    
   Definition cache_key := (list subparser * terminal)%type.
   
   Lemma cache_key_eq_dec : 
