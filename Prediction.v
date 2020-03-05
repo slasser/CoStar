@@ -915,181 +915,286 @@ Module PredictionFn (Import D : Defs.T).
   Qed.
 
   (* SLL prediction *)
-
-  (* First, some static analysis over a grammar *)
-
-  Definition pos  := (option nonterminal * list symbol)%type.
-
-  Lemma pos_eq_dec :
-    forall p p' : pos, {p = p'} + {p <> p'}.
-  Proof.
-    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
-  Qed.
-
-  Module MDT_Pos.
-    Definition t := pos.
-    Definition eq_dec := pos_eq_dec.
-  End MDT_Pos.
-  Module Pos_as_DT   := Make_UDT(MDT_Pos).
-  Module Pset  := MSetWeakList.Make Pos_as_DT.
-  Module PsetF := WFactsOn Pos_as_DT Pset.
-  Module Pmap  := FMapWeakList.Make Pos_as_DT.
-
-  Definition edge := (pos * pos)%type.
-
-  Definition src (e : edge) : pos := fst e.
-
-  Definition dst (e : edge) : pos := snd e.
-
-  Lemma edge_eq_dec :
-    forall e e' : edge, {e = e'} + {e <> e'}.
-  Proof.
-    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
-  Qed.
-
-  Module MDT_Edge.
-    Definition t := edge.
-    Definition eq_dec := edge_eq_dec.
-  End MDT_Edge.
-  Module Edge_as_DT   := Make_UDT(MDT_Edge).
-  Module E  := MSetWeakList.Make Edge_as_DT.
-  Module EF := WFactsOn Edge_as_DT E.
-
-  Definition oneToMany {A B : Type} (s : A) (ds : list B) : list (A * B) :=
-    map (pair s) ds.
-  
-  Definition beqNt x x' : bool :=
-    match nt_eq_dec x' x with
-    | left _ => true
-    | right _ => false
-    end.
-
-  Fixpoint prodsOf (x : nonterminal) (ps : list production) := 
-    filter (fun p => beqNt x (lhs p)) ps.
-
-  Fixpoint pushEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
-    match ys with 
-    | []          => []
-    | T _ :: ys'  => pushEdges' g x ys'
-    | NT y :: ys' =>
-      let es := map (fun rhs => ((Some x, ys), (Some y, rhs)))
-                    (rhssForNt g y)
-      in  es ++ pushEdges' g x ys'
-    end.
-
-  Definition pushEdges (g : grammar) : list edge :=
-    flat_map (fun p => pushEdges' g (lhs p) (rhs p)) g.
-
-  Fixpoint returnEdges' (x : nonterminal) (ys : list symbol) : list edge :=
-    match ys with
-    | []          => []
-    | T _ :: ys'  => returnEdges' x ys'
-    | NT y :: ys' =>
-      ((Some y, []), (Some x, ys')) :: returnEdges' x ys'
-    end.
-
-  Definition returnEdges (g : grammar) : list edge :=
-    flat_map (fun p => returnEdges' (lhs p) (rhs p)) g.
-
-  Definition finalEdges g : list edge :=
-    map (fun x => ((Some x, []), (None, []))) (lhss g).
-
-  Definition fromlist (es : list edge) : E.t :=
-    fold_right E.add E.empty es.
-
-  Definition epsilonEdges g : list edge :=
-    pushEdges g ++ returnEdges g ++ finalEdges g.
-
-  Fixpoint dsts (es : list edge) (s : pos) : list pos :=
-    match es with
-    | []             => []
-    | (s', d) :: es' =>
-      if pos_eq_dec s' s then d :: dsts es' s else dsts es' s
-    end.
-
-  Definition mem (e : edge) (es : list edge) : bool :=
-    if in_dec edge_eq_dec e es then true else false.
-  
-  Definition newEdges' (es : list edge) (e : edge) : list edge :=
-    let (a, b) := e in
-    let cs     := filter (fun c => negb (mem (a, c) es)) (dsts es b)
-    in  oneToMany a cs.
-
-  Definition newEdges (es : list edge) : list edge :=
-    flat_map (newEdges' es) es.
-
-  Definition sources es := map src es.
-  Definition dests   es := map dst es.
-
-  Definition allEdges es := 
-    let ss := sources es in
-    let ds := dests   es in
-    flat_map (fun s => oneToMany s ds) ss.
-
-  Definition stable (p : pos) : bool :=
-    match p with
-    | (None, [])         => true
-    | (Some x, T _ :: _) => true
-    | _                  => false
-    end.
-
-  Fixpoint stablePositions' x ys : list pos :=
-    match ys with
-    | []          => []
-    | T a :: ys'  => (Some x, ys) :: stablePositions' x ys'
-    | NT _ :: ys' => stablePositions' x ys'
-    end.
-
-  Definition stablePositions (g : grammar) : list pos :=
-    (None, []) :: flat_map (fun p => stablePositions' (lhs p) (rhs p)) g.
-
-  Definition reflEdges (g : grammar) : list edge :=
-    map (fun p => (p, p)) (stablePositions g).
-
-  Definition m (es : list edge) : nat :=
-    E.cardinal (E.diff (fromlist (allEdges es)) (fromlist es)).
-
-  Axiom magic : forall A, A.
-
-  Program Fixpoint transClosure (es : list edge)
-                                { measure (m es) } : list edge :=
-    let es' := newEdges es in
-    match es' as es'' return es' = es'' -> _ with
-    | []     => fun _   => es
-    | _ :: _ => fun heq => transClosure (es' ++ es)
-    end eq_refl.
-  Next Obligation.
-    rewrite heq; simpl.
-    unfold m.
-    apply magic.
-  Defined.
-
-  Definition destStable (e : edge) : bool :=
-    let (_, b) := e in stable b.
-
-  Definition stableEdges (es : list edge) : list edge :=
-    filter destStable es.
-
-  Definition mkGraphEdges (g : grammar) : list edge :=
-    stableEdges (transClosure (epsilonEdges g)) ++ (reflEdges g).
-
-  (* A closure graph is a map where each key K is a grammar position
-     and each value V is a set of positions that are epsilon-reachable from K *)
-  Definition closure_map := Pmap.t Pset.t.
-
-  Definition addEdge (e : edge) (m : closure_map) : closure_map :=
-    let (k, v) := e in
-    match Pmap.find k m with
-    | Some vs => Pmap.add k (Pset.add v vs) m
-    | None    => Pmap.add k (Pset.singleton v) m
-    end.
-
-  Definition fromEdges (es : list edge) : closure_map :=
-    fold_right addEdge (Pmap.empty Pset.t) es.
-
-  Definition mkGraph (g : grammar) : closure_map :=
-    fromEdges (mkGraphEdges g).
+  Module Import SLL.
     
+    (* First, some static analysis over a grammar *)
+    Definition pos  := (option nonterminal * list symbol)%type.
+    
+    Lemma pos_eq_dec :
+      forall p p' : pos, {p = p'} + {p <> p'}.
+    Proof.
+      repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
+    Qed.
+    
+    Module MDT_Pos.
+      Definition t := pos.
+      Definition eq_dec := pos_eq_dec.
+    End MDT_Pos.
+    Module Pos_as_DT   := Make_UDT(MDT_Pos).
+    Module Pset  := MSetWeakList.Make Pos_as_DT.
+    Module PsetF := WFactsOn Pos_as_DT Pset.
+    Module Pmap  := FMapWeakList.Make Pos_as_DT.
+    
+    Definition edge := (pos * pos)%type.
+    
+    Definition src (e : edge) : pos := fst e.
+    
+    Definition dst (e : edge) : pos := snd e.
+
+    Lemma edge_eq_dec :
+      forall e e' : edge, {e = e'} + {e <> e'}.
+    Proof.
+      repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
+    Qed.
+    
+    Module MDT_Edge.
+      Definition t := edge.
+      Definition eq_dec := edge_eq_dec.
+    End MDT_Edge.
+    Module Edge_as_DT   := Make_UDT(MDT_Edge).
+    Module E  := MSetWeakList.Make Edge_as_DT.
+    Module EF := WFactsOn Edge_as_DT E.
+    
+    Definition oneToMany {A B : Type} (s : A) (ds : list B) : list (A * B) :=
+      map (pair s) ds.
+    
+    Definition beqNt x x' : bool :=
+      match nt_eq_dec x' x with
+      | left _ => true
+      | right _ => false
+      end.
+    
+    Fixpoint prodsOf (x : nonterminal) (ps : list production) := 
+      filter (fun p => beqNt x (lhs p)) ps.
+    
+    Fixpoint pushEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
+      match ys with 
+      | []          => []
+      | T _ :: ys'  => pushEdges' g x ys'
+      | NT y :: ys' =>
+        let es := map (fun rhs => ((Some x, ys), (Some y, rhs)))
+                      (rhssForNt g y)
+        in  es ++ pushEdges' g x ys'
+      end.
+    
+    Definition pushEdges (g : grammar) : list edge :=
+      flat_map (fun p => pushEdges' g (lhs p) (rhs p)) g.
+
+    Fixpoint returnEdges' (x : nonterminal) (ys : list symbol) : list edge :=
+      match ys with
+      | []          => []
+      | T _ :: ys'  => returnEdges' x ys'
+      | NT y :: ys' =>
+        ((Some y, []), (Some x, ys')) :: returnEdges' x ys'
+      end.
+    
+    Definition returnEdges (g : grammar) : list edge :=
+      flat_map (fun p => returnEdges' (lhs p) (rhs p)) g.
+
+    Definition finalEdges g : list edge :=
+      map (fun x => ((Some x, []), (None, []))) (lhss g).
+
+    Definition fromlist (es : list edge) : E.t :=
+      fold_right E.add E.empty es.
+
+    Definition epsilonEdges g : list edge :=
+      pushEdges g ++ returnEdges g ++ finalEdges g.
+
+    Fixpoint dsts (es : list edge) (s : pos) : list pos :=
+      match es with
+      | []             => []
+      | (s', d) :: es' =>
+        if pos_eq_dec s' s then d :: dsts es' s else dsts es' s
+      end.
+
+    Definition mem (e : edge) (es : list edge) : bool :=
+      if in_dec edge_eq_dec e es then true else false.
+    
+    Definition newEdges' (es : list edge) (e : edge) : list edge :=
+      let (a, b) := e in
+      let cs     := filter (fun c => negb (mem (a, c) es)) (dsts es b)
+      in  oneToMany a cs.
+
+    Definition newEdges (es : list edge) : list edge :=
+      flat_map (newEdges' es) es.
+
+    Definition sources es := map src es.
+    Definition dests   es := map dst es.
+
+    Definition allEdges es := 
+      let ss := sources es in
+      let ds := dests   es in
+      flat_map (fun s => oneToMany s ds) ss.
+
+    Definition stable (p : pos) : bool :=
+      match p with
+      | (None, [])         => true
+      | (Some x, T _ :: _) => true
+      | _                  => false
+      end.
+
+    Fixpoint stablePositions' x ys : list pos :=
+      match ys with
+      | []          => []
+      | T a :: ys'  => (Some x, ys) :: stablePositions' x ys'
+      | NT _ :: ys' => stablePositions' x ys'
+      end.
+
+    Definition stablePositions (g : grammar) : list pos :=
+      (None, []) :: flat_map (fun p => stablePositions' (lhs p) (rhs p)) g.
+
+    Definition reflEdges (g : grammar) : list edge :=
+      map (fun p => (p, p)) (stablePositions g).
+
+    Definition m (es : list edge) : nat :=
+      E.cardinal (E.diff (fromlist (allEdges es)) (fromlist es)).
+
+    Axiom magic : forall A, A.
+
+    Program Fixpoint transClosure (es : list edge)
+            { measure (m es) } : list edge :=
+      let es' := newEdges es in
+      match es' as es'' return es' = es'' -> _ with
+      | []     => fun _   => es
+      | _ :: _ => fun heq => transClosure (es' ++ es)
+      end eq_refl.
+    Next Obligation.
+      rewrite heq; simpl.
+      unfold m.
+      apply magic.
+    Defined.
+
+    Definition destStable (e : edge) : bool :=
+      let (_, b) := e in stable b.
+    
+    Definition stableEdges (es : list edge) : list edge :=
+      filter destStable es.
+    
+    Definition mkGraphEdges (g : grammar) : list edge :=
+      stableEdges (transClosure (epsilonEdges g)) ++ (reflEdges g).
+    
+    (* A closure graph is a map where each key K is a grammar position
+     and each value V is a set of positions that are epsilon-reachable from K *)
+    Definition closure_map := Pmap.t Pset.t.
+    
+    Definition addEdge (e : edge) (m : closure_map) : closure_map :=
+      let (k, v) := e in
+      match Pmap.find k m with
+      | Some vs => Pmap.add k (Pset.add v vs) m
+      | None    => Pmap.add k (Pset.singleton v) m
+      end.
+    
+    Definition fromEdges (es : list edge) : closure_map :=
+      fold_right addEdge (Pmap.empty Pset.t) es.
+
+    Definition mkGraph (g : grammar) : closure_map :=
+      fromEdges (mkGraphEdges g).
+    
+    Record subparser := Sp { prediction : list symbol
+                           ; position   : pos }.
+    
+    (* "move" operation *)
+    
+    Inductive subparser_move_result :=
+    | SpMoveSucc   : subparser -> subparser_move_result
+    | SpMoveReject : subparser_move_result
+    | SpMoveError  : prediction_error -> subparser_move_result.
+    
+    Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
+    match sp with
+    | Sp pred pos =>
+      match pos with
+      | (None, [])           => SpMoveReject
+      | (None, _ :: _)       => SpMoveError SpInvalidState
+      | (Some _, [])         => SpMoveError SpInvalidState
+      | (Some _, NT _ :: _)  => SpMoveError SpInvalidState
+      | (Some x, T a :: suf) =>
+        match tok with
+        | (a', _) =>
+          if t_eq_dec a' a then
+            SpMoveSucc (Sp pred (Some x, suf))
+          else
+            SpMoveReject
+        end
+      end
+    end.
+
+    Definition move_result := sum prediction_error (list subparser).
+
+    (* consider refactoring to short-circuit in case of error *)
+    Fixpoint aggrMoveResults (rs : list subparser_move_result) : move_result :=
+      match rs with
+      | []       => inr []
+      | r :: rs' =>
+        match (r, aggrMoveResults rs') with
+        | (SpMoveError e, _)       => inl e
+        | (_, inl e)               => inl e
+        | (SpMoveSucc sp, inr sps) => inr (sp :: sps)
+        | (SpMoveReject, inr sps)  => inr sps
+        end
+      end.
+    
+    Definition move (tok : token) (sps : list subparser) : move_result :=
+      aggrMoveResults (map (moveSp tok) sps).
+
+    (* SLL closure *)
+
+    Definition spClosure (m : closure_map) (sp : subparser) : list subparser :=
+      match sp with
+      | Sp pred pos =>
+        match Pmap.find pos m with
+        | Some dsts => map (Sp pred) (Pset.elements dsts)
+        | None      => []
+        end
+      end.
+
+    Definition closure (m : closure_map) (sps : list subparser) : list subparser :=
+      flat_map (spClosure m) sps.
+
+    Inductive prediction_result :=
+    | PredSucc   : list symbol      -> prediction_result
+    | PredAmbig  :                     prediction_result
+    | PredReject :                     prediction_result
+    | PredError  : prediction_error -> prediction_result.
+
+    Definition finalConfig (sp : subparser) : bool :=
+      match sp with
+      | Sp _ (None, []) => true
+      | _               => false
+      end.
+
+    Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
+      allEqual _ beqGamma sp.(prediction) (map prediction sps).
+
+    Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
+      match filter finalConfig sps with
+      | []         => PredReject
+      | sp :: sps' => 
+        if allPredictionsEqual sp sps' then
+          PredSucc sp.(prediction)
+        else
+          PredAmbig
+      end.
+
+    (* To do: add DFA cache *)
+    Fixpoint sllPredict' (cm : closure_map) (sps : list subparser) (ts : list token) : prediction_result :=
+      match sps with
+      | []         => PredReject
+      | sp :: sps' =>
+        if allPredictionsEqual sp sps' then
+          PredSucc sp.(prediction)
+        else
+          match ts with
+          | []       => handleFinalSubparsers sps
+          | t :: ts' =>
+            match move t sps with
+            | inl msg => PredError msg
+            | inr mv  =>
+              sllPredict' cm (closure cm mv) ts'
+            end
+          end
+      end.
+  
   Definition cache_key := (list subparser * terminal)%type.
   
   Lemma cache_key_eq_dec : 
