@@ -915,7 +915,7 @@ Module PredictionFn (Import D : Defs.T).
   Qed.
 
   (* SLL prediction *)
-  Module Import SLL.
+  Module SLL.
     
     (* First, some static analysis over a grammar *)
     Definition pos  := (option nonterminal * list symbol)%type.
@@ -1151,12 +1151,6 @@ Module PredictionFn (Import D : Defs.T).
     Definition closure (m : closure_map) (sps : list subparser) : list subparser :=
       flat_map (spClosure m) sps.
 
-    Inductive prediction_result :=
-    | PredSucc   : list symbol      -> prediction_result
-    | PredAmbig  :                     prediction_result
-    | PredReject :                     prediction_result
-    | PredError  : prediction_error -> prediction_result.
-
     Definition finalConfig (sp : subparser) : bool :=
       match sp with
       | Sp _ (None, []) => true
@@ -1173,7 +1167,7 @@ Module PredictionFn (Import D : Defs.T).
         if allPredictionsEqual sp sps' then
           PredSucc sp.(prediction)
         else
-          PredAmbig
+          PredAmbig sp.(prediction)
       end.
 
     (* To do: add DFA cache *)
@@ -1194,8 +1188,30 @@ Module PredictionFn (Import D : Defs.T).
             end
           end
       end.
+
+    Definition initSps (g : grammar) (x : nonterminal) : list subparser :=
+      map (fun rhs => Sp rhs (Some x, rhs))
+          (rhssForNt g x).
+
+    Definition startState (g : grammar) (cm : closure_map)
+                          (x : nonterminal) : list subparser :=
+      closure cm (initSps g x).
+
+    Definition sllPredict (g : grammar) (cm : closure_map) (x : nonterminal)
+               (ts : list token) : prediction_result :=
+      sllPredict' cm (startState g cm x) ts.
+
+  End SLL.
+
+  Definition adaptivePredict g cm x stk ts : prediction_result :=
+    let sll_res := SLL.sllPredict g cm x ts in
+    match sll_res with
+    | PredAmbig _ => llPredict g x stk ts
+    | _ => sll_res
+    end.
   
-  Definition cache_key := (list subparser * terminal)%type.
+    (*
+    Definition cache_key := (list subparser * terminal)%type.
   
   Lemma cache_key_eq_dec : 
     forall k k' : cache_key,
@@ -1373,8 +1389,8 @@ Definition adaptivePredict g x stk ts c : cache * prediction_result :=
   | SLL_failover c' => let r := llPredict g x stk ts 
                        in  (c', r)
   end.
-
-  (* next steps : 
+     *)
+    (* next steps : 
      - don't wrap prediction_result in SLL_prediction_result 
      - write versions of step, multistep, and parse that use cache
      - see if there's a performance improvement *) 

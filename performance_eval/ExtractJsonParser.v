@@ -133,8 +133,4 @@ Definition jsonGrammar : grammar :=
     (EltsTl, [T Comma; NT Value; NT EltsTl])
   ].
 
-
-Definition es := fromlist (pushEdges jsonGrammar ++ returnEdges jsonGrammar ++ finalEdges jsonGrammar).
-Definition l := List.length (E.elements es).
-
 Extraction "performance_eval/myJsonParser.ml" D PG jsonGrammar.
