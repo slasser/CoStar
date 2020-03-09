@@ -56,3 +56,9 @@ set), and app
 - early version of DFA cache optimization is unsuccessful; failing over whenever
   a subparser dips into the context results in a slow-growing cache and too many
   failovers
+
+
+03_09_20_compute_closure_statically.eps
+=======================================
+- an optimized version of prediction that involves computing the closure sites
+of all grammar positions statically results in a big performance improvement
