@@ -1170,21 +1170,50 @@ Module PredictionFn (Import D : Defs.T).
           PredAmbig sp.(prediction)
       end.
 
+    Definition cache_key := (list subparser * terminal)%type.
+    
+    Lemma cache_key_eq_dec : 
+      forall k k' : cache_key,
+        {k = k'} + {k <> k'}.
+    Proof.
+      repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
+  Defined.
+
+  Module MDT_CacheKey.
+    Definition t := cache_key.
+    Definition eq_dec := cache_key_eq_dec.
+  End MDT_CacheKey.
+  Module CacheKey_as_DT := Make_UDT(MDT_CacheKey).
+  Module Cache := FMapWeakList.Make CacheKey_as_DT.
+  Module CacheFacts := WFacts_fun CacheKey_as_DT Cache.
+  
+  (* A cache is a finite map with (list subparser * terminal) keys 
+     and (list subparser) values *)
+  Definition cache : Type := Cache.t (list subparser).
+
+  Definition empty_cache : cache := Cache.empty (list subparser).
+
     (* To do: add DFA cache *)
-    Fixpoint sllPredict' (cm : closure_map) (sps : list subparser) (ts : list token) : prediction_result :=
+    Fixpoint sllPredict' (cm : closure_map) (sps : list subparser) (ts : list token) (c : cache) : prediction_result * cache :=
       match sps with
-      | []         => PredReject
+      | []         => (PredReject, c)
       | sp :: sps' =>
         if allPredictionsEqual sp sps' then
-          PredSucc sp.(prediction)
+          (PredSucc sp.(prediction), c)
         else
           match ts with
-          | []       => handleFinalSubparsers sps
-          | t :: ts' =>
-            match move t sps with
-            | inl msg => PredError msg
-            | inr mv  =>
-              sllPredict' cm (closure cm mv) ts'
+          | []       => (handleFinalSubparsers sps, c)
+          | (a, l) :: ts' =>
+            match Cache.find (sps, a) c with 
+            | Some sps' => sllPredict' cm sps' ts' c
+            | None => 
+              match move (a, l) sps with
+              | inl msg => (PredError msg, c)
+              | inr mv  =>
+                let cl := closure cm mv in
+                let c' := Cache.add (sps, a) cl c in
+                sllPredict' cm cl ts' c'
+              end
             end
           end
       end.
@@ -1198,15 +1227,15 @@ Module PredictionFn (Import D : Defs.T).
       closure cm (initSps g x).
 
     Definition sllPredict (g : grammar) (cm : closure_map) (x : nonterminal)
-               (ts : list token) : prediction_result :=
-      sllPredict' cm (startState g cm x) ts.
+               (ts : list token) (c : cache) : prediction_result * cache :=
+      sllPredict' cm (startState g cm x) ts c.
 
   End SLL.
 
-  Definition adaptivePredict g cm x stk ts : prediction_result :=
-    let sll_res := SLL.sllPredict g cm x ts in
+  Definition adaptivePredict g cm x stk ts c : prediction_result * SLL.cache :=
+    let sll_res := SLL.sllPredict g cm x ts c in
     match sll_res with
-    | PredAmbig _ => llPredict g x stk ts
+    | (PredAmbig _, _) => (llPredict g x stk ts, c)
     | _ => sll_res
     end.
   
