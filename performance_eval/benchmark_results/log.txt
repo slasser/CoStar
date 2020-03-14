@@ -62,3 +62,11 @@ set), and app
 =======================================
 - an optimized version of prediction that involves computing the closure sites
 of all grammar positions statically results in a big performance improvement
+
+
+03_14_20_dynamic_cache.eps
+==========================
+- building a cache dynamically also results in a big performance improvement --
+  slightly smaller than the static optimization mentioned above, but the dynamic
+  optimization is a better approximation of LL prediction, meaning that it will
+  fail over to LL prediction less often

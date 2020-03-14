@@ -1,7 +1,7 @@
 Require Import FMaps Omega PeanoNat String. 
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.Prediction_complete.
+Require Import GallStar.SLL_Prediction.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
 Require Import GallStar.Utils.
@@ -10,7 +10,7 @@ Open Scope list_scope.
 
 Module ParserFn (Import D : Defs.T).
 
-  Module Export PC := PredictionCompleteFn D.
+  Module Export SP := SllPredictionFn D.
 
   Inductive parse_error :=
   | InvalidState    : parse_error
@@ -443,23 +443,20 @@ Module ParserFn (Import D : Defs.T).
 
   (* cache-optimized version *)
 
-  Definition cache := PC.PEF.P.SLL.cache.
-  Definition empty_cache := PC.PEF.P.SLL.empty_cache.
-
   Inductive step_result_opt :=
   | StepAccept_opt : forest -> step_result_opt
   | StepReject_opt : string -> step_result_opt
-  | StepK_opt      : prefix_stack -> suffix_stack -> list token -> NtSet.t -> bool -> cache -> step_result_opt
+  | StepK_opt      : prefix_stack -> suffix_stack -> list token -> NtSet.t -> bool -> SLL.cache -> step_result_opt
   | StepError_opt  : parse_error -> step_result_opt.
 
   Definition step_opt (g      : grammar)
-                      (cm     : PC.PEF.P.SLL.closure_map)
+                      (cm     : SLL.closure_map)
                       (p_stk  : prefix_stack)
                       (s_stk  : suffix_stack)
                       (ts     : list token)
                       (av     : NtSet.t)
                       (u      : bool) 
-                      (c      : cache) : step_result_opt := 
+                      (c      : SLL.cache) : step_result_opt := 
     match p_stk, s_stk with
     | (PF pre v, p_frs), (SF suf, s_frs) =>
       match suf with
@@ -499,7 +496,7 @@ Module ParserFn (Import D : Defs.T).
       (* nonterminal case --> push a frame onto the stack *)
       | NT x :: _ => 
         if NtSet.mem x av then
-          match adaptivePredict g cm x s_stk ts c with
+          match SLL.adaptivePredict g cm x s_stk ts c with
           | (PredSucc rhs, c') =>
             let p_stk' := (PF [] [], PF pre v :: p_frs) in
             let s_stk' := (SF rhs, SF suf :: s_frs)     in
@@ -561,7 +558,7 @@ Module ParserFn (Import D : Defs.T).
                          (ts : list token)
                          (av : NtSet.t)
                          (u  : bool)
-                         (c  : cache)
+                         (c  : SLL.cache)
                          (a  : Acc lex_nat_triple (meas g ss ts av))
                          {struct a} : parse_result :=
     match step_opt g cm ps ss ts av u c as res return step_opt g cm ps ss ts av u c = res -> _ with
@@ -574,9 +571,9 @@ Module ParserFn (Import D : Defs.T).
     end eq_refl.
   
   Definition parse_opt (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-    let cm     := PC.PEF.P.SLL.mkGraph g in
+    let cm     := SLL.mkGraph g in
     let p_stk0 := (PF [] [], []) in
     let s_stk0 := (SF gamma, []) in
-    multistep_opt g cm p_stk0 s_stk0 ts (allNts g) true empty_cache (lex_nat_triple_wf _). 
+    multistep_opt g cm p_stk0 s_stk0 ts (allNts g) true SLL.empty_cache (lex_nat_triple_wf _). 
   
 End ParserFn.
