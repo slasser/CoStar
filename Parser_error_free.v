@@ -78,7 +78,7 @@ Module ParserErrorFreeFn (Import D : Defs.T).
    when given a non-left-recursive grammar *)
   Lemma unavailable_nts_invar_starts_true :
     forall g ys,
-      unavailable_nts_are_open_calls g (allNts g) (SF ys, []). 
+      unavailable_nts_are_open_calls g (allNts g) (SF None ys, []). 
   Proof.
     intros g ys; intros x hi hni; ND.fsetdec.
   Qed.
@@ -88,10 +88,10 @@ Module ParserErrorFreeFn (Import D : Defs.T).
    be defined in terms of unavailable_nts_are_open_calls *)
 
   Lemma return_preserves_unavailable_nts_invar :
-    forall g s_ce s_cr s_cr' s_frs x suf av,
-      s_ce     = SF []
-      -> s_cr  = SF (NT x :: suf)
-      -> s_cr' = SF suf
+    forall g s_ce s_cr s_cr' s_frs o o' x suf av,
+      s_ce     = SF o' []
+      -> s_cr  = SF o (NT x :: suf)
+      -> s_cr' = SF o suf
       -> unavailable_nts_are_open_calls g av (s_ce, s_cr :: s_frs)
       -> unavailable_nts_are_open_calls g (NtSet.add x av) (s_cr', s_frs).
   Proof.
@@ -101,9 +101,9 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma push_preserves_unavailable_nts_invar :
-    forall g s_cr s_ce s_frs av x suf rhs,
-      s_cr = SF (NT x :: suf)
-      -> s_ce = SF rhs
+    forall g s_cr s_ce s_frs av o x suf rhs,
+      s_cr = SF o (NT x :: suf)
+      -> s_ce = SF (Some x) rhs
       -> In (x, rhs) g
       -> unavailable_nts_are_open_calls g av (s_cr, s_frs)
       -> unavailable_nts_are_open_calls g (NtSet.remove x av) (s_ce, s_cr :: s_frs).
@@ -137,9 +137,9 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Proof.
     intros g p_stk s_stk ts av u x hu hs.
     apply step_LeftRecursion_facts in hs.
-    destruct hs as (hni & hi & suf & frs & ?); subst.
+    destruct hs as (hni & hi & o & suf & frs & ?); subst.
     apply hu in hni; auto.
-    destruct hni as (frs_pre & cr & frs_suf & suf' & ? & ? & hf); subst.
+    destruct hni as (frs_pre & cr & frs_suf & o' & suf' & ? & ? & hf); subst.
     eapply frnp_grammar_nullable_path; eauto.
   Qed.
 

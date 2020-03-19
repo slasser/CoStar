@@ -17,10 +17,10 @@ Module ParserCompleteFn (Import D : Defs.T).
 
   (* To do: encapsulate "gamma_recognize unprocStackSyms..." in a definition *)
   Lemma return_preserves_ussr :
-    forall g ce cr cr' frs x suf w,
-      ce     = SF []
-      -> cr  = SF (NT x :: suf)
-      -> cr' = SF suf
+    forall g ce cr cr' frs o o' x suf w,
+      ce     = SF o' []
+      -> cr  = SF o (NT x :: suf)
+      -> cr' = SF o suf
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
       -> gamma_recognize g (unprocStackSyms (cr', frs)) w.
   Proof.
@@ -28,28 +28,28 @@ Module ParserCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma consume_preserves_ussr :
-    forall g fr fr' frs suf a l w,
-      fr     = SF (T a :: suf)
-      -> fr' = SF suf
+    forall g fr fr' frs suf o a l w,
+      fr     = SF o (T a :: suf)
+      -> fr' = SF o suf
       -> gamma_recognize g (unprocStackSyms (fr, frs)) ((a, l) :: w)
       -> gamma_recognize g (unprocStackSyms (fr', frs)) w.
   Proof.
-    intros g ? ? frs suf a l w ? ? hg; subst; sis.
+    intros g ? ? frs suf o a l w ? ? hg; subst; sis.
     apply gamma_recognize_terminal_head in hg.
     destruct hg as (? & ? & heq & ?); inv heq; auto.
   Qed.
 
   Lemma push_succ_preserves_ussr :
-    forall g cr ce frs x suf rhs w,
-      cr    = SF (NT x :: suf)
-      -> ce = SF rhs
+    forall g cr ce frs o x suf rhs w,
+      cr    = SF o (NT x :: suf)
+      -> ce = SF (Some x) rhs
       -> no_left_recursion g
       -> suffix_stack_wf g (cr, frs)
       -> llPredict g x (cr, frs) w = PredSucc rhs
       -> gamma_recognize g (unprocStackSyms (cr, frs)) w
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g ? ? frs x suf rhs w ? ? hn hw hl hg; subst; sis.
+    intros g ? ? frs o x suf rhs w ? ? hn hw hl hg; subst; sis.
     apply gamma_recognize_nonterminal_head in hg.
     destruct hg as (rhs' & wp & wms & ? & hi' & hg & hg'); subst.
     apply gamma_recognize_split in hg'.
@@ -58,16 +58,16 @@ Module ParserCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma push_ambig_preserves_ussr :
-    forall g cr ce frs x suf rhs w,
-      cr    = SF (NT x :: suf)
-      -> ce = SF rhs
+    forall g cr ce frs o x suf rhs w,
+      cr    = SF o (NT x :: suf)
+      -> ce = SF (Some x) rhs
       -> no_left_recursion g
       -> suffix_stack_wf g (cr, frs)
       -> llPredict g x (cr, frs) w = PredAmbig rhs
       -> gamma_recognize g (unprocStackSyms (cr, frs)) w
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g ? ? frs x suf rhs w ? ? hn hw hl hg; subst; sis.
+    intros g ? ? frs o x suf rhs w ? ? hn hw hl hg; subst; sis.
     eapply llPredict_ambig_rhs_unproc_stack_syms in hl; eauto.
     sis; auto.
   Qed.

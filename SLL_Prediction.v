@@ -338,13 +338,13 @@ Module SllPredictionFn (Import D : Defs.T).
     map (fun rhs => Sp rhs (SF (Some x) rhs, []))
         (rhssForNt g x).
 
-  Definition startState (g : grammar) (cm : closure_map)
+  Definition sllStartState (g : grammar) (cm : closure_map)
              (x : nonterminal) : sum prediction_error (list subparser) :=
     sllClosure g cm (sllInitSps g x).
 
   Definition sllPredict (g : grammar) (cm : closure_map) (x : nonterminal)
              (ts : list token) (c : cache) : prediction_result * cache :=
-    match startState g cm x with
+    match sllStartState g cm x with
     | inl msg => (PredError msg, c)
     | inr sps => sllPredict' g cm sps ts c
     end.

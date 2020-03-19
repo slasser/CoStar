@@ -57,30 +57,30 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma consume_preserves_frames_wf_invar :
-    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v,
+    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf o a l v,
       p_fr     = PF pre v
       -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
-      -> s_fr  = SF (T a :: suf)
-      -> s_fr' = SF suf
+      -> s_fr  = SF o (T a :: suf)
+      -> s_fr' = SF o suf
       -> frames_wf g (p_fr :: p_frs) (s_fr :: s_frs) 
       -> frames_wf g (p_fr' :: p_frs) (s_fr' :: s_frs).
   Proof.
-    intros g ? ? ? ? p_frs s_frs pre suf a l v ? ? ? ? hw; subst; 
+    intros g ? ? ? ? p_frs s_frs pre suf o a l v ? ? ? ? hw; subst; 
       inv_fw hw hi hw'; auto.
     econstructor; eauto; sis; apps.
   Qed.
 
   Lemma push_preserves_frames_wf_invar :
-    forall g p_cr p_ce s_cr s_ce p_frs s_frs x rhs pre suf v,
+    forall g p_cr p_ce s_cr s_ce p_frs s_frs o x rhs pre suf v,
       p_cr     = PF pre v
       -> p_ce  = PF [] []
-      -> s_cr  = SF (NT x :: suf)
-      -> s_ce  = SF rhs
+      -> s_cr  = SF o (NT x :: suf)
+      -> s_ce  = SF (Some x) rhs
       -> In (x, rhs) g
       -> frames_wf g (p_cr :: p_frs) (s_cr :: s_frs) 
       -> frames_wf g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs).
   Proof.
-    intros g ? ? ? ? p_frs s_frs x rhs pre suf v ? ? ? ? hi hf; subst; auto.
+    intros g ? ? ? ? p_frs s_frs o x rhs pre suf v ? ? ? ? hi hf; subst; auto.
   Qed.    
 
   Definition stacks_wf g p_stk s_stk := 
@@ -136,18 +136,18 @@ Module ParserSoundFn (Import D : Defs.T).
   | FD_bottom  :
       forall pre suf wpre wsuf v,
         gamma_derivation g (rev pre) wpre (rev v)
-        -> frames_derivation g [PF pre v] [SF suf] wpre wsuf
+        -> frames_derivation g [PF pre v] [SF None suf] wpre wsuf
   | FD_upper :
-      forall p_cr p_frs s_cr s_frs x pre' suf suf' v' wpre wmid wsuf,
-        SF (NT x :: suf) = s_cr
+      forall p_cr p_frs s_cr s_frs o x pre' suf suf' v' wpre wmid wsuf,
+        SF o (NT x :: suf) = s_cr
         -> In (x, rev pre' ++ suf') g
         -> gamma_derivation g (rev pre') wmid (rev v')
         -> frames_derivation g (p_cr :: p_frs)
-                             (s_cr :: s_frs)
-                             wpre (wmid ++ wsuf)
-        -> frames_derivation g (PF pre' v' :: p_cr :: p_frs)
-                             (SF suf'    :: s_cr :: s_frs)
-                             (wpre ++ wmid) wsuf.
+                               (s_cr :: s_frs)
+                               wpre (wmid ++ wsuf)
+        -> frames_derivation g (PF pre' v'       :: p_cr :: p_frs)
+                               (SF (Some x) suf' :: s_cr :: s_frs)
+                               (wpre ++ wmid) wsuf.
 
   Hint Constructors frames_derivation : core.
 
@@ -157,38 +157,38 @@ Module ParserSoundFn (Import D : Defs.T).
     let hg  := fresh "hg"  in
     inversion hf as [ ?
                     | ? ? ? ? ? hg 
-                    | ? ? ? ? ? ? ? ? ? ? ? ? heq hi hg hf']; subst; clear hf.
+                    | ? ? ? ? ? ? ? ? ? ? ? ? ? heq hi hg hf']; subst; clear hf.
 
   Lemma fd_inv_cons :
-    forall g p_fr s_fr p_frs s_frs pre suf w wsuf v,
+    forall g p_fr s_fr p_frs s_frs o pre suf w wsuf v,
       p_fr    = PF pre v
-      -> s_fr = SF suf
+      -> s_fr = SF o suf
       -> frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) w wsuf
       -> exists wpre wmid,
           w = wpre ++ wmid
           /\ gamma_derivation g (rev pre) wmid (rev v)
           /\ frames_derivation g p_frs s_frs wpre (wmid ++ wsuf).
   Proof.
-    intros g ? ? p_frs s_frs pre suf w wsuf v ? ? hf; subst; inv hf; eauto.
+    intros g ? ? p_frs s_frs o pre suf w wsuf v ? ? hf; subst; inv hf; eauto.
     exists []; eexists; repeat split; eauto.
   Qed.
 
   Lemma return_preserves_frames_derivation :
-    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x v v' wpre wsuf,
+    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf o o' x v v' wpre wsuf,
       p_ce     = PF pre' v'
-      -> s_ce  = SF []
+      -> s_ce  = SF o' []
       -> p_cr  = PF pre v
       -> p_cr' = PF (NT x :: pre) (Node x (rev v') :: v)
-      -> s_cr  = SF (NT x :: suf)
-      -> s_cr' = SF suf
+      -> s_cr  = SF o (NT x :: suf)
+      -> s_cr' = SF o suf
       -> frames_derivation g (p_ce :: p_cr :: p_frs)
-                           (s_ce :: s_cr :: s_frs)
-                           wpre wsuf
+                             (s_ce :: s_cr :: s_frs)
+                             wpre wsuf
       -> frames_derivation g (p_cr' :: p_frs)
-                           (s_cr' :: s_frs)
-                           wpre wsuf.
+                             (s_cr' :: s_frs)
+                             wpre wsuf.
   Proof.
-    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x v v' wpre wsuf
+    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf o o' x v v' wpre wsuf
            ? ? ? ? ? ? hf; subst; inv_fd hf hf'.
     inv heq; rewrite app_nil_r in *; inv_fd hf' hf''.
     - constructor; sis.
@@ -200,17 +200,17 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma consume_preserves_frames_derivation :
-    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v wpre wsuf,
+    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf o a l v wpre wsuf,
       p_fr     = PF pre v
       -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
-      -> s_fr  = SF (T a :: suf)
-      -> s_fr' = SF suf
+      -> s_fr  = SF o (T a :: suf)
+      -> s_fr' = SF o suf
       -> frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
                            wpre ((a, l) :: wsuf)
       -> frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs) 
                            (wpre ++ [(a, l)]) wsuf.
   Proof.
-    intros g ? ? ? ? p_frs s_frs pre suf a l v wpre wsuf
+    intros g ? ? ? ? p_frs s_frs pre suf o a l v wpre wsuf
            ? ? ? ? hf; subst; inv hf.
     - constructor; sis.
       apply gamma_derivation_app; auto.
@@ -221,18 +221,18 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma push_preserves_frames_derivation :
-    forall g p_cr p_ce s_cr s_ce p_frs s_frs x rhs pre suf wpre wsuf v,
+    forall g p_cr p_ce s_cr s_ce p_frs s_frs o x rhs pre suf wpre wsuf v,
       p_cr     = PF pre v
       -> p_ce  = PF [] []
-      -> s_cr  = SF (NT x :: suf)
-      -> s_ce  = SF rhs
+      -> s_cr  = SF o (NT x :: suf)
+      -> s_ce  = SF (Some x) rhs
       -> In (x, rhs) g
       -> frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) 
                            wpre wsuf
       -> frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) 
                            wpre wsuf.
   Proof.
-    intros g ? ? ? ? p_frs s_frs x rhs pre suf wpre wsuf v ? ? ? ? hi hf; subst.
+    intros g ? ? ? ? p_frs s_frs o x rhs pre suf wpre wsuf v ? ? ? ? hi hf; subst.
     rew_nil_r wpre; eauto.
   Qed.    
 
@@ -281,13 +281,13 @@ Module ParserSoundFn (Import D : Defs.T).
                -> gamma_derivation g (rev pre) wpre' (rev v')
                -> gamma_recognize g suf wsuf'
                -> wpre' = wpre /\ wsuf' = wsuf /\ rev v' = rev v)
-        -> unique_frames_derivation g [PF pre v] [SF suf] wpre wsuf
+        -> unique_frames_derivation g [PF pre v] [SF None suf] wpre wsuf
   | USD_upper :
-      forall p_cr p_ce s_cr s_ce p_frs s_frs pre pre' suf suf' x wpre wmid wsuf v v',
-        PF pre v            = p_cr
-        -> SF (NT x :: suf) = s_cr
-        -> PF pre' v'       = p_ce 
-        -> SF suf'          = s_ce
+      forall p_cr p_ce s_cr s_ce p_frs s_frs pre pre' suf suf' o x wpre wmid wsuf v v',
+        PF pre v              = p_cr
+        -> SF o (NT x :: suf) = s_cr
+        -> PF pre' v'         = p_ce 
+        -> SF (Some x) suf'   = s_ce
         -> unique_frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) 
                                     wpre (wmid ++ wsuf)
         -> In (x, rev pre' ++ suf') g
@@ -313,24 +313,24 @@ Module ParserSoundFn (Import D : Defs.T).
     let hs  := fresh "hs"  in
     let hs' := fresh "hs'" in
     inversion hu as [ ? ? ? ? ? hg ha 
-                    | ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 
-                        hp hs hp' hs' hu' hi hg ha hpu
+                    | ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?  
+                      hp hs hp' hs' hu' hi hg ha hpu
                     ]; subst; clear hu.
 
   (* factor out repetition *)
   Lemma return_preserves_unique_frames_derivation :
-    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x wpre wsuf v v',
+    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf o o' x wpre wsuf v v',
       p_ce     = PF pre' v'
-      -> s_ce  = SF []
+      -> s_ce  = SF o' []
       -> p_cr  = PF pre v
       -> p_cr' = PF (NT x :: pre) (Node x (rev v') :: v)
-      -> s_cr  = SF (NT x :: suf)
-      -> s_cr' = SF suf
+      -> s_cr  = SF o (NT x :: suf)
+      -> s_cr' = SF o suf
       -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
                                   wpre wsuf
       -> unique_frames_derivation g (p_cr' :: p_frs) (s_cr' :: s_frs) wpre wsuf.
   Proof.
-    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x wpre wsuf v v' 
+    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf o o' x wpre wsuf v v' 
            ? ? ? ? ? ? hu; subst. 
     inv_ufd hu ha hg hi hpu hu'; inv hp; inv hs; inv hp'; inv hs'; sis; 
       rewrite app_nil_r in *.
@@ -383,17 +383,17 @@ Module ParserSoundFn (Import D : Defs.T).
 
   (* factor out repetition *)
   Lemma consume_preserves_unique_frames_derivation :
-    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l wpre wsuf v,
+    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf o a l wpre wsuf v,
       p_fr     = PF pre v
-      -> s_fr  = SF (T a :: suf)
+      -> s_fr  = SF o (T a :: suf)
       -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
-      -> s_fr' = SF suf
+      -> s_fr' = SF o suf
       -> unique_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
                                   wpre ((a, l) :: wsuf)
       -> unique_frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs) 
                                   (wpre ++ [(a, l)]) wsuf.
   Proof.
-    intros g ? ? ? ? p_frs s_frs pre suf a l wpre wsuf v ? ? ? ? hu; subst.
+    intros g ? ? ? ? p_frs s_frs pre suf o a l wpre wsuf v ? ? ? ? hu; subst.
     inv_ufd hu ha hg hi hpu hu'.
     - constructor.
       + apply gamma_derivation_app; auto.
@@ -424,18 +424,18 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma push_succ_preserves_unique_frames_derivation :
-    forall g p_cr p_ce s_cr s_ce p_frs s_frs x pre suf rhs wpre wsuf v,
+    forall g p_cr p_ce s_cr s_ce p_frs s_frs o x pre suf rhs wpre wsuf v,
       p_cr    = PF pre v
-      -> s_cr = SF (NT x :: suf)
+      -> s_cr = SF o (NT x :: suf)
       -> p_ce = PF [] []
-      -> s_ce = SF rhs
+      -> s_ce = SF (Some x) rhs
       -> no_left_recursion g
       -> stacks_wf g (p_cr, p_frs) (s_cr, s_frs)
       -> llPredict g x (s_cr, s_frs) wsuf = PredSucc rhs
       -> unique_frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) wpre wsuf
       -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) wpre wsuf.
   Proof.
-    intros g ? ? ? ? p_frs s_frs x pre suf rhs wpre wsuf v ? ? ? ? hn hw hl hu; subst.
+    intros g ? ? ? ? p_frs s_frs o x pre suf rhs wpre wsuf v ? ? ? ? hn hw hl hu; subst.
     assert (heq: wpre = wpre ++ []) by apps; rewrite heq.
     econstructor; eauto; sis.
     - eapply llPredict_succ_in_grammar; eauto.
@@ -477,7 +477,7 @@ Module ParserSoundFn (Import D : Defs.T).
 
   Lemma unique_stack_prefix_derivation_invar_starts_true :
     forall g ys ts,
-      unique_stack_prefix_derivation g ts (PF [] [], []) (SF ys, []) ts true. 
+      unique_stack_prefix_derivation g ts (PF [] [], []) (SF None ys, []) ts true. 
   Proof.
     intros g ys ts; red; intros _.
     exists []; split; auto.
@@ -513,7 +513,7 @@ Module ParserSoundFn (Import D : Defs.T).
     apply multistep_accept_cases in hm.
     destruct hm as [[hf hu'] | he]; subst.
     - apply step_StepAccept_facts in hf.
-      destruct hf as (? & ? & (pre & ?)); subst.
+      destruct hf as (? & o & ? & (pre & ?)); subst.
       unfold bottomFrameSyms; simpl; rewrite app_nil_r.
       red in hu.
       destruct hu as (wpre & ? & hu); subst; auto.
@@ -581,11 +581,11 @@ Module ParserSoundFn (Import D : Defs.T).
   Inductive ambiguous_frames_derivation (g : grammar) :
     list prefix_frame -> list suffix_frame -> list token -> list token -> Prop :=
   | AFD_push :
-      forall p_cr p_ce s_cr s_ce p_frs s_frs pre pre' suf suf' x alt_rhs wpre wmid wsuf v v',
-        PF pre v            = p_cr
-        -> SF (NT x :: suf) = s_cr
-        -> PF pre' v'       = p_ce
-        ->  SF suf'         = s_ce
+      forall p_cr p_ce s_cr s_ce p_frs s_frs pre pre' suf suf' o x alt_rhs wpre wmid wsuf v v',
+        PF pre v              = p_cr
+        -> SF o (NT x :: suf) = s_cr
+        -> PF pre'   v'       = p_ce
+        -> SF (Some x) suf'  = s_ce
         -> frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) wpre (wmid ++ wsuf)
         -> In (x, rev pre' ++ suf') g
         -> gamma_derivation g (rev pre') wmid (rev v')
@@ -595,9 +595,9 @@ Module ParserSoundFn (Import D : Defs.T).
         -> ambiguous_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
                                        (wpre ++ wmid) wsuf
   | AFD_sem :
-      forall p_fr s_fr p_frs s_frs pre suf wpre wmid wmid' wsuf wsuf' v v',
-        PF pre v  = p_fr
-        -> SF suf = s_fr
+      forall p_fr s_fr p_frs s_frs o pre suf wpre wmid wmid' wsuf wsuf' v v',
+        PF pre v    = p_fr
+        -> SF o suf = s_fr
         -> frames_derivation g p_frs s_frs wpre (wmid ++ wsuf)
         -> gamma_derivation g (rev pre) wmid (rev v)
         -> gamma_derivation g (rev pre) wmid' (rev v')
@@ -607,9 +607,9 @@ Module ParserSoundFn (Import D : Defs.T).
         -> ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs)
                                        (wpre ++ wmid) wsuf
   | AFD_tail :
-      forall p_fr s_fr p_frs s_frs pre suf wpre wmid wsuf v,
-        PF pre v  = p_fr
-        -> SF suf = s_fr
+      forall p_fr s_fr p_frs s_frs o pre suf wpre wmid wsuf v,
+        PF pre v    = p_fr
+        -> SF o suf = s_fr
         -> ambiguous_frames_derivation g p_frs s_frs wpre (wmid ++ wsuf)
         -> gamma_derivation g (rev pre) wmid (rev v)
         -> ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs)
@@ -623,25 +623,25 @@ Module ParserSoundFn (Import D : Defs.T).
     let hp' := fresh "hp'" in
     let hs' := fresh "hs'" in
     inversion ha as
-        [ ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? hp hs hp' hs' hf hi hg hi' hneq hr
-        | ? ? ? ? ? ? ? ? ? ? ? ? ? hp hs hf hg hd' hr heq hneq
-        | ? ? ? ? ? ? ? ? ? ? hp hs ha' hg]; subst; clear ha.
+        [ ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? hp hs hp' hs' hf hi hg hi' hneq hr
+        | ? ? ? ? ? ? ? ? ? ? ? ? ? ? hp hs hf hg hd' hr heq hneq
+        | ? ? ? ? ? ? ? ? ? ? ? hp hs ha' hg]; subst; clear ha.
 
   Lemma return_preserves_ambiguous_frames_derivation_invar :
-    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x wpre wsuf v v',
+    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf o o' x wpre wsuf v v',
       p_ce     = PF pre' v'
-      -> s_ce  = SF []
+      -> s_ce  = SF o' []
       -> p_cr  = PF pre v
       -> p_cr' = PF (NT x :: pre) (Node x (rev v') :: v)
-      -> s_cr  = SF (NT x :: suf)
-      -> s_cr' = SF suf
+      -> s_cr  = SF o (NT x :: suf)
+      -> s_cr' = SF o suf
       -> frames_wf g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
       -> ambiguous_frames_derivation
            g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) wpre wsuf
       -> ambiguous_frames_derivation
            g (p_cr' :: p_frs) (s_cr' :: s_frs) wpre wsuf.
   Proof.
-    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x wpre wsuf v v' 
+    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf o o' x wpre wsuf v v' 
            ? ? ? ? ? ? hw ha; subst.
     inv_afd ha  ha' heq hf hg hg' hi hi' hneq hr; inv hp; inv hs; sis.
     - (* ambig push case *)
@@ -716,17 +716,17 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma consume_preserves_ambiguous_frames_derivation_invar :
-    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf a l v wpre wsuf,
+    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf o a l v wpre wsuf,
       p_fr     = PF pre v
       -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
-      -> s_fr  = SF (T a :: suf)
-      -> s_fr' = SF suf
+      -> s_fr  = SF o (T a :: suf)
+      -> s_fr' = SF o suf
       -> ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
                                      wpre ((a, l) :: wsuf)
       -> ambiguous_frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs)
                                      (wpre ++ [(a, l)]) wsuf.
   Proof.
-    intros g ? ? ? ? p_frs s_frs pre suf a l v wpre wsuf
+    intros g ? ? ? ? p_frs s_frs pre suf o a l v wpre wsuf
            ? ? ? ? ha; subst.
     inv_afd ha ha' heq hf hg hg' hi hi' hneq hr; sis.
     - (* push case *)
@@ -830,15 +830,15 @@ Module ParserSoundFn (Import D : Defs.T).
       + destruct hl as [osp [fsp [osp' [fsp' [rhs' [hi' [heq [hm' [hf [hi'' [heq' [hm'' [hf' hn]]]]]]]]]]]]]; subst.
         rewrite <- app_assoc in *; sis.
         exists osp; exists fsp; exists osp'; exists fsp'; exists osp'.(prediction); repeat split; eauto.
-      + apply move_preserves_suffix_stack_wf_invar in hm; auto.
+      + eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
         apply closure_preserves_suffix_stack_wf_invar in hc; auto.
       + eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
   Qed.
 
   Lemma llPredict_ambig_rhs_unproc_stack_syms' :
-    forall g cr ce x suf frs w rhs,
-      cr    = SF (NT x :: suf)
-      -> ce = SF rhs
+    forall g cr ce o x suf frs w rhs,
+      cr    = SF o (NT x :: suf)
+      -> ce = SF (Some x) rhs
       -> no_left_recursion g
       -> suffix_stack_wf g (cr, frs)
       -> llPredict g x (cr, frs) w = PredAmbig rhs
@@ -849,7 +849,7 @@ Module ParserSoundFn (Import D : Defs.T).
                 /\ gamma_recognize g (rhs' ++ suf ++ unprocTailSyms frs) w).
   
   Proof.
-    intros g cr ce x suf frs w rhs ? ? hn hw hl; subst; sis.
+    intros g cr ce o x suf frs w rhs ? ? hn hw hl; subst; sis.
     pose proof hl as hl'; apply llPredict_ambig_in_grammar in hl'.
     unfold llPredict in hl.
     destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
@@ -904,7 +904,7 @@ Module ParserSoundFn (Import D : Defs.T).
 
   Lemma ambiguous_stack_prefix_derivation_invar_starts_true :
     forall g ys ts,
-      ambiguous_stack_prefix_derivation g ts (PF [] [], []) (SF ys, []) ts true.
+      ambiguous_stack_prefix_derivation g ts (PF [] [], []) (SF None ys, []) ts true.
   Proof.
     intros g ys ts hc; inv hc.
   Qed.
@@ -973,7 +973,7 @@ Module ParserSoundFn (Import D : Defs.T).
     apply multistep_ambig_cases in hm.
     destruct hm as [[hs hu] | he]; subst.
     - apply step_StepAccept_facts in hs.
-      destruct hs as (? & ? & (pre & ?)); subst.
+      destruct hs as (? & ? & ? & (pre & ?)); subst.
       unfold bottomFrameSyms; simpl; rewrite app_nil_r.
       red in ha.
       destruct ha as [wpre [heq ha]]; subst; auto; rew_anr.
