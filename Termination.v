@@ -10,7 +10,7 @@ Module TerminationFn (Import D : Defs.T).
 
   Definition headFrameSize (fr : suffix_frame) : nat :=
     match fr with
-    | SF suf => length suf
+    | SF _ suf => length suf
     end.
 
   Definition headFrameScore (fr : suffix_frame) (b : nat) (e : nat) : nat :=
@@ -18,8 +18,8 @@ Module TerminationFn (Import D : Defs.T).
 
   Definition tailFrameSize (fr : suffix_frame) : nat :=
     match fr with
-    | SF []          => 0
-    | SF (_ :: suf') => length suf'
+    | SF _ []          => 0
+    | SF _ (_ :: suf') => length suf'
     end.
 
   Definition tailFrameScore (fr : suffix_frame) (b : nat) (e : nat) : nat :=
@@ -116,14 +116,14 @@ Module TerminationFn (Import D : Defs.T).
   Qed.
 
   Lemma stackScore_le_after_return :
-    forall callee caller caller' x x' suf' av locs b,
-      callee = SF []
-      -> caller  = SF (NT x' :: suf')
-      -> caller' = SF suf'
+    forall callee caller caller' o o' x x' suf' av locs b,
+      callee = SF o []
+      -> caller  = SF o' (NT x' :: suf')
+      -> caller' = SF o' suf'
       -> stackScore (caller', locs) b (NtSet.cardinal (NtSet.add x av))
          <= stackScore (callee, caller :: locs) b (NtSet.cardinal av).
   Proof.
-    intros ce cr cr' x x' suf' av locs b hce hcr hcr'; subst.
+    intros ce cr cr' o o' x x' suf' av locs b hce hcr hcr'; subst.
     unfold stackScore; simpl.
     unfold headFrameScore; unfold headFrameSize.
     unfold tailFrameScore; unfold tailFrameSize.
@@ -138,12 +138,12 @@ Module TerminationFn (Import D : Defs.T).
 
   (* this version might be easier to apply *)
   Lemma stackScore_le_after_return' :
-    forall suf_cr x b av frs,
-      stackScore (SF suf_cr, frs) 
+    forall suf_cr o o' x b av frs,
+      stackScore (SF o' suf_cr, frs) 
                  b 
                  (NtSet.cardinal (NtSet.add x av))
       <= 
-      stackScore (SF [], SF (NT x :: suf_cr) :: frs) 
+      stackScore (SF o [], SF o' (NT x :: suf_cr) :: frs) 
                  b 
                  (NtSet.cardinal av).
   Proof.
@@ -201,9 +201,9 @@ Module TerminationFn (Import D : Defs.T).
   Qed.
 
   Lemma stackScore_lt_after_push :
-    forall g callee caller x suf' av rhs locs,
-      callee = SF rhs
-      -> caller = SF (NT x :: suf')
+    forall g callee caller o o' x suf' av rhs locs,
+      callee = SF o rhs
+      -> caller = SF o' (NT x :: suf')
       -> NtSet.In x av
       -> In (x, rhs) g
       -> stackScore (callee, caller :: locs)
@@ -214,7 +214,7 @@ Module TerminationFn (Import D : Defs.T).
                     (1 + maxRhsLength g)
                     (NtSet.cardinal av).
   Proof.
-    intros g callee caller x suf' av rhs locs
+    intros g callee caller o o' x suf' av rhs locs
            Hcallee Hcaller Hin Hin'; subst; simpl.
     apply NtSet.mem_spec in Hin.
     rewrite remove_cardinal_1; auto.
@@ -228,14 +228,14 @@ Module TerminationFn (Import D : Defs.T).
   Qed.
 
   Lemma stackScore_lt_after_push' :
-    forall g suf_cr rhs x av locs,
+    forall g suf_cr rhs o o' x av locs,
       NtSet.In x av
       -> In (x, rhs) g
-      -> stackScore (SF rhs, SF (NT x :: suf_cr) :: locs)
+      -> stackScore (SF o rhs, SF o' (NT x :: suf_cr) :: locs)
                     (1 + maxRhsLength g)
                     (NtSet.cardinal (NtSet.remove x av))
          <
-         stackScore (SF (NT x :: suf_cr), locs)
+         stackScore (SF o' (NT x :: suf_cr), locs)
                     (1 + maxRhsLength g)
                     (NtSet.cardinal av).
   Proof.

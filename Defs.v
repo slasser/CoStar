@@ -218,21 +218,21 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition prefix_stack := (prefix_frame * list prefix_frame)%type.
 
   Inductive suffix_frame :=
-  | SF : list symbol -> suffix_frame.
+  | SF : option nonterminal -> list symbol -> suffix_frame.
 
   Definition suffix_stack := (suffix_frame * list suffix_frame)%type. 
 
   Fixpoint unprocTailSyms (frs : list suffix_frame) : list symbol :=
     match frs with 
-    | []                        => []
-    | SF [] :: _               => [] (* impossible for a well-formed stack *)
-    | SF (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
-    | SF (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
+    | []                         => []
+    | SF _ [] :: _               => [] (* impossible for a well-formed stack *)
+    | SF _ (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
+    | SF _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
     end.
 
   Definition unprocStackSyms (stk : suffix_stack) : list symbol :=
     match stk with
-    | (SF suf, frs) => suf ++ unprocTailSyms frs
+    | (SF _ suf, frs) => suf ++ unprocTailSyms frs
     end.
 
   (*
@@ -248,7 +248,7 @@ Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
    *)
   Definition bottomFrameSyms p_stk s_stk := 
     match bottomElt p_stk, bottomElt s_stk with
-    | PF pre _, SF suf => rev pre ++ suf
+    | PF pre _, SF _ suf => rev pre ++ suf
     end.
 
   (* Grammatical derivation relation *)

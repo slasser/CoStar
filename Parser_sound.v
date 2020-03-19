@@ -17,19 +17,19 @@ Module ParserSoundFn (Import D : Defs.T).
   Inductive frames_wf (g : grammar) : list prefix_frame -> list suffix_frame -> Prop :=
   | WF_bottom :
       forall pre suf v,
-        frames_wf g [PF pre v] [SF suf]
+        frames_wf g [PF pre v] [SF None suf]
   | WF_upper :
-      forall x pre pre' suf suf' p_frs s_frs v v',
+      forall x o pre pre' suf suf' p_frs s_frs v v',
         In (x, rev pre' ++ suf') g
         -> frames_wf g (PF pre v :: p_frs) 
-                     (SF (NT x :: suf) :: s_frs)
+                     (SF o (NT x :: suf) :: s_frs)
         -> frames_wf g (PF pre' v' :: PF pre v :: p_frs) 
-                     (SF suf' :: SF (NT x :: suf) :: s_frs).
+                     (SF (Some x) suf' :: SF o (NT x :: suf) :: s_frs).
 
   Hint Constructors frames_wf : core.
 
   Ltac inv_fw hw  hi hw' := 
-    inversion hw as [? ? ? | ? ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
+    inversion hw as [? ? ? | ? ? ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
 
   Lemma frames_wf__suffix_frames_wf :
     forall g p_frs s_frs,
@@ -40,17 +40,17 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma return_preserves_frames_wf_invar :
-    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x v v',
+    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf x o o' v v',
       p_ce     = PF pre' v'
-      -> s_ce  = SF []
+      -> s_ce  = SF o' []
       -> p_cr  = PF pre v
       -> p_cr' = PF (NT x :: pre) (Node x (rev v') :: v)
-      -> s_cr  = SF (NT x :: suf)
-      -> s_cr' = SF suf
+      -> s_cr  = SF o (NT x :: suf)
+      -> s_cr' = SF o suf
       -> frames_wf g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
       -> frames_wf g (p_cr' :: p_frs) (s_cr' :: s_frs).
   Proof.
-    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x v v'
+    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf x o o' v v'
            ? ? ? ? ? ? hw; subst; inv_fw hw hi hw'; rew_anr.
     inv_fw hw' hi' hw''; auto.
     econstructor; eauto; sis; apps.

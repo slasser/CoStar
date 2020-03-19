@@ -35,7 +35,7 @@ Module ParserFn (Import D : Defs.T).
              (av     : NtSet.t)
              (u      : bool) : step_result := 
     match p_stk, s_stk with
-    | (PF pre v, p_frs), (SF suf, s_frs) =>
+    | (PF pre v, p_frs), (SF o suf, s_frs) =>
       match suf with
       (* no more symbols to process in current frame *)
       | [] =>
@@ -47,13 +47,13 @@ Module ParserFn (Import D : Defs.T).
           | _ :: _ => StepReject "stack exhausted, tokens remain"
           end
         (* nonempty stacks --> return to caller frames *)
-        | PF pre_cr v_cr :: p_frs', SF suf_cr :: s_frs' =>
+        | PF pre_cr v_cr :: p_frs', SF o_cr suf_cr :: s_frs' =>
           match suf_cr with
           | []                => StepError InvalidState
           | T _  :: _         => StepError InvalidState
           | NT x :: suf_cr'   =>
             let p_stk' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
-            let s_stk' := (SF suf_cr', s_frs')                                   in
+            let s_stk' := (SF o_cr suf_cr', s_frs')                              in
             StepK p_stk' s_stk' ts (NtSet.add x av) u
           end
         | _, _ => StepError InvalidState
@@ -65,7 +65,7 @@ Module ParserFn (Import D : Defs.T).
         | (a', l) :: ts' =>
           if t_eq_dec a' a then
             let p_stk' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
-            let s_stk' := (SF suf', s_frs)                         in
+            let s_stk' := (SF o suf', s_frs)                       in
             StepK p_stk' s_stk' ts' (allNts g) u
           else
             StepReject "token mismatch"
@@ -75,12 +75,12 @@ Module ParserFn (Import D : Defs.T).
         if NtSet.mem x av then
           match llPredict g x s_stk ts with
           | PredSucc rhs =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs) in
-            let s_stk' := (SF rhs, SF suf :: s_frs)     in
+            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
+            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
             StepK p_stk' s_stk' ts (NtSet.remove x av) u
           | PredAmbig rhs =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs) in
-            let s_stk' := (SF rhs, SF suf :: s_frs)     in
+            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
+            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
             StepK p_stk' s_stk' ts (NtSet.remove x av) false
           | PredReject =>
             StepReject "prediction found no viable right-hand sides"
@@ -98,7 +98,7 @@ Module ParserFn (Import D : Defs.T).
     forall g p_stk s_stk ts av u v,
       step g p_stk s_stk ts av u = StepAccept v
       -> ts = []
-         /\ s_stk = (SF [], [])
+         /\ exists o, s_stk = (SF o [], [])
          /\ exists pre,
              p_stk = (PF pre (rev v), []).
   Proof.
@@ -112,8 +112,8 @@ Module ParserFn (Import D : Defs.T).
       step g p_stk s_stk ts av u = StepError (LeftRecursion x)
       -> ~ NtSet.In x av
          /\ NtSet.In x (allNts g)
-         /\ exists suf frs,
-             s_stk = (SF (NT x :: suf), frs).
+         /\ exists o suf frs,
+             s_stk = (SF o (NT x :: suf), frs).
   Proof.
     intros g pstk sstk ts av u x hs.
     unfold step in hs; repeat dmeq h; tc; inv hs; sis;
@@ -132,10 +132,10 @@ Module ParserFn (Import D : Defs.T).
     (List.length ts, stackScore stk (1 + m) e, stackHeight stk).
 
   Lemma meas_lt_after_return :
-    forall g ce cr cr' x suf frs ts av,
-      ce  = SF []
-      -> cr  = SF (NT x :: suf)
-      -> cr' = SF suf
+    forall g ce cr cr' o o_cr x suf frs ts av,
+      ce  = SF o []
+      -> cr  = SF o_cr (NT x :: suf)
+      -> cr' = SF o_cr suf
       -> lex_nat_triple (meas g (cr', frs) ts (NtSet.add x av))
                         (meas g (ce, cr :: frs) ts av).
   Proof.
@@ -148,9 +148,9 @@ Module ParserFn (Import D : Defs.T).
   Defined.
 
   Lemma meas_lt_after_push :
-    forall g cr ce x suf rhs frs ts av,
-      cr = SF (NT x :: suf)
-      -> ce = SF rhs
+    forall g cr ce o o' x suf rhs frs ts av,
+      cr = SF o (NT x :: suf)
+      -> ce = SF o' rhs
       -> In (x, rhs) g 
       -> NtSet.In x av
       -> lex_nat_triple (meas g (ce, cr :: frs) ts (NtSet.remove x av))
@@ -167,7 +167,7 @@ Module ParserFn (Import D : Defs.T).
       -> lex_nat_triple (meas g s_stk' ts' av') (meas g s_stk ts av).
   Proof.
     intros g pstk pstk' sstk stk' ts ts' av av' u u' hs; unfold step in hs.
-    destruct sstk as ([ [| [a|x] suf] ], frs).
+    destruct sstk as ([ o [| [a|x] suf] ], frs).
     - dms; tc; inv hs.
       eapply meas_lt_after_return; eauto.
     - dms; tc; inv hs.
@@ -192,14 +192,13 @@ Module ParserFn (Import D : Defs.T).
   Defined.
 
   Fixpoint multistep (g  : grammar)
-           (ps : prefix_stack)
-           (ss : suffix_stack)
-           (ts : list token)
-           (av : NtSet.t)
-           (u  : bool)
-           (a  : Acc lex_nat_triple (meas g ss ts av))
-           {struct a} :
-    parse_result :=
+                     (ps : prefix_stack)
+                     (ss : suffix_stack)
+                     (ts : list token)
+                     (av : NtSet.t)
+                     (u  : bool)
+                     (a  : Acc lex_nat_triple (meas g ss ts av))
+                     {struct a} : parse_result :=
     match step g ps ss ts av u as res return step g ps ss ts av u = res -> _ with
     | StepAccept v             => fun _  => if u then Accept v else Ambig v
     | StepReject s             => fun _  => Reject s
@@ -438,7 +437,7 @@ Module ParserFn (Import D : Defs.T).
 
   Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
     let p_stk0 := (PF [] [], []) in
-    let s_stk0 := (SF gamma, []) in
+    let s_stk0 := (SF None gamma, []) in
     multistep g p_stk0 s_stk0 ts (allNts g) true (lex_nat_triple_wf _). 
 
   (* cache-optimized version *)
@@ -446,19 +445,20 @@ Module ParserFn (Import D : Defs.T).
   Inductive step_result_opt :=
   | StepAccept_opt : forest -> step_result_opt
   | StepReject_opt : string -> step_result_opt
-  | StepK_opt      : prefix_stack -> suffix_stack -> list token -> NtSet.t -> bool -> SLL.cache -> step_result_opt
+  | StepK_opt      : prefix_stack -> suffix_stack -> list token -> NtSet.t
+                     -> bool -> cache -> step_result_opt
   | StepError_opt  : parse_error -> step_result_opt.
 
   Definition step_opt (g      : grammar)
-                      (cm     : SLL.closure_map)
+                      (cm     : closure_map)
                       (p_stk  : prefix_stack)
                       (s_stk  : suffix_stack)
                       (ts     : list token)
                       (av     : NtSet.t)
                       (u      : bool) 
-                      (c      : SLL.cache) : step_result_opt := 
+                      (c      : cache) : step_result_opt := 
     match p_stk, s_stk with
-    | (PF pre v, p_frs), (SF suf, s_frs) =>
+    | (PF pre v, p_frs), (SF o suf, s_frs) =>
       match suf with
       (* no more symbols to process in current frame *)
       | [] =>
@@ -470,13 +470,13 @@ Module ParserFn (Import D : Defs.T).
           | _ :: _ => StepReject_opt "stack exhausted, tokens remain"
           end
         (* nonempty stacks --> return to caller frames *)
-        | PF pre_cr v_cr :: p_frs', SF suf_cr :: s_frs' =>
+        | PF pre_cr v_cr :: p_frs', SF o_cr suf_cr :: s_frs' =>
           match suf_cr with
           | []                => StepError_opt InvalidState
           | T _  :: _         => StepError_opt InvalidState
           | NT x :: suf_cr'   =>
             let p_stk' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
-            let s_stk' := (SF suf_cr', s_frs')                                   in
+            let s_stk' := (SF o_cr suf_cr', s_frs')                              in
             StepK_opt p_stk' s_stk' ts (NtSet.add x av) u c          
           end
         | _, _ => StepError_opt InvalidState
@@ -488,7 +488,7 @@ Module ParserFn (Import D : Defs.T).
         | (a', l) :: ts' =>
           if t_eq_dec a' a then
             let p_stk' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
-            let s_stk' := (SF suf', s_frs)                         in
+            let s_stk' := (SF o suf', s_frs)                       in
             StepK_opt p_stk' s_stk' ts' (allNts g) u c
           else
             StepReject_opt "token mismatch"
@@ -496,14 +496,14 @@ Module ParserFn (Import D : Defs.T).
       (* nonterminal case --> push a frame onto the stack *)
       | NT x :: _ => 
         if NtSet.mem x av then
-          match SLL.adaptivePredict g cm x s_stk ts c with
+          match adaptivePredict g cm x s_stk ts c with
           | (PredSucc rhs, c') =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs) in
-            let s_stk' := (SF rhs, SF suf :: s_frs)     in
+            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
+            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
             StepK_opt p_stk' s_stk' ts (NtSet.remove x av) u c'
           | (PredAmbig rhs, _) =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs) in
-            let s_stk' := (SF rhs, SF suf :: s_frs)     in
+            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
+            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
             StepK_opt p_stk' s_stk' ts (NtSet.remove x av) false c
           | (PredReject, _) =>
             StepReject_opt "prediction found no viable right-hand sides"
@@ -552,13 +552,13 @@ Module ParserFn (Import D : Defs.T).
   Defined.
   
   Fixpoint multistep_opt (g  : grammar)
-                         cm 
+                         (cm : closure_map)
                          (ps : prefix_stack)
                          (ss : suffix_stack)
                          (ts : list token)
                          (av : NtSet.t)
                          (u  : bool)
-                         (c  : SLL.cache)
+                         (c  : cache)
                          (a  : Acc lex_nat_triple (meas g ss ts av))
                          {struct a} : parse_result :=
     match step_opt g cm ps ss ts av u c as res return step_opt g cm ps ss ts av u c = res -> _ with
@@ -571,9 +571,9 @@ Module ParserFn (Import D : Defs.T).
     end eq_refl.
   
   Definition parse_opt (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-    let cm     := SLL.mkGraph g in
-    let p_stk0 := (PF [] [], []) in
-    let s_stk0 := (SF gamma, []) in
-    multistep_opt g cm p_stk0 s_stk0 ts (allNts g) true SLL.empty_cache (lex_nat_triple_wf _). 
+    let cm     := mkGraph g           in
+    let p_stk0 := (PF [] [], [])      in
+    let s_stk0 := (SF None gamma, []) in
+    multistep_opt g cm p_stk0 s_stk0 ts (allNts g) true empty_cache (lex_nat_triple_wf _). 
   
 End ParserFn.
