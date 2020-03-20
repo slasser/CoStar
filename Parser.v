@@ -569,6 +569,101 @@ Module ParserFn (Import D : Defs.T).
       fun hs => multistep_opt g cm ps' ss' ts' av' u' c'
                               (StepK_result_acc_opt _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
     end eq_refl.
+
+  Lemma multistep_opt_unfold :
+    forall g cm ps ss ts av u c a,
+      multistep_opt g cm ps ss ts av u c a =
+      match step_opt g cm ps ss ts av u c as res return step_opt g cm ps ss ts av u c = res -> _ with
+      | StepAccept_opt v             => fun _  => if u then Accept v else Ambig v
+      | StepReject_opt s             => fun _  => Reject s
+      | StepError_opt e              => fun _  => Error e
+      | StepK_opt ps' ss' ts' av' u' c' =>
+        fun hs => multistep_opt g cm ps' ss' ts' av' u' c'
+                                (StepK_result_acc_opt _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
+      end eq_refl.
+  Proof.
+    intros; destruct a; auto.
+  Qed.
+
+  Lemma multistep_opt_cases' :
+    forall (g   : grammar)
+           (cm  : closure_map)
+           (ps  : prefix_stack)
+           (ss  : suffix_stack)
+           (ts  : list token)
+           (av  : NtSet.t)
+           (u   : bool)
+           (c   : cache)
+           (a   : Acc lex_nat_triple (meas g ss ts av))
+           (sr  : step_result_opt)
+           (pr  : parse_result)
+           (heq : step_opt g cm ps ss ts av u c = sr),
+      match sr as res return step_opt g cm ps ss ts av u c = res -> _ with
+      | StepAccept_opt v             => fun _  => if u then Accept v else Ambig v
+      | StepReject_opt s             => fun _  => Reject s
+      | StepError_opt e              => fun _  => Error e
+      | StepK_opt ps' ss' ts' av' u' c' =>
+        fun hs => multistep_opt g cm ps' ss' ts' av' u' c'
+                                (StepK_result_acc_opt _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
+      end heq = pr
+      -> match pr with
+         | Accept f => (sr = StepAccept_opt f /\ u = true)
+                       \/ (exists ps' ss' ts' av' u' c' a',
+                              sr = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Accept f)
+         | Ambig f  => (sr = StepAccept_opt f /\ u = false)
+                       \/ (exists ps' ss' ts' av' u' c' a',
+                              sr = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Ambig f)
+         | Reject s => sr = StepReject_opt s
+                       \/ (exists ps' ss' ts' av' u' a' c',
+                              sr = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Reject s)
+         | Error s  => sr = StepError_opt s
+                       \/ (exists ps' ss' ts' av' u' c' a',
+                              sr = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Error s)
+         end.
+  Proof.
+    intros g cm ps ss ts av u c a sr pr heq.
+    destruct pr; destruct sr; destruct u;
+      try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 10].
+  Qed.
+
+  Lemma multistep_opt_cases :
+    forall (g   : grammar)
+           (cm  : closure_map)
+           (ps  : prefix_stack)
+           (ss  : suffix_stack)
+           (ts  : list token)
+           (av  : NtSet.t)
+           (u   : bool)
+           (c   : cache)
+           (a   : Acc lex_nat_triple (meas g ss ts av))
+           (pr  : parse_result),
+      multistep_opt g cm ps ss ts av u c a = pr
+      -> match pr with
+         | Accept f => (step_opt g cm ps ss ts av u c = StepAccept_opt f /\ u = true)
+                       \/ (exists ps' ss' ts' av' u' c' a',
+                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Accept f)
+         | Ambig f  => (step_opt g cm ps ss ts av u c = StepAccept_opt f /\ u = false)
+                       \/ (exists ps' ss' ts' av' u' c' a',
+                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Ambig f)
+         | Reject s => step_opt g cm ps ss ts av u c = StepReject_opt s
+                       \/ (exists ps' ss' ts' av' u' a' c',
+                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Reject s)
+         | Error s  => step_opt g cm ps ss ts av u c = StepError_opt s
+                       \/ (exists ps' ss' ts' av' u' c' a',
+                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
+                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Error s)
+         end.
+  Proof.
+    intros; subst.
+    rewrite multistep_opt_unfold; eapply multistep_opt_cases'; eauto.
+  Qed.
   
   Definition parse_opt (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
     let cm     := mkGraph g           in

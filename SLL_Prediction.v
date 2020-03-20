@@ -232,6 +232,16 @@ Module SllPredictionFn (Import D : Defs.T).
       end
     end.
 
+  Lemma sll_cstep_done_eq_or_map_lookup :
+    forall g cm av sp pr fr frs sps,
+      sp = Sp pr (fr, frs)
+      -> sllClosureStep g cm av sp = CstepDone sps
+      -> sps = [sp] \/ sps = map (fun fr' => Sp pr (fr', [])) (callSites cm fr).
+  Proof.
+    intros g cm av sp pr fr frs sps ? hs; subst.
+    unfold sllClosureStep in hs; dms; tc; inv hs; auto.
+  Qed.
+  
   Lemma CstepK_sll_equiv_ll :
     forall (g      : grammar)
            (cm     : closure_map)
@@ -277,6 +287,148 @@ Module SllPredictionFn (Import D : Defs.T).
         in  aggrClosureResults crs
     end eq_refl.
 
+  Lemma sllSpClosure_unfold :
+    forall g cm av sp a,
+      sllSpClosure g cm av sp a =
+      match sllClosureStep g cm av sp as r return sllClosureStep g cm av sp = r -> _ with
+      | CstepDone sps'  => fun _  => inr sps'
+      | CstepError e    => fun _  => inl e
+      | CstepK av' sps' => 
+        fun hs => 
+          let crs := 
+              dmap sps' (fun sp' hin =>
+                           sllSpClosure g cm av' sp' (acc_after_sll_step _ _ _ _ _ _ _ hs hin a))
+          in  aggrClosureResults crs
+      end eq_refl.
+  Proof.
+    intros g cm av sp a; destruct a; auto. 
+  Qed.
+  
+  Lemma sllSpClosure_cases' :
+    forall (g   : grammar)
+           (cm  : closure_map)
+           (sp  : subparser)
+           (av  : NtSet.t)
+           (a   : Acc lex_nat_pair (meas g av sp))
+           (sr  : subparser_closure_step_result)
+           (cr  : closure_result)
+           (heq : sllClosureStep g cm av sp = sr),
+      match sr as r return sllClosureStep g cm av sp = r -> closure_result with
+      | CstepDone sps'  => fun _  => inr sps'
+      | CstepError e    => fun _  => inl e
+      | CstepK av' sps' => 
+        fun hs => 
+          let crs := dmap sps' (fun sp' hin => sllSpClosure g cm av' sp'
+                                                            (acc_after_sll_step _ _ _ _ _ _ _ hs hin a))
+          in  aggrClosureResults crs
+      end heq = cr
+      -> match cr with
+         | inl e => 
+           sr = CstepError e
+           \/ exists (sps : list subparser)
+                     (av' : NtSet.t)
+                     (hs  : sllClosureStep g cm av sp = CstepK av' sps)
+                     (crs : list closure_result),
+               crs = dmap sps (fun sp' hi => 
+                                 sllSpClosure g cm av' sp'
+                                              (acc_after_sll_step _ _ _ _ _ _ _ hs hi a))
+               /\ aggrClosureResults crs = inl e
+         | inr sps =>
+           match sp with
+           | Sp pred (fr, frs) =>
+             (sr = CstepDone sps
+              /\ (sps = [sp] \/ sps = map (fun fr' => Sp pred (fr', [])) (callSites cm fr)))
+             \/ exists (sps' : list subparser)
+                       (av'  : NtSet.t)
+                       (hs   : sllClosureStep g cm av sp = CstepK av' sps')
+                       (crs  : list closure_result),
+                 crs = dmap sps' (fun sp' hi => 
+                                    sllSpClosure g cm av' sp'
+                                                 (acc_after_sll_step _ _ _ _ _ _ _ hs hi a))
+                 /\ aggrClosureResults crs = inr sps
+           end
+         end.
+  Proof.
+    intros g cm [pr (fr, frs)] av a sr cr heq.
+    destruct sr as [| sps | e];
+      destruct cr as [e' | sps']; intros heq'; tc;
+        try solve [inv heq'; eauto | eauto 8].
+    eapply sll_cstep_done_eq_or_map_lookup in heq; inv heq'; eauto.
+  Qed.
+  
+  Lemma sllSpClosure_cases :
+    forall (g  : grammar)
+           (cm : closure_map)
+           (sp : subparser)
+           (av : NtSet.t)
+           (a  : Acc lex_nat_pair (meas g av sp))
+           (cr : closure_result),
+      sllSpClosure g cm av sp a = cr
+      -> match cr with
+         | inl e => 
+           sllClosureStep g cm av sp = CstepError e
+           \/ exists (sps : list subparser)
+                     (av' : NtSet.t)
+                     (hs  : sllClosureStep g cm av sp = CstepK av' sps)
+                     (crs : list closure_result),
+               crs = dmap sps (fun sp' hi => 
+                                 sllSpClosure g cm av' sp'
+                                   (acc_after_sll_step _ _ _ _ _ _ _ hs hi a))
+               /\ aggrClosureResults crs = inl e
+         | inr sps =>
+           match sp with
+           | Sp pred (fr, frs) =>
+             (sllClosureStep g cm av sp = CstepDone sps
+              /\ (sps = [sp]
+                  \/ sps = map (fun fr' => Sp pred (fr', [])) (callSites cm fr)))
+             \/ exists (sps' : list subparser)
+                       (av'  : NtSet.t)
+                       (hs   : sllClosureStep g cm av sp = CstepK av' sps')
+                       (crs  : list closure_result),
+                 crs = dmap sps' (fun sp' hi => 
+                                    sllSpClosure g cm av' sp'
+                                      (acc_after_sll_step _ _ _ _ _ _ _ hs hi a))
+                 /\ aggrClosureResults crs = inr sps
+           end
+         end.
+  Proof.
+    intros g cm av sp a cr hs; subst.
+    rewrite sllSpClosure_unfold.
+    eapply sllSpClosure_cases'; eauto.
+  Qed.
+
+  (*
+  Lemma spClosure_success_cases :
+    forall g sp av a sps,
+      spClosure g av sp a = inr sps
+      -> (spClosureStep g av sp = CstepDone sps /\ sps = [sp])
+         \/ exists (sps' : list subparser)
+                   (av'  : NtSet.t)
+                   (hs   : spClosureStep g av sp = CstepK av' sps')
+                   (crs  : list closure_result),
+          crs = dmap sps' (fun sp' hi => 
+                             spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
+          /\ aggrClosureResults crs = inr sps.
+  Proof.
+    intros g sp av a sps hs; apply spClosure_cases with (cr := inr sps); auto.
+  Qed.
+
+  Lemma spClosure_error_cases :
+    forall g sp av a e,
+      spClosure g av sp a = inl e
+      -> spClosureStep g av sp = CstepError e
+         \/ exists (sps : list subparser)
+                   (av' : NtSet.t)
+                   (hs  : spClosureStep g av sp = CstepK av' sps)
+                   (crs : list closure_result),
+          crs = dmap sps (fun sp' hi => 
+                            spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
+          /\ aggrClosureResults crs = inl e.
+  Proof.
+    intros g sp av a e hs; apply spClosure_cases with (cr := inl e); auto.
+  Qed.
+   *)
+  
   Definition sllClosure (g : grammar) (cm : closure_map) (sps : list subparser) :
     sum prediction_error (list subparser) :=
     aggrClosureResults (map (fun sp => sllSpClosure g cm (allNts g) sp (lex_nat_pair_wf _)) sps).
