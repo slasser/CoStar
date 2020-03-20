@@ -486,6 +486,33 @@ Module SllPredictionFn (Import D : Defs.T).
         end
     end.
 
+  Lemma sllPredict'_success_result_in_original_subparsers :
+    forall g cm ts ca ca' ys sps,
+      sllPredict' g cm sps ts ca = (PredSucc ys, ca')
+      -> exists sp, In sp sps /\ sp.(prediction) = ys.
+  Proof.
+    intros g cm ts. 
+    induction ts as [| (a,l) ts IH]; intros ca ca' ys sps hp; sis.
+    - destruct sps as [| sp sps']; tc; dmeq hall.
+      + inv hp; exists sp; split; auto.
+        apply in_eq.
+      + injection hp; intros _ hh. 
+        apply handleFinalSubparsers_succ_facts in hh.
+        destruct hh as (sp' & _ & hi & heq & _); eauto. 
+    - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
+      + inv hp; exists sp; split; auto.
+        apply in_eq.
+      + dmeq hf; tc.
+        * (* need an invariant about the cache here *)
+          apply IH in hp; destruct hp as [sp' [hi heq]]; subst.
+          admit.
+        * destruct (move _ _) as [m | sps''] eqn:hm; tc.
+          destruct (sllClosure _ _ _) as [m | sps'''] eqn:hc; tc.
+          apply IH in hp; destruct hp as [? [? ?]]; subst.
+          (* need an sllClosure_preserves_prediction lemma *)
+          admit.
+  Admitted.
+  
   Definition sllInitSps (g : grammar) (x : nonterminal) : list subparser :=
     map (fun rhs => Sp rhs (SF (Some x) rhs, []))
         (rhssForNt g x).
@@ -494,6 +521,16 @@ Module SllPredictionFn (Import D : Defs.T).
              (x : nonterminal) : sum prediction_error (list subparser) :=
     sllClosure g cm (sllInitSps g x).
 
+  Lemma sllStartState_sp_prediction_in_rhssForNt :
+    forall g cm x sp' sps',
+      sllStartState g cm x = inr sps'
+      -> In sp' sps'
+      -> In sp'.(prediction) (rhssForNt g x).
+  Proof.
+    intros g cm x sp' sps' hs hi.
+    unfold sllStartState in hs.
+  Admitted.
+
   Definition sllPredict (g : grammar) (cm : closure_map) (x : nonterminal)
              (ts : list token) (c : cache) : prediction_result * cache :=
     match sllStartState g cm x with
@@ -501,12 +538,55 @@ Module SllPredictionFn (Import D : Defs.T).
     | inr sps => sllPredict' g cm sps ts c
     end.
 
+  Lemma sllPredict_succ_in_rhssForNt :
+    forall g cm x ts ca ca' ys,
+      sllPredict g cm x ts ca = (PredSucc ys, ca')
+      -> In ys (rhssForNt g x).
+  Proof.
+    intros g cm x ts ca ca' ys hs; unfold sllPredict in hs.
+    dmeq hs'; tc.
+    eapply sllPredict'_success_result_in_original_subparsers in hs.
+    destruct hs as [sp [hi heq]]; subst.
+    eapply sllStartState_sp_prediction_in_rhssForNt; eauto.
+  Qed.
+      
   Definition adaptivePredict g cm x stk ts c : prediction_result * cache :=
     let sll_res := sllPredict g cm x ts c in
     match sll_res with
     | (PredAmbig _, _) => (llPredict g x stk ts, c)
     | _ => sll_res
     end.
+  
+  Lemma adaptivePredict_succ_in_rhssForNt :
+    forall g cm x ss ts ca ca' ys,
+      adaptivePredict g cm x ss ts ca = (PredSucc ys, ca')
+      -> In ys (rhssForNt g x).
+  Proof.
+    intros g cm x ss ts ca ca' ys ha.
+    unfold adaptivePredict in ha; dmeqs h; tc; inv ha.
+    - eapply sllPredict_succ_in_rhssForNt; eauto.
+    - eapply llPredict_succ_in_rhssForNt; eauto.
+  Qed.
+  
+  Lemma adaptivePredict_succ_in_grammar :
+    forall g cm x ss ts ca ca' ys,
+      adaptivePredict g cm x ss ts ca = (PredSucc ys, ca')
+      -> In (x, ys) g.
+  Proof.
+    intros g cm x ss ts ca ca' ys ha.
+    apply rhssForNt_in_iff.
+    eapply adaptivePredict_succ_in_rhssForNt; eauto.
+  Qed.
+
+  Lemma adaptivePredict_ambig_in_grammar :
+    forall g cm x ss ts ca ca' ys,
+      adaptivePredict g cm x ss ts ca = (PredAmbig ys, ca')
+      -> In (x, ys) g.
+  Proof.
+    intros g cm x ss ts ca ca' ys ha.
+    unfold adaptivePredict in ha; dms; tc; inv ha.
+    eapply llPredict_ambig_in_grammar; eauto.
+  Qed.
 
   (* Equivalence of LL and SLL *)
   

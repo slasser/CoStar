@@ -17,24 +17,30 @@ Module ParserFn (Import D : Defs.T).
   | LeftRecursion   : nonterminal -> parse_error
   | PredictionError : prediction_error -> parse_error.
 
-  Inductive step_result :=
-    StepAccept : forest -> step_result
-  | StepReject : string -> step_result
-  | StepK      : prefix_stack -> suffix_stack -> list token -> NtSet.t -> bool -> step_result
-  | StepError  : parse_error -> step_result.
-
+  (* to do : move this lower *)
   Inductive parse_result := Accept : forest -> parse_result
                           | Ambig  : forest -> parse_result
                           | Reject : string -> parse_result
                           | Error  : parse_error -> parse_result.
 
-  Definition step (g : grammar)
-             (p_stk  : prefix_stack)
-             (s_stk  : suffix_stack)
-             (ts     : list token)
-             (av     : NtSet.t)
-             (u      : bool) : step_result := 
-    match p_stk, s_stk with
+  (* cache-optimized version *)
+
+  Inductive step_result :=
+  | StepAccept : forest -> step_result
+  | StepReject : string -> step_result
+  | StepK      : prefix_stack -> suffix_stack -> list token -> NtSet.t
+                 -> bool -> cache -> step_result
+  | StepError  : parse_error -> step_result.
+
+  Definition step (g  : grammar)
+                  (cm : closure_map)
+                  (ps : prefix_stack)
+                  (ss : suffix_stack)
+                  (ts : list token)
+                  (av : NtSet.t)
+                  (un : bool) 
+                  (ca : cache) : step_result := 
+    match ps, ss with
     | (PF pre v, p_frs), (SF o suf, s_frs) =>
       match suf with
       (* no more symbols to process in current frame *)
@@ -52,9 +58,9 @@ Module ParserFn (Import D : Defs.T).
           | []                => StepError InvalidState
           | T _  :: _         => StepError InvalidState
           | NT x :: suf_cr'   =>
-            let p_stk' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
-            let s_stk' := (SF o_cr suf_cr', s_frs')                              in
-            StepK p_stk' s_stk' ts (NtSet.add x av) u
+            let ps' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
+            let ss' := (SF o_cr suf_cr', s_frs')                              in
+            StepK ps' ss' ts (NtSet.add x av) un ca          
           end
         | _, _ => StepError InvalidState
         end
@@ -64,28 +70,28 @@ Module ParserFn (Import D : Defs.T).
         | []             => StepReject "input exhausted"
         | (a', l) :: ts' =>
           if t_eq_dec a' a then
-            let p_stk' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
-            let s_stk' := (SF o suf', s_frs)                       in
-            StepK p_stk' s_stk' ts' (allNts g) u
+            let ps' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
+            let ss' := (SF o suf', s_frs)                       in
+            StepK ps' ss' ts' (allNts g) un ca
           else
             StepReject "token mismatch"
         end
       (* nonterminal case --> push a frame onto the stack *)
       | NT x :: _ => 
         if NtSet.mem x av then
-          match llPredict g x s_stk ts with
-          | PredSucc rhs =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
-            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK p_stk' s_stk' ts (NtSet.remove x av) u
-          | PredAmbig rhs =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
-            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK p_stk' s_stk' ts (NtSet.remove x av) false
-          | PredReject =>
+          match adaptivePredict g cm x ss ts ca with
+          | (PredSucc rhs, ca') =>
+            let ps' := (PF [] [], PF pre v :: p_frs)        in
+            let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
+            StepK ps' ss' ts (NtSet.remove x av) un ca'
+          | (PredAmbig rhs, ca') =>
+            let ps' := (PF [] [], PF pre v :: p_frs)        in
+            let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
+            StepK ps' ss' ts (NtSet.remove x av) false ca'
+          | (PredReject, _)  =>
             StepReject "prediction found no viable right-hand sides"
-          | PredError e =>
-            StepError (PredictionError e)
+          | (PredError e, _) =>
+            StepError (PredictionError e) 
           end
         else if NtSet.mem x (allNts g) then
                StepError (LeftRecursion x)
@@ -93,43 +99,42 @@ Module ParserFn (Import D : Defs.T).
                StepReject "nonterminal not in grammar"
       end
     end.
-
+  
   Lemma step_StepAccept_facts :
-    forall g p_stk s_stk ts av u v,
-      step g p_stk s_stk ts av u = StepAccept v
+    forall g cm ps ss ts av un ca v,
+      step g cm ps ss ts av un ca = StepAccept v
       -> ts = []
-         /\ exists o, s_stk = (SF o [], [])
+         /\ exists o, ss = (SF o [], [])
          /\ exists pre,
-             p_stk = (PF pre (rev v), []).
+             ps = (PF pre (rev v), []).
   Proof.
-    intros g pstk sstk ts av u v hs.
+    intros g cm ps ss ts av un ca v hs.
     unfold step in hs; dms; tc.
     inv hs; rewrite rev_involutive; eauto.
   Qed.
 
   Lemma step_LeftRecursion_facts :
-    forall g p_stk s_stk ts av u x,
-      step g p_stk s_stk ts av u = StepError (LeftRecursion x)
+    forall g cm ps ss ts av un ca x,
+      step g cm ps ss ts av un ca = StepError (LeftRecursion x)
       -> ~ NtSet.In x av
          /\ NtSet.In x (allNts g)
          /\ exists o suf frs,
-             s_stk = (SF o (NT x :: suf), frs).
+             ss = (SF o (NT x :: suf), frs).
   Proof.
-    intros g pstk sstk ts av u x hs.
+    intros g cm ps ss ts av un ca x hs.
     unfold step in hs; repeat dmeq h; tc; inv hs; sis;
       repeat split; eauto.
-    - unfold not; intros hi.
-      apply NtSet.mem_spec in hi; tc.
+    - unfold not; intros hi; apply NtSet.mem_spec in hi; tc.
     - apply NtSet.mem_spec; auto.
   Qed.
 
-  Definition meas (g   : grammar)
-             (stk : suffix_stack)
-             (ts  : list token)
-             (av  : NtSet.t) : nat * nat * nat := 
+  Definition meas (g  : grammar)
+                  (ss : suffix_stack)
+                  (ts : list token)
+                  (av :  NtSet.t) : nat * nat * nat := 
     let m := maxRhsLength g    in
     let e := NtSet.cardinal av in
-    (List.length ts, stackScore stk (1 + m) e, stackHeight stk).
+    (List.length ts, stackScore ss (1 + m) e, stackHeight ss).
 
   Lemma meas_lt_after_return :
     forall g ce cr cr' o o_cr x suf frs ts av,
@@ -162,25 +167,30 @@ Module ParserFn (Import D : Defs.T).
   Defined.
 
   Lemma step_meas_lt :
-    forall g p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
-      step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
-      -> lex_nat_triple (meas g s_stk' ts' av') (meas g s_stk ts av).
+    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
+      step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> lex_nat_triple (meas g ss' ts' av') (meas g ss ts av).
   Proof.
-    intros g pstk pstk' sstk stk' ts ts' av av' u u' hs; unfold step in hs.
-    destruct sstk as ([ o [| [a|x] suf] ], frs).
+    intros g cm ps ps' ss ss' ts ts' av av' un un' ca ca' hs; unfold step in hs.
+    destruct ss as ([ o [| [a|x] suf] ], frs).
     - dms; tc; inv hs.
       eapply meas_lt_after_return; eauto.
     - dms; tc; inv hs.
       apply triple_fst_lt; auto.
-    - destruct pstk as ([pre v], p_frs).
+    - destruct ps as ([pre v], p_frs).
       destruct (NtSet.mem x av) eqn:hm; [.. | dms; tc].
       apply NtSet.mem_spec in hm.
-      destruct (llPredict _ _ _ _) eqn:hp; dms; tc; inv hs.
-      + apply llPredict_succ_in_grammar in hp.
+      destruct (adaptivePredict _ _ _ _ _ _) eqn:hp; dms; tc; inv hs.
+      + (* lemma : adaptivePredict_succ_in_grammar *)
+        assert (Hass : In (x, l) g) by admit.
+        (* apply llPredict_succ_in_grammar in hp. *)
         eapply meas_lt_after_push; eauto.
-      + apply llPredict_ambig_in_grammar in hp.
+      + (* lemma : adaptivePredict_ambig_in_grammar 
+           should be easy cuz failover *)
+        assert (Hass : In (x, l) g) by admit.
+        (* apply llPredict_ambig_in_grammar in hp. *)
         eapply meas_lt_after_push; eauto.
-  Qed.
+  Admitted.
 
   Lemma StepK_result_acc :
     forall g ps ps' ss ss' ts ts' av av' u u' (a : Acc lex_nat_triple (meas g ss ts av)),
@@ -440,82 +450,7 @@ Module ParserFn (Import D : Defs.T).
     let s_stk0 := (SF None gamma, []) in
     multistep g p_stk0 s_stk0 ts (allNts g) true (lex_nat_triple_wf _). 
 
-  (* cache-optimized version *)
 
-  Inductive step_result_opt :=
-  | StepAccept_opt : forest -> step_result_opt
-  | StepReject_opt : string -> step_result_opt
-  | StepK_opt      : prefix_stack -> suffix_stack -> list token -> NtSet.t
-                     -> bool -> cache -> step_result_opt
-  | StepError_opt  : parse_error -> step_result_opt.
-
-  Definition step_opt (g      : grammar)
-                      (cm     : closure_map)
-                      (p_stk  : prefix_stack)
-                      (s_stk  : suffix_stack)
-                      (ts     : list token)
-                      (av     : NtSet.t)
-                      (u      : bool) 
-                      (c      : cache) : step_result_opt := 
-    match p_stk, s_stk with
-    | (PF pre v, p_frs), (SF o suf, s_frs) =>
-      match suf with
-      (* no more symbols to process in current frame *)
-      | [] =>
-        match p_frs, s_frs with
-        (* empty stacks --> terminate *)
-        | [], [] => 
-          match ts with
-          | []     => StepAccept_opt (rev v)
-          | _ :: _ => StepReject_opt "stack exhausted, tokens remain"
-          end
-        (* nonempty stacks --> return to caller frames *)
-        | PF pre_cr v_cr :: p_frs', SF o_cr suf_cr :: s_frs' =>
-          match suf_cr with
-          | []                => StepError_opt InvalidState
-          | T _  :: _         => StepError_opt InvalidState
-          | NT x :: suf_cr'   =>
-            let p_stk' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
-            let s_stk' := (SF o_cr suf_cr', s_frs')                              in
-            StepK_opt p_stk' s_stk' ts (NtSet.add x av) u c          
-          end
-        | _, _ => StepError_opt InvalidState
-        end
-      (* terminal case --> consume a token *)
-      | T a :: suf' =>
-        match ts with
-        | []             => StepReject_opt "input exhausted"
-        | (a', l) :: ts' =>
-          if t_eq_dec a' a then
-            let p_stk' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
-            let s_stk' := (SF o suf', s_frs)                       in
-            StepK_opt p_stk' s_stk' ts' (allNts g) u c
-          else
-            StepReject_opt "token mismatch"
-        end
-      (* nonterminal case --> push a frame onto the stack *)
-      | NT x :: _ => 
-        if NtSet.mem x av then
-          match adaptivePredict g cm x s_stk ts c with
-          | (PredSucc rhs, c') =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
-            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK_opt p_stk' s_stk' ts (NtSet.remove x av) u c'
-          | (PredAmbig rhs, _) =>
-            let p_stk' := (PF [] [], PF pre v :: p_frs)        in
-            let s_stk' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK_opt p_stk' s_stk' ts (NtSet.remove x av) false c
-          | (PredReject, _) =>
-            StepReject_opt "prediction found no viable right-hand sides"
-          | (PredError e, _) =>
-            StepError_opt (PredictionError e) 
-          end
-        else if NtSet.mem x (allNts g) then
-               StepError_opt (LeftRecursion x)
-             else
-               StepReject_opt "nonterminal not in grammar"
-      end
-    end.
     
     (* 
   Lemma step_meas_lt_opt :
