@@ -193,8 +193,8 @@ Module ParserFn (Import D : Defs.T).
   Admitted.
 
   Lemma StepK_result_acc :
-    forall g ps ps' ss ss' ts ts' av av' u u' (a : Acc lex_nat_triple (meas g ss ts av)),
-      step g ps ss ts av u = StepK ps' ss' ts' av' u'
+    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca' (a : Acc lex_nat_triple (meas g ss ts av)),
+      step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> Acc lex_nat_triple (meas g ss' ts' av').
   Proof.
     intros; eapply Acc_inv; eauto.
@@ -202,40 +202,40 @@ Module ParserFn (Import D : Defs.T).
   Defined.
 
   Fixpoint multistep (g  : grammar)
+                     (cm : closure_map)
                      (ps : prefix_stack)
                      (ss : suffix_stack)
                      (ts : list token)
                      (av : NtSet.t)
-                     (u  : bool)
+                     (un : bool)
+                     (ca : cache)
                      (a  : Acc lex_nat_triple (meas g ss ts av))
                      {struct a} : parse_result :=
-    match step g ps ss ts av u as res return step g ps ss ts av u = res -> _ with
-    | StepAccept v             => fun _  => if u then Accept v else Ambig v
-    | StepReject s             => fun _  => Reject s
-    | StepError e              => fun _  => Error e
-    | StepK ps' ss' ts' av' u' =>
-      fun hs => multistep g ps' ss' ts' av' u'
-                          (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
+    match step g cm ps ss ts av un ca as res return step g cm ps ss ts av un ca = res -> _ with
+    | StepAccept v                  => fun _  => if un then Accept v else Ambig v
+    | StepReject s                  => fun _  => Reject s
+    | StepError e                   => fun _  => Error e
+    | StepK ps' ss' ts' av' un' ca' =>
+      fun hs => multistep g cm ps' ss' ts' av' un' ca'
+                          (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
     end eq_refl.
 
   Lemma multistep_unfold :
-    forall g ps ss ts av u a,
-      multistep g ps ss ts av u a = 
-      match step g ps ss ts av u
-            as res return (step g ps ss ts av u = res -> parse_result)
-      with
-      | StepAccept sv            => fun _ => if u then Accept sv else Ambig sv
-      | StepReject s             => fun _ => Reject s
-      | StepK ps' ss' ts' av' u' =>
-        fun hs =>
-          multistep g ps' ss' ts' av' u'
-                    (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
-      | StepError s              => fun _ => Error s
+    forall g cm ps ss ts av un ca a,
+      multistep g cm ps ss ts av un ca a =
+      match step g cm ps ss ts av un ca as res return step g cm ps ss ts av un ca = res -> _ with
+      | StepAccept v                  => fun _  => if un then Accept v else Ambig v
+      | StepReject s                  => fun _  => Reject s
+      | StepError e                   => fun _  => Error e
+      | StepK ps' ss' ts' av' un' ca' =>
+        fun hs => multistep g cm ps' ss' ts' av' un' ca'
+                            (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
       end eq_refl.
   Proof.
     intros; destruct a; auto.
   Qed.
 
+  (*
   Lemma multistep_unfold_ex :
     forall g ps ss ts av u a,
     exists heq,
@@ -254,80 +254,85 @@ Module ParserFn (Import D : Defs.T).
   Proof.
     intros; eexists; apply multistep_unfold.
   Qed.              
-
+   *)
+  
   Lemma multistep_cases' :
     forall (g   : grammar)
+           (cm  : closure_map)
            (ps  : prefix_stack)
            (ss  : suffix_stack)
            (ts  : list token)
            (av  : NtSet.t)
-           (u   : bool)
+           (un  : bool)
+           (ca  : cache)
            (a   : Acc lex_nat_triple (meas g ss ts av))
            (sr  : step_result)
            (pr  : parse_result)
-           (heq : step g ps ss ts av u = sr),
-      match sr as res return (step g ps ss ts av u = res -> parse_result) with
-      | StepAccept sv            => fun _ => if u then Accept sv else Ambig sv
-      | StepReject s             => fun _  => Reject s
-      | StepK ps' ss' ts' av' u' =>
-        fun hs => multistep g ps' ss' ts' av' u'
-                            (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
+           (heq : step g cm ps ss ts av un ca = sr),
+      match sr as res return (step g cm ps ss ts av un ca = res -> parse_result) with
+      | StepAccept sv                 => fun _ => if un then Accept sv else Ambig sv
+      | StepReject s                  => fun _  => Reject s
+      | StepK ps' ss' ts' av' un' ca' =>
+        fun hs => multistep g cm ps' ss' ts' av' un' ca'
+                            (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
       | StepError s              => fun _ => Error s
       end heq = pr
       -> match pr with
-         | Accept f => (sr = StepAccept f /\ u = true)
-                       \/ (exists ps' ss' ts' av' u' a',
-                              sr = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Accept f)
-         | Ambig f  => (sr = StepAccept f /\ u = false)
-                       \/ (exists ps' ss' ts' av' u' a',
-                              sr = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Ambig f)
+         | Accept f => (sr = StepAccept f /\ un = true)
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              sr = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Accept f)
+         | Ambig f  => (sr = StepAccept f /\ un = false)
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              sr = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Ambig f)
          | Reject s => sr = StepReject s
-                       \/ (exists ps' ss' ts' av' u' a',
-                              sr = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Reject s)
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              sr = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Reject s)
          | Error s  => sr = StepError s
-                       \/ (exists ps' ss' ts' av' u' a',
-                              sr = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Error s)
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              sr = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error s)
          end.
   Proof.
-    intros g ps ss ts av u a sr pr heq.
-    destruct pr; destruct sr; destruct u;
-      try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 8].
+    intros g cm ps ss ts av un ca a sr pr heq.
+    destruct pr; destruct sr; destruct un;
+      try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 10].
   Qed.
 
   Lemma multistep_cases :
     forall (g   : grammar)
+           (cm  : closure_map)
            (ps  : prefix_stack)
            (ss  : suffix_stack)
            (ts  : list token)
            (av  : NtSet.t)
-           (u   : bool)
+           (un  : bool)
+           (ca  : cache)
            (a   : Acc lex_nat_triple (meas g ss ts av))
            (pr  : parse_result),
-      multistep g ps ss ts av u a = pr
+      multistep g cm ps ss ts av un ca a = pr
       -> match pr with
-         | Accept f => (step g ps ss ts av u = StepAccept f /\ u = true)
-                       \/ (exists ps' ss' ts' av' u' a',
-                              step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Accept f)
-         | Ambig f  => (step g ps ss ts av u = StepAccept f /\ u = false)
-                       \/ (exists ps' ss' ts' av' u' a',
-                              step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Ambig f)
-         | Reject s => step g ps ss ts av u = StepReject s
-                       \/ (exists ps' ss' ts' av' u' a',
-                              step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Reject s)
-         | Error s  => step g ps ss ts av u = StepError s
-                       \/ (exists ps' ss' ts' av' u' a',
-                              step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                              /\ multistep g ps' ss' ts' av' u' a' = Error s)
+         | Accept f => (step g cm ps ss ts av un ca = StepAccept f /\ un = true)
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Accept f)
+         | Ambig f  => (step g cm ps ss ts av un ca = StepAccept f /\ un = false)
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Ambig f)
+         | Reject s => step g cm ps ss ts av un ca = StepReject s
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Reject s)
+         | Error s  => step g cm ps ss ts av un ca = StepError s
+                       \/ (exists ps' ss' ts' av' un' ca' a',
+                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error s)
          end.
   Proof.
-    intros g ps ss ts av u a pr hm; subst.
+    intros g cm ps ss ts av un ca a pr hm; subst.
     rewrite multistep_unfold.
     eapply multistep_cases'; eauto.
   Qed.
