@@ -757,6 +757,7 @@ Module PredictionFn (Import D : Defs.T).
     eapply filter_cons_in; eauto.
   Qed.
 
+  (* to do : encapsulate move/closure within target function *)
   Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
     match sps with
     | []         => PredReject

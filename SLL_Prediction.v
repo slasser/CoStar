@@ -466,10 +466,16 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Definition empty_cache : cache := Cache.empty (list subparser).
 
-  Definition target (sps : list subparser) (a : terminal) : sum prediction_error (list subparser) :=
-    match move 
+  Definition target g cm (sps : list subparser) (a : terminal) : sum prediction_error (list subparser) :=
+    match move a sps with
+    | inl e => inl e
+    | inr sps' => match sllClosure g cm sps' with
+                  | inl e => inl e
+                  | inr sps'' => inr sps''
+                  end
+    end.
 
-  (* To do: maybe only PredSucc and PredAmbig should carry an updated cache *)
+    (* To do: maybe only PredSucc and PredAmbig should carry an updated cache *)
   Fixpoint sllPredict' (g : grammar) (cm : closure_map) (sps : list subparser) (ts : list token) (c : cache) : prediction_result * cache :=
     match sps with 
     | []         => (PredReject, c)
@@ -482,16 +488,12 @@ Module SllPredictionFn (Import D : Defs.T).
         | (a, l) :: ts' =>
           match Cache.find (sps, a) c with 
           | Some sps' => sllPredict' g cm sps' ts' c
-          | None      => 
-            match move (a, l) sps with
-            | inl msg => (PredError msg, c)
-            | inr mv  =>
-              match sllClosure g cm mv with
-              | inl msg => (PredError msg, c)
-              | inr cl  =>
-                let c' := Cache.add (sps, a) cl c
-                in  sllPredict' g cm cl ts' c'
-              end
+          | None      =>
+            match target g cm sps a with
+            | inl e    => (PredError e, c)
+            | inr sps' =>
+              let c' := Cache.add (sps, a) sps' c
+              in  sllPredict' g cm sps' ts' c'
             end
           end
         end
@@ -517,7 +519,9 @@ Module SllPredictionFn (Import D : Defs.T).
         * (* need an invariant about the cache here *)
           apply IH in hp; destruct hp as [sp' [hi heq]]; subst.
           admit.
-        * destruct (move _ _) as [m | sps''] eqn:hm; tc.
+        * (* to do : lemma about target function *)
+          unfold target in hp.
+          destruct (move _ _) as [m | sps''] eqn:hm; tc.
           destruct (sllClosure _ _ _) as [m | sps'''] eqn:hc; tc.
           apply IH in hp; destruct hp as [? [? ?]]; subst.
           eapply sllClosure_preserves_prediction in hc; eauto.
