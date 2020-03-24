@@ -181,16 +181,11 @@ Module ParserFn (Import D : Defs.T).
       destruct (NtSet.mem x av) eqn:hm; [.. | dms; tc].
       apply NtSet.mem_spec in hm.
       destruct (adaptivePredict _ _ _ _ _ _) eqn:hp; dms; tc; inv hs.
-      + (* lemma : adaptivePredict_succ_in_grammar *)
-        assert (Hass : In (x, l) g) by admit.
-        (* apply llPredict_succ_in_grammar in hp. *)
-        eapply meas_lt_after_push; eauto.
-      + (* lemma : adaptivePredict_ambig_in_grammar 
-           should be easy cuz failover *)
-        assert (Hass : In (x, l) g) by admit.
-        (* apply llPredict_ambig_in_grammar in hp. *)
-        eapply meas_lt_after_push; eauto.
-  Admitted.
+      + eapply meas_lt_after_push; eauto.
+        eapply adaptivePredict_succ_in_grammar; eauto.
+      + eapply meas_lt_after_push; eauto.
+        eapply adaptivePredict_ambig_in_grammar; eauto.
+  Qed.
 
   Lemma StepK_result_acc :
     forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca' (a : Acc lex_nat_triple (meas g ss ts av)),
@@ -467,5 +462,5 @@ Module ParserFn (Import D : Defs.T).
     let p_stk0 := (PF [] [], [])      in
     let s_stk0 := (SF None gamma, []) in
     multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache (lex_nat_triple_wf _). 
-  
+Print Assumptions parse.  
 End ParserFn.

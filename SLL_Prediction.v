@@ -433,6 +433,14 @@ Module SllPredictionFn (Import D : Defs.T).
     sum prediction_error (list subparser) :=
     aggrClosureResults (map (fun sp => sllSpClosure g cm (allNts g) sp (lex_nat_pair_wf _)) sps).
 
+  Lemma sllClosure_preserves_prediction :
+    forall g cm sps sp' sps',
+      sllClosure g cm sps = inr sps'
+      -> In sp' sps'
+      -> exists sp, In sp sps /\ prediction sp' = prediction sp.
+  Proof.
+  Admitted.
+
   (* SLL prediction *)
 
   Definition cache_key := (list subparser * terminal)%type.
@@ -457,6 +465,9 @@ Module SllPredictionFn (Import D : Defs.T).
   Definition cache : Type := Cache.t (list subparser).
 
   Definition empty_cache : cache := Cache.empty (list subparser).
+
+  Definition target (sps : list subparser) (a : terminal) : sum prediction_error (list subparser) :=
+    match move 
 
   (* To do: maybe only PredSucc and PredAmbig should carry an updated cache *)
   Fixpoint sllPredict' (g : grammar) (cm : closure_map) (sps : list subparser) (ts : list token) (c : cache) : prediction_result * cache :=
@@ -509,8 +520,10 @@ Module SllPredictionFn (Import D : Defs.T).
         * destruct (move _ _) as [m | sps''] eqn:hm; tc.
           destruct (sllClosure _ _ _) as [m | sps'''] eqn:hc; tc.
           apply IH in hp; destruct hp as [? [? ?]]; subst.
-          (* need an sllClosure_preserves_prediction lemma *)
-          admit.
+          eapply sllClosure_preserves_prediction in hc; eauto.
+          destruct hc as [sp'' [hi'' heq]]; rewrite heq.
+          eapply move_preserves_prediction in hm; eauto.
+          destruct hm as [? [? ?]]; eauto.
   Admitted.
   
   Definition sllInitSps (g : grammar) (x : nonterminal) : list subparser :=

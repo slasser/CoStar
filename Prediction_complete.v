@@ -37,35 +37,35 @@ Module PredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma move_func_refines_move_step :
-    forall t ts sp sp' sps sps',
+    forall a l ts sp sp' sps sps',
       In sp sps
-      -> move_step sp (t :: ts) sp' ts
-      -> move t sps = inr sps'
+      -> move_step sp ((a,l) :: ts) sp' ts
+      -> move a sps = inr sps'
       -> In sp' sps'.
   Proof.
-    intros t ts sp sp' sps sps' hi hr hf.
+    intros a l ts sp sp' sps sps' hi hr hf.
     inv hr.
     eapply move_succ_all_sps_step; eauto.
   Qed.
 
   Lemma moveSp_move_step :
-    forall t w' sp sp',
-      move_step sp (t :: w') sp' w'
-      -> moveSp t sp = MoveSucc sp'.
+    forall a l w' sp sp',
+      move_step sp ((a,l) :: w') sp' w'
+      -> moveSp a sp = MoveSucc sp'.
   Proof.
-    intros t w' sp sp' hm.
+    intros a l w' sp sp' hm.
     inv hm; unfold moveSp; dms; tc.
   Qed.
 
   Lemma move_step_moveSp :
-    forall t w' sp sp',
-      moveSp t sp = MoveSucc sp'
-      -> move_step sp (t :: w') sp' w'.
+    forall a l w' sp sp',
+      moveSp a sp = MoveSucc sp'
+      -> move_step sp ((a,l) :: w') sp' w'.
   Proof.
-    intros t w' [pred ([o suf], frs)]
+    intros a l w' [pred ([o suf], frs)]
            [pred' ([o' suf'], frs')] hm.
     unfold moveSp in hm.
-    destruct suf as [| [a | x] suf]; try (dms; tc); subst.
+    destruct suf as [| [a' | x] suf]; try (dms; tc); subst.
     inv hm; constructor.
   Qed.
 
@@ -75,7 +75,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
       -> suffix_stack_wf g sp.(stack)
       -> suffix_stack_wf g sp'.(stack).
   Proof.
-    intros g sp sp' t w' hm hw.
+    intros g sp sp' (a,l) w' hm hw.
     eapply moveSp_preserves_suffix_stack_wf_invar; eauto.
     eapply moveSp_move_step; eauto.
   Qed.
@@ -702,13 +702,13 @@ Module PredictionCompleteFn (Import D : Defs.T).
       -> In sp' sps'.
 
   Lemma move_closure_op_preserves_subparsers_complete_invar :
-    forall g t wpre wsuf sps sps' sps'' sps''',
-      subparsers_complete_wrt_originals g sps wpre sps' (t :: wsuf)
-      -> move t sps' = inr sps''
+    forall g a l wpre wsuf sps sps' sps'' sps''',
+      subparsers_complete_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
+      -> move a sps' = inr sps''
       -> closure g sps'' = inr sps'''
-      -> subparsers_complete_wrt_originals g sps (wpre ++ [t]) sps''' wsuf.
+      -> subparsers_complete_wrt_originals g sps (wpre ++ [(a,l)]) sps''' wsuf.
   Proof.
-    intros g t wpre wsuf sps sps' sps'' sps''' hinvar hm hc. 
+    intros g a l wpre wsuf sps sps' sps'' sps''' hinvar hm hc. 
     unfold subparsers_complete_wrt_originals. 
     rewrite <- app_assoc; simpl; intros sp sp''' hi hms.
     eapply mcms_backtrack_terminal in hms.
@@ -732,7 +732,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
             -> sp.(prediction) = rhs.
   Proof.
     intros g orig_sps wsuf.
-    induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs hi hl; 
+    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs hi hl; 
       destruct curr_sps as [| curr_sp curr_sps]; sis; tc.
     - dmeq hall.
       + inv hl.
@@ -758,14 +758,14 @@ Module PredictionCompleteFn (Import D : Defs.T).
           eapply allPredictionsEqual_in; eauto.
     - destruct (allPredictionsEqual curr_sp curr_sps) eqn:ha.
       + inv hl.
-        exists wpre; exists (t :: wsuf'); split; auto.
+        exists wpre; exists ((a,l) :: wsuf'); split; auto.
         intros orig_sp curr_sp' hin hm.
         apply eq_trans with (y := curr_sp'.(prediction)).
         * eapply mcms_preserves_label; eauto.
         * eapply hi in hm; eauto.
           eapply allPredictionsEqual_in; eauto.
       + dmeq hm; tc; dmeq hc; tc.
-        eapply IH with (wpre := wpre ++ [t]) in hl; eauto.
+        eapply IH with (wpre := wpre ++ [(a,l)]) in hl; eauto.
         * destruct hl as [wpre' [wsuf'' [heq hall]]].
           exists wpre'; exists wsuf''; split; auto.
           rewrite <- heq; apps.
@@ -850,14 +850,14 @@ Module PredictionCompleteFn (Import D : Defs.T).
         /\ move_closure_multistep' g sp (wpre ++ wsuf) sp' wsuf.
 
   Lemma move_func_refines_move_step_backward :
-    forall t w sps sps' sp',
-      move t sps = inr sps'
+    forall a l w sps sps' sp',
+      move a sps = inr sps'
       -> In sp' sps'
       -> exists sp,
           In sp sps
-          /\ move_step sp (t :: w) sp' w.
+          /\ move_step sp ((a,l) :: w) sp' w.
   Proof.
-    intros t s sps sps' sp' hm hi.
+    intros a l s sps sps' sp' hm hi.
     unfold move in hm.
     eapply aggrMoveResults_map_backwards in hm; eauto.
     destruct hm as [sp [hi' hm]].
@@ -913,14 +913,14 @@ Module PredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma move_closure_op_preserves_subparsers_sound_invar :
-    forall g t wpre wsuf sps sps' sps'' sps''',
+    forall g a l wpre wsuf sps sps' sps'' sps''',
       all_suffix_stacks_wf g sps'
-      -> subparsers_sound_wrt_originals g sps wpre sps' (t :: wsuf)
-      -> move t sps' = inr sps''
+      -> subparsers_sound_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
+      -> move a sps' = inr sps''
       -> closure g sps'' = inr sps'''
-      -> subparsers_sound_wrt_originals g sps (wpre ++ [t]) sps''' wsuf.
+      -> subparsers_sound_wrt_originals g sps (wpre ++ [(a,l)]) sps''' wsuf.
   Proof.
-    intros g t wpre wsuf sps sps' sps'' sps''' ha hi hm hc. 
+    intros g a l wpre wsuf sps sps' sps'' sps''' ha hi hm hc. 
     unfold subparsers_sound_wrt_originals in *.
     rewrite <- app_assoc; simpl; intros sp''' hi'''.
     assert (ha'' : all_suffix_stacks_wf g sps'').
@@ -954,7 +954,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
           /\ finalConfig final_sp = true.
   Proof.
     intros g orig_sps wsuf.
-    induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs ha hi hl; destruct curr_sps as [| csp csps]; sis; tc.
+    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs ha hi hl; destruct curr_sps as [| csp csps]; sis; tc.
     - destruct (allPredictionsEqual csp csps) eqn:ha'; tc.
       unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| csp' csps'] eqn:hf; tc.
@@ -974,7 +974,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
     - destruct (allPredictionsEqual _ _); tc.
       destruct (move _ _ ) as [e | sps'] eqn:hm; tc.
       destruct (closure _ _) as [e | sps''] eqn:hc; tc.
-      eapply IH with (wpre := wpre ++ [t]) in hl.
+      eapply IH with (wpre := wpre ++ [(a,l)]) in hl.
       + destruct hl as [osp [fsp [hi' [heq [hm' hf]]]]].
         exists osp; exists fsp; repeat split; auto.
         rewrite <- app_assoc in hm'; auto.
@@ -1118,17 +1118,17 @@ Module PredictionCompleteFn (Import D : Defs.T).
   Qed.
   
   Lemma moveSp_preserves_successful_sp_invar :
-    forall g sp t w',
+    forall g sp a l w',
       stable_config sp.(stack)
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
+      -> gamma_recognize g (unprocStackSyms sp.(stack)) ((a,l) :: w')
       -> exists sp',
-          moveSp t sp = MoveSucc sp'
+          moveSp a sp = MoveSucc sp'
           /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w'.
   Proof.
-    intros g sp t w' hs hg.
+    intros g sp a l w' hs hg.
     pose proof hg as hg'.
     apply stable_config_gamma_recognize_terminal_inv in hg; auto.
-    destruct hg as [o [a [suf [frs heq]]]].
+    destruct hg as [o [a' [suf [frs heq]]]].
     unfold moveSp.
     destruct sp as [pred stk]; subst; sis.
     rewrite heq; rewrite heq in hg'; sis.
@@ -1139,18 +1139,18 @@ Module PredictionCompleteFn (Import D : Defs.T).
 
   (* refactor *)
   Lemma aggrMoveResults_map_preserves_successful_sp_invar :
-    forall g sp sps sps' t w',
+    forall g sp sps sps' a l w',
       all_stacks_stable sps
       -> In sp sps
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
-      -> aggrMoveResults (map (moveSp t) sps) = inr sps'
+      -> gamma_recognize g (unprocStackSyms sp.(stack)) ((a,l) :: w')
+      -> aggrMoveResults (map (moveSp a) sps) = inr sps'
       -> exists sp',
-          moveSp t sp = MoveSucc sp'
+          moveSp a sp = MoveSucc sp'
           /\ In sp' sps'
           /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w'.
   Proof.
     intros g sp sps.
-    induction sps as [| hd tl IH]; intros sps' t w' ha hi hg hm.
+    induction sps as [| hd tl IH]; intros sps' a l w' ha hi hg hm.
     - inv hi.
     - destruct hi as [hh | ht]; subst.
       + simpl in hm.
@@ -1173,13 +1173,13 @@ Module PredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma move_preserves_successful_sp_invar :
-    forall g sps sps' t w',
+    forall g sps sps' a l w',
       all_stacks_stable sps
-      -> exists_successful_sp g sps (t :: w')
-      -> move t sps = inr sps'
+      -> exists_successful_sp g sps ((a,l) :: w')
+      -> move a sps = inr sps'
       -> exists_successful_sp g sps' w'.
   Proof.
-    intros g sps sps' t w' ha he hm.
+    intros g sps sps' a l w' ha he hm.
     destruct he as [sp [hi hg]].
     red.
     eapply aggrMoveResults_map_preserves_successful_sp_invar in hm; eauto.
@@ -1253,14 +1253,14 @@ Module PredictionCompleteFn (Import D : Defs.T).
   Qed.
   
   Lemma move_closure_preserves_successful_sp_invar :
-    forall g sps sps' sps'' t w',
+    forall g sps sps' sps'' a l w',
       all_stacks_stable sps
-      -> exists_successful_sp g sps (t :: w')
-      -> move t sps = inr sps'
+      -> exists_successful_sp g sps ((a,l) :: w')
+      -> move a sps = inr sps'
       -> closure g sps' = inr sps''
       -> exists_successful_sp g sps'' w'.
   Proof.
-    intros g sps sps' sps'' t w' ha he hm hc.
+    intros g sps sps' sps'' a l w' ha he hm hc.
     eapply move_preserves_successful_sp_invar in hm; eauto.
     eapply closure_preserves_successful_sp_invar; eauto.
   Qed.
@@ -1272,7 +1272,7 @@ Module PredictionCompleteFn (Import D : Defs.T).
       -> exists_successful_sp g sps w
       -> llPredict' g sps w <> PredReject.
   Proof.
-    intros g w; induction w as [| t w' IH]; intros sps ha ha' hex; unfold not; intros hl; unfold exists_successful_sp in hex; sis.
+    intros g w; induction w as [| (a,l) w' IH]; intros sps ha ha' hex; unfold not; intros hl; unfold exists_successful_sp in hex; sis.
     - destruct hex as [sp [hi hg]]. 
       destruct sps as [| sp' sps'].
       + inv hi.

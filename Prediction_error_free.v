@@ -252,7 +252,7 @@ Module PredictionErrorFreeFn (Import D : Defs.T).
       -> all_stacks_stable sps
       -> llPredict' g sps ts <> PredError SpInvalidState.
   Proof.
-    intros g ts; induction ts as [| t ts IH]; intros sps ha ha'; unfold not; intros hl; sis.
+    intros g ts; induction ts as [| (a,l) ts IH]; intros sps ha ha'; unfold not; intros hl; sis.
     - destruct sps as [| sp sps']; tc; dm; tc.
       eapply handleFinalSubparsers_never_returns_error; eauto.
     - destruct sps as [| sp sps']; tc.
@@ -397,7 +397,7 @@ Module PredictionErrorFreeFn (Import D : Defs.T).
       no_left_recursion g
       -> llPredict' g sps ts <> PredError (SpLeftRecursion x).
   Proof.
-    intros g ts; induction ts as [| t ts IH];
+    intros g ts; induction ts as [| (a,l) ts IH];
       intros sps x hn; unfold not; intros hl; sis.
     - dm; tc; dm; tc.
       eapply handleFinalSubparsers_never_returns_error; eauto.

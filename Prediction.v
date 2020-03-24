@@ -30,21 +30,18 @@ Module PredictionFn (Import D : Defs.T).
   | MoveReject : subparser_move_result
   | MoveError  : prediction_error -> subparser_move_result.
 
-  Definition moveSp (tok : token) (sp : subparser) : subparser_move_result :=
+  Definition moveSp (a : terminal) (sp : subparser) : subparser_move_result :=
     match sp with
     | Sp pred stk =>
       match stk with
       | (SF _ [], [])            => MoveReject
       | (SF _ [], _ :: _)        => MoveError SpInvalidState
       | (SF _ (NT _ :: _), _)    => MoveError SpInvalidState
-      | (SF o (T a :: suf), frs) =>
-        match tok with
-        | (a', _) =>
-          if t_eq_dec a' a then
-            MoveSucc (Sp pred (SF o suf, frs))
-          else
-            MoveReject
-        end
+      | (SF o (T a' :: suf), frs) =>
+        if t_eq_dec a' a then
+          MoveSucc (Sp pred (SF o suf, frs))
+        else
+          MoveReject
       end
     end.
 
@@ -58,10 +55,10 @@ Module PredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma moveSp_succ_step :
-    forall sp sp' pred o a l suf frs,
+    forall sp sp' pred o a suf frs,
       sp = Sp pred (SF o (T a :: suf), frs)
       -> sp' = Sp pred (SF o suf, frs)
-      -> moveSp (a, l) sp = MoveSucc sp'.
+      -> moveSp a sp = MoveSucc sp'.
   Proof.
     intros; subst; unfold moveSp; dms; tc.
   Qed.
@@ -153,8 +150,8 @@ Module PredictionFn (Import D : Defs.T).
         eexists; split; [apply in_cons; eauto | auto].
   Qed.
 
-  Definition move (tok : token) (sps : list subparser) : move_result :=
-    aggrMoveResults (map (moveSp tok) sps).
+  Definition move (a : terminal) (sps : list subparser) : move_result :=
+    aggrMoveResults (map (moveSp a) sps).
 
   Lemma move_unfold :
     forall t sps,
@@ -189,14 +186,14 @@ Module PredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma move_succ_all_sps_step :
-    forall sp sp' pred o a l suf frs sps sps',
+    forall sp sp' pred o a suf frs sps sps',
       sp = Sp pred (SF o (T a :: suf), frs)
       -> sp' = Sp pred (SF o suf, frs)
       -> In sp sps
-      -> move (a, l) sps = inr sps'
+      -> move a sps = inr sps'
       -> In sp' sps'.
   Proof.
-    intros sp sp' pred o a l suf frs sps sps' ? ? hi hm; subst.
+    intros sp sp' pred o a suf frs sps sps' ? ? hi hm; subst.
     eapply move_maps_moveSp; eauto.
     eapply moveSp_succ_step; eauto.
   Qed.
@@ -769,8 +766,8 @@ Module PredictionFn (Import D : Defs.T).
       else
         match ts with
         | []       => handleFinalSubparsers sps
-        | t :: ts' =>
-          match move t sps with
+        | (a, _) :: ts' =>
+          match move a sps with
           | inl msg => PredError msg
           | inr mv  =>
             match closure g mv with
@@ -787,7 +784,7 @@ Module PredictionFn (Import D : Defs.T).
       -> exists sp, In sp sps /\ (prediction sp) = gamma.
   Proof.
     intros g ts gamma.
-    induction ts as [| t ts IH]; intros sps hl; sis.
+    induction ts as [| (a, l) ts IH]; intros sps hl; sis.
     - destruct sps as [| sp sps']; tc; dmeq hall.
       + inv hl; exists sp; split; auto.
         apply in_eq.
@@ -796,7 +793,7 @@ Module PredictionFn (Import D : Defs.T).
     - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
       + inv hl; exists sp; split; auto.
         apply in_eq.
-      + destruct (move t _) as [m | sps''] eqn:hm; tc.
+      + destruct (move a _) as [m | sps''] eqn:hm; tc.
         destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
         apply IH in hl; destruct hl as [? [? ?]]; subst.
         eapply closure_preserves_prediction in hc; eauto.
@@ -811,12 +808,12 @@ Module PredictionFn (Import D : Defs.T).
       -> exists sp, In sp sps /\ (prediction sp) = gamma.
   Proof.
     intros g ts gamma.
-    induction ts as [| t ts IH]; intros sps hl; sis.
+    induction ts as [| (a,l) ts IH]; intros sps hl; sis.
     - destruct sps as [| sp sps']; tc; dmeq hall; inv hl.
       apply handleFinalSubparsers_ambig_from_subparsers; auto.
     - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
       + inv hl.
-      + destruct (move t _) as [m | sps''] eqn:hm; tc.
+      + destruct (move a _) as [m | sps''] eqn:hm; tc.
         destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
         apply IH in hl; destruct hl as [? [? ?]]; subst.
         eapply closure_preserves_prediction in hc; eauto.

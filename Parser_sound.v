@@ -89,20 +89,20 @@ Module ParserSoundFn (Import D : Defs.T).
     end.
 
   Lemma step_preserves_stacks_wf_invar :
-    forall g ps ps' ss ss' ts ts' av av' u u',
+    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
       stacks_wf g ps ss
-      -> step g ps ss ts av u = StepK ps' ss' ts' av' u'
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> stacks_wf g ps' ss'.
   Proof.
-    intros g (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
-           ts ts' av av' u u' hw hs; red; red in hw.
+    intros g cm (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
+           ts ts' av av' un un' ca ca' hw hs; red; red in hw.
     unfold step in hs; dmeqs h; tc; inv hs.
     - eapply return_preserves_frames_wf_invar; eauto. 
     - eapply consume_preserves_frames_wf_invar; eauto. 
-    - eapply push_preserves_frames_wf_invar; eauto. 
-      eapply llPredict_succ_in_grammar; eauto.
     - eapply push_preserves_frames_wf_invar; eauto.
-      eapply llPredict_ambig_in_grammar; eauto.
+      eapply adaptivePredict_succ_in_grammar; eauto.
+    - eapply push_preserves_frames_wf_invar; eauto.
+      eapply adaptivePredict_ambig_in_grammar; eauto.
   Qed.
 
   Lemma stacks_wf__suffix_stack_wf :
@@ -115,12 +115,12 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma step_preserves_bottomFrameSyms_invar :
-    forall g p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
+    forall g cm p_stk p_stk' s_stk s_stk' ts ts' av av' un un' ca ca',
       stacks_wf g p_stk s_stk
-      -> step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
+      -> step g cm p_stk s_stk ts av un ca = StepK p_stk' s_stk' ts' av' un' ca'
       -> bottomFrameSyms p_stk s_stk = bottomFrameSyms p_stk' s_stk'.
   Proof.
-    intros g (p_fr, p_frs) p_stk' (s_fr, s_frs) s_stk' ts ts' av av' u u' hw hs.
+    intros g cm (p_fr, p_frs) p_stk' (s_fr, s_frs) s_stk' ts ts' av av' un un' ca ca' hw hs.
     unfold step in hs; dms; inv hs; tc; unfold bottomFrameSyms;
       destruct p_frs; destruct s_frs; sis; apps; inv_fw hw hi hw'; inv hw'. 
   Qed.
@@ -245,13 +245,13 @@ Module ParserSoundFn (Import D : Defs.T).
     end.
 
   Lemma step_preserves_stack_prefix_derivation_invar :
-    forall g w ps ps' ss ss' ts ts' av av' u u',
+    forall g cm w ps ps' ss ss' ts ts' av av' un un' ca ca',
       stack_prefix_derivation g w ps ss ts
-      -> step g ps ss ts av u = StepK ps' ss' ts' av' u'
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> stack_prefix_derivation g w ps' ss' ts'.
   Proof.
-    intros g w (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
-           ts ts' av av' u u' hf hs; red; red in hf.
+    intros g cm w (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
+           ts ts' av av' un un' ca ca' hf hs; red; red in hf.
     destruct hf as (wpre & heq & hf); subst.
     unfold step in hs; dmeqs h; tc; inv hs.
     - eexists; split; eauto.
@@ -261,10 +261,10 @@ Module ParserSoundFn (Import D : Defs.T).
       + eapply consume_preserves_frames_derivation; eauto.
     - eexists; split; eauto.
       eapply push_preserves_frames_derivation; eauto.
-      eapply llPredict_succ_in_grammar; eauto.
+      eapply adaptivePredict_succ_in_grammar; eauto.
     - eexists; split; eauto.
       eapply push_preserves_frames_derivation; eauto.
-      eapply llPredict_ambig_in_grammar; eauto.
+      eapply adaptivePredict_ambig_in_grammar; eauto.
   Qed.
 
   (* Invariant for proving the "unambiguous" version of the parser soundness
