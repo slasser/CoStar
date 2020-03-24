@@ -339,276 +339,133 @@ Module ParserFn (Import D : Defs.T).
 
   Lemma multistep_accept_cases :
     forall (g  : grammar)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
+           (cm : closure_map)
+           (ps : prefix_stack)
+           (ss : suffix_stack)
+           (ts : list token)
+           (av : NtSet.t)
+           (un : bool)
+           (ca : cache)
            (a  : Acc lex_nat_triple (meas g ss ts av))
            (f  : forest),
-      multistep g ps ss ts av u a = Accept f
-      -> (step g ps ss ts av u = StepAccept f /\ u = true)
-         \/ (exists ps' ss' ts' av' u' a',
-                step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                /\ multistep g ps' ss' ts' av' u' a' = Accept f).
+      multistep g cm ps ss ts av un ca a = Accept f
+      -> (step g cm ps ss ts av un ca = StepAccept f /\ un = true)
+         \/ (exists ps' ss' ts' av' un' ca' a',
+                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Accept f).
   Proof.
-    intros ? ? ? ? ? ? a f hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ a (Accept f) hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? hm; subst. 
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_ambig_cases :
     forall (g  : grammar)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
+           (cm : closure_map)
+           (ps : prefix_stack)
+           (ss : suffix_stack)
+           (ts : list token)
+           (av : NtSet.t)
+           (un : bool)
+           (ca : cache)
            (a  : Acc lex_nat_triple (meas g ss ts av))
            (f  : forest),
-      multistep g ps ss ts av u a = Ambig f
-      -> (step g ps ss ts av u = StepAccept f /\ u = false)
-         \/ (exists ps' ss' ts' av' u' a',
-                step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                /\ multistep g ps' ss' ts' av' u' a' = Ambig f).
+      multistep g cm ps ss ts av un ca a = Ambig f
+      -> (step g cm ps ss ts av un ca = StepAccept f /\ un = false)
+         \/ (exists ps' ss' ts' av' un' ca' a',
+                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Ambig f).
   Proof.
-    intros ? ? ? ? ? ? a f hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ a (Ambig f) hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? hm; subst. 
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_reject_cases :
     forall (g  : grammar)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
-           (a   : Acc lex_nat_triple (meas g ss ts av))
-           (s   : string),
-      multistep g ps ss ts av u a = Reject s
-      -> step g ps ss ts av u = StepReject s
-         \/ (exists ps' ss' ts' av' u' a',
-                step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                /\ multistep g ps' ss' ts' av' u' a' = Reject s).
+           (cm : closure_map)
+           (ps : prefix_stack)
+           (ss : suffix_stack)
+           (ts : list token)
+           (av : NtSet.t)
+           (un : bool)
+           (ca : cache)
+           (a  : Acc lex_nat_triple (meas g ss ts av))
+           (s  : string),
+      multistep g cm ps ss ts av un ca a = Reject s
+      -> step g cm ps ss ts av un ca = StepReject s
+         \/ (exists ps' ss' ts' av' un' ca' a',
+                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Reject s).
   Proof.
-    intros ? ? ? ? ? ? a s hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ a (Reject s) hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? hm; subst. 
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_invalid_state_cases :
     forall (g  : grammar)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
-           (a   : Acc lex_nat_triple (meas g ss ts av)),
-      multistep g ps ss ts av u a = Error InvalidState
-      -> step g ps ss ts av u = StepError InvalidState
-         \/ (exists ps' ss' ts' av' u' a',
-                step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                /\ multistep g ps' ss' ts' av' u' a' = Error InvalidState).
+           (cm : closure_map)
+           (ps : prefix_stack)
+           (ss : suffix_stack)
+           (ts : list token)
+           (av : NtSet.t)
+           (un : bool)
+           (ca : cache)
+           (a  : Acc lex_nat_triple (meas g ss ts av)),
+      multistep g cm ps ss ts av un ca a = Error InvalidState
+      -> step g cm ps ss ts av un ca = StepError InvalidState
+         \/ (exists ps' ss' ts' av' un' ca' a',
+                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error InvalidState).
   Proof.
-    intros ? ? ? ? ? ? a hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ a (Error InvalidState) hm); auto.
+    intros ? ? ? ? ? ? ? ? ? hm; subst.
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_left_recursion_cases :
     forall (g  : grammar)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
-           (a   : Acc lex_nat_triple (meas g ss ts av))
-           (x   : nonterminal),
-      multistep g ps ss ts av u a = Error (LeftRecursion x)
-      -> step g ps ss ts av u = StepError (LeftRecursion x)
-         \/ (exists ps' ss' ts' av' u' a',
-                step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                /\ multistep g ps' ss' ts' av' u' a' = Error (LeftRecursion x)).
+           (cm : closure_map)
+           (ps : prefix_stack)
+           (ss : suffix_stack)
+           (ts : list token)
+           (av : NtSet.t)
+           (un : bool)
+           (ca : cache)
+           (a  : Acc lex_nat_triple (meas g ss ts av))
+           (x  : nonterminal),
+      multistep g cm ps ss ts av un ca a = Error (LeftRecursion x)
+      -> step g cm ps ss ts av un ca = StepError (LeftRecursion x)
+         \/ (exists ps' ss' ts' av' un' ca' a',
+                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error (LeftRecursion x)).
   Proof.
-    intros ? ? ? ? ? ? a x hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ a (Error (LeftRecursion x)) hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? hm; subst.
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_prediction_error_cases :
     forall (g  : grammar)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
+           (cm : closure_map)
+           (ps : prefix_stack)
+           (ss : suffix_stack)
+           (ts : list token)
+           (av : NtSet.t)
+           (un : bool)
+           (ca : cache)
            (a   : Acc lex_nat_triple (meas g ss ts av))
            (e   : prediction_error),
-      multistep g ps ss ts av u a = Error (PredictionError e)
-      -> step g ps ss ts av u = StepError (PredictionError e)
-         \/ (exists ps' ss' ts' av' u' a',
-                step g ps ss ts av u = StepK ps' ss' ts' av' u'
-                /\ multistep g ps' ss' ts' av' u' a' = Error (PredictionError e)).
+      multistep g cm ps ss ts av un ca a = Error (PredictionError e)
+      -> step g cm ps ss ts av un ca = StepError (PredictionError e)
+         \/ (exists ps' ss' ts' av' un' ca' a',
+                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error (PredictionError e)).
   Proof.
-    intros ? ? ? ? ? ? a e hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ a (Error (PredictionError e)) hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? hm; subst.
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-    let p_stk0 := (PF [] [], []) in
-    let s_stk0 := (SF None gamma, []) in
-    multistep g p_stk0 s_stk0 ts (allNts g) true (lex_nat_triple_wf _). 
-
-
-    
-    (* 
-  Lemma step_meas_lt_opt :
-    forall g p_stk p_stk' s_stk s_stk' ts ts' av av' u u' c c',
-      step_opt g p_stk s_stk ts av u c = StepK_opt p_stk' s_stk' ts' av' u' c'
-      -> lex_nat_triple (meas g s_stk' ts' av') (meas g s_stk ts av).
-  Proof.
-    intros g pstk pstk' sstk stk' ts ts' av av' u u' c c' hs; unfold step_opt in hs.
-    destruct sstk as ([ [| [a|x] suf] ], frs).
-    - dms; tc; inv hs.
-      eapply meas_lt_after_return; eauto.
-    - dms; tc; inv hs.
-      apply triple_fst_lt; auto.
-    - destruct pstk as ([pre v], p_frs).
-      destruct (NtSet.mem x av) eqn:hm; [.. | dms; tc].
-      apply NtSet.mem_spec in hm.
-      destruct (llPredict _ _ _ _) eqn:hp; dms; tc; inv hs.
-      + apply llPredict_succ_in_grammar in hp.
-        eapply meas_lt_after_push; eauto.
-      + apply llPredict_ambig_in_grammar in hp.
-        eapply meas_lt_after_push; eauto.
-  Qed.
-     *)
-    
-  Axiom magic : forall A, A.
-    
-  Lemma StepK_result_acc_opt :
-    forall g cm ps ps' ss ss' ts ts' av av' u u' c c' (a : Acc lex_nat_triple (meas g ss ts av)),
-      step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
-      -> Acc lex_nat_triple (meas g ss' ts' av').
-  Proof.
-    intros; eapply Acc_inv; eauto.
-    apply magic.
-  Defined.
-  
-  Fixpoint multistep_opt (g  : grammar)
-                         (cm : closure_map)
-                         (ps : prefix_stack)
-                         (ss : suffix_stack)
-                         (ts : list token)
-                         (av : NtSet.t)
-                         (u  : bool)
-                         (c  : cache)
-                         (a  : Acc lex_nat_triple (meas g ss ts av))
-                         {struct a} : parse_result :=
-    match step_opt g cm ps ss ts av u c as res return step_opt g cm ps ss ts av u c = res -> _ with
-    | StepAccept_opt v             => fun _  => if u then Accept v else Ambig v
-    | StepReject_opt s             => fun _  => Reject s
-    | StepError_opt e              => fun _  => Error e
-    | StepK_opt ps' ss' ts' av' u' c' =>
-      fun hs => multistep_opt g cm ps' ss' ts' av' u' c'
-                              (StepK_result_acc_opt _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
-    end eq_refl.
-
-  Lemma multistep_opt_unfold :
-    forall g cm ps ss ts av u c a,
-      multistep_opt g cm ps ss ts av u c a =
-      match step_opt g cm ps ss ts av u c as res return step_opt g cm ps ss ts av u c = res -> _ with
-      | StepAccept_opt v             => fun _  => if u then Accept v else Ambig v
-      | StepReject_opt s             => fun _  => Reject s
-      | StepError_opt e              => fun _  => Error e
-      | StepK_opt ps' ss' ts' av' u' c' =>
-        fun hs => multistep_opt g cm ps' ss' ts' av' u' c'
-                                (StepK_result_acc_opt _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
-      end eq_refl.
-  Proof.
-    intros; destruct a; auto.
-  Qed.
-
-  Lemma multistep_opt_cases' :
-    forall (g   : grammar)
-           (cm  : closure_map)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
-           (c   : cache)
-           (a   : Acc lex_nat_triple (meas g ss ts av))
-           (sr  : step_result_opt)
-           (pr  : parse_result)
-           (heq : step_opt g cm ps ss ts av u c = sr),
-      match sr as res return step_opt g cm ps ss ts av u c = res -> _ with
-      | StepAccept_opt v             => fun _  => if u then Accept v else Ambig v
-      | StepReject_opt s             => fun _  => Reject s
-      | StepError_opt e              => fun _  => Error e
-      | StepK_opt ps' ss' ts' av' u' c' =>
-        fun hs => multistep_opt g cm ps' ss' ts' av' u' c'
-                                (StepK_result_acc_opt _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
-      end heq = pr
-      -> match pr with
-         | Accept f => (sr = StepAccept_opt f /\ u = true)
-                       \/ (exists ps' ss' ts' av' u' c' a',
-                              sr = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Accept f)
-         | Ambig f  => (sr = StepAccept_opt f /\ u = false)
-                       \/ (exists ps' ss' ts' av' u' c' a',
-                              sr = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Ambig f)
-         | Reject s => sr = StepReject_opt s
-                       \/ (exists ps' ss' ts' av' u' a' c',
-                              sr = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Reject s)
-         | Error s  => sr = StepError_opt s
-                       \/ (exists ps' ss' ts' av' u' c' a',
-                              sr = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Error s)
-         end.
-  Proof.
-    intros g cm ps ss ts av u c a sr pr heq.
-    destruct pr; destruct sr; destruct u;
-      try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 10].
-  Qed.
-
-  Lemma multistep_opt_cases :
-    forall (g   : grammar)
-           (cm  : closure_map)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
-           (ts  : list token)
-           (av  : NtSet.t)
-           (u   : bool)
-           (c   : cache)
-           (a   : Acc lex_nat_triple (meas g ss ts av))
-           (pr  : parse_result),
-      multistep_opt g cm ps ss ts av u c a = pr
-      -> match pr with
-         | Accept f => (step_opt g cm ps ss ts av u c = StepAccept_opt f /\ u = true)
-                       \/ (exists ps' ss' ts' av' u' c' a',
-                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Accept f)
-         | Ambig f  => (step_opt g cm ps ss ts av u c = StepAccept_opt f /\ u = false)
-                       \/ (exists ps' ss' ts' av' u' c' a',
-                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Ambig f)
-         | Reject s => step_opt g cm ps ss ts av u c = StepReject_opt s
-                       \/ (exists ps' ss' ts' av' u' a' c',
-                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Reject s)
-         | Error s  => step_opt g cm ps ss ts av u c = StepError_opt s
-                       \/ (exists ps' ss' ts' av' u' c' a',
-                              step_opt g cm ps ss ts av u c = StepK_opt ps' ss' ts' av' u' c'
-                              /\ multistep_opt g cm ps' ss' ts' av' u' c' a' = Error s)
-         end.
-  Proof.
-    intros; subst.
-    rewrite multistep_opt_unfold; eapply multistep_opt_cases'; eauto.
-  Qed.
-  
-  Definition parse_opt (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
     let cm     := mkGraph g           in
     let p_stk0 := (PF [] [], [])      in
     let s_stk0 := (SF None gamma, []) in
-    multistep_opt g cm p_stk0 s_stk0 ts (allNts g) true empty_cache (lex_nat_triple_wf _). 
+    multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache (lex_nat_triple_wf _). 
   
 End ParserFn.
