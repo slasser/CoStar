@@ -195,12 +195,12 @@ Module PredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma spClosureStepDone_stable_config :
-    forall g av sp sps,
+    forall g av sp,
       suffix_stack_wf g sp.(stack)
-      -> spClosureStep g av sp = CstepDone sps
+      -> spClosureStep g av sp = CstepDone
       -> stable_config sp.(stack).
   Proof.
-    intros g av sp sps hw hs.
+    intros g av sp hw hs.
     unfold spClosureStep in hs; dms; tc; sis; auto.
     inv hw; auto.
   Qed.

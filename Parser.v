@@ -168,10 +168,11 @@ Module ParserFn (Import D : Defs.T).
 
   Lemma step_meas_lt :
     forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
-      step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      cache_stores_target_results g ca cm
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> lex_nat_triple (meas g ss' ts' av') (meas g ss ts av).
   Proof.
-    intros g cm ps ps' ss ss' ts ts' av av' un un' ca ca' hs; unfold step in hs.
+    intros g cm ps ps' ss ss' ts ts' av av' un un' ca ca' hc hs; unfold step in hs.
     destruct ss as ([ o [| [a|x] suf] ], frs).
     - dms; tc; inv hs.
       eapply meas_lt_after_return; eauto.
@@ -189,13 +190,21 @@ Module ParserFn (Import D : Defs.T).
 
   Lemma StepK_result_acc :
     forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca' (a : Acc lex_nat_triple (meas g ss ts av)),
-      step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      cache_stores_target_results g ca cm
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> Acc lex_nat_triple (meas g ss' ts' av').
   Proof.
     intros; eapply Acc_inv; eauto.
     eapply step_meas_lt; eauto.
   Defined.
 
+  Lemma step_preserves_cache_invar :
+    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
+      cache_stores_target_results g ca cm
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> cache_stores_target_results g ca' cm.
+  Admitted.
+  
   Fixpoint multistep (g  : grammar)
                      (cm : closure_map)
                      (ps : prefix_stack)
@@ -204,6 +213,7 @@ Module ParserFn (Import D : Defs.T).
                      (av : NtSet.t)
                      (un : bool)
                      (ca : cache)
+                     (hc : cache_stores_target_results g ca cm)
                      (a  : Acc lex_nat_triple (meas g ss ts av))
                      {struct a} : parse_result :=
     match step g cm ps ss ts av un ca as res return step g cm ps ss ts av un ca = res -> _ with
@@ -211,8 +221,10 @@ Module ParserFn (Import D : Defs.T).
     | StepReject s                  => fun _  => Reject s
     | StepError e                   => fun _  => Error e
     | StepK ps' ss' ts' av' un' ca' =>
-      fun hs => multistep g cm ps' ss' ts' av' un' ca'
-                          (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
+      fun hs =>
+        let hc' := step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hs
+        in  multistep g cm ps' ss' ts' av' un' ca' hc'
+                      (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hc hs)
     end eq_refl.
 
   Lemma multistep_unfold :
@@ -223,7 +235,7 @@ Module ParserFn (Import D : Defs.T).
       | StepReject s                  => fun _  => Reject s
       | StepError e                   => fun _  => Error e
       | StepK ps' ss' ts' av' un' ca' =>
-        fun hs => multistep g cm ps' ss' ts' av' un' ca'
+        fun hs => multistep g cm ps' ss' ts' av' un' ca' _
                             (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
       end eq_refl.
   Proof.

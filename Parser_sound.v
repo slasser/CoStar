@@ -423,25 +423,45 @@ Module ParserSoundFn (Import D : Defs.T).
         inv heq''; auto. 
   Qed.
 
+  (* this has to be llPredict *)
   Lemma push_succ_preserves_unique_frames_derivation :
-    forall g p_cr p_ce s_cr s_ce p_frs s_frs o x pre suf rhs wpre wsuf v,
+    forall g cm p_cr p_ce s_cr s_ce p_frs s_frs o x pre suf rhs wpre wsuf ca ca' v,
       p_cr    = PF pre v
       -> s_cr = SF o (NT x :: suf)
       -> p_ce = PF [] []
       -> s_ce = SF (Some x) rhs
       -> no_left_recursion g
       -> stacks_wf g (p_cr, p_frs) (s_cr, s_frs)
-      -> llPredict g x (s_cr, s_frs) wsuf = PredSucc rhs
-      -> unique_frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) wpre wsuf
-      -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs) wpre wsuf.
+      -> adaptivePredict g cm x (s_cr, s_frs) wsuf ca = (PredSucc rhs, ca')
+      -> unique_frames_derivation g (p_cr :: p_frs)
+                                    (s_cr :: s_frs) wpre wsuf
+      -> unique_frames_derivation g (p_ce :: p_cr :: p_frs)
+                                    (s_ce :: s_cr :: s_frs) wpre wsuf.
   Proof.
-    intros g ? ? ? ? p_frs s_frs o x pre suf rhs wpre wsuf v ? ? ? ? hn hw hl hu; subst.
+    intros g cm ? ? ? ? p_frs s_frs o x pre suf rhs wpre wsuf ca ca' v ? ? ? ?
+           hn hw hl hu; subst.
     assert (heq: wpre = wpre ++ []) by apps; rewrite heq.
     econstructor; eauto; sis.
-    - eapply llPredict_succ_in_grammar; eauto.
+    - eapply adaptivePredict_succ_in_grammar; eauto. 
     - intros wmid' wsuf' v'' heq' hd hr; sis; subst.
       inv hd; auto.
-    - intros; eapply llPredict_succ_at_most_one_rhs_applies in hl; eauto.
+    - intros.
+      assert (Hass : llPredict g x (SF o (NT x :: suf), s_frs) wsuf = PredSucc rhs
+                  \/ llPredict g x (SF o (NT x :: suf), s_frs) wsuf = PredReject) by admit.
+      destruct Hass.
+      + eapply llPredict_succ_at_most_one_rhs_applies in H1; eauto.
+        red. eapply frames_wf__suffix_frames_wf; eauto.
+      + exfalso.
+        eapply ussr_llPredict_neq_reject; eauto.
+        * red. eapply frames_wf__suffix_frames_wf; eauto.
+        * simpl.
+          apply gamma_recognize_split in H0.
+          destruct H0 as (w & w' & ? & ? & ?); subst.
+          eauto.
+  Admitted.
+
+  
+      intros; eapply llPredict_succ_at_most_one_rhs_applies in hl; eauto.
       red. eapply frames_wf__suffix_frames_wf; eauto.
   Qed.
 
@@ -455,15 +475,15 @@ Module ParserSoundFn (Import D : Defs.T).
     end.
 
   Lemma step_preserves_unique_stack_prefix_derivation_invar :
-    forall g w p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
+    forall g cm w p_stk p_stk' s_stk s_stk' ts ts' av av' un un' ca ca',
       no_left_recursion g
       -> stacks_wf g p_stk s_stk
-      -> unique_stack_prefix_derivation g w p_stk s_stk ts u
-      -> step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
-      -> unique_stack_prefix_derivation g w p_stk' s_stk' ts' u'.
+      -> unique_stack_prefix_derivation g w p_stk s_stk ts un
+      -> step g cm p_stk s_stk ts av un ca = StepK p_stk' s_stk' ts' av' un' ca'
+      -> unique_stack_prefix_derivation g w p_stk' s_stk' ts' un'.
   Proof.
-    intros g w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
-           ts ts' av av' u u' hn hw hu hs; red; red in hu; intros hu'.
+    intros g cm w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
+           ts ts' av av' un un' ca ca' hn hw hu hs; red; red in hu; intros hu'.
     unfold step in hs; dmeqs h; inv hs; tc;
       destruct hu as (wpre & heq & hu); subst; auto. 
     - exists wpre; split; auto.

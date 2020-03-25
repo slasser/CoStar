@@ -203,12 +203,12 @@ Module PredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_multistep_done_eq :
-    forall g av av' sp sp' sps,
+    forall g av av' sp sp',
       closure_multistep g av sp av' sp'
-      -> spClosureStep g av sp = CstepDone sps
+      -> spClosureStep g av sp = CstepDone
       -> sp = sp'.
   Proof.
-    intros g av av' sp sp' sps hm hs; unfold spClosureStep in hs; dms; tc;
+    intros g av av' sp sp' hm hs; unfold spClosureStep in hs; dms; tc;
       inv_cm hm hs' hm'; auto; inv hs'.
   Qed.
 

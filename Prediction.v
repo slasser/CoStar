@@ -201,7 +201,7 @@ Module PredictionFn (Import D : Defs.T).
   (* "closure" operation *)
 
   Inductive subparser_closure_step_result :=
-  | CstepDone  : list subparser -> subparser_closure_step_result
+  | CstepDone  : subparser_closure_step_result
   | CstepK     : NtSet.t -> list subparser -> subparser_closure_step_result
   | CstepError : prediction_error -> subparser_closure_step_result.
 
@@ -212,14 +212,14 @@ Module PredictionFn (Import D : Defs.T).
       match fr with
       | SF o [] =>
         match frs with
-        | []                   => CstepDone [sp]
+        | []                   => CstepDone
         | SF _ [] :: _         => CstepError SpInvalidState
         | SF _ (T _ :: _) :: _ => CstepError SpInvalidState
         | SF o_cr (NT x :: suf_cr) :: frs_tl =>
           let stk':= (SF o_cr suf_cr, frs_tl) 
           in  CstepK (NtSet.add x av) [Sp pred stk'] 
         end
-      | SF _ (T _ :: _)    => CstepDone [sp]
+      | SF _ (T _ :: _)    => CstepDone
       | SF _ (NT x :: suf) =>
         if NtSet.mem x av then
           let sps' := map (fun rhs => Sp pred 
@@ -233,6 +233,11 @@ Module PredictionFn (Import D : Defs.T).
       end
     end.
 
+(*  Lemma spClosureStep_done_eq :
+    forall g av sp,
+      spClosureStep
+ *)
+  
   Lemma spClosureStep_preserves_prediction :
     forall g sp sp' sps' av av',
       spClosureStep g av sp = CstepK av' sps'
@@ -245,14 +250,6 @@ Module PredictionFn (Import D : Defs.T).
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst; auto.
     - inv hi.
-  Qed.
-
-  Lemma cstep_done_eq :
-    forall g av sp sps,
-      spClosureStep g av sp = CstepDone sps
-      -> sps = [sp].
-  Proof.
-    intros g av sp sps hs; unfold spClosureStep in hs; dms; tc.
   Qed.
 
   Definition closure_result := sum prediction_error (list subparser).
@@ -488,7 +485,7 @@ Module PredictionFn (Import D : Defs.T).
                      (sp : subparser)
                      (a  : Acc lex_nat_pair (meas g av sp)) : closure_result :=
     match spClosureStep g av sp as r return spClosureStep g av sp = r -> _ with
-    | CstepDone sps   => fun _  => inr sps
+    | CstepDone       => fun _  => inr [sp]
     | CstepError e    => fun _  => inl e
     | CstepK av' sps' => 
       fun hs => 
@@ -502,7 +499,7 @@ Module PredictionFn (Import D : Defs.T).
     forall g sp av a,
       spClosure g av sp a =
       match spClosureStep g av sp as r return spClosureStep g av sp = r -> _ with
-      | CstepDone sps   => fun _  => inr sps
+      | CstepDone       => fun _  => inr [sp]
       | CstepError e    => fun _  => inl e
       | CstepK av' sps' => 
         fun hs => 
@@ -524,7 +521,7 @@ Module PredictionFn (Import D : Defs.T).
            (cr  : closure_result)
            (heq : spClosureStep g av sp = sr),
       match sr as r return spClosureStep g av sp = r -> closure_result with
-      | CstepDone sps   => fun _  => inr sps
+      | CstepDone       => fun _  => inr [sp]
       | CstepError e    => fun _  => inl e
       | CstepK av' sps' => 
         fun hs => 
@@ -543,7 +540,7 @@ Module PredictionFn (Import D : Defs.T).
                                  spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
                /\ aggrClosureResults crs = inl e
          | inr sps => 
-           (sr = CstepDone sps /\ sps = [sp])
+           (sr = CstepDone /\ sps = [sp])
            \/ exists (sps' : list subparser)
                      (av'  : NtSet.t)
                      (hs   : spClosureStep g av sp = CstepK av' sps')
@@ -557,7 +554,6 @@ Module PredictionFn (Import D : Defs.T).
     destruct sr as [| sps | e];
     destruct cr as [e' | sps']; intros heq'; tc;
     try solve [inv heq'; eauto | eauto 8].
-    apply cstep_done_eq in heq; inv heq'; auto.
   Qed.
 
   Lemma spClosure_cases :
@@ -578,7 +574,7 @@ Module PredictionFn (Import D : Defs.T).
                                  spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
                /\ aggrClosureResults crs = inl e
          | inr sps =>
-           (spClosureStep g av sp = CstepDone sps /\ sps = [sp])
+           (spClosureStep g av sp = CstepDone /\ sps = [sp])
            \/ exists (sps' : list subparser)
                      (av'  : NtSet.t)
                      (hs   : spClosureStep g av sp = CstepK av' sps')
@@ -596,7 +592,7 @@ Module PredictionFn (Import D : Defs.T).
   Lemma spClosure_success_cases :
     forall g sp av a sps,
       spClosure g av sp a = inr sps
-      -> (spClosureStep g av sp = CstepDone sps /\ sps = [sp])
+      -> (spClosureStep g av sp = CstepDone /\ sps = [sp])
          \/ exists (sps' : list subparser)
                    (av'  : NtSet.t)
                    (hs   : spClosureStep g av sp = CstepK av' sps')
@@ -623,7 +619,7 @@ Module PredictionFn (Import D : Defs.T).
     intros g sp av a e hs; apply spClosure_cases with (cr := inl e); auto.
   Qed.
 
-  Lemma spClosure_preserves_prediction :
+  Lemma spClosure_preserves_prediction' :
     forall g pair (a : Acc lex_nat_pair pair) sp av a' sp' sps',
       pair = meas g av sp
       -> spClosure g av sp a' = inr sps'
@@ -633,7 +629,7 @@ Module PredictionFn (Import D : Defs.T).
     intros g pair a.
     induction a as [pair hlt IH].
     intros sp av a' sp' sps' heq hs hi; subst.
-    apply spClosure_success_cases in hs.
+    pose proof hs as hs'; apply spClosure_success_cases in hs.
     destruct hs as [[hs heq] | [sps'' [av' [hs [crs [heq heq']]]]]]; subst.
     - apply in_singleton_eq in hi; subst; auto.
     - eapply aggrClosureResults_succ_in_input in heq'; eauto.
@@ -644,6 +640,15 @@ Module PredictionFn (Import D : Defs.T).
       + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs; auto.
         rewrite hs; auto.
       + eapply spClosureStep_meas_lt; eauto.
+  Qed.
+
+  Lemma spClosure_preserves_prediction :
+    forall g av sp sp' sps' a,
+      spClosure g av sp a = inr sps'
+      -> In sp' sps'
+      -> sp'.(prediction) = sp.(prediction).
+  Proof.
+    intros; eapply spClosure_preserves_prediction'; eauto.
   Qed.
 
   Definition closure (g : grammar) (sps : list subparser) :
@@ -662,7 +667,6 @@ Module PredictionFn (Import D : Defs.T).
     apply in_map_iff in hi'; destruct hi' as [sp [hspc hi''']].
     eexists; split; eauto.
     eapply spClosure_preserves_prediction; eauto.
-    apply lex_nat_pair_wf.
   Qed.
 
   (* LL prediction *)
@@ -834,7 +838,7 @@ Module PredictionFn (Import D : Defs.T).
       -> In sp.(prediction) (rhssForNt g x).
   Proof.
     intros g x (fr, frs) sp hi; unfold initSps in hi.
-    eapply in_map_iff in hi; firstorder; subst; auto.
+    apply in_map_iff in hi; firstorder; subst; auto.
   Qed.
 
   Lemma initSps_result_incl_all_rhss :
@@ -862,8 +866,7 @@ Module PredictionFn (Import D : Defs.T).
     intros g x (fr, frs) sp' sps' hf hi.
     unfold startState in hf.
     eapply closure_preserves_prediction in hf; eauto.
-    destruct hf as [sp [hin heq]].
-    rewrite heq.
+    destruct hf as [sp [hin heq]]; rewrite heq.
     eapply initSps_prediction_in_rhssForNt; eauto.
   Qed.
 
