@@ -1,6 +1,6 @@
 Require Import FMaps List MSets Program.Wf.
 Require Import GallStar.Lex.
-Require Import GallStar.Prediction_complete.
+Require Import GallStar.LLPrediction_complete.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.

@@ -1,9 +1,9 @@
 Require Import Arith Bool List.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.Prediction.
+(*Require Import GallStar.Prediction.
 Require Import GallStar.Prediction_error_free.
-Require Import GallStar.Prediction_complete.
+Require Import GallStar.Prediction_complete. *)
 Require Import GallStar.Parser.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.

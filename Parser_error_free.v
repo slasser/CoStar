@@ -1,8 +1,8 @@
 Require Import List.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.Prediction.
-Require Import GallStar.Parser.
+(*Require Import GallStar.Prediction.
+Require Import GallStar.Parser. *)
 Require Import GallStar.Parser_sound.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.

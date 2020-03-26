@@ -1,8 +1,7 @@
 Require Import Bool List Omega.
 Require Import GallStar.Defs. 
 Require Import GallStar.Lex.
-Require Import GallStar.Prediction.
-Require Import GallStar.Prediction_error_free.
+Require Import GallStar.LLPrediction_error_free.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.

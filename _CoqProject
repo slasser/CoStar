@@ -7,11 +7,11 @@ Lex.v
 Defs.v
 Termination.v
 
-Prediction.v
-Prediction_error_free.v
-Prediction_complete.v
+LLPrediction.v
+LLPrediction_error_free.v
+LLPrediction_complete.v
 
-SLL_Prediction.v
+SLLPrediction.v
 
 Parser.v
 Parser_sound.v

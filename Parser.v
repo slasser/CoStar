@@ -1,7 +1,7 @@
 Require Import FMaps Omega PeanoNat String. 
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.SLL_Prediction.
+Require Import GallStar.SLLPrediction.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
 Require Import GallStar.Utils.

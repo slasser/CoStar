@@ -1,7 +1,7 @@
 Require Import List.
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.Prediction.
+Require Import GallStar.LLPrediction.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.
