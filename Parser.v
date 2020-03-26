@@ -205,7 +205,7 @@ Module ParserFn (Import D : Defs.T).
       -> cache_stores_target_results g ca' cm.
   Admitted.
   
-  Fixpoint multistep (g  : grammar)
+  Fixpoint multistep (gr : grammar)
                      (cm : closure_map)
                      (ps : prefix_stack)
                      (ss : suffix_stack)
@@ -213,58 +213,37 @@ Module ParserFn (Import D : Defs.T).
                      (av : NtSet.t)
                      (un : bool)
                      (ca : cache)
-                     (hc : cache_stores_target_results g ca cm)
-                     (a  : Acc lex_nat_triple (meas g ss ts av))
-                     {struct a} : parse_result :=
-    match step g cm ps ss ts av un ca as res return step g cm ps ss ts av un ca = res -> _ with
+                     (hc : cache_stores_target_results gr ca cm)
+                     (ha : Acc lex_nat_triple (meas gr ss ts av))
+                     {struct ha} : parse_result :=
+    match step gr cm ps ss ts av un ca as res return step gr cm ps ss ts av un ca = res -> _ with
     | StepAccept v                  => fun _  => if un then Accept v else Ambig v
     | StepReject s                  => fun _  => Reject s
     | StepError e                   => fun _  => Error e
     | StepK ps' ss' ts' av' un' ca' =>
-      fun hs =>
-        let hc' := step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hs
-        in  multistep g cm ps' ss' ts' av' un' ca' hc'
-                      (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hc hs)
+      fun hs => multistep gr cm ps' ss' ts' av' un' ca'
+                          (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hs)
+                          (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ ha hc hs)
     end eq_refl.
 
   Lemma multistep_unfold :
-    forall g cm ps ss ts av un ca a,
-      multistep g cm ps ss ts av un ca a =
-      match step g cm ps ss ts av un ca as res return step g cm ps ss ts av un ca = res -> _ with
+    forall gr cm ps ss ts av un ca hc ha,
+      multistep gr cm ps ss ts av un ca hc ha =
+      match step gr cm ps ss ts av un ca as res return step gr cm ps ss ts av un ca = res -> _ with
       | StepAccept v                  => fun _  => if un then Accept v else Ambig v
       | StepReject s                  => fun _  => Reject s
       | StepError e                   => fun _  => Error e
       | StepK ps' ss' ts' av' un' ca' =>
-        fun hs => multistep g cm ps' ss' ts' av' un' ca' _
-                            (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
+        fun hs => multistep gr cm ps' ss' ts' av' un' ca'
+                            (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hs)
+                            (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ ha hc hs)
       end eq_refl.
   Proof.
-    intros; destruct a; auto.
+    intros; destruct ha; auto.
   Qed.
-
-  (*
-  Lemma multistep_unfold_ex :
-    forall g ps ss ts av u a,
-    exists heq,
-      multistep g ps ss ts av u a =
-      match step g ps ss ts av u
-            as res return (step g ps ss ts av u = res -> parse_result)
-      with
-      | StepAccept sv            => fun _ => if u then Accept sv else Ambig sv
-      | StepReject s             => fun _ => Reject s
-      | StepK ps' ss' ts' av' u' =>
-        fun hs =>
-          multistep g ps' ss' ts' av' u'
-                    (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ a hs)
-      | StepError s              => fun _ => Error s
-      end heq.
-  Proof.
-    intros; eexists; apply multistep_unfold.
-  Qed.              
-   *)
   
   Lemma multistep_cases' :
-    forall (g   : grammar)
+    forall (gr  : grammar)
            (cm  : closure_map)
            (ps  : prefix_stack)
            (ss  : suffix_stack)
@@ -272,44 +251,46 @@ Module ParserFn (Import D : Defs.T).
            (av  : NtSet.t)
            (un  : bool)
            (ca  : cache)
-           (a   : Acc lex_nat_triple (meas g ss ts av))
+           (hc  : cache_stores_target_results gr ca cm)
+           (ha  : Acc lex_nat_triple (meas gr ss ts av))
            (sr  : step_result)
            (pr  : parse_result)
-           (heq : step g cm ps ss ts av un ca = sr),
-      match sr as res return (step g cm ps ss ts av un ca = res -> parse_result) with
+           (heq : step gr cm ps ss ts av un ca = sr),
+      match sr as res return (step gr cm ps ss ts av un ca = res -> parse_result) with
       | StepAccept sv                 => fun _ => if un then Accept sv else Ambig sv
-      | StepReject s                  => fun _  => Reject s
+      | StepReject s                  => fun _ => Reject s
+      | StepError s                   => fun _ => Error s
       | StepK ps' ss' ts' av' un' ca' =>
-        fun hs => multistep g cm ps' ss' ts' av' un' ca'
-                            (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ a hs)
-      | StepError s              => fun _ => Error s
+        fun hs => multistep gr cm ps' ss' ts' av' un' ca'
+                            (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hs)
+                            (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ ha hc hs)
       end heq = pr
       -> match pr with
          | Accept f => (sr = StepAccept f /\ un = true)
-                       \/ (exists ps' ss' ts' av' un' ca' a',
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
                               sr = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Accept f)
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Accept f)
          | Ambig f  => (sr = StepAccept f /\ un = false)
-                       \/ (exists ps' ss' ts' av' un' ca' a',
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
                               sr = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Ambig f)
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Ambig f)
          | Reject s => sr = StepReject s
-                       \/ (exists ps' ss' ts' av' un' ca' a',
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
                               sr = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Reject s)
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Reject s)
          | Error s  => sr = StepError s
-                       \/ (exists ps' ss' ts' av' un' ca' a',
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
                               sr = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error s)
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Error s)
          end.
   Proof.
-    intros g cm ps ss ts av un ca a sr pr heq.
+    intros g cm ps ss ts av un ca hc ha sr pr heq.
     destruct pr; destruct sr; destruct un;
       try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 10].
   Qed.
 
   Lemma multistep_cases :
-    forall (g   : grammar)
+    forall (gr  : grammar)
            (cm  : closure_map)
            (ps  : prefix_stack)
            (ss  : suffix_stack)
@@ -317,35 +298,36 @@ Module ParserFn (Import D : Defs.T).
            (av  : NtSet.t)
            (un  : bool)
            (ca  : cache)
-           (a   : Acc lex_nat_triple (meas g ss ts av))
+           (hc  : cache_stores_target_results gr ca cm)
+           (ha  : Acc lex_nat_triple (meas gr ss ts av))
            (pr  : parse_result),
-      multistep g cm ps ss ts av un ca a = pr
+      multistep gr cm ps ss ts av un ca hc ha = pr
       -> match pr with
-         | Accept f => (step g cm ps ss ts av un ca = StepAccept f /\ un = true)
-                       \/ (exists ps' ss' ts' av' un' ca' a',
-                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Accept f)
-         | Ambig f  => (step g cm ps ss ts av un ca = StepAccept f /\ un = false)
-                       \/ (exists ps' ss' ts' av' un' ca' a',
-                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Ambig f)
-         | Reject s => step g cm ps ss ts av un ca = StepReject s
-                       \/ (exists ps' ss' ts' av' un' ca' a',
-                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Reject s)
-         | Error s  => step g cm ps ss ts av un ca = StepError s
-                       \/ (exists ps' ss' ts' av' un' ca' a',
-                              step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                              /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error s)
+         | Accept f => (step gr cm ps ss ts av un ca = StepAccept f /\ un = true)
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                              step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Accept f)
+         | Ambig f  => (step gr cm ps ss ts av un ca = StepAccept f /\ un = false)
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                              step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Ambig f)
+         | Reject s => step gr cm ps ss ts av un ca = StepReject s
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                              step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Reject s)
+         | Error s  => step gr cm ps ss ts av un ca = StepError s
+                       \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                              step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Error s)
          end.
   Proof.
-    intros g cm ps ss ts av un ca a pr hm; subst.
+    intros g cm ps ss ts av un ca hc ha pr hm; subst.
     rewrite multistep_unfold.
     eapply multistep_cases'; eauto.
   Qed.
 
   Lemma multistep_accept_cases :
-    forall (g  : grammar)
+    forall (gr : grammar)
            (cm : closure_map)
            (ps : prefix_stack)
            (ss : suffix_stack)
@@ -353,20 +335,21 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (a  : Acc lex_nat_triple (meas g ss ts av))
+           (hc : cache_stores_target_results gr ca cm)
+           (ha : Acc lex_nat_triple (meas gr ss ts av))
            (f  : forest),
-      multistep g cm ps ss ts av un ca a = Accept f
-      -> (step g cm ps ss ts av un ca = StepAccept f /\ un = true)
-         \/ (exists ps' ss' ts' av' un' ca' a',
-                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Accept f).
+      multistep gr cm ps ss ts av un ca hc ha = Accept f
+      -> (step gr cm ps ss ts av un ca = StepAccept f /\ un = true)
+         \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Accept f).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? ? hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_ambig_cases :
-    forall (g  : grammar)
+    forall (gr : grammar)
            (cm : closure_map)
            (ps : prefix_stack)
            (ss : suffix_stack)
@@ -374,20 +357,21 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (a  : Acc lex_nat_triple (meas g ss ts av))
+           (hc : cache_stores_target_results gr ca cm)
+           (ha : Acc lex_nat_triple (meas gr ss ts av))
            (f  : forest),
-      multistep g cm ps ss ts av un ca a = Ambig f
-      -> (step g cm ps ss ts av un ca = StepAccept f /\ un = false)
-         \/ (exists ps' ss' ts' av' un' ca' a',
-                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Ambig f).
+      multistep gr cm ps ss ts av un ca hc ha = Ambig f
+      -> (step gr cm ps ss ts av un ca = StepAccept f /\ un = false)
+         \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Ambig f).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? ? hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_reject_cases :
-    forall (g  : grammar)
+    forall (gr : grammar)
            (cm : closure_map)
            (ps : prefix_stack)
            (ss : suffix_stack)
@@ -395,20 +379,21 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (a  : Acc lex_nat_triple (meas g ss ts av))
+           (hc : cache_stores_target_results gr ca cm)
+           (ha : Acc lex_nat_triple (meas gr ss ts av))
            (s  : string),
-      multistep g cm ps ss ts av un ca a = Reject s
-      -> step g cm ps ss ts av un ca = StepReject s
-         \/ (exists ps' ss' ts' av' un' ca' a',
-                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Reject s).
+      multistep gr cm ps ss ts av un ca hc ha = Reject s
+      -> step gr cm ps ss ts av un ca = StepReject s
+         \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Reject s).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? ? hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_invalid_state_cases :
-    forall (g  : grammar)
+    forall (gr : grammar)
            (cm : closure_map)
            (ps : prefix_stack)
            (ss : suffix_stack)
@@ -416,19 +401,20 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (a  : Acc lex_nat_triple (meas g ss ts av)),
-      multistep g cm ps ss ts av un ca a = Error InvalidState
-      -> step g cm ps ss ts av un ca = StepError InvalidState
-         \/ (exists ps' ss' ts' av' un' ca' a',
-                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error InvalidState).
+           (hc : cache_stores_target_results gr ca cm)
+           (ha : Acc lex_nat_triple (meas gr ss ts av)),
+      multistep gr cm ps ss ts av un ca hc ha = Error InvalidState
+      -> step gr cm ps ss ts av un ca = StepError InvalidState
+         \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Error InvalidState).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? hm; subst.
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_left_recursion_cases :
-    forall (g  : grammar)
+    forall (gr : grammar)
            (cm : closure_map)
            (ps : prefix_stack)
            (ss : suffix_stack)
@@ -436,20 +422,21 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (a  : Acc lex_nat_triple (meas g ss ts av))
+           (hc : cache_stores_target_results gr ca cm)
+           (ha : Acc lex_nat_triple (meas gr ss ts av))
            (x  : nonterminal),
-      multistep g cm ps ss ts av un ca a = Error (LeftRecursion x)
-      -> step g cm ps ss ts av un ca = StepError (LeftRecursion x)
-         \/ (exists ps' ss' ts' av' un' ca' a',
-                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error (LeftRecursion x)).
+      multistep gr cm ps ss ts av un ca hc ha = Error (LeftRecursion x)
+      -> step gr cm ps ss ts av un ca = StepError (LeftRecursion x)
+         \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Error (LeftRecursion x)).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? ? hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? ? hm; subst.
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
   Lemma multistep_prediction_error_cases :
-    forall (g  : grammar)
+    forall (gr : grammar)
            (cm : closure_map)
            (ps : prefix_stack)
            (ss : suffix_stack)
@@ -457,22 +444,34 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (a   : Acc lex_nat_triple (meas g ss ts av))
-           (e   : prediction_error),
-      multistep g cm ps ss ts av un ca a = Error (PredictionError e)
-      -> step g cm ps ss ts av un ca = StepError (PredictionError e)
-         \/ (exists ps' ss' ts' av' un' ca' a',
-                step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep g cm ps' ss' ts' av' un' ca' a' = Error (PredictionError e)).
+           (hc : cache_stores_target_results gr ca cm)
+           (ha : Acc lex_nat_triple (meas gr ss ts av))
+           (e  : prediction_error),
+      multistep gr cm ps ss ts av un ca hc ha = Error (PredictionError e)
+      -> step gr cm ps ss ts av un ca = StepError (PredictionError e)
+         \/ (exists ps' ss' ts' av' un' ca' hc' ha',
+                step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Error (PredictionError e)).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? ? hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ hm); auto.
+    intros ? ? ? ? ? ? ? ? ? ? ? hm; subst.
+    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.
   Qed.
 
+  Lemma empty_cache_stores_target_results :
+    forall gr cm,
+      cache_stores_target_results gr empty_cache cm.
+  Proof.
+    intros gr cm sps a sps' hf.
+    rewrite CacheFacts.empty_o in hf; tc.
+  Defined.
+  
   Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
     let cm     := mkGraph g           in
     let p_stk0 := (PF [] [], [])      in
     let s_stk0 := (SF None gamma, []) in
-    multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache (lex_nat_triple_wf _). 
-Print Assumptions parse.  
+    multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache
+              (empty_cache_stores_target_results g cm) (lex_nat_triple_wf _).
+
+  Print Assumptions parse.  
+
 End ParserFn.
