@@ -448,7 +448,7 @@ Module SllPredictionFn (Import D : Defs.T).
   Definition cache : Type := Cache.t (list subparser).
 
   Definition empty_cache : cache := Cache.empty (list subparser).
-
+  
   Definition sllTarget g cm (sps : list subparser) (a : terminal) : sum prediction_error (list subparser) :=
     match move a sps with
     | inl e    => inl e
@@ -475,11 +475,11 @@ Module SllPredictionFn (Import D : Defs.T).
     destruct hm as [? [? ?]]; eauto.
   Qed.
 
-  Definition cache_stores_target_results g ca cm :=
+  Definition cache_stores_target_results g cm ca :=
     forall sps a sps',
       Cache.find (sps, a) ca = Some sps'
       -> sllTarget g cm sps a = inr sps'.
-
+  
     (* To do: maybe only PredSucc and PredAmbig should carry an updated cache *)
   Fixpoint sllPredict' (g : grammar) (cm : closure_map) (sps : list subparser) (ts : list token) (c : cache) : prediction_result * cache :=
     match sps with 
@@ -506,7 +506,7 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Lemma sllPredict'_success_result_in_original_subparsers :
     forall g cm ts ca ca' ys sps,
-      cache_stores_target_results g ca cm
+      cache_stores_target_results g cm ca
       -> sllPredict' g cm sps ts ca = (PredSucc ys, ca')
       -> exists sp, In sp sps /\ sp.(prediction) = ys.
   Proof.
@@ -523,7 +523,7 @@ Module SllPredictionFn (Import D : Defs.T).
         apply in_eq.
       + dmeq hf; tc.
         * apply IH in hp; auto; destruct hp as [sp' [hi heq]]; subst.
-          apply hc in hf.
+          apply hc in hf; auto.
           eapply sllTarget_preserves_prediction; eauto.
         * dmeq ht; tc.
           apply IH in hp.
@@ -578,7 +578,7 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Lemma sllPredict_succ_in_rhssForNt :
     forall g cm x ts ca ca' ys,
-      cache_stores_target_results g ca cm
+      cache_stores_target_results g cm ca
       -> sllPredict g cm x ts ca = (PredSucc ys, ca')
       -> In ys (rhssForNt g x).
   Proof.
@@ -598,7 +598,7 @@ Module SllPredictionFn (Import D : Defs.T).
   
   Lemma adaptivePredict_succ_in_rhssForNt :
     forall g cm x ss ts ca ca' ys,
-      cache_stores_target_results g ca cm
+      cache_stores_target_results g cm ca
       -> adaptivePredict g cm x ss ts ca = (PredSucc ys, ca')
       -> In ys (rhssForNt g x).
   Proof.
@@ -610,7 +610,7 @@ Module SllPredictionFn (Import D : Defs.T).
   
   Lemma adaptivePredict_succ_in_grammar :
     forall g cm x ss ts ca ca' ys,
-      cache_stores_target_results g ca cm
+      cache_stores_target_results g cm ca
       -> adaptivePredict g cm x ss ts ca = (PredSucc ys, ca')
       -> In (x, ys) g.
   Proof.
@@ -621,7 +621,7 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Lemma adaptivePredict_ambig_in_grammar :
     forall g cm x ss ts ca ca' ys,
-      cache_stores_target_results g ca cm
+      cache_stores_target_results g cm ca
       -> adaptivePredict g cm x ss ts ca = (PredAmbig ys, ca')
       -> In (x, ys) g.
   Proof.
@@ -630,6 +630,20 @@ Module SllPredictionFn (Import D : Defs.T).
     eapply llPredict_ambig_in_grammar; eauto.
   Qed.
 
+  Lemma adaptivePredict_succ_preserves_cache_invar :
+    forall gr cm x ss ts ca ys ca',
+      cache_stores_target_results gr cm ca
+      -> adaptivePredict gr cm x ss ts ca = (PredSucc ys, ca')
+      -> cache_stores_target_results gr cm ca'.
+  Admitted.
+
+  Lemma adaptivePredict_ambig_preserves_cache_invar :
+    forall gr cm x ss ts ca ys ca',
+      cache_stores_target_results gr cm ca
+      -> adaptivePredict gr cm x ss ts ca = (PredAmbig ys, ca')
+      -> cache_stores_target_results gr cm ca'.
+  Admitted.
+  
   (* Equivalence of LL and SLL *)
   
   Lemma sll'_ll'_equiv_succ :

@@ -838,7 +838,7 @@ Module PredictionFn (Import D : Defs.T).
       -> In sp.(prediction) (rhssForNt g x).
   Proof.
     intros g x (fr, frs) sp hi; unfold initSps in hi.
-    apply in_map_iff in hi; firstorder; subst; auto.
+    eapply in_map_iff in hi; firstorder; subst; auto.
   Qed.
 
   Lemma initSps_result_incl_all_rhss :

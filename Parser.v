@@ -128,6 +128,18 @@ Module ParserFn (Import D : Defs.T).
     - apply NtSet.mem_spec; auto.
   Qed.
 
+    Lemma step_preserves_cache_invar :
+    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
+      cache_stores_target_results g cm ca
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> cache_stores_target_results g cm ca'.
+  Proof.
+    intros gr cm ps ps' ss ss' ts ts' av av' un un' ca ca' hc hs.
+    unfold step in hs; dmeqs H; tc; inv hs; auto.
+    - eapply adaptivePredict_succ_preserves_cache_invar;  eauto.
+    - eapply adaptivePredict_ambig_preserves_cache_invar; eauto.
+  Defined.
+
   Definition meas (g  : grammar)
                   (ss : suffix_stack)
                   (ts : list token)
@@ -168,7 +180,7 @@ Module ParserFn (Import D : Defs.T).
 
   Lemma step_meas_lt :
     forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
-      cache_stores_target_results g ca cm
+      cache_stores_target_results g cm ca
       -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> lex_nat_triple (meas g ss' ts' av') (meas g ss ts av).
   Proof.
@@ -190,20 +202,13 @@ Module ParserFn (Import D : Defs.T).
 
   Lemma StepK_result_acc :
     forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca' (a : Acc lex_nat_triple (meas g ss ts av)),
-      cache_stores_target_results g ca cm
+      cache_stores_target_results g cm ca
       -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> Acc lex_nat_triple (meas g ss' ts' av').
   Proof.
     intros; eapply Acc_inv; eauto.
     eapply step_meas_lt; eauto.
   Defined.
-
-  Lemma step_preserves_cache_invar :
-    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
-      cache_stores_target_results g ca cm
-      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-      -> cache_stores_target_results g ca' cm.
-  Admitted.
   
   Fixpoint multistep (gr : grammar)
                      (cm : closure_map)
@@ -213,7 +218,7 @@ Module ParserFn (Import D : Defs.T).
                      (av : NtSet.t)
                      (un : bool)
                      (ca : cache)
-                     (hc : cache_stores_target_results gr ca cm)
+                     (hc : cache_stores_target_results gr cm ca)
                      (ha : Acc lex_nat_triple (meas gr ss ts av))
                      {struct ha} : parse_result :=
     match step gr cm ps ss ts av un ca as res return step gr cm ps ss ts av un ca = res -> _ with
@@ -251,7 +256,7 @@ Module ParserFn (Import D : Defs.T).
            (av  : NtSet.t)
            (un  : bool)
            (ca  : cache)
-           (hc  : cache_stores_target_results gr ca cm)
+           (hc  : cache_stores_target_results gr cm ca)
            (ha  : Acc lex_nat_triple (meas gr ss ts av))
            (sr  : step_result)
            (pr  : parse_result)
@@ -298,7 +303,7 @@ Module ParserFn (Import D : Defs.T).
            (av  : NtSet.t)
            (un  : bool)
            (ca  : cache)
-           (hc  : cache_stores_target_results gr ca cm)
+           (hc  : cache_stores_target_results gr cm ca)
            (ha  : Acc lex_nat_triple (meas gr ss ts av))
            (pr  : parse_result),
       multistep gr cm ps ss ts av un ca hc ha = pr
@@ -335,7 +340,7 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (hc : cache_stores_target_results gr ca cm)
+           (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (f  : forest),
       multistep gr cm ps ss ts av un ca hc ha = Accept f
@@ -357,7 +362,7 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (hc : cache_stores_target_results gr ca cm)
+           (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (f  : forest),
       multistep gr cm ps ss ts av un ca hc ha = Ambig f
@@ -379,7 +384,7 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (hc : cache_stores_target_results gr ca cm)
+           (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (s  : string),
       multistep gr cm ps ss ts av un ca hc ha = Reject s
@@ -401,7 +406,7 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (hc : cache_stores_target_results gr ca cm)
+           (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av)),
       multistep gr cm ps ss ts av un ca hc ha = Error InvalidState
       -> step gr cm ps ss ts av un ca = StepError InvalidState
@@ -422,7 +427,7 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (hc : cache_stores_target_results gr ca cm)
+           (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (x  : nonterminal),
       multistep gr cm ps ss ts av un ca hc ha = Error (LeftRecursion x)
@@ -444,7 +449,7 @@ Module ParserFn (Import D : Defs.T).
            (av : NtSet.t)
            (un : bool)
            (ca : cache)
-           (hc : cache_stores_target_results gr ca cm)
+           (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (e  : prediction_error),
       multistep gr cm ps ss ts av un ca hc ha = Error (PredictionError e)
@@ -459,7 +464,7 @@ Module ParserFn (Import D : Defs.T).
 
   Lemma empty_cache_stores_target_results :
     forall gr cm,
-      cache_stores_target_results gr empty_cache cm.
+      cache_stores_target_results gr cm empty_cache.
   Proof.
     intros gr cm sps a sps' hf.
     rewrite CacheFacts.empty_o in hf; tc.
