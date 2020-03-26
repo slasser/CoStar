@@ -480,29 +480,58 @@ Module SllPredictionFn (Import D : Defs.T).
       Cache.find (sps, a) ca = Some sps'
       -> sllTarget g cm sps a = inr sps'.
   
-    (* To do: maybe only PredSucc and PredAmbig should carry an updated cache *)
-  Fixpoint sllPredict' (g : grammar) (cm : closure_map) (sps : list subparser) (ts : list token) (c : cache) : prediction_result * cache :=
+  Lemma sllTarget_add_preserves_cache_invar :
+    forall gr cm ca sps a sps',
+      cache_stores_target_results gr cm ca
+      -> sllTarget gr cm sps a = inr sps'
+      -> cache_stores_target_results gr cm (Cache.add (sps, a) sps' ca).
+  Proof.
+    intros gr cm ca sps a sps' hc ht ka kb v hf.
+    destruct (cache_key_eq_dec (ka, kb) (sps, a)) as [he | hn].
+    - inv he; rewrite CacheFacts.add_eq_o in hf; inv hf; auto.
+    - rewrite CacheFacts.add_neq_o in hf; auto.
+  Qed.
+  
+  Fixpoint sllPredict' (gr  : grammar)
+                       (cm  : closure_map)
+                       (sps : list subparser)
+                       (ts  : list token)
+                       (ca  : cache) : prediction_result * cache :=
     match sps with 
-    | []         => (PredReject, c)
+    | []         => (PredReject, ca)
     | sp :: sps' =>
       if allPredictionsEqual sp sps' then
-        (PredSucc sp.(prediction), c)
+        (PredSucc sp.(prediction), ca)
       else
         match ts with
-        | []            => (handleFinalSubparsers sps, c)
+        | []            => (handleFinalSubparsers sps, ca)
         | (a, l) :: ts' =>
-          match Cache.find (sps, a) c with 
-          | Some sps' => sllPredict' g cm sps' ts' c
+          match Cache.find (sps, a) ca with 
+          | Some sps' => sllPredict' gr cm sps' ts' ca
           | None      =>
-            match sllTarget g cm sps a with
-            | inl e    => (PredError e, c)
+            match sllTarget gr cm sps a with
+            | inl e    => (PredError e, ca)
             | inr sps' =>
-              let c' := Cache.add (sps, a) sps' c
-              in  sllPredict' g cm sps' ts' c'
+              let ca' := Cache.add (sps, a) sps' ca
+              in  sllPredict' gr cm sps' ts' ca'
             end
           end
         end
     end.
+
+  Lemma sllPredict'_succ_preserves_cache_invar :
+    forall gr cm ts sps ca ys ca',
+      cache_stores_target_results gr cm ca
+      -> sllPredict' gr cm sps ts ca = (PredSucc ys, ca')
+      -> cache_stores_target_results gr cm ca'.
+  Proof.
+    intros gr cm ts; induction ts as [| (a,l) ts IH];
+      intros sps ca ys ca' hc hs; sis.
+    - dms; tc; inv hs; auto.
+    - dm; tc; dm; try solve [inv hs; auto]; dm; eauto.
+      dmeq ht; tc. apply IH in hs; auto.
+      apply sllTarget_add_preserves_cache_invar; auto.
+  Qed.
 
   Lemma sllPredict'_success_result_in_original_subparsers :
     forall g cm ts ca ca' ys sps,
@@ -588,6 +617,17 @@ Module SllPredictionFn (Import D : Defs.T).
     destruct hs as [sp [hi heq]]; subst.
     eapply sllStartState_sp_prediction_in_rhssForNt; eauto.
   Qed.
+
+  Lemma sllPredict_succ_preserves_cache_invar :
+    forall gr cm x ts ca ys ca',
+      cache_stores_target_results gr cm ca
+      -> sllPredict gr cm x ts ca = (PredSucc ys, ca')
+      -> cache_stores_target_results gr cm ca'.
+  Proof.
+    intros gr cm x ts ca ys ca' hc hs.
+    unfold sllPredict in hs; dms; tc.
+    eapply sllPredict'_succ_preserves_cache_invar; eauto.
+  Qed.
       
   Definition adaptivePredict g cm x stk ts c : prediction_result * cache :=
     let sll_res := sllPredict g cm x ts c in
@@ -635,14 +675,20 @@ Module SllPredictionFn (Import D : Defs.T).
       cache_stores_target_results gr cm ca
       -> adaptivePredict gr cm x ss ts ca = (PredSucc ys, ca')
       -> cache_stores_target_results gr cm ca'.
-  Admitted.
+  Proof.
+    intros gr cm x ss ts ca ys ca' hc ha.
+    unfold adaptivePredict in ha; dmeqs H; inv ha; auto.
+    eapply sllPredict_succ_preserves_cache_invar; eauto.
+  Qed.
 
   Lemma adaptivePredict_ambig_preserves_cache_invar :
     forall gr cm x ss ts ca ys ca',
       cache_stores_target_results gr cm ca
       -> adaptivePredict gr cm x ss ts ca = (PredAmbig ys, ca')
       -> cache_stores_target_results gr cm ca'.
-  Admitted.
+    intros gr cm x ss ts ca ys ca' hc ha.
+    unfold adaptivePredict in ha; dmeqs H; inv ha; auto.
+  Qed.
   
   (* Equivalence of LL and SLL *)
   
