@@ -203,3 +203,6 @@ Proof.
     + apply app_inj_tail in heq; destruct heq as [heq ?]; subst.
       apply IH in heq; subst; auto.
 Qed.
+
+Definition oneToMany {A B : Type} (s : A) (ds : list B) : list (A * B) :=
+  map (pair s) ds.

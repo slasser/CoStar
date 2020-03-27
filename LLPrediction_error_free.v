@@ -6,9 +6,9 @@ Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.
 
-Module PredictionErrorFreeFn (Import D : Defs.T).
+Module LLPredictionErrorFreeFn (Import D : Defs.T).
 
-  Module Export P := PredictionFn D.
+  Module Export LLP := LLPredictionFn D.
 
   (* BREAKING THIS INTO TWO GROUPS OF LEMMAS
    FOR THE TWO TYPES OF PREDICTION ERRORS *)
@@ -423,4 +423,4 @@ Module PredictionErrorFreeFn (Import D : Defs.T).
     - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
   Qed.
 
-End PredictionErrorFreeFn.
+End LLPredictionErrorFreeFn.

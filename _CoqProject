@@ -11,6 +11,7 @@ LLPrediction.v
 LLPrediction_error_free.v
 LLPrediction_complete.v
 
+GrammarAnalysis.v
 SLLPrediction.v
 
 Parser.v

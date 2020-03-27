@@ -8,7 +8,7 @@ Import ListNotations.
 Open Scope list_scope.
 Set Implicit Arguments.
 
-Module PredictionFn (Import D : Defs.T).
+Module LLPredictionFn (Import D : Defs.T).
 
   Module Export Term := TerminationFn D.
 
@@ -1191,4 +1191,4 @@ Module PredictionFn (Import D : Defs.T).
     intros g pred (fr, frs); repeat red; intros; ND.fsetdec.
   Qed.
 
-End PredictionFn.
+End LLPredictionFn.

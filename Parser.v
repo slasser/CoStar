@@ -471,7 +471,7 @@ Module ParserFn (Import D : Defs.T).
   Defined.
   
   Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-    let cm     := mkGraph g           in
+    let cm     := mkClosureMap g      in
     let p_stk0 := (PF [] [], [])      in
     let s_stk0 := (SF None gamma, []) in
     multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache

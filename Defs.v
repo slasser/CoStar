@@ -22,15 +22,28 @@ End SYMBOL_TYPES.
 (* Core definitions, parameterized by grammar symbol types *)
 Module DefsFn (Export Ty : SYMBOL_TYPES).
 
-  Inductive symbol       := T  : terminal -> symbol 
-                          | NT : nonterminal -> symbol.
+  Definition t_eq_dec  := Ty.t_eq_dec.
+  Definition nt_eq_dec := Ty.nt_eq_dec.
+
+  Definition beqNt (x x' : nonterminal) : bool :=
+    match nt_eq_dec x' x with
+    | left _  => true
+    | right _ => false
+    end.
+
+  Definition beqT (a a' : terminal) : bool :=
+    match t_eq_dec a' a with
+    | left _  => true
+    | right _ => false
+    end.
+
+  Inductive symbol := T  : terminal -> symbol 
+                    | NT : nonterminal -> symbol.
 
   Lemma symbol_eq_dec : forall s s' : symbol,
       {s = s'} + {s <> s'}.
   Proof. 
-    decide equality.
-    - apply Ty.t_eq_dec. 
-    - apply Ty.nt_eq_dec.
+    decide equality; try apply t_eq_dec; try apply nt_eq_dec.
   Defined.
 
   Lemma gamma_eq_dec :
@@ -219,6 +232,24 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Inductive suffix_frame :=
   | SF : option nonterminal -> list symbol -> suffix_frame.
+
+  Lemma suffix_frame_eq_dec :
+    forall fr fr' : suffix_frame, {fr = fr'} + {fr <> fr'}.
+  Proof.
+    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
+  Qed.
+
+  (* Finite sets and maps for suffix frames *)
+  Module MDT_SF.
+    Definition t       := suffix_frame.
+    Definition eq_dec  := suffix_frame_eq_dec.
+  End MDT_SF.
+  Module SF_as_DT      := Make_UDT(MDT_SF).
+  Module FrameSet      := MSetWeakList.Make SF_as_DT.
+  Module FrameSetFacts := WFactsOn SF_as_DT FrameSet.
+  Module FrameMap      := FMapWeakList.Make SF_as_DT.
+  Module FS            := FrameSet.
+  Module FM            := FrameMap.
 
   Definition suffix_stack := (suffix_frame * list suffix_frame)%type. 
 

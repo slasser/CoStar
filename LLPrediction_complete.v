@@ -6,9 +6,9 @@ Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.
 
-Module PredictionCompleteFn (Import D : Defs.T).
+Module LLPredictionCompleteFn (Import D : Defs.T).
 
-  Module Export PEF := PredictionErrorFreeFn D.
+  Module Export LLPEF := LLPredictionErrorFreeFn D.
 
   Inductive move_step :
     subparser -> list token -> subparser -> list token -> Prop :=
@@ -1345,4 +1345,4 @@ Module PredictionCompleteFn (Import D : Defs.T).
       eapply initSps_preserves_exists_successful_sp_invar; eauto.
   Qed.
 
-End PredictionCompleteFn.
+End LLPredictionCompleteFn.
