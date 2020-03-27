@@ -91,11 +91,12 @@ Module ParserSoundFn (Import D : Defs.T).
   Lemma step_preserves_stacks_wf_invar :
     forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
       stacks_wf g ps ss
+      -> cache_stores_target_results g cm ca
       -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> stacks_wf g ps' ss'.
   Proof.
     intros g cm (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
-           ts ts' av av' un un' ca ca' hw hs; red; red in hw.
+           ts ts' av av' un un' ca ca' hw hc hs; red; red in hw.
     unfold step in hs; dmeqs h; tc; inv hs.
     - eapply return_preserves_frames_wf_invar; eauto. 
     - eapply consume_preserves_frames_wf_invar; eauto. 
@@ -246,12 +247,13 @@ Module ParserSoundFn (Import D : Defs.T).
 
   Lemma step_preserves_stack_prefix_derivation_invar :
     forall g cm w ps ps' ss ss' ts ts' av av' un un' ca ca',
-      stack_prefix_derivation g w ps ss ts
+      cache_stores_target_results g cm ca
+      -> stack_prefix_derivation g w ps ss ts
       -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> stack_prefix_derivation g w ps' ss' ts'.
   Proof.
     intros g cm w (pfr, pfrs) (pfr', pfrs') (sfr, sfrs) (sfr', sfrs')
-           ts ts' av av' un un' ca ca' hf hs; red; red in hf.
+           ts ts' av av' un un' ca ca' hc hf hs; red; red in hf.
     destruct hf as (wpre & heq & hf); subst.
     unfold step in hs; dmeqs h; tc; inv hs.
     - eexists; split; eauto.
@@ -432,6 +434,7 @@ Module ParserSoundFn (Import D : Defs.T).
       -> s_ce = SF (Some x) rhs
       -> no_left_recursion g
       -> stacks_wf g (p_cr, p_frs) (s_cr, s_frs)
+      -> cache_stores_target_results g cm ca
       -> adaptivePredict g cm x (s_cr, s_frs) wsuf ca = (PredSucc rhs, ca')
       -> unique_frames_derivation g (p_cr :: p_frs)
                                     (s_cr :: s_frs) wpre wsuf
@@ -439,7 +442,7 @@ Module ParserSoundFn (Import D : Defs.T).
                                     (s_ce :: s_cr :: s_frs) wpre wsuf.
   Proof.
     intros g cm ? ? ? ? p_frs s_frs o x pre suf rhs wpre wsuf ca ca' v ? ? ? ?
-           hn hw hl hu; subst.
+           hn hw hc hp hu; subst.
     assert (heq: wpre = wpre ++ []) by apps; rewrite heq.
     econstructor; eauto; sis.
     - eapply adaptivePredict_succ_in_grammar; eauto. 
