@@ -669,6 +669,16 @@ Module LLPredictionFn (Import D : Defs.T).
     eapply spClosure_preserves_prediction; eauto.
   Qed.
 
+  Definition llTarget g a sps : sum prediction_error (list subparser) :=
+    match move a sps with
+    | inl e    => inl e
+    | inr sps' =>
+      match closure g sps' with
+      | inl e     => inl e
+      | inr sps'' => inr sps''
+      end
+    end.
+  
   (* LL prediction *)
 
   Inductive prediction_result :=
@@ -761,6 +771,24 @@ Module LLPredictionFn (Import D : Defs.T).
     eapply filter_cons_in; eauto.
   Qed.
 
+  Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
+    match ts with
+    | []            => handleFinalSubparsers sps
+    | (a, _) :: ts' =>
+      match sps with
+      | []          => PredReject
+      | sp' :: sps' =>
+        if allPredictionsEqual sp' sps' then
+          PredSucc sp'.(prediction)
+        else
+          match llTarget g a (sp' :: sps') with
+          | inl e => PredError e
+          | inr sps'' => llPredict' g sps'' ts'
+          end
+      end
+    end.
+
+  (*
   (* to do : encapsulate move/closure within target function *)
   Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
     match sps with
@@ -782,23 +810,23 @@ Module LLPredictionFn (Import D : Defs.T).
           end
         end
     end.
+   *)
 
-  Lemma llPredict'_success_result_in_original_subparsers :
+Lemma llPredict'_success_result_in_original_subparsers :
     forall g ts gamma sps,
       llPredict' g sps ts = PredSucc gamma
       -> exists sp, In sp sps /\ (prediction sp) = gamma.
   Proof.
     intros g ts gamma.
     induction ts as [| (a, l) ts IH]; intros sps hl; sis.
-    - destruct sps as [| sp sps']; tc; dmeq hall.
-      + inv hl; exists sp; split; auto.
-        apply in_eq.
-      + apply handleFinalSubparsers_succ_facts in hl.
-        destruct hl as (sp' & _ & hi & heq & _); eauto. 
+    - apply handleFinalSubparsers_succ_facts in hl.
+      destruct hl as (sp' & _ & hi & heq & _); eauto.
     - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
       + inv hl; exists sp; split; auto.
         apply in_eq.
-      + destruct (move a _) as [m | sps''] eqn:hm; tc.
+      + (* lemma *)
+        unfold llTarget in hl.
+        destruct (move a _) as [m | sps''] eqn:hm; tc.
         destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
         apply IH in hl; destruct hl as [? [? ?]]; subst.
         eapply closure_preserves_prediction in hc; eauto.
@@ -814,11 +842,12 @@ Module LLPredictionFn (Import D : Defs.T).
   Proof.
     intros g ts gamma.
     induction ts as [| (a,l) ts IH]; intros sps hl; sis.
-    - destruct sps as [| sp sps']; tc; dmeq hall; inv hl.
-      apply handleFinalSubparsers_ambig_from_subparsers; auto.
+    - apply handleFinalSubparsers_ambig_from_subparsers; auto.
     - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
       + inv hl.
-      + destruct (move a _) as [m | sps''] eqn:hm; tc.
+      + (* lemma *)
+        unfold llTarget in hl.
+        destruct (move a _) as [m | sps''] eqn:hm; tc.
         destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
         apply IH in hl; destruct hl as [? [? ?]]; subst.
         eapply closure_preserves_prediction in hc; eauto.

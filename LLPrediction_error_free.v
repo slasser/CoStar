@@ -246,29 +246,58 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     apply lex_nat_pair_wf.
   Qed.
 
+  Lemma llTarget_never_returns_SpInvalidState :
+    forall g a sps,
+      all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps
+      -> llTarget g a sps <> inl SpInvalidState.
+  Proof.
+    intros g a sps hw hs; unfold not; intros ht; unfold llTarget in ht; dmeq hm.
+    - inv ht; eapply move_never_returns_SpInvalidState_for_ready_sps; eauto.
+    - eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
+      dmeq hc; tc; inv ht; eapply closure_never_returns_SpInvalidState; eauto.
+  Qed.
+
+  Lemma llTarget_preserves_suffix_stacks_wf_invar :
+    forall g a sps sps',
+      all_suffix_stacks_wf g sps
+      -> llTarget g a sps = inr sps'
+      -> all_suffix_stacks_wf g sps'.
+  Proof.
+    intros g a sps sps' hw ht; unfold llTarget in ht.
+    dmeq hm; tc; dmeq hc; tc; inv ht.
+    eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
+    eapply closure_preserves_suffix_stack_wf_invar; eauto.
+  Qed.
+
+  Lemma llTarget_preserves_stacks_stable_invar :
+    forall g a sps sps',
+      all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps
+      -> llTarget g a sps = inr sps'
+      -> all_stacks_stable sps'.
+  Proof.
+    intros g a sps sps' hw hs ht; unfold llTarget in ht.
+    dmeq hm; tc; dmeq hc; tc; inv ht.
+    eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
+    eapply all_stacks_stable_after_closure; eauto.
+  Qed.
+
   Lemma llPredict'_never_returns_SpInvalidState :
     forall g ts sps,
       all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
       -> llPredict' g sps ts <> PredError SpInvalidState.
   Proof.
-    intros g ts; induction ts as [| (a,l) ts IH]; intros sps ha ha'; unfold not; intros hl; sis.
-    - destruct sps as [| sp sps']; tc; dm; tc.
-      eapply handleFinalSubparsers_never_returns_error; eauto.
+    intros g ts; induction ts as [| (a,l) ts IH]; intros sps ha ha';
+      unfold not; intros hl; sis.
+    - eapply handleFinalSubparsers_never_returns_error; eauto.
     - destruct sps as [| sp sps']; tc.
-      dm; tc.
-      dmeq hm; tc.
-      + inv hl.
-        eapply move_never_returns_SpInvalidState_for_ready_sps; eauto.
-      + dmeq hc; tc.
-        * inv hl.
-          eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-          eapply closure_never_returns_SpInvalidState; eauto.
-        * eapply IH in hl; eauto.
-          -- eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-             eapply closure_preserves_suffix_stack_wf_invar; eauto.
-          -- eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-             eapply all_stacks_stable_after_closure; eauto.
+      dm; tc; dmeq ht.
+      + inv hl; eapply llTarget_never_returns_SpInvalidState; eauto.
+      + eapply IH in hl; eauto.
+        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+        * eapply llTarget_preserves_stacks_stable_invar; eauto.
   Qed.
 
   Lemma stacks_wf_in_startState_result :
@@ -391,6 +420,17 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     destruct hm as [sp [hm hi]].
     eapply moveSp_never_returns_SpLeftRecursion; eauto.
   Qed.
+
+  Lemma llTarget_never_returns_SpLeftRecursion :
+    forall g a sps x,
+      no_left_recursion g
+      -> llTarget g a sps <> inl (SpLeftRecursion x).
+  Proof.
+    intros g a sps x hn; unfold not; intros ht.
+    unfold llTarget in ht; dmeq hm; tc.
+    - inv ht; eapply move_never_returns_SpLeftRecursion; eauto.
+    - dmeq hc; tc; inv ht; eapply closure_never_finds_left_recursion; eauto.
+  Qed.
   
   Lemma llPredict'_never_returns_SpLeftRecursion :
     forall g ts sps x,
@@ -399,15 +439,10 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Proof.
     intros g ts; induction ts as [| (a,l) ts IH];
       intros sps x hn; unfold not; intros hl; sis.
-    - dm; tc; dm; tc.
-      eapply handleFinalSubparsers_never_returns_error; eauto.
+    - eapply handleFinalSubparsers_never_returns_error; eauto.
     - destruct sps as [| sp sps']; tc; dm; tc; dmeq hm; tc.
-      + inv hl.
-        eapply move_never_returns_SpLeftRecursion; eauto.
-      + dmeq hc.
-        * inv hl.
-          eapply closure_never_finds_left_recursion in hc; eauto.
-        * eapply IH in hl; eauto.
+      + inv hl; eapply llTarget_never_returns_SpLeftRecursion; eauto.
+      + eapply IH in hl; eauto.
   Qed.
 
   Lemma llPredict_never_returns_SpLeftRecursion :
@@ -421,6 +456,21 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     dmeq hss.
     - inv hl. eapply closure_never_finds_left_recursion; eauto. 
     - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
+  Qed.
+
+  (* For convenience, some lemmas that generalize over both 
+     types of prediction errors *)
+  
+  Lemma startState_never_returns_error :
+    forall g fr frs o x suf e,
+      no_left_recursion g
+      -> suffix_stack_wf g (fr, frs)
+      -> fr = SF o (NT x :: suf)
+      -> startState g x (fr, frs) <> inl e.
+  Proof.
+    intros ? ? ? ? ? ? e ? ? ?; unfold not; intros hs; subst; destruct e.
+    - eapply startState_never_returns_SpInvalidState; eauto.
+    - eapply closure_never_finds_left_recursion; eauto.
   Qed.
 
 End LLPredictionErrorFreeFn.
