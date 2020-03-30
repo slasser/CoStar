@@ -719,6 +719,17 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     eapply closure_func_refines_closure_multistep; eauto.
   Qed.
 
+  Lemma llTarget_preserves_subparsers_complete_invar :
+    forall g a l wpre wsuf sps sps' sps'',
+      subparsers_complete_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
+      -> llTarget g a sps' = inr sps''
+      -> subparsers_complete_wrt_originals g sps (wpre ++ [(a,l)]) sps'' wsuf.
+  Proof.
+    intros g a l wpre wsuf sps sps' sps'' hc ht.
+    unfold llTarget in ht; dmeqs H; tc; inv ht.
+    eapply move_closure_op_preserves_subparsers_complete_invar; eauto.
+  Qed.
+  
   Lemma llPredict'_succ_labels_eq_after_prefix :
     forall g orig_sps wsuf wpre curr_sps rhs,
       subparsers_complete_wrt_originals g orig_sps wpre curr_sps wsuf
@@ -731,44 +742,35 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
             -> sp.(prediction) = rhs.
   Proof.
     intros g orig_sps wsuf.
-    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs hi hl; 
-      destruct curr_sps as [| curr_sp curr_sps]; sis; tc.
-    - dmeq hall.
-      + inv hl.
-        exists wpre; exists []; split; auto.
-        intros orig_sp curr_sp' hin hm.
-        apply eq_trans with (y := curr_sp'.(prediction)).
-        * eapply mcms_preserves_label; eauto.
-        * apply hi in hm; auto.
-          eapply allPredictionsEqual_in; eauto.
-      + unfold handleFinalSubparsers in hl.
-        destruct (filter _ _) as [| sp'' sps''] eqn:hf; tc.
-        destruct (allPredictionsEqual sp'' sps'') eqn:ha'; tc.
-        inv hl.
-        exists wpre; exists []; split; auto.
-        intros orig_sp curr_sp' hin hm.
-        apply eq_trans with (y := curr_sp'.(prediction)).
-        * eapply mcms_preserves_label; eauto.
-        * pose proof hm as hm'.
-          apply hi in hm; auto.
-          apply mcms_succ_final_config in hm'; auto.
-          eapply filter_In' in hm; eauto.
-          rewrite hf in hm.
-          eapply allPredictionsEqual_in; eauto.
-    - destruct (allPredictionsEqual curr_sp curr_sps) eqn:ha.
-      + inv hl.
-        exists wpre; exists ((a,l) :: wsuf'); split; auto.
+    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs hi hl; sis.
+    - unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp'' sps''] eqn:hf; tc.
+      destruct (allPredictionsEqual sp'' sps'') eqn:ha'; tc.
+      inv hl.
+      exists wpre; exists []; split; auto.
+      intros orig_sp curr_sp' hin hm.
+      apply eq_trans with (y := curr_sp'.(prediction)).
+      + eapply mcms_preserves_label; eauto.
+      + pose proof hm as hm'.
+        apply hi in hm; auto.
+        apply mcms_succ_final_config in hm'; auto.
+        eapply filter_In' in hm; eauto.
+        rewrite hf in hm.
+        eapply allPredictionsEqual_in; eauto.
+    - destruct curr_sps as [| curr_sp curr_sps]; tc.
+      destruct (allPredictionsEqual curr_sp curr_sps) eqn:ha.
+      + inv hl; exists wpre; exists ((a,l) :: wsuf'); split; auto.
         intros orig_sp curr_sp' hin hm.
         apply eq_trans with (y := curr_sp'.(prediction)).
         * eapply mcms_preserves_label; eauto.
         * eapply hi in hm; eauto.
           eapply allPredictionsEqual_in; eauto.
-      + dmeq hm; tc; dmeq hc; tc.
+      + dmeq ht; tc.
         eapply IH with (wpre := wpre ++ [(a,l)]) in hl; eauto.
         * destruct hl as [wpre' [wsuf'' [heq hall]]].
           exists wpre'; exists wsuf''; split; auto.
           rewrite <- heq; apps.
-        * eapply move_closure_op_preserves_subparsers_complete_invar; eauto.
+        * eapply llTarget_preserves_subparsers_complete_invar; eauto.
   Qed.
 
   Lemma subparsers_complete_invar_starts_true :
@@ -941,6 +943,18 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     destruct sp''' as [pred ([suf], frs)]; inv hc; auto.
   Qed.
 
+  Lemma llTarget_preserves_subparsers_sound_invar :
+    forall g a l wpre wsuf sps sps' sps'',
+      all_suffix_stacks_wf g sps'
+      -> subparsers_sound_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
+      -> llTarget g a sps' = inr sps''
+      -> subparsers_sound_wrt_originals g sps (wpre ++ [(a,l)]) sps'' wsuf.
+  Proof.
+    intros g a l wpre wsuf sps sps' sps'' hw hs ht.
+    unfold llTarget in ht; dmeqs H; tc; inv ht.
+    eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
+  Qed.
+
   Lemma llPredict'_ambig_rhs_leads_to_successful_parse :
     forall g orig_sps wsuf wpre curr_sps rhs,
       all_suffix_stacks_wf g curr_sps
@@ -953,9 +967,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
           /\ finalConfig final_sp = true.
   Proof.
     intros g orig_sps wsuf.
-    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs ha hi hl; destruct curr_sps as [| csp csps]; sis; tc.
-    - destruct (allPredictionsEqual csp csps) eqn:ha'; tc.
-      unfold handleFinalSubparsers in hl.
+    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs ha hi hl; sis; tc.
+    - unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| csp' csps'] eqn:hf; tc.
       destruct (allPredictionsEqual csp' csps') eqn:ha''; tc.
       inv hl.
@@ -967,19 +980,18 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       exists orig_sp; exists csp'; repeat split; auto.
       + (* easy *)
         eapply mcms'_preserves_label; eauto.
-      + assert (hi'' : In csp' (filter finalConfig (csp :: csps))).
+      + assert (hi'' : In csp' (filter finalConfig curr_sps)).
         { rewrite hf'; apply in_eq. }
         eapply filter_In in hi''; destruct hi''; auto.
-    - destruct (allPredictionsEqual _ _); tc.
-      destruct (move _ _ ) as [e | sps'] eqn:hm; tc.
-      destruct (closure _ _) as [e | sps''] eqn:hc; tc.
+    - destruct curr_sps as [| sp' sps']; tc.
+      destruct (allPredictionsEqual _ _); tc.
+      dmeq ht; tc.
       eapply IH with (wpre := wpre ++ [(a,l)]) in hl.
       + destruct hl as [osp [fsp [hi' [heq [hm' hf]]]]].
         exists osp; exists fsp; repeat split; auto.
         rewrite <- app_assoc in hm'; auto.
-      + eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-        apply closure_preserves_suffix_stack_wf_invar in hc; auto.
-      + eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
+      + eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+      + eapply llTarget_preserves_subparsers_sound_invar; eauto.
   Qed.
 
   Lemma closure_step_ussr_backward :
@@ -1263,6 +1275,18 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     eapply move_preserves_successful_sp_invar in hm; eauto.
     eapply closure_preserves_successful_sp_invar; eauto.
   Qed.
+
+  Lemma llTarget_preserves_successful_sp_invar :
+    forall g sps sps' a l w',
+      all_stacks_stable sps
+      -> exists_successful_sp g sps ((a,l) :: w')
+      -> llTarget g a sps = inr sps'
+      -> exists_successful_sp g sps' w'.
+  Proof.
+    intros g sps sps' a l w' hs he ht.
+    unfold llTarget in ht; dmeqs H; tc; inv ht.
+    eapply move_closure_preserves_successful_sp_invar; eauto.
+  Qed.
   
   Lemma exists_successful_sp_llPredict'_neq_reject :
     forall g w sps,
@@ -1271,37 +1295,24 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       -> exists_successful_sp g sps w
       -> llPredict' g sps w <> PredReject.
   Proof.
-    intros g w; induction w as [| (a,l) w' IH]; intros sps ha ha' hex; unfold not; intros hl; unfold exists_successful_sp in hex; sis.
+    intros g w; induction w as [| (a,l) w' IH]; intros sps ha ha' hex;
+      unfold not; intros hl; unfold exists_successful_sp in hex; sis.
+    - destruct hex as [sp [hi hg]].
+      destruct sps as [| sp' sps']; try solve [inv hi].
+      (* lemma *)
+      unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp'' sps''] eqn:hf; dms; tc.
+      apply stable_config_recognize_nil__final_config in hg; auto.
+      eapply filter_In' in hg; eauto.
+      rewrite hf in hg; inv hg.
     - destruct hex as [sp [hi hg]]. 
-      destruct sps as [| sp' sps'].
-      + inv hi.
-      + dm; tc.
-        (* lemma *)
-        unfold handleFinalSubparsers in hl.
-        destruct (filter _ _) as [| sp'' sps''] eqn:hf; dms; tc.
-        apply stable_config_recognize_nil__final_config in hg; auto.
-        eapply filter_In' in hg; eauto.
-        rewrite hf in hg; inv hg.
-    - destruct hex as [sp [hi hg]]. 
-      destruct sps as [| sp' sps'].
-      + inv hi.
-      + dm; tc.
-        destruct (move _ _) as [e | sps''] eqn:hm; tc.
-        destruct (closure _ _) as [e | sps'''] eqn:hc; tc.
-        eapply IH in hl; eauto.
-        * red. 
-          intros sp''' hi'.
-          eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-          eapply closure_preserves_suffix_stack_wf_invar in hc; auto.
-        * red.
-          intros sp''' hi'.
-          eapply closure_func_refines_closure_multistep_backward in hc; eauto.
-          -- destruct hc as [av'' [sp'' [hi'' hc]]].
-             eapply stable_config_after_closure_multistep; eauto.
-          -- red; intros sp'''' hi''.
-             eapply move_preserves_suffix_stack_wf_invar in hm; auto.
-        * eapply move_closure_preserves_successful_sp_invar; eauto.
-          exists sp; split; eauto.
+      destruct sps as [| sp' sps']; try solve [inv hi].
+      dm; tc; dmeq ht; tc.
+      eapply IH in hl; eauto.
+      + eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+      + eapply llTarget_preserves_stacks_stable_invar; eauto.
+      + eapply llTarget_preserves_successful_sp_invar; eauto.
+        exists sp; split; eauto.
   Qed.
 
   Lemma initSps_preserves_exists_successful_sp_invar :
