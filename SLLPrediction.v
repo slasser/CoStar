@@ -315,26 +315,26 @@ Module SllPredictionFn (Import D : Defs.T).
                        (sps : list subparser)
                        (ts  : list token)
                        (ca  : cache) : prediction_result * cache :=
-    match sps with 
-    | []         => (PredReject, ca)
-    | sp :: sps' =>
-      if allPredictionsEqual sp sps' then
-        (PredSucc sp.(prediction), ca)
-      else
-        match ts with
-        | []            => (handleFinalSubparsers sps, ca)
-        | (a, l) :: ts' =>
-          match Cache.find (sps, a) ca with 
-          | Some sps' => sllPredict' gr cm sps' ts' ca
-          | None      =>
-            match sllTarget gr cm sps a with
-            | inl e    => (PredError e, ca)
-            | inr sps' =>
-              let ca' := Cache.add (sps, a) sps' ca
-              in  sllPredict' gr cm sps' ts' ca'
+    match ts with
+    | []            => (handleFinalSubparsers sps, ca)
+    | (a, l) :: ts' =>
+      match sps with
+      | []          => (PredReject, ca)
+      | sp' :: sps' =>
+        if allPredictionsEqual sp' sps' then
+          (PredSucc sp'.(prediction), ca)
+        else
+          match Cache.find (sp' :: sps', a) ca with 
+          | Some sps'' => sllPredict' gr cm sps'' ts' ca
+          | None       =>
+            match sllTarget gr cm (sp' :: sps') a with
+            | inl e     => (PredError e, ca)
+            | inr sps'' =>
+              let ca' := Cache.add (sp' :: sps', a) sps'' ca
+              in  sllPredict' gr cm sps'' ts' ca'
             end
           end
-        end
+      end
     end.
 
   Lemma sllPredict'_succ_preserves_cache_invar :
@@ -359,31 +359,19 @@ Module SllPredictionFn (Import D : Defs.T).
   Proof.
     intros g cm ts. 
     induction ts as [| (a,l) ts IH]; intros ca ca' ys sps hc hp; sis.
-    - destruct sps as [| sp sps']; tc; dmeq hall.
-      + inv hp; exists sp; split; auto.
-        apply in_eq.
-      + injection hp; intros _ hh. 
-        apply handleFinalSubparsers_succ_facts in hh.
-        destruct hh as (sp' & _ & hi & heq & _); eauto. 
-    - destruct sps as [| sp sps'] eqn:hs; tc; dmeq hall.
-      + inv hp; exists sp; split; auto.
-        apply in_eq.
+    - injection hp; intros _ hh. 
+      apply handleFinalSubparsers_succ_facts in hh.
+      destruct hh as (sp' & _ & hi & heq & _); eauto. 
+    - destruct sps as [| sp' sps'] eqn:hs; tc; dmeq hall.
+      + inv hp; exists sp'; split; auto; apply in_eq.
       + dmeq hf; tc.
-        * apply IH in hp; auto; destruct hp as [sp' [hi heq]]; subst.
+        * apply IH in hp; auto; destruct hp as [sp'' [hi heq]]; subst.
           apply hc in hf; auto.
           eapply sllTarget_preserves_prediction; eauto.
-        * dmeq ht; tc.
-          apply IH in hp.
-          -- destruct hp as [sp' [hi ?]]; subst.
+        * dmeq ht; tc; apply IH in hp.
+          -- destruct hp as [sp'' [hi ?]]; subst.
              eapply sllTarget_preserves_prediction; eauto.
-          -- (* lemma *)
-            red.
-            intros ss t ss' hfind.
-            destruct (cache_key_eq_dec (ss, t) (sp :: sps', a)).
-            ++ inv e.
-               rewrite CacheFacts.add_eq_o in hfind; auto.
-               inv hfind; auto.
-            ++ rewrite CacheFacts.add_neq_o in hfind; auto.
+          -- eapply sllTarget_add_preserves_cache_invar; eauto.
   Qed.
   
   Definition sllInitSps (g : grammar) (x : nonterminal) : list subparser :=
