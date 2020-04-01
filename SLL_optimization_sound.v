@@ -1,6 +1,7 @@
 Require Import List.
 Require Import GallStar.SLLPrediction.
 Require Import GallStar.Tactics.
+Require Import GallStar.Utils.
 Import ListNotations.
 
 Module SllOptimizationSoundFn (Import D : Defs.T).
@@ -21,8 +22,71 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       /\ exists ctx, fr' :: frs' ++ ctx = fr :: frs
     end.
 
+  (* move somewhere else *)
+  Lemma finalConfig_inv :
+    forall sp pred stk,
+      sp = Sp pred stk
+      -> finalConfig sp = true
+      -> stk = (SF None [], []).
+  Proof.
+    intros sp pred stk ? hf; subst; unfold finalConfig in hf; dms; tc.
+  Qed.
+  
+  Lemma approx_finalConfig_true :
+    forall sp sp',
+      approx sp' sp
+      -> finalConfig sp  = true
+      -> finalConfig sp' = true.
+  Proof.
+    intros [pred stk] [pred' (fr', frs')] ha hf.
+    eapply finalConfig_inv in hf; eauto; subst.
+    unfold approx in ha. destruct ha as [? [ctx heq]]; subst.
+    injection heq; intros heq' ?; subst.
+    apply app_eq_nil in heq'; destruct heq'; subst; auto.
+  Qed.
+
+  
   Definition overapprox (sps' sps : list subparser) : Prop :=
     forall sp, In sp sps -> exists sp', In sp' sps' /\ approx sp' sp.
+  
+  (* to do : refactor *)
+  Lemma overapprox_finalConfig :
+    forall sps sps' sps'' sps''',
+      overapprox sps''' sps''
+      -> filter finalConfig sps''  = sps
+      -> filter finalConfig sps''' = sps'
+      -> overapprox sps' sps.
+  Proof.
+    intros sps sps' sps'' sps''' ho hf hf' sp'' hi.
+    assert (hi' : In sp'' (filter finalConfig sps'')).
+    { rewrite hf; auto. }
+    assert (hi'' : In sp'' sps'').
+    { eapply filter_In; eauto. }
+    apply ho in hi''.
+    destruct hi'' as [sp''' [hi''' happrox]].
+    assert (hfc : finalConfig sp''   = true).
+    { apply filter_In in hi'; firstorder. }
+    assert (hfc' : finalConfig sp''' = true).
+    { eapply approx_finalConfig_true; eauto. }
+    exists sp'''; split; auto.
+    rewrite <- hf'; apply filter_In; auto.
+  Qed.
+
+  (* to do *)
+  Lemma overapprox_final_subparsers_succ_eq :
+    forall sps sps' rhs rhs',
+      overapprox sps' sps
+      -> handleFinalSubparsers sps = PredSucc rhs
+      -> handleFinalSubparsers sps' = PredSucc rhs'
+      -> rhs' = rhs.
+  Proof.
+    intros sps sps' rhs rhs' ho hl hs; unfold handleFinalSubparsers in *.
+    destruct (filter _ sps)  as [| x xs] eqn:hf  ; tc.
+    destruct (filter _ sps') as [| y ys] eqn:hf' ; tc.
+    destruct (allPredictionsEqual x xs)  eqn:ha  ; tc; inv hl.
+    destruct (allPredictionsEqual y ys)  eqn:ha' ; tc; inv hs.
+    eapply overapprox_finalConfig in ho; eauto.
+  Admitted.    
 
   Lemma sllPredict'_llPredict'_succ_eq :
     forall g cm ts sps' sps ca ys ca' ys',
@@ -38,10 +102,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     intros g cm ts; induction ts as [| (a,l) ts IH];
       intros sps' sps ca ys ca' ys' hw hs he hc ho hll hsll;
       pose proof hll as hll'; simpl in hll, hsll.
-    - (* no more tokens left *)
-      (* lemma *)
-      inv hsll.
-      admit.
+    - inv hsll; eapply overapprox_final_subparsers_succ_eq; eauto.
     - (* there's a head token left *)
       destruct sps' as [| sp' sps']; tc.
       destruct sps  as [| sp  sps ]; tc.
@@ -52,6 +113,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         rewrite Hass in hll; inv hll.
         admit.
       + clear hll.
+        (* can probably get rid of the Reject option because of
+           the successful sp invariant *)
         assert (Hass : exists sps'', llTarget g a (sp :: sps) = inr sps''
                                      /\ (llPredict' g sps'' ts = PredSucc ys \/ llPredict' g sps'' ts = PredReject)) by admit.
         clear hll'.
