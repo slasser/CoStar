@@ -559,6 +559,17 @@ Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
       exists (wpre ++ w); exists w'; repeat split; auto; apps.
   Qed.
 
+  Lemma gamma_recognize_fold_head_nt :
+    forall g x rhs ys ts,
+      In (x, rhs) g
+      -> gamma_recognize g (rhs ++ ys) ts
+      -> gamma_recognize g (NT x :: ys) ts.
+  Proof.
+    intros g x rhs ys ts hi hr.
+    apply gamma_recognize_split in hr.
+    destruct hr as [w [w' [? [hr hr']]]]; subst; eauto.
+  Qed.
+
   Lemma gamma_derivation__gamma_recognize :
     forall g ys w v,
       gamma_derivation g ys w v

@@ -24,393 +24,166 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Definition overapprox (sps' sps : list subparser) : Prop :=
     forall sp, In sp sps -> exists sp', In sp' sps' /\ approx sp' sp.
 
-  (*
-  (* need some more invariants here *)
-  Lemma sllPredict'_overapprox_llPredict' :
-    forall g cm ts sps' sps ca ca' sll_res ll_res,
-      cache_stores_target_results g cm ca
+  Lemma sllPredict'_llPredict'_succ_eq :
+    forall g cm ts sps' sps ca ys ca' ys',
+      all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps
+      -> exists_successful_sp g sps ts
+      -> cache_stores_target_results g cm ca
       -> overapprox sps' sps
-      -> sllPredict' g cm sps' ts ca = (sll_res, ca')
-      -> llPredict' g sps ts = ll_res
-      -> match sll_res with
-         | PredAmbig ys => True
-         | PredSucc ys  =>
-           ll_res = PredSucc ys \/ ll_res = PredReject
-         | PredReject =>
-           ll_res = PredReject
-         | PredError e =>
-           True
-         end.
-  Proof.
-    intros g cm ts; induction ts as [| (a,l) ts IH]; intros sps' sps ca ca' sll_res ll_res hc ho hs hl; sis.
-    - (* no more tokens left *)
-      destruct sps as [| sp sps]; subst.
-      + destruct sps' as [| sp' sps'].
-        * inv hs; auto.
-        * destruct (allPredictionsEqual sp' sps') eqn:ha'; inv hs; auto.
-          dm; auto.
-      + destruct sps' as [| sp' sps'].
-        * (* overapprox contra *)
-          admit.
-        * destruct (allPredictionsEqual sp' sps') eqn:ha'; inv hs; auto.
-          -- assert (Hass : allPredictionsEqual sp sps = true) by admit.
-          rewrite Hass.
-          admit.
-          -- dmeq hh; auto.
-             ++ unfold handleFinalSubparsers in hh. dmeqs H; tc; auto.
-                ** inv hh.
-          assert (
-          -- inv hs; auto.
-          -- 
-      + destruct 
-        * inv hs.
-          
-      destruct sps' as [| sp' sps']; destruct sps as [| sp sps]; inv hs; auto.
-            destruct sps as [| sp sps]; auto.
-      destruct (allPredictionsEqual sp' sps') eqn:ha.
-      + (* overapprox + SLL allPredictionsEqual = LL allPredictionsEqual *)
-        inv hs.
-        assert (Hass : allPredictionsEqual sp sps = true) by admit.
-        simpl. rewrite Hass.
-        admit.
-      + inv hs. rename H0 into hh.
-        unfold handleFinalSubparsers in *.
-        (* handleFinalSubparsers will extract the sps in final
-           configurations, and the resulting ones will have
-           allPredictionsEqual = true, so allPredictionsEqual
-           will also be true for the LL subparsers in final 
-           configurations *)
-        admit.
-    - (* there's a head token left *)
-      destruct sps  as [| sp sps]; auto.
-      destruct sps' as [| sp' sps']; tc.
-      destruct (allPredictionsEqual sp' sps') eqn:ha'.
-      + inv hs.
-        assert (Hass : allPredictionsEqual sp sps = true) by admit.
-        simpl. rewrite Hass.
-        (* same as the case above *)
-        admit.
-      + destruct (allPredictionsEqual sp sps) eqn:ha in hl.
-        * (* tricky case: LL prediction has converged on a 
-             prediction, but SLL prediction hasn't *)
-          (* maybe we can prove that if llPredict' returns 
-             PredSucc ys when there's a token left, then 
-             llPredict' on the tail returns either the same prediction 
-             or reject *)
-          destruct (Cache.find _ _) as [sps''' |] eqn:hf.
-          -- apply hc in hf.
-             subst. left.
-             
-             assert (Hass : exists sps'' ll_r,
-                        llPredict' g sps'' ts = ll_r
-                        /\ (ll_r = PredSucc (prediction sp)
-                            \/ ll_r = PredReject)) by admit.
-             destruct Hass as [sps'' [ll_r' [ heq htail]]].
-             eapply IH with (sps := sps'')
-                            (ll_r := ll_r') in hs; eauto.
-             ++ destruct hs; destruct htail; subst.
-                ** inv H0; auto.
-                ** inv H0.
-                ** inv H0.
-                ** right. rewrite <- hl'. rewrite <- heq.
-             ++ 
-             destruct htail as [hsuc | hrej].
-             ++ subst.
-                eapply IH with (sps := sps'') in hs; eauto.
-                (* overapprox invariant is preserved *)
-                admit.
-             ++ eapply IH with (sps := sps'')
-                               (ll_r := ll_r') in hs; eauto.
-                ** subst.
-                   left.
-                   admit.
-                ** admit.
-          -- 
-                ** subst.
-                eapp
-                (ll_r := ll_r') in hs; eauto.
-             clear hl. clear hl'.
-
-             ++ eapply IH with (sps  := sps''); eauto.
-                               (ll_r := PredSucc (prediction sp)) in hs; eauto.
-                ** admit.
-                ** 
-          assert (Hass : exists sps'', llPredict' g sps'' ts =
-                                       PredSucc (prediction sp) \/ llPredict' g sps'' ts = PredReject) by admit.
-          destruct Hass as [sps'' htail].
-          destruct (Cache.find _ _) as [sps''' |] eqn:hf.
-          -- apply hc in hf.
-             destruct htail.
-             ++ eapply IH with (sps := sps'') in hs; eauto.
-                ** (* invariant preserved *)
-                  admit.
-                ** subst; auto.
-             ++ eapply IH with (sps := sps'') (ll_r := PredReject) in hs; eauto.
-                ** subst; auto.
-        * eapply IH in hs; eauto.
-        inv hs.
-inv hs.
-
-    
-         | ll_r = PredSucc ys \/ ll_r = PredReject.
-  Proof.
-   *)
-
-  (* to do : maybe I should redefine llPredict'
-     and sllPredict' so that they call handleFinalSubparsers
-     right away when the remaining token list is empty *)
-  (* need some more invariants here *)
-  Lemma sllPredict'_succ_llPredict'_succ_or_reject :
-    forall g cm ts sps' sps ca ys ca' ll_r,
-      cache_stores_target_results g cm ca
-      -> overapprox sps' sps
-      -> sllPredict' g cm sps' ts ca = (PredSucc ys, ca')
-      -> llPredict' g sps ts = ll_r
-      -> ll_r = PredSucc ys \/ ll_r = PredReject.
-  Proof.
-    intros g cm ts; induction ts as [| (a,l) ts IH]; intros sps' sps ca ys ca' ll_r hc ho hs hl; simpl in hs; pose proof hl as hl'; simpl in hl.
-    - (* no more tokens left *)
-      destruct sps as [| sp sps]; auto.
-      destruct sps' as [| sp' sps']; tc.
-      destruct (allPredictionsEqual sp' sps') eqn:ha.
-      + (* overapprox + SLL allPredictionsEqual = LL allPredictionsEqual *)
-        inv hs.
-        assert (Hass : allPredictionsEqual sp sps = true) by admit.
-        simpl. rewrite Hass.
-        admit.
-      + inv hs. rename H0 into hh.
-        unfold handleFinalSubparsers in *.
-        (* handleFinalSubparsers will extract the sps in final
-           configurations, and the resulting ones will have
-           allPredictionsEqual = true, so allPredictionsEqual
-           will also be true for the LL subparsers in final 
-           configurations *)
-        destruct (allPredictionsEqual sp sps) eqn:ha'.
-        * dmeqs H; tc. inv hh.
-        admit.
-    - (* there's a head token left *)
-      destruct sps  as [| sp sps]; auto.
-      destruct sps' as [| sp' sps']; tc.
-      destruct (allPredictionsEqual sp' sps') eqn:ha'.
-      + inv hs.
-        assert (Hass : allPredictionsEqual sp sps = true) by admit.
-        simpl. rewrite Hass.
-        (* same as the case above *)
-        admit.
-      + destruct (allPredictionsEqual sp sps) eqn:ha in hl.
-        * (* tricky case: LL prediction has converged on a 
-             prediction, but SLL prediction hasn't *)
-          (* maybe we can prove that if llPredict' returns 
-             PredSucc ys when there's a token left, then 
-             llPredict' on the tail returns either the same prediction 
-             or reject *)
-          destruct (Cache.find _ _) as [sps''' |] eqn:hf.
-          -- apply hc in hf.
-             subst. left.
-             
-             assert (Hass : exists sps'' ll_r,
-                        llPredict' g sps'' ts = ll_r
-                        /\ (ll_r = PredSucc (prediction sp)
-                            \/ ll_r = PredReject)) by admit.
-             destruct Hass as [sps'' [ll_r' [ heq htail]]].
-             eapply IH with (sps := sps'')
-                            (ll_r := ll_r') in hs; eauto.
-             ++ destruct hs; destruct htail; subst.
-                ** inv H0; auto.
-                ** inv H0.
-                ** inv H0.
-                ** right. rewrite <- hl'. rewrite <- heq.
-             ++ 
-             destruct htail as [hsuc | hrej].
-             ++ subst.
-                eapply IH with (sps := sps'') in hs; eauto.
-                (* overapprox invariant is preserved *)
-                admit.
-             ++ eapply IH with (sps := sps'')
-                               (ll_r := ll_r') in hs; eauto.
-                ** subst.
-                   left.
-                   admit.
-                ** admit.
-          -- 
-                ** subst.
-                eapp
-                (ll_r := ll_r') in hs; eauto.
-             clear hl. clear hl'.
-
-             ++ eapply IH with (sps  := sps''); eauto.
-                               (ll_r := PredSucc (prediction sp)) in hs; eauto.
-                ** admit.
-                ** 
-          assert (Hass : exists sps'', llPredict' g sps'' ts =
-                                       PredSucc (prediction sp) \/ llPredict' g sps'' ts = PredReject) by admit.
-          destruct Hass as [sps'' htail].
-          destruct (Cache.find _ _) as [sps''' |] eqn:hf.
-          -- apply hc in hf.
-             destruct htail.
-             ++ eapply IH with (sps := sps'') in hs; eauto.
-                ** (* invariant preserved *)
-                  admit.
-                ** subst; auto.
-             ++ eapply IH with (sps := sps'') (ll_r := PredReject) in hs; eauto.
-                ** subst; auto.
-        * eapply IH in hs; eauto.
-        inv hs.
-inv hs.
-        
-  Admitted.
-
-  
-  (* need some more invariants here *)
-  Lemma sllPredict'_succ_llPredict'_succ_or_reject :
-    forall g cm ts sps' sps ca ys ca',
-      overapprox sps' sps
-      -> sllPredict' g cm sps' ts ca = (PredSucc ys, ca')
       -> llPredict' g sps ts = PredSucc ys
-         \/ llPredict' g sps ts = PredReject.
+      -> sllPredict' g cm sps' ts ca = (PredSucc ys', ca')
+      -> ys' = ys.
   Proof.
-    intros g cm ts; induction ts as [| (a,l) ts IH]; intros sps' sps ca ys ca' ho hs; simpl in hs.
+    intros g cm ts; induction ts as [| (a,l) ts IH];
+      intros sps' sps ca ys ca' ys' hw hs he hc ho hll hsll;
+      pose proof hll as hll'; simpl in hll, hsll.
     - (* no more tokens left *)
-      destruct sps as [| sp sps]; auto.
-      destruct sps' as [| sp' sps']; tc.
-      destruct (allPredictionsEqual _ _) eqn:ha.
-      + (* overapprox + SLL allPredictionsEqual = LL allPredictionsEqual *)
-        inv hs.
-        assert (Hass : allPredictionsEqual sp sps = true) by admit.
-        simpl. rewrite Hass.
-        admit.
-      + inv hs. rename H0 into hh.
-        unfold handleFinalSubparsers in *.
-        (* handleFinalSubparsers will extract the sps in final
-           configurations, and the resulting ones will have
-           allPredictionsEqual = true, so allPredictionsEqual
-           will also be true for the LL subparsers in final 
-           configurations *)
-        admit.
+      (* lemma *)
+      inv hsll.
+      admit.
     - (* there's a head token left *)
-      destruct sps as [| sp sps]; auto.
       destruct sps' as [| sp' sps']; tc.
+      destruct sps  as [| sp  sps ]; tc.
       destruct (allPredictionsEqual sp' sps') eqn:ha'.
-      + inv hs.
+      + inv hsll.
+        (* sp :: sps must all be equal *)
         assert (Hass : allPredictionsEqual sp sps = true) by admit.
-        simpl. rewrite Hass.
-        (* same as the case above *)
+        rewrite Hass in hll; inv hll.
         admit.
-      + simpl. subst.
-        destruct (allPredictionsEqual sp sps) eqn:ha.
-        * (* tricky case: LL prediction has converged on a 
-             prediction, but SLL prediction hasn't *)
-        destruct (Cache.find _ _) as [sps'' |] eqn:hf.
-        * eapply IH in hs; eauto.
-        inv hs.
-inv hs.
-        
+      + clear hll.
+        assert (Hass : exists sps'', llTarget g a (sp :: sps) = inr sps''
+                                     /\ (llPredict' g sps'' ts = PredSucc ys \/ llPredict' g sps'' ts = PredReject)) by admit.
+        clear hll'.
+        destruct Hass as [sps'' [ht [hsuc | hrej]]].
+        * destruct (Cache.find _ _) as [sps''' |] eqn:hf.
+          -- apply hc in hf.
+             eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
+             ++ eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+             ++ eapply llTarget_preserves_stacks_stable_invar; eauto.
+             ++ eapply llTarget_preserves_successful_sp_invar; eauto.
+             ++ admit.
+          -- destruct (sllTarget _ _ _ _) as [?| sps'''] eqn:ht';tc.
+             eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
+             ** eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+             ** eapply llTarget_preserves_stacks_stable_invar; eauto.
+             ** eapply llTarget_preserves_successful_sp_invar; eauto.
+             ** eapply sllTarget_add_preserves_cache_invar; eauto.
+             ** admit.
+        * exfalso.
+          eapply exists_successful_sp_llPredict'_neq_reject with (sps := sps''); eauto.
+          -- eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+          -- eapply llTarget_preserves_stacks_stable_invar; eauto.
+          -- eapply llTarget_preserves_successful_sp_invar; eauto.
   Admitted.
 
-  Lemma sllPredict_succ_llPredict_succ_or_reject :
-    forall g cm ss o x suf frs ts ca ys ca',
-      ss = (SF o (NT x :: suf), frs)
+  (* maybe change this to gamma_recognize rhs ++ ... *)
+  (* next: write a lemma that does case analysis on the
+     llPredict result to show that it must be equal to
+     the sllPredict result *)
+  (*
+  Lemma sllPredict_succ_at_most_one_rhs_applies :
+    forall g cm cr ce frs o x suf w rhs rhs' ca ca',
+      cr    = SF o (NT x :: suf)
+      -> ce = SF (Some x) rhs
       -> no_left_recursion g
-      -> suffix_stack_wf g ss
-      -> sllPredict g cm x ts ca = (PredSucc ys, ca')
-      -> llPredict g x ss ts  = PredSucc ys
-         \/ llPredict g x ss ts  = PredReject.
+      -> suffix_stack_wf g (cr, frs)
+      -> cache_stores_target_results g cm ca
+      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
+      -> llPredict g x (cr, frs) w = PredSucc rhs
+      -> sllPredict g cm x w ca    = (PredSucc rhs', ca')
+      -> rhs' = rhs.
   Proof.
-    intros g cm ss o x suf frs ts ca ys ca' ? hn hw hp; subst.
-    unfold llPredict; unfold sllPredict in hp; dmeqs H; tc; inv hp.
-    - exfalso; eapply startState_never_returns_error; eauto.
-    - eapply sllPredict'_succ_llPredict'_succ_or_reject; eauto.
+    intros g cm ? ? frs o x suf w rhs rhs' ca ca' ? ?
+           hn hw hc hr hl hs; subst.
+    unfold llPredict in hl; unfold sllPredict in hs.
+    destruct (startState _ _ _) as [? | sps] eqn:hss; tc.
+    destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
+    eapply sllPredict'_llPredict'_succ_eq with
+        (sps := sps) (sps' := sps'); eauto.
+    - eapply startState_preserves_stacks_wf_invar; eauto. 
+    - eapply startState_all_stacks_stable; eauto. 
+    - (* lemma *)
+      eapply closure_preserves_successful_sp_invar; eauto.
+      eapply initSps_preserves_exists_successful_sp_invar; eauto.
+    - (* lemma : startState preserves overapprox invar *)
+      admit.
+  Admitted.
+   *)
+  
+  Lemma sllPredict_llPredict_succ_eq :
+    forall g cm cr o x suf frs w ca rhs rhs' ca',
+      cr = SF o (NT x :: suf)
+      -> suffix_stack_wf g (cr, frs)
+      -> cache_stores_target_results g cm ca
+      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
+      -> llPredict g x (cr, frs) w = PredSucc rhs
+      -> sllPredict g cm x w ca = (PredSucc rhs', ca')
+      -> rhs' = rhs.
+  Proof.
+    intros g cm ? o x suf frs w ca rhs rhs' ca' ? hw hc hr hl hs; subst.
+    unfold sllPredict in hs; unfold llPredict in hl.
+    destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
+    destruct (startState _ _ _) as [? | sps] eqn:hss; tc.
+    eapply sllPredict'_llPredict'_succ_eq; eauto.
+    - eapply startState_preserves_stacks_wf_invar; eauto.
+    - eapply startState_all_stacks_stable; eauto.
+    - (* lemma *)
+      eapply closure_preserves_successful_sp_invar; eauto.
+      eapply initSps_preserves_exists_successful_sp_invar; eauto.
+    - (* overapprox should be true of sllStartState and llStartState *)
+      admit.
+  Admitted.
+
+    Lemma sllPredict_succ_eq_llPredict_succ :
+    forall g cm cr o x suf frs w ca rhs ca',
+      cr = SF o (NT x :: suf)
+      -> no_left_recursion g
+      -> suffix_stack_wf g (cr, frs)
+      -> cache_stores_target_results g cm ca
+      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
+      -> sllPredict g cm x w ca = (PredSucc rhs, ca')
+      -> llPredict g x (cr, frs) w = PredSucc rhs.
+  Proof.
+    intros g cm ? o x suf frs w ca rhs' ca' ? hn hw hc hr hs; subst.
+    destruct (llPredict _ _ _ _) as [rhs | rhs | | e] eqn:hl.
+    - symmetry; f_equal; eapply sllPredict_llPredict_succ_eq; eauto.
+    - exfalso. admit.
+    - exfalso; eapply ussr_llPredict_neq_reject; eauto.
+    - exfalso; eapply llPredict_never_returns_error; eauto.
+  Admitted.
+
+  Lemma adaptivePredict_succ_eq_llPredict_succ :
+    forall g cm cr x o suf frs w ca rhs ca',
+      cr = SF o (NT x :: suf)
+      -> no_left_recursion g
+      -> suffix_stack_wf g (cr, frs)
+      -> cache_stores_target_results g cm ca
+      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
+      -> adaptivePredict g cm x (cr, frs) w ca = (PredSucc rhs, ca')
+      -> llPredict g x (cr, frs) w = PredSucc rhs.
+  Proof.
+    intros g cm ? x o suf frs w ca rhs ca' ? hn hw hc hr ha; subst.
+    unfold adaptivePredict in ha.
+    destruct (sllPredict _ _ _ _ _) as ([? | ? | | ?], ?) eqn:hs; tc; inv ha.
+    eapply sllPredict_succ_eq_llPredict_succ; eauto.
+  Qed.
+
+  Lemma adaptivePredict_succ_at_most_one_rhs_applies :
+    forall g cm cr o x suf frs w ca rhs rhs' ca',
+      cr = SF o (NT x :: suf)
+      -> no_left_recursion g
+      -> suffix_stack_wf g (cr, frs)
+      -> cache_stores_target_results g cm ca
+      -> In (x, rhs) g
+      -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w
+      -> adaptivePredict g cm x (cr, frs) w ca = (PredSucc rhs', ca')
+      -> rhs' = rhs.
+  Proof.
+    intros g cm ? o x suf frs w ca rhs rhs' ca' ? hn hw hc hi hr ha; subst.
+    eapply adaptivePredict_succ_eq_llPredict_succ in ha; eauto.
+    - eapply llPredict_succ_at_most_one_rhs_applies; eauto.
+    - eapply gamma_recognize_fold_head_nt; eauto.
   Qed.
   
-  Lemma adaptivePredict_succ_llPredict_succ_or_reject :
-    forall g cm x ss ts ca ys ca',
-      adaptivePredict g cm x ss ts ca = (PredSucc ys, ca')
-      -> llPredict g x ss ts = PredSucc ys
-         \/ llPredict g x ss ts = PredReject.
-  Proof.
-    intros g cm x ss ts ca ys ca' hp.
-    unfold adaptivePredict in hp; dmeqs H; tc; inv hp; auto.
-    eapply sllPredict_succ_llPredict_succ_or_reject; eauto.
-  Qed.
-
 End SllOptimizationSoundFn.
-
-        
-(*
-Lemma sll'_ll'_equiv_succ :
-    forall g cm sps sps' ts c c' ys,
-      sllPredict' g cm sps ts c = (PredSucc ys, c')
-      -> llPredict' g sps' ts = PredReject
-         \/llPredict' g sps' ts = PredSucc ys.
-  Proof.
-    intros g cm sps sps' ts c c' ys hs.
-    unfold sllPredict' in hs.
-    induction ts as [| t ts IH].
-    - destruct sps as [| sp sps]; tc.
-      destruct (allPredictionsEqual sp sps) eqn:ha.
-      + (* SLL all equal *)
-        inv hs.
-        destruct sps' as [| sp' sps']; auto.
-        right. simpl.
-        (* an invariant relating the LL and SLL subaparsers
-           should prove that SLL all equal -> LL all equal *)
-  Abort.
-
-  (* Equivalence of LL and SLL *)
-(*
-Lemma sll'_ll'_equiv_succ :
-  forall g cm sps sps' ts c c' ys,
-    
-sllPredict' g cm sps ts c = (PredSucc ys, c')
-    -> llPredict' g sps' ts = PredReject
-       \/llPredict' g sps' ts = PredSucc ys.
-Proof.
-  intros g cm sps sps' ts c c' ys hs.
-  unfold SLL.sllPredict' in hs.
-  induction ts as [| t ts IH].
-  - destruct sps as [| sp sps]; tc.
-    destruct (SLL.allPredictionsEqual sp sps) eqn:ha.
-    + (* SLL all equal *)
-      destruct sps' as [| sp' sps']; auto.
-      right.
-Abort.
-
-Lemma sll_ll_equiv_succ :
-  forall g cm fr frs x suf ts c c' ys,
-    no_left_recursion g
-    -> suffix_stack_wf g (fr, frs)
-    -> fr = SF (NT x :: suf)
-    -> SLL.sllPredict g cm x ts c = (PredSucc ys, c')
-    -> llPredict g x (fr, frs) ts = PredSucc ys.
-Proof.
-  intros g cm fr frs x suf ts c c' ys hn hw ? hs; subst.
-  unfold SLL.sllPredict in hs.
-  destruct (SLL.startState g cm x) as [e | sps] eqn:hss; tc.
-  unfold llPredict.
-  destruct (startState g x _) as [e | sps'] eqn:hss'.
-  - (* lemma *)
-    destruct e as [ | x'].
-    + exfalso; eapply startState_never_returns_SpInvalidState; eauto.
-    + exfalso; eapply closure_never_finds_left_recursion; eauto.
-  - (* what do we know at this point?
-         - sllPredict' succeeded, so there must be an sp in sps with label ys
-         - there must also be an sp' in sps' with label ys *)
-    admit.
-Abort.
-
-Lemma adaptivePredict_equiv_llPredict :
-  forall g cm x stk ts c c' r,
-    SLL.adaptivePredict g cm x stk ts c = (r, c')
-    -> llPredict g x stk ts = r.
-Proof.
-  intros g cm x stk ts c c' r ha.
-  unfold SLL.adaptivePredict in ha.
-  destruct (SLL.sllPredict _ _ _ _ _) as (r', c'') eqn:hs.
-  destruct r' as [ys | ys | | e]; inv ha; auto.
-  - (* PredSucc *)
-    admit.
-  - admit.
-  - admit.
-Admitted.
-*)
-*)

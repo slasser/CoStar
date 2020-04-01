@@ -781,13 +781,48 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     eapply mcms_words_eq__subparsers_eq in hm; subst; auto.
   Qed.
 
+    (* One of the main lemmas in this file; if llPredict return a right-hand side
+   and finds no ambiguity, then only that right-hand side will result in a 
+   successful derivation *)
+  (* This probably belongs in a different file, since it's involved in more than
+   just proving completeness *)
+  Lemma llPredict_succ_at_most_one_rhs_applies :
+    forall g cr o x suf frs w rhs rhs',
+      cr = SF o (NT x :: suf)
+      -> no_left_recursion g
+      -> suffix_stack_wf g (cr, frs)
+      -> In (x, rhs) g
+      -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w
+      -> llPredict g x (cr, frs) w = PredSucc rhs'
+      -> rhs' = rhs.
+  Proof.
+    intros g cr o x suf frs w rhs rhs' ? hn hw hi hr hl; subst; sis. 
+    unfold llPredict in hl.
+    destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
+    eapply startState_closure_multistep_from_orig_sp in hs; eauto.
+    destruct hs as [av [sp [hc [hg' hi']]]].
+    eapply llPredict'_succ_labels_eq_after_prefix
+      with (wpre := []) (orig_sps := sps) in hl;
+      [ .. | eapply subparsers_complete_invar_starts_true; eauto].
+    destruct hl as [wpre' [wsuf' [? hall]]]; sis; subst.
+    eapply mcms_subparser_consumes_remaining_input in hg'; eauto.
+    - destruct hg' as [sp'' hm].
+      eapply mcms_backtrack_two_groups in hm.
+      destruct hm as [sp' [hm hm']].
+      apply hall in hm; subst; auto.
+      apply closure_multistep_preserves_label in hc; auto.
+    - eapply stable_config_after_closure_multistep; eauto.
+    - eapply closure_multistep_preserves_suffix_stack_wf_invar; eauto; sis.
+      apply push_preserves_suffix_frames_wf_invar; auto.
+  Qed.
+
   (* One of the main lemmas in this file; if llPredict return a right-hand side
    and finds no ambiguity, then only that right-hand side will result in a 
    successful derivation *)
   (* This probably belongs in a different file, since it's involved in more than
    just proving completeness *)
   (* Also, I think there's a primed version of this lemma--this one may be deprecated *)
-    Lemma llPredict_succ_at_most_one_rhs_applies :
+(*    Lemma llPredict_succ_at_most_one_rhs_applies :
     forall g cr ce o x suf frs w rhs rhs',
       cr = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
@@ -816,7 +851,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     - eapply stable_config_after_closure_multistep; eauto.
     - eapply closure_multistep_preserves_suffix_stack_wf_invar; eauto; sis.
       apply push_preserves_suffix_frames_wf_invar; auto.
-  Qed.
+  Qed. *)
 
   (* Moving on to the case where llPredict returns Ambig... *)
 
@@ -1080,10 +1115,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         apply in_map_iff in hi'.
         destruct hi' as [rhs [heq hi']]; subst; sis.
         apply closure_multistep_preserves_label in hc; sis; subst; auto.
-      + (* lemma *)
-        intros init_sp hi'.
-        eapply initSps_preserves_suffix_stack_wf_invar; eauto.
-    - eapply stacks_wf_in_startState_result; eauto.
+      + eapply initSps_preserves_suffix_stack_wf_invar; eauto. 
+    - eapply startState_preserves_stacks_wf_invar; eauto. 
     - red. intros sp' hi; sis.
       exists sp'; split; auto.
       eapply closure_func_refines_closure_multistep_backward in hi; eauto.
@@ -1092,8 +1125,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         { eapply stable_config_after_closure_multistep; eauto. }
         destruct sp' as [pred ([suf'], frs')]; sis.
         inv hst; auto.
-      + intros sp hi'.
-        eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+      + eapply initSps_preserves_suffix_stack_wf_invar; eauto. 
   Qed.
 
   (* Now some facts about how prediction doesn't return Reject when the initial
@@ -1341,18 +1373,10 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     unfold llPredict in hl.
     destruct (startState _ _ _) as [e | sps] eqn:hs; tc.
     eapply exists_successful_sp_llPredict'_neq_reject; eauto.
+    - eapply startState_preserves_stacks_wf_invar; eauto. 
+    - eapply startState_all_stacks_stable; eauto.
     - (* lemma *)
-      eapply closure_preserves_suffix_stack_wf_invar; eauto.
-      red; intros.
-      eapply initSps_preserves_suffix_stack_wf_invar; eauto.
-    - (* lemma *)
-      red; intros.
-      eapply closure_func_refines_closure_multistep_backward in hs; eauto.
-      + firstorder.
-        eapply stable_config_after_closure_multistep; eauto.
-      + red; intros.
-        eapply initSps_preserves_suffix_stack_wf_invar; eauto.
-    - eapply closure_preserves_successful_sp_invar; eauto.
+      eapply closure_preserves_successful_sp_invar; eauto.
       eapply initSps_preserves_exists_successful_sp_invar; eauto.
   Qed.
 

@@ -232,11 +232,6 @@ Module LLPredictionFn (Import D : Defs.T).
                CstepK NtSet.empty [] 
       end
     end.
-
-(*  Lemma spClosureStep_done_eq :
-    forall g av sp,
-      spClosureStep
- *)
   
   Lemma spClosureStep_preserves_prediction :
     forall g sp sp' sps' av av',
@@ -1032,18 +1027,17 @@ Lemma llPredict'_success_result_in_original_subparsers :
   Qed.
 
   Lemma initSps_preserves_suffix_stack_wf_invar :
-    forall g fr o x suf frs sp,
+    forall g fr o x suf frs,
       fr = SF o (NT x :: suf)
       -> suffix_stack_wf g (fr, frs)
-      -> In sp (initSps g x (fr, frs))
-      -> suffix_stack_wf g sp.(stack).
+      -> all_suffix_stacks_wf g (initSps g x (fr, frs)).
   Proof.
-    intros g fr o x suf frs sp ? hw hi; subst; unfold initSps in hi.
+    intros g fr o x suf frs ? hw sp hi; subst; unfold initSps in hi.
     apply in_map_iff in hi.
     destruct hi as [rhs [? hi]]; subst; sis.
     apply push_preserves_suffix_frames_wf_invar; eauto.
     apply rhssForNt_in_iff; auto.
-  Qed.
+  Qed.    
 
   (* AN INVARIANT THAT RELATES "UNAVAILABLE" NONTERMINALS
    TO THE SHAPE OF THE STACK *)

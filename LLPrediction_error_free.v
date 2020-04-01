@@ -300,7 +300,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
         * eapply llTarget_preserves_stacks_stable_invar; eauto.
   Qed.
 
-  Lemma stacks_wf_in_startState_result :
+  Lemma startState_preserves_stacks_wf_invar :
     forall g fr frs o x suf sps,
       suffix_stack_wf g (fr, frs)
       -> fr = SF o (NT x :: suf)
@@ -310,6 +310,18 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     intros g [suf'] frs o x suf sps hw heq hs; sis; subst.
     eapply closure_preserves_suffix_stack_wf_invar; eauto.
     unfold all_suffix_stacks_wf; intros sp hi.
+    eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+  Qed.
+
+  Lemma startState_all_stacks_stable :
+    forall g cr o x suf frs sps,
+      cr = SF o (NT x :: suf)
+      -> suffix_stack_wf g (cr, frs)
+      -> startState g x (cr, frs) = inr sps
+      -> all_stacks_stable sps.
+  Proof.
+    intros g cr o x suf frs sps ? hw hs sp hi.
+    eapply all_stacks_stable_after_closure; eauto.
     eapply initSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
@@ -325,11 +337,8 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     - inv hl.
       eapply startState_never_returns_SpInvalidState; eauto.
     - eapply llPredict'_never_returns_SpInvalidState; eauto.
-      + eapply stacks_wf_in_startState_result; eauto.
-      + unfold startState in hss.
-        eapply all_stacks_stable_after_closure; eauto.
-        (* lemma *)
-        red; intros; eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+      + eapply startState_preserves_stacks_wf_invar; eauto. 
+      + eapply startState_all_stacks_stable; eauto.
   Qed.
 
   (* LEFT RECURSION CASE *)
@@ -471,6 +480,19 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     intros ? ? ? ? ? ? e ? ? ?; unfold not; intros hs; subst; destruct e.
     - eapply startState_never_returns_SpInvalidState; eauto.
     - eapply closure_never_finds_left_recursion; eauto.
+  Qed.
+
+  Lemma llPredict_never_returns_error :
+    forall g fr o x suf frs ts e,
+      fr = SF o (NT x :: suf)
+      -> no_left_recursion g
+      -> suffix_stack_wf g (fr, frs)
+      -> llPredict g x (fr, frs) ts <> PredError e.
+  Proof.
+    unfold not; intros g fr o x suf frs ts e ? hn hw hl; subst.
+    destruct e as [| x'].
+    - eapply llPredict_never_returns_SpInvalidState;  eauto.
+    - eapply llPredict_never_returns_SpLeftRecursion; eauto.
   Qed.
 
 End LLPredictionErrorFreeFn.
