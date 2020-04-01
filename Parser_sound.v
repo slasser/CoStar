@@ -464,12 +464,13 @@ Module ParserSoundFn (Import D : Defs.T).
     forall g cm w p_stk p_stk' s_stk s_stk' ts ts' av av' un un' ca ca',
       no_left_recursion g
       -> stacks_wf g p_stk s_stk
+      -> cache_stores_target_results g cm ca
       -> unique_stack_prefix_derivation g w p_stk s_stk ts un
       -> step g cm p_stk s_stk ts av un ca = StepK p_stk' s_stk' ts' av' un' ca'
       -> unique_stack_prefix_derivation g w p_stk' s_stk' ts' un'.
   Proof.
     intros g cm w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
-           ts ts' av av' un un' ca ca' hn hw hu hs; red; red in hu; intros hu'.
+           ts ts' av av' un un' ca ca' hn hw hc hu hs; red; red in hu; intros hu'.
     unfold step in hs; dmeqs h; inv hs; tc;
       destruct hu as (wpre & heq & hu); subst; auto. 
     - exists wpre; split; auto.
@@ -494,28 +495,31 @@ Module ParserSoundFn (Import D : Defs.T).
 
   Lemma multistep_sound_unambig' :
     forall (g      : grammar)
+           (cm     : closure_map)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
            (w wsuf : list token)
            (av     : NtSet.t)
            (p_stk  : prefix_stack)
            (s_stk  : suffix_stack)
-           (u      : bool)
+           (un     : bool)
+           (ca     : cache)
+           (hc     : cache_stores_target_results g cm ca)
            (a'     : Acc lex_nat_triple (meas g s_stk wsuf av))
            (v      : forest),
       tri = meas g s_stk wsuf av
       -> no_left_recursion g
       -> stacks_wf g p_stk s_stk
-      -> unique_stack_prefix_derivation g w p_stk s_stk wsuf u
-      -> multistep g p_stk s_stk wsuf av u a' = Accept v
+      -> unique_stack_prefix_derivation g w p_stk s_stk wsuf un
+      -> multistep g cm p_stk s_stk wsuf av un ca hc a' = Accept v
       -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
          /\ (forall v',
                 gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
                 -> v' = v).
   Proof.
-    intros g tri a.
+    intros g cm tri a.
     induction a as [tri hlt IH].
-    intros w wsuf av p_stk s_stk u a' v ? hn hw hu hm; subst.
+    intros w wsuf av p_stk s_stk un ca hc a' v ? hn hw hu hm; subst.
     apply multistep_accept_cases in hm.
     destruct hm as [[hf hu'] | he]; subst.
     - apply step_StepAccept_facts in hf.
@@ -530,30 +534,33 @@ Module ParserSoundFn (Import D : Defs.T).
       rewrite heq in hd. 
       eapply ha in hd; eauto; apps.
       destruct hd as (? & ? & heq'); repeat rewrite rev_involutive in heq'; auto.
-    - destruct he as (ps' & ss' & ts' & av' & u' & a'' & hs & hm).
+    - destruct he as (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.
       + erewrite step_preserves_bottomFrameSyms_invar; eauto.
-      + eapply step_meas_lt; eauto.
-      + eapply step_preserves_stacks_wf_invar; eauto. 
-      + eapply step_preserves_unique_stack_prefix_derivation_invar; eauto.
+      + eapply step_meas_lt with (ca := ca); eauto. 
+      + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto. 
+      + eapply step_preserves_unique_stack_prefix_derivation_invar with (ca := ca); eauto.
   Qed.
 
   Lemma multistep_sound_unambig :
     forall (g      : grammar)
+           (cm     : closure_map)
            (w wsuf : list token)
            (av     : NtSet.t)
-           (p_stk  : prefix_stack)
-           (s_stk  : suffix_stack)
-           (u      : bool)
-           (a      : Acc lex_nat_triple (meas g s_stk wsuf av))
+           (ps     : prefix_stack)
+           (ss     : suffix_stack)
+           (un     : bool)
+           (ca     : cache)
+           (hc     : cache_stores_target_results g cm ca)
+           (ha     : Acc lex_nat_triple (meas g ss wsuf av))
            (v      : forest),
       no_left_recursion g
-      -> stacks_wf g p_stk s_stk
-      -> unique_stack_prefix_derivation g w p_stk s_stk wsuf u
-      -> multistep g p_stk s_stk wsuf av u a = Accept v
-      -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
+      -> stacks_wf g ps ss
+      -> unique_stack_prefix_derivation g w ps ss wsuf un
+      -> multistep g cm ps ss wsuf av un ca hc ha = Accept v
+      -> gamma_derivation g (bottomFrameSyms ps ss) w v
          /\ (forall v',
-                gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
+                gamma_derivation g (bottomFrameSyms ps ss) w v'
                 -> v' = v).
   Proof.
     intros; eapply multistep_sound_unambig'; eauto.
@@ -802,8 +809,8 @@ Module ParserSoundFn (Import D : Defs.T).
           /\ rhs' <> rhs.
   Proof.
     intros g orig_sps wsuf.
-    induction wsuf as [| t wsuf' IH]; intros wpre curr_sps rhs ha hi hl; destruct curr_sps as [| csp csps]; sis; tc.
-    - destruct (allPredictionsEqual csp csps) eqn:ha'; tc.
+    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs ha hi hl; sis; tc.
+    - (* lemma *)
       unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| csp' csps'] eqn:hf; tc.
       destruct (allPredictionsEqual csp' csps') eqn:ha''; tc.
@@ -815,33 +822,33 @@ Module ParserSoundFn (Import D : Defs.T).
       destruct hf as [orig_sp [hi' hm]].
       apply allPredictionsEqual_false_exists_diff_rhs in ha''.
       destruct ha'' as [csp'' [hi'' hn]].
-      assert (hi''' : In csp'' (csp :: csps)).
+      assert (hi''' : In csp'' curr_sps).
       { eapply filter_tail_in; eauto. }
       apply hi in hi'''.
       destruct hi''' as [orig_sp' [hi''' hm']].
-      exists orig_sp; exists csp'; exists orig_sp'; exists csp''; exists csp''.(prediction); repeat split; auto.
-      + (* easy *)
-        eapply mcms'_preserves_label; eauto.
-      + assert (hi'''' : In csp' (filter finalConfig (csp :: csps))).
+      exists orig_sp; exists csp'; exists orig_sp'; exists csp'';
+      exists csp''.(prediction); repeat split; auto.
+      + eapply mcms'_preserves_label; eauto.
+      + assert (hi'''' : In csp' (filter finalConfig curr_sps)).
         { rewrite hf'; apply in_eq. }
         eapply filter_In in hi''''; destruct hi''''; auto.
       + eapply mcms'_preserves_label; eauto.
-      + assert (hi'''' : In csp'' (filter finalConfig (csp :: csps))).
+      + assert (hi'''' : In csp'' (filter finalConfig curr_sps)). 
         { rewrite hf'; apply in_cons; auto. }
         eapply filter_In in hi''''; destruct hi''''; auto.
-    - destruct (allPredictionsEqual _ _); tc.
-      destruct (move _ _ ) as [e | sps'] eqn:hm; tc.
-      destruct (closure _ _) as [e | sps''] eqn:hc; tc.
-      eapply IH with (wpre := wpre ++ [t]) in hl.
+    - destruct curr_sps as [| csp csps]; tc.
+      destruct (allPredictionsEqual _ _); tc.
+      destruct (llTarget _ _ _) as [? | sps'] eqn:ht; tc.
+      eapply IH with (wpre := wpre ++ [(a,l)]) in hl.
       + destruct hl as [osp [fsp [osp' [fsp' [rhs' [hi' [heq [hm' [hf [hi'' [heq' [hm'' [hf' hn]]]]]]]]]]]]]; subst.
         rewrite <- app_assoc in *; sis.
-        exists osp; exists fsp; exists osp'; exists fsp'; exists osp'.(prediction); repeat split; eauto.
-      + eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-        apply closure_preserves_suffix_stack_wf_invar in hc; auto.
-      + eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
+        exists osp; exists fsp; exists osp'; exists fsp';
+        exists osp'.(prediction); repeat split; eauto.
+      + eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+      + eapply llTarget_preserves_subparsers_sound_invar; eauto.
   Qed.
 
-  Lemma llPredict_ambig_rhs_unproc_stack_syms' :
+    Lemma llPredict_ambig_rhs_unproc_stack_syms' :
     forall g cr ce o x suf frs w rhs,
       cr    = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
@@ -888,7 +895,7 @@ Module ParserSoundFn (Import D : Defs.T).
              apply closure_multistep_preserves_label in hc; sis; subst; auto.
           -- red; intros init_sp hi''.
              eapply initSps_preserves_suffix_stack_wf_invar; eauto.
-    - eapply stacks_wf_in_startState_result; eauto.
+    - eapply startState_preserves_stacks_wf_invar; eauto. 
     - red. intros sp' hi; sis.
       exists sp'; split; auto.
       eapply closure_func_refines_closure_multistep_backward in hi; eauto.
@@ -915,17 +922,17 @@ Module ParserSoundFn (Import D : Defs.T).
     intros g ys ts hc; inv hc.
   Qed.
 
-  Lemma step_preserves_ambiguous_stack_prefix_derivation_invar :
-    forall g w p_stk p_stk' s_stk s_stk' ts ts' av av' u u',
+    Lemma step_preserves_ambiguous_stack_prefix_derivation_invar :
+    forall g cm w ps ps' ss ss' ts ts' av av' un un' ca ca',
       no_left_recursion g
-      -> stacks_wf g p_stk s_stk
-      -> stack_prefix_derivation g w p_stk s_stk ts
-      -> ambiguous_stack_prefix_derivation g w p_stk s_stk ts u
-      -> step g p_stk s_stk ts av u = StepK p_stk' s_stk' ts' av' u'
-      -> ambiguous_stack_prefix_derivation g w p_stk' s_stk' ts' u'.
+      -> stacks_wf g ps ss
+      -> stack_prefix_derivation g w ps ss ts
+      -> ambiguous_stack_prefix_derivation g w ps ss ts un
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> ambiguous_stack_prefix_derivation g w ps' ss' ts' un'.
   Proof.
-    intros g w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
-           ts ts' av av' u u' hn hw hp ha hs; red; red in ha; intros hu.
+    intros g cm w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
+           ts ts' av av' un un' ca ca' hn hw hp ha hs; red; red in ha; intros hu.
     unfold step in hs; dmeqs h; inv hs; tc.
     - (* return *)
       destruct ha as (wpre & heq & ha); subst; sis; auto.
@@ -944,6 +951,7 @@ Module ParserSoundFn (Import D : Defs.T).
       destruct hp as (wpre & heq & hd); subst.
       exists wpre; split; auto.
       rew_nil_r wpre.
+      eapply adaptivePredict_ambig_llPredict_ambig in h4; eauto.
       pose proof h4 as h4'; apply llPredict_ambig_in_grammar in h4'.
       eapply llPredict_ambig_rhs_unproc_stack_syms' in h4; eauto.
       + destruct h4 as [hr [rhs' [hi [hneq hr']]]].
@@ -953,29 +961,32 @@ Module ParserSoundFn (Import D : Defs.T).
 
   Lemma multistep_sound_ambig' :
     forall (g      : grammar)
+           (cm     : closure_map)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
            (w wsuf : list token)
            (av     : NtSet.t)
-           (p_stk  : prefix_stack)
-           (s_stk  : suffix_stack)
-           (u      : bool)
-           (a'     : Acc lex_nat_triple (meas g s_stk wsuf av))
+           (ps     : prefix_stack)
+           (ss     : suffix_stack)
+           (un     : bool)
+           (ca     : cache)
+           (hc     : cache_stores_target_results g cm ca)
+           (a'     : Acc lex_nat_triple (meas g ss wsuf av))
            (v      : forest),
-      tri = meas g s_stk wsuf av
+      tri = meas g ss wsuf av
       -> no_left_recursion g
-      -> stacks_wf g p_stk s_stk
-      -> stack_prefix_derivation g w p_stk s_stk wsuf
-      -> ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u
-      -> multistep g p_stk s_stk wsuf av u a' = Ambig v
-      -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
+      -> stacks_wf g ps ss
+      -> stack_prefix_derivation g w ps ss wsuf
+      -> ambiguous_stack_prefix_derivation g w ps ss wsuf un
+      -> multistep g cm ps ss wsuf av un ca hc a' = Ambig v
+      -> gamma_derivation g (bottomFrameSyms ps ss) w v
          /\ (exists v',
-                gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
+                gamma_derivation g (bottomFrameSyms ps ss) w v'
                 /\ v' <> v).
   Proof.
-    intros g tri a.
+    intros g cm tri a.
     induction a as [tri hlt IH].
-    intros w wsuf av p_stk s_stk u a' v ? hn hw hd ha hm; subst.
+    intros w wsuf av ps ss un ca hc a' v ? hn hw hd ha hm; subst.
     apply multistep_ambig_cases in hm.
     destruct hm as [[hs hu] | he]; subst.
     - apply step_StepAccept_facts in hs.
@@ -991,32 +1002,35 @@ Module ParserSoundFn (Import D : Defs.T).
         rewrite rev_involutive in *.
         firstorder.
       + inv ha'.
-    - destruct he as (ps' & ss' & ts' & av' & u' & a'' & hs & hm).
+    - destruct he as (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.
       + erewrite step_preserves_bottomFrameSyms_invar; eauto.
-      + eapply step_meas_lt; eauto.
-      + eapply step_preserves_stacks_wf_invar; eauto. 
-      + eapply step_preserves_stack_prefix_derivation_invar; eauto.
+      + eapply step_meas_lt with (ca := ca); eauto.
+      + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
+      + eapply step_preserves_stack_prefix_derivation_invar with (ca := ca); eauto.
       + eapply step_preserves_ambiguous_stack_prefix_derivation_invar; eauto.
   Qed.
 
   Lemma multistep_sound_ambig :
     forall (g      : grammar)
+           (cm     : closure_map)
            (w wsuf : list token)
            (av     : NtSet.t)
-           (p_stk  : prefix_stack)
-           (s_stk  : suffix_stack)
-           (u      : bool)
-           (a      : Acc lex_nat_triple (meas g s_stk wsuf av))
+           (ps     : prefix_stack)
+           (ss     : suffix_stack)
+           (un     : bool)
+           (ca     : cache)
+           (hc     : cache_stores_target_results g cm ca)
+           (a      : Acc lex_nat_triple (meas g ss wsuf av))
            (v      : forest),
       no_left_recursion g
-      -> stacks_wf g p_stk s_stk
-      -> stack_prefix_derivation g w p_stk s_stk wsuf
-      -> ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u
-      -> multistep g p_stk s_stk wsuf av u a = Ambig v
-      -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w v
+      -> stacks_wf g ps ss
+      -> stack_prefix_derivation g w ps ss wsuf
+      -> ambiguous_stack_prefix_derivation g w ps ss wsuf un
+      -> multistep g cm ps ss wsuf av un ca hc a = Ambig v
+      -> gamma_derivation g (bottomFrameSyms ps ss) w v
          /\ (exists v',
-                gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
+                gamma_derivation g (bottomFrameSyms ps ss) w v'
                 /\ v' <> v).
   Proof.
     intros; eapply multistep_sound_ambig'; eauto.

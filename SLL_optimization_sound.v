@@ -185,5 +185,13 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     - eapply llPredict_succ_at_most_one_rhs_applies; eauto.
     - eapply gamma_recognize_fold_head_nt; eauto.
   Qed.
+
+  Lemma adaptivePredict_ambig_llPredict_ambig :
+    forall g cm x ss w ca rhs ca',
+      adaptivePredict g cm x ss w ca = (PredAmbig rhs, ca')
+      -> llPredict g x ss w = PredAmbig rhs.
+  Proof.
+    unfold adaptivePredict; intros; dms; tc. 
+  Qed.
   
 End SllOptimizationSoundFn.
