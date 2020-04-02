@@ -56,6 +56,12 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition beqGamma (xs ys : list symbol) : bool :=
     if gamma_eq_dec xs ys then true else false.
 
+  Lemma beqGamma_eq_iff :
+    forall xs ys, beqGamma xs ys = true <-> xs = ys.
+  Proof.
+    unfold beqGamma; split; intros; dms; tc. 
+  Qed.
+
   (* Finite sets of nonterminals *)
   Module MDT_NT.
     Definition t      := nonterminal.

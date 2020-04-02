@@ -688,6 +688,15 @@ Module LLPredictionFn (Import D : Defs.T).
     | _                     => false
     end.
 
+  Lemma finalConfig_empty_stack :
+    forall sp pred stk,
+      sp = Sp pred stk
+      -> finalConfig sp = true
+      -> stk = (SF None [], []).
+  Proof.
+    intros sp pred stk ? hf; subst; unfold finalConfig in hf; dms; tc.
+  Qed.
+
   Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
     allEqual _ beqGamma sp.(prediction) (map prediction sps).
 
