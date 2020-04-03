@@ -469,7 +469,19 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
 
   (* For convenience, some lemmas that generalize over both 
      types of prediction errors *)
-  
+
+  Lemma llTarget_never_returns_error :
+    forall g a sps e,
+      no_left_recursion g
+      -> all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps
+      -> llTarget g a sps <> inl e.
+  Proof.
+    unfold not; intros g a sps e hn hw hs hl; destruct e.
+    - eapply llTarget_never_returns_SpInvalidState ; eauto.
+    - eapply llTarget_never_returns_SpLeftRecursion; eauto.
+  Qed.
+
   Lemma startState_never_returns_error :
     forall g fr frs o x suf e,
       no_left_recursion g
@@ -482,6 +494,18 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     - eapply closure_never_finds_left_recursion; eauto.
   Qed.
 
+  Lemma llPredict'_never_returns_error :
+    forall g sps ts e,
+      no_left_recursion g
+      -> all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps
+      -> llPredict' g sps ts <> PredError e.
+  Proof.
+    intros g sps ts e hn hw hs hl; destruct e.
+    - eapply llPredict'_never_returns_SpInvalidState ; eauto.
+    - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
+  Qed.
+  
   Lemma llPredict_never_returns_error :
     forall g fr o x suf frs ts e,
       fr = SF o (NT x :: suf)

@@ -70,7 +70,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     intros x y xs ys ho ha hi.
     apply ho in hi; destruct hi as [y' [hi he]].
     apply eq_trans with (y := prediction y').
-    - eapply allPredictionsEqual_in in ha; eauto.
+    - inv hi; auto.
+      eapply allPredictionsEqual_prop in ha; firstorder.
     - apply approx_predictions_eq; auto.
   Qed.
 
@@ -110,7 +111,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
 
   Lemma sllPredict'_llPredict'_succ_eq :
     forall g cm ts sps' sps ca ys ca' ys',
-      all_suffix_stacks_wf g sps
+      no_left_recursion g
+      -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
       -> exists_successful_sp g sps ts
       -> cache_stores_target_results g cm ca
@@ -120,7 +122,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       -> ys' = ys.
   Proof.
     intros g cm ts; induction ts as [| (a,l) ts IH];
-      intros sps' sps ca ys ca' ys' hw hs he hc ho hll hsll;
+      intros sps' sps ca ys ca' ys' hn hw hs he hc ho hll hsll;
       pose proof hll as hll'; simpl in hll, hsll.
     - inv hsll; eapply overapprox_final_subparsers_succ_eq; eauto.
     - destruct sps' as [| sp' sps']; tc.
@@ -132,32 +134,22 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         rewrite ha in hll; inv hll.
         eapply overapprox_ape_pointwise; eauto.
         apply in_eq.
-      + clear hll.
-        (* can probably get rid of the Reject option because of
-           the successful sp invariant *)
-        assert (Hass : exists sps'', llTarget g a (sp :: sps) = inr sps''
-                                     /\ (llPredict' g sps'' ts = PredSucc ys \/ llPredict' g sps'' ts = PredReject)) by admit.
-        clear hll'.
-        destruct Hass as [sps'' [ht [hsuc | hrej]]].
-        * destruct (Cache.find _ _) as [sps''' |] eqn:hf.
-          -- apply hc in hf.
-             eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
-             ++ eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
-             ++ eapply llTarget_preserves_stacks_stable_invar; eauto.
-             ++ eapply llTarget_preserves_successful_sp_invar; eauto.
-             ++ admit.
-          -- destruct (sllTarget _ _ _ _) as [?| sps'''] eqn:ht';tc.
-             eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
-             ** eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
-             ** eapply llTarget_preserves_stacks_stable_invar; eauto.
-             ** eapply llTarget_preserves_successful_sp_invar; eauto.
-             ** eapply sllTarget_add_preserves_cache_invar; eauto.
-             ** admit.
-        * exfalso.
-          eapply exists_successful_sp_llPredict'_neq_reject with (sps := sps''); eauto.
+      + apply exists_successful_sp_llPredict'_succ_step in hll'; eauto.
+        destruct hll' as [sps'' [ht hll']].
+        destruct (Cache.find _ _) as [sps''' |] eqn:hf.
+        * apply hc in hf.
+          eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
           -- eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
           -- eapply llTarget_preserves_stacks_stable_invar; eauto.
           -- eapply llTarget_preserves_successful_sp_invar; eauto.
+          -- admit.
+        * destruct (sllTarget _ _ _ _) as [?| sps'''] eqn:ht';tc.
+          eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
+          -- eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+          -- eapply llTarget_preserves_stacks_stable_invar; eauto.
+          -- eapply llTarget_preserves_successful_sp_invar; eauto.
+          -- eapply sllTarget_add_preserves_cache_invar; eauto.
+          -- admit.
   Admitted.
 
   (* maybe change this to gamma_recognize rhs ++ ... *)
@@ -197,6 +189,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Lemma sllPredict_llPredict_succ_eq :
     forall g cm cr o x suf frs w ca rhs rhs' ca',
       cr = SF o (NT x :: suf)
+      -> no_left_recursion g
       -> suffix_stack_wf g (cr, frs)
       -> cache_stores_target_results g cm ca
       -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
@@ -204,7 +197,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       -> sllPredict g cm x w ca = (PredSucc rhs', ca')
       -> rhs' = rhs.
   Proof.
-    intros g cm ? o x suf frs w ca rhs rhs' ca' ? hw hc hr hl hs; subst.
+    intros g cm ? o x suf frs w ca rhs rhs' ca' ? hn hw hc hr hl hs; subst.
     unfold sllPredict in hs; unfold llPredict in hl.
     destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
     destruct (startState _ _ _) as [? | sps] eqn:hss; tc.

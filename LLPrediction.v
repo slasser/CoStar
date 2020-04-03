@@ -721,17 +721,43 @@ Module LLPredictionFn (Import D : Defs.T).
     intros sp sp' sps ha hi; induction sps as [| sp'' sps IH]; inv hi;
       apply allPredictionsEqual_inv_cons in ha; destruct ha as [hhd htl]; auto.
   Qed.
-  
-  Lemma allPredictionsEqual_in :
-    forall sp' sp sps,
-      allPredictionsEqual sp sps = true
-      -> In sp' (sp :: sps)
-      -> sp'.(prediction) = sp.(prediction).
+
+  Lemma allPredictionsEqual_false_exists_diff_rhs :
+    forall sp sps,
+      allPredictionsEqual sp sps = false
+      -> exists sp',
+        In sp' sps
+        /\ sp'.(prediction) <> sp.(prediction).
   Proof.
-    intros sp' sp sps ha hi; inv hi; auto.
-    eapply allPredictionsEqual_in_tl; eauto.
+    intros sp sps ha; unfold allPredictionsEqual in ha.
+    induction sps as [| sp' sps IH]; simpl in ha.
+    - inv ha.
+    - apply andb_false_iff in ha; destruct ha as [hh | ht].
+      + exists sp'; split.
+        * apply in_eq.
+        * intros heq; symmetry in heq; apply beqGamma_eq_iff in heq; tc.
+      + apply IH in ht; destruct ht as [sp'' [hi hn]].
+        exists sp''; split; auto.
+        apply in_cons; auto.
   Qed.
 
+  (* propositional spec for allPredictionsEqual *)
+  Definition all_predictions_equal sp sps :=
+    forall sp', In sp' sps -> prediction sp' = prediction sp.
+
+  Lemma allPredictionsEqual_prop :
+    forall sp sps,
+      allPredictionsEqual sp sps = true
+      -> all_predictions_equal sp (sp :: sps).
+  Proof.
+    intros sp sps ha sp' hi. 
+    unfold allPredictionsEqual, allEqual in ha.
+    destruct hi as [hh | ht]; subst; auto.
+    eapply forallb_forall with (x := prediction sp') in ha; eauto.
+    - symmetry; apply beqGamma_eq_iff; auto.
+    - apply in_map_iff; eauto.
+  Qed.
+      
   Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
     match filter finalConfig sps with
     | []         => PredReject

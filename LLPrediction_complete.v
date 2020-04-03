@@ -756,7 +756,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         apply mcms_succ_final_config in hm'; auto.
         eapply filter_In' in hm; eauto.
         rewrite hf in hm.
-        eapply allPredictionsEqual_in; eauto.
+        eapply allPredictionsEqual_prop; eauto.
     - destruct curr_sps as [| curr_sp curr_sps]; tc.
       destruct (allPredictionsEqual curr_sp curr_sps) eqn:ha.
       + inv hl; exists wpre; exists ((a,l) :: wsuf'); split; auto.
@@ -764,7 +764,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         apply eq_trans with (y := curr_sp'.(prediction)).
         * eapply mcms_preserves_label; eauto.
         * eapply hi in hm; eauto.
-          eapply allPredictionsEqual_in; eauto.
+          eapply allPredictionsEqual_prop; eauto.
       + dmeq ht; tc.
         eapply IH with (wpre := wpre ++ [(a,l)]) in hl; eauto.
         * destruct hl as [wpre' [wsuf'' [heq hall]]].
@@ -1347,6 +1347,132 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         exists sp; split; eauto.
   Qed.
 
+  (* to do : these next few lemmas might belong in a different location *)
+
+  Lemma llTarget_preserves_all_predictions_equal :
+    forall g a x sps sps',
+    all_predictions_equal x sps
+    -> llTarget g a sps = inr sps'
+    -> all_predictions_equal x sps'.
+  Proof.
+    intros g a x sps sps'' ha hl sp'' hi''.
+    red in ha.
+    (* lemma about llTarget preserving prediction *)
+    unfold llTarget in hl.
+    destruct (move _ _) as [? | sps'] eqn:hm; tc.
+    destruct (closure _ _) as [? | ?] eqn:hc; tc; inv hl.
+    eapply closure_preserves_prediction in hc; eauto.
+    destruct hc as [sp' [hi' heq']]; rewrite heq'.
+    eapply move_preserves_prediction in hm; eauto.
+    destruct hm as [sp [hi heq]]; rewrite heq; firstorder.
+  Qed.
+
+  Lemma all_predictions_equal_filter :
+    forall sp sps sps' f,
+      all_predictions_equal sp sps
+      -> filter f sps = sps'
+      -> all_predictions_equal sp sps'.
+  Proof.
+    intros sp sps sps' f ha hf sp' hi; subst.
+    apply filter_In in hi; firstorder.
+  Qed.
+
+  (* to do : this lemma is an example of why some invariants
+     aren't required when it's assumed that llPredict' succeeds.
+    There might be other places where I can remove these 
+    hypotheses. *)
+  Lemma llPredict'_succ__eq_all_predictions_equal :
+    forall g sp ys ts sps,
+(*      no_left_recursion g
+      -> all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps *)
+      all_predictions_equal sp sps
+      -> llPredict' g sps ts = PredSucc ys
+      -> ys = prediction sp.
+  Proof.
+    intros g sp ys ts; induction ts as [| (a, l) ts IH];
+      intros sps ha hl; sis.
+    - unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp' sps'] eqn:hf; tc.
+      dm; tc; inv hl.
+      eapply all_predictions_equal_filter in hf; firstorder.
+    - destruct sps as [| sp' sps']; tc.
+      destruct (allPredictionsEqual sp' sps').
+      + inv hl; firstorder.
+      + destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
+        apply IH in hl; auto.
+        eapply llTarget_preserves_all_predictions_equal; eauto.
+  Qed.
+
+  Lemma all_predictions_equal__llPredict'_neq_ambig :
+    forall g sp ys ts sps,
+      all_predictions_equal sp sps
+      -> llPredict' g sps ts <> PredAmbig ys.
+  Proof.
+    intros g sp ys ts; induction ts as [| (a, l) ts IH]; intros sps ha hl; sis.
+    - (* lemma *)
+      unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp' sps'] eqn:hf; tc.
+      destruct (allPredictionsEqual _ _) eqn:ha'; tc; inv hl.
+      apply allPredictionsEqual_false_exists_diff_rhs in ha'.
+      destruct ha' as [sp'' [hi hneq]].
+      apply hneq. apply eq_trans with (y := prediction sp).
+      + apply ha.
+        eapply filter_In; rewrite hf; apply in_cons; auto.
+      + symmetry; apply ha.
+        eapply filter_In; rewrite hf; apply in_eq.
+    - destruct sps as [| sp' sps']; tc.
+      destruct (allPredictionsEqual _ _); tc.
+      destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
+      apply IH in hl; auto.
+      eapply llTarget_preserves_all_predictions_equal; eauto.
+  Qed. 
+
+  Lemma llPredict'_all_predictions_equal_succ :
+    forall g sp sps ts,
+      no_left_recursion g
+      -> all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps
+      -> exists_successful_sp g sps ts
+      -> all_predictions_equal sp sps
+      -> llPredict' g sps ts = PredSucc (prediction sp).
+  Proof.
+    intros g sp sps ts hn hw hs he ha.
+    destruct (llPredict' g sps ts) as [rhs | rhs | | e] eqn:hl.
+    - f_equal; eapply llPredict'_succ__eq_all_predictions_equal in hl; eauto.
+    - exfalso; eapply all_predictions_equal__llPredict'_neq_ambig; eauto. 
+    - exfalso; eapply exists_successful_sp_llPredict'_neq_reject; eauto.
+    - exfalso; eapply llPredict'_never_returns_error; eauto.
+  Qed.
+  
+  Lemma exists_successful_sp_llPredict'_succ_step :
+    forall g sps a l ts ys,
+      no_left_recursion g
+      -> all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps
+      -> exists_successful_sp g sps ((a, l) :: ts)
+      -> llPredict' g sps ((a, l) :: ts) = PredSucc ys
+      -> exists sps',
+          llTarget g a sps = inr sps'
+          /\ llPredict' g sps' ts = PredSucc ys.
+  Proof.
+    intros g sps a l ts ys hn hw hs he hl; sis.
+    destruct sps as [| sp sps]; tc.
+    destruct (allPredictionsEqual _ _) eqn:ha.
+    - inv hl; apply allPredictionsEqual_prop in ha.
+      destruct (llTarget g a (sp :: sps)) as [e | sps'] eqn:ht.
+      + exfalso; eapply llTarget_never_returns_error; eauto.
+      + eexists; split; eauto.
+        eapply llPredict'_all_predictions_equal_succ; eauto.
+        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+        * eapply llTarget_preserves_stacks_stable_invar; eauto.
+        * eapply llTarget_preserves_successful_sp_invar; eauto.
+        * eapply llTarget_preserves_all_predictions_equal in ht; eauto.
+    - destruct (llTarget _ _ _) as [? | sps'] eqn:ht; tc; eauto.
+  Qed.
+
+  (* end of block that might need to be moved *)
+  
   Lemma initSps_preserves_exists_successful_sp_invar :
     forall g fr o x suf frs w,
       fr = SF o (NT x :: suf)
