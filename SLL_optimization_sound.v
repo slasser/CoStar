@@ -109,6 +109,36 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     apply in_eq.
   Qed.
 
+  (*
+  Lemma overapprox_allPredictionsEqual_false :
+    forall sp sps sps',
+      overapprox sps' sps
+      -> allPredictionsEqual sp sps = false
+      -> ~ all_predictions_equal sp sps'.
+  Proof.
+    intros sp sps sps' ho ha ha'.
+    apply allPredictionsEqual_false_exists_diff_rhs in ha.
+    destruct ha as [sp' [hi hneq]]; apply hneq; clear hneq.
+    apply ho in hi; destruct hi as [sp'' [hi ha]]; clear ho.
+    apply eq_trans with (y := prediction sp'').
+    - symmetry; apply approx_predictions_eq; auto.
+    - firstorder.
+  Qed.
+   *)
+
+  (* try proving something about :
+     ~ all_predictions_equal sp sps -> allPredictionsEqual sp sps = false *)
+  Lemma overapprox_allPredictionsEqual_false :
+    forall x y xs ys,
+      overapprox (y :: ys) (x :: xs)
+      -> allPredictionsEqual x xs = false
+      -> allPredictionsEqual y ys = false.
+  Proof.
+    intros x y xs ys ho ha.
+    apply allPredictionsEqual_false_exists_diff_rhs in ha.
+    destruct ha as [x' [hi hneq]].
+  Abort.
+
   Lemma sllPredict'_llPredict'_succ_eq :
     forall g cm ts sps' sps ca ys ca' ys',
       no_left_recursion g
@@ -134,7 +164,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         rewrite ha in hll; inv hll.
         eapply overapprox_ape_pointwise; eauto.
         apply in_eq.
-      + apply exists_successful_sp_llPredict'_succ_step in hll'; eauto.
+      + apply esp_llPredict'_succ__exists_target in hll'; eauto.
         destruct hll' as [sps'' [ht hll']].
         destruct (Cache.find _ _) as [sps''' |] eqn:hf.
         * apply hc in hf.
@@ -151,40 +181,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
           -- eapply sllTarget_add_preserves_cache_invar; eauto.
           -- admit.
   Admitted.
-
-  (* maybe change this to gamma_recognize rhs ++ ... *)
-  (* next: write a lemma that does case analysis on the
-     llPredict result to show that it must be equal to
-     the sllPredict result *)
-  (*
-  Lemma sllPredict_succ_at_most_one_rhs_applies :
-    forall g cm cr ce frs o x suf w rhs rhs' ca ca',
-      cr    = SF o (NT x :: suf)
-      -> ce = SF (Some x) rhs
-      -> no_left_recursion g
-      -> suffix_stack_wf g (cr, frs)
-      -> cache_stores_target_results g cm ca
-      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
-      -> llPredict g x (cr, frs) w = PredSucc rhs
-      -> sllPredict g cm x w ca    = (PredSucc rhs', ca')
-      -> rhs' = rhs.
-  Proof.
-    intros g cm ? ? frs o x suf w rhs rhs' ca ca' ? ?
-           hn hw hc hr hl hs; subst.
-    unfold llPredict in hl; unfold sllPredict in hs.
-    destruct (startState _ _ _) as [? | sps] eqn:hss; tc.
-    destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
-    eapply sllPredict'_llPredict'_succ_eq with
-        (sps := sps) (sps' := sps'); eauto.
-    - eapply startState_preserves_stacks_wf_invar; eauto. 
-    - eapply startState_all_stacks_stable; eauto. 
-    - (* lemma *)
-      eapply closure_preserves_successful_sp_invar; eauto.
-      eapply initSps_preserves_exists_successful_sp_invar; eauto.
-    - (* lemma : startState preserves overapprox invar *)
-      admit.
-  Admitted.
-   *)
   
   Lemma sllPredict_llPredict_succ_eq :
     forall g cm cr o x suf frs w ca rhs rhs' ca',
@@ -204,13 +200,55 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply sllPredict'_llPredict'_succ_eq; eauto.
     - eapply startState_preserves_stacks_wf_invar; eauto.
     - eapply startState_all_stacks_stable; eauto.
-    - (* lemma *)
-      eapply closure_preserves_successful_sp_invar; eauto.
-      eapply initSps_preserves_exists_successful_sp_invar; eauto.
+    - eapply startState_preserves_esp_invar; eauto. 
     - (* overapprox should be true of sllStartState and llStartState *)
       admit.
   Admitted.
 
+  Lemma sllPredict'_succ__llPredict'_neq_ambig :
+    forall g cm ts sps sps' ca ca' ys ys',
+      cache_stores_target_results g cm ca
+      -> overapprox sps' sps
+      -> sllPredict' g cm sps' ts ca = (PredSucc ys, ca')
+      -> llPredict' g sps ts <> PredAmbig ys'.
+  Proof.
+    intros g cm ts; induction ts as [| (a, l) ts IH];
+      intros sps sps' ca ca' ys ys' hc ho hs hl; sis.
+    - inv hs.
+      admit.
+    - destruct sps' as [| sp' sps']; tc.
+      destruct sps as [| sp sps]; tc.
+      destruct (allPredictionsEqual sp sps) eqn:ha; tc.
+      assert (Hass : allPredictionsEqual sp' sps' = false) by admit.
+      rewrite Hass in hs.
+      destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
+      destruct (Cache.find _ _) as [sps''' |] eqn:hf.
+      + apply hc in hf.
+        eapply IH in hs; eauto. 
+        (* lemma : sllTarget and llTarget preserve overapprox *)
+        admit.
+      + destruct (sllTarget _ _ _ _) as [? | sps'''] eqn:ht'; tc.
+        eapply IH in hs; eauto.
+        * eapply sllTarget_add_preserves_cache_invar; eauto.
+        * (* same lemma as above *)
+          admit.
+  Admitted.
+
+  Lemma sllPredict_succ__llPredict_neq_ambig :
+    forall g cm x fr frs ts ca ys ca' ys',
+      cache_stores_target_results g cm ca
+      -> sllPredict g cm x ts ca = (PredSucc ys, ca')
+      -> llPredict g x (fr, frs) ts <> PredAmbig ys'.
+  Proof.
+    intros g cm x fr frs ts ca ys ca' ys' hc hs hl.
+    unfold sllPredict in hs; unfold llPredict in hl.
+    destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
+    destruct (startState _ _ _) as [? | sps]     eqn:hss ; tc.
+    eapply sllPredict'_succ__llPredict'_neq_ambig; eauto.
+    (* lemma : overapprox holds after sllStartState, llStartState *)
+    admit.
+  Admitted.
+  
     Lemma sllPredict_succ_eq_llPredict_succ :
     forall g cm cr o x suf frs w ca rhs ca',
       cr = SF o (NT x :: suf)
@@ -224,10 +262,10 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     intros g cm ? o x suf frs w ca rhs' ca' ? hn hw hc hr hs; subst.
     destruct (llPredict _ _ _ _) as [rhs | rhs | | e] eqn:hl.
     - symmetry; f_equal; eapply sllPredict_llPredict_succ_eq; eauto.
-    - exfalso. admit.
+    - exfalso; eapply sllPredict_succ__llPredict_neq_ambig; eauto.
     - exfalso; eapply ussr_llPredict_neq_reject; eauto.
     - exfalso; eapply llPredict_never_returns_error; eauto.
-  Admitted.
+  Qed.
 
   Lemma adaptivePredict_succ_eq_llPredict_succ :
     forall g cm cr x o suf frs w ca rhs ca',

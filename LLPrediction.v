@@ -8,6 +8,20 @@ Import ListNotations.
 Open Scope list_scope.
 Set Implicit Arguments.
 
+
+(* Key functions defined in this module:
+
+   move
+   LLclosure
+   LLtarget
+   LLpredict'
+   initSps
+   startState
+   LLpredict
+   
+*)
+
+
 Module LLPredictionFn (Import D : Defs.T).
 
   Module Export Term := TerminationFn D.
@@ -757,6 +771,34 @@ Module LLPredictionFn (Import D : Defs.T).
     - symmetry; apply beqGamma_eq_iff; auto.
     - apply in_map_iff; eauto.
   Qed.
+
+  Lemma llTarget_preserves_all_predictions_equal :
+    forall g a x sps sps',
+    all_predictions_equal x sps
+    -> llTarget g a sps = inr sps'
+    -> all_predictions_equal x sps'.
+  Proof.
+    intros g a x sps sps'' ha hl sp'' hi''.
+    red in ha.
+    (* lemma about llTarget preserving prediction *)
+    unfold llTarget in hl.
+    destruct (move _ _) as [? | sps'] eqn:hm; tc.
+    destruct (closure _ _) as [? | ?] eqn:hc; tc; inv hl.
+    eapply closure_preserves_prediction in hc; eauto.
+    destruct hc as [sp' [hi' heq']]; rewrite heq'.
+    eapply move_preserves_prediction in hm; eauto.
+    destruct hm as [sp [hi heq]]; rewrite heq; firstorder.
+  Qed.
+
+  Lemma all_predictions_equal_filter :
+    forall sp sps sps' f,
+      all_predictions_equal sp sps
+      -> filter f sps = sps'
+      -> all_predictions_equal sp sps'.
+  Proof.
+    intros sp sps sps' f ha hf sp' hi; subst.
+    apply filter_In in hi; firstorder.
+  Qed.
       
   Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
     match filter finalConfig sps with
@@ -818,31 +860,7 @@ Module LLPredictionFn (Import D : Defs.T).
       end
     end.
 
-  (*
-  (* to do : encapsulate move/closure within target function *)
-  Fixpoint llPredict' (g : grammar) (sps : list subparser) (ts : list token) : prediction_result :=
-    match sps with
-    | []         => PredReject
-    | sp :: sps' =>
-      if allPredictionsEqual sp sps' then
-        PredSucc sp.(prediction)
-      else
-        match ts with
-        | []       => handleFinalSubparsers sps
-        | (a, _) :: ts' =>
-          match move a sps with
-          | inl msg => PredError msg
-          | inr mv  =>
-            match closure g mv with
-            | inl msg => PredError msg
-            | inr cl  => llPredict' g cl ts'
-            end
-          end
-        end
-    end.
-   *)
-
-Lemma llPredict'_success_result_in_original_subparsers :
+  Lemma llPredict'_success_result_in_original_subparsers :
     forall g ts gamma sps,
       llPredict' g sps ts = PredSucc gamma
       -> exists sp, In sp sps /\ (prediction sp) = gamma.
@@ -885,6 +903,57 @@ Lemma llPredict'_success_result_in_original_subparsers :
         eapply move_preserves_prediction in hm; eauto.
         destruct hm as [? [? ?]]; eauto.
   Qed.
+
+    (* to do : this lemma is an example of why some invariants
+     aren't required when it's assumed that llPredict' succeeds.
+    There might be other places where I can remove these 
+    hypotheses. *)
+  Lemma llPredict'_succ__eq_all_predictions_equal :
+    forall g sp ys ts sps,
+(*      no_left_recursion g
+      -> all_suffix_stacks_wf g sps
+      -> all_stacks_stable sps *)
+      all_predictions_equal sp sps
+      -> llPredict' g sps ts = PredSucc ys
+      -> ys = prediction sp.
+  Proof.
+    intros g sp ys ts; induction ts as [| (a, l) ts IH];
+      intros sps ha hl; sis.
+    - unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp' sps'] eqn:hf; tc.
+      dm; tc; inv hl.
+      eapply all_predictions_equal_filter in hf; firstorder.
+    - destruct sps as [| sp' sps']; tc.
+      destruct (allPredictionsEqual sp' sps').
+      + inv hl; firstorder.
+      + destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
+        apply IH in hl; auto.
+        eapply llTarget_preserves_all_predictions_equal; eauto.
+  Qed.
+
+  Lemma all_predictions_equal__llPredict'_neq_ambig :
+    forall g sp ys ts sps,
+      all_predictions_equal sp sps
+      -> llPredict' g sps ts <> PredAmbig ys.
+  Proof.
+    intros g sp ys ts; induction ts as [| (a, l) ts IH]; intros sps ha hl; sis.
+    - (* lemma *)
+      unfold handleFinalSubparsers in hl.
+      destruct (filter _ _) as [| sp' sps'] eqn:hf; tc.
+      destruct (allPredictionsEqual _ _) eqn:ha'; tc; inv hl.
+      apply allPredictionsEqual_false_exists_diff_rhs in ha'.
+      destruct ha' as [sp'' [hi hneq]].
+      apply hneq. apply eq_trans with (y := prediction sp).
+      + apply ha.
+        eapply filter_In; rewrite hf; apply in_cons; auto.
+      + symmetry; apply ha.
+        eapply filter_In; rewrite hf; apply in_eq.
+    - destruct sps as [| sp' sps']; tc.
+      destruct (allPredictionsEqual _ _); tc.
+      destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
+      apply IH in hl; auto.
+      eapply llTarget_preserves_all_predictions_equal; eauto.
+  Qed. 
 
   Definition initSps (g : grammar) (x : nonterminal) (stk : suffix_stack) : list subparser :=
     let (fr, frs) := stk
