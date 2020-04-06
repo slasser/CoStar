@@ -267,7 +267,7 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Definition empty_cache : cache := Cache.empty (list subparser).
   
-  Definition sllTarget g cm (sps : list subparser) (a : terminal) : sum prediction_error (list subparser) :=
+  Definition sllTarget g cm (a : terminal) (sps : list subparser) : sum prediction_error (list subparser) :=
     match move a sps with
     | inl e    => inl e
     | inr sps' =>
@@ -279,7 +279,7 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Lemma sllTarget_preserves_prediction :
     forall g cm sps a sp' sps',
-      sllTarget g cm sps a = inr sps'
+      sllTarget g cm a sps = inr sps'
       -> In sp' sps'
       -> exists sp, In sp sps /\ prediction sp = prediction sp'.
   Proof.
@@ -296,12 +296,12 @@ Module SllPredictionFn (Import D : Defs.T).
   Definition cache_stores_target_results g cm ca :=
     forall sps a sps',
       Cache.find (sps, a) ca = Some sps'
-      -> sllTarget g cm sps a = inr sps'.
+      -> sllTarget g cm a sps = inr sps'.
   
   Lemma sllTarget_add_preserves_cache_invar :
     forall gr cm ca sps a sps',
       cache_stores_target_results gr cm ca
-      -> sllTarget gr cm sps a = inr sps'
+      -> sllTarget gr cm a sps = inr sps'
       -> cache_stores_target_results gr cm (Cache.add (sps, a) sps' ca).
   Proof.
     intros gr cm ca sps a sps' hc ht ka kb v hf.
@@ -327,7 +327,7 @@ Module SllPredictionFn (Import D : Defs.T).
           match Cache.find (sp' :: sps', a) ca with 
           | Some sps'' => sllPredict' gr cm sps'' ts' ca
           | None       =>
-            match sllTarget gr cm (sp' :: sps') a with
+            match sllTarget gr cm a (sp' :: sps') with
             | inl e     => (PredError e, ca)
             | inr sps'' =>
               let ca' := Cache.add (sp' :: sps', a) sps'' ca

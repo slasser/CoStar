@@ -143,6 +143,16 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     rewrite ha in hh'; tc.
   Qed.
 
+  (* probably need some invariant about closure_map here *)
+  Lemma target_preserves_overapprox :
+    forall g cm sps sps' sps'' sps''' a,
+      overapprox sps' sps
+      -> llTarget g a sps = inr sps''
+      -> sllTarget g cm a sps' = inr sps'''
+      -> overapprox sps''' sps''.
+  Proof.
+  Admitted.
+
   Lemma sllPredict'_llPredict'_succ_eq :
     forall g cm ts sps' sps ca ys ca' ys',
       no_left_recursion g
@@ -176,15 +186,15 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
           -- eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
           -- eapply llTarget_preserves_stacks_stable_invar; eauto.
           -- eapply llTarget_preserves_successful_sp_invar; eauto.
-          -- admit.
+          -- eapply target_preserves_overapprox; eauto.
         * destruct (sllTarget _ _ _ _) as [?| sps'''] eqn:ht';tc.
           eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
           -- eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
           -- eapply llTarget_preserves_stacks_stable_invar; eauto.
           -- eapply llTarget_preserves_successful_sp_invar; eauto.
           -- eapply sllTarget_add_preserves_cache_invar; eauto.
-          -- admit.
-  Admitted.
+          -- eapply target_preserves_overapprox; eauto. 
+  Qed.
   
   Lemma sllPredict_llPredict_succ_eq :
     forall g cm cr o x suf frs w ca rhs rhs' ca',
@@ -227,15 +237,13 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
       destruct (Cache.find _ _) as [sps''' |] eqn:hf.
       + apply hc in hf.
-        eapply IH in hs; eauto. 
-        (* lemma : sllTarget and llTarget preserve overapprox *)
-        admit.
+        eapply IH in hs; eauto.
+        eapply target_preserves_overapprox; eauto.
       + destruct (sllTarget _ _ _ _) as [? | sps'''] eqn:ht'; tc.
         eapply IH in hs; eauto.
         * eapply sllTarget_add_preserves_cache_invar; eauto.
-        * (* same lemma as above *)
-          admit.
-  Admitted.
+        * eapply target_preserves_overapprox; eauto. 
+  Qed.
 
   Lemma sllPredict_succ__llPredict_neq_ambig :
     forall g cm x fr frs ts ca ys ca' ys',
@@ -301,7 +309,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply adaptivePredict_succ_eq_llPredict_succ in ha; eauto.
     - eapply llPredict_succ_at_most_one_rhs_applies; eauto.
     - eapply gamma_recognize_fold_head_nt; eauto.
-  Qed.
+  Qed. 
 
   Lemma adaptivePredict_ambig_llPredict_ambig :
     forall g cm x ss w ca rhs ca',
