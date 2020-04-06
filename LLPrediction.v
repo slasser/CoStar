@@ -759,20 +759,45 @@ Module LLPredictionFn (Import D : Defs.T).
   Definition all_predictions_equal sp sps :=
     forall sp', In sp' sps -> prediction sp' = prediction sp.
 
+  Lemma ape_tail :
+    forall sp sp' sps,
+      all_predictions_equal sp (sp' :: sps)
+      -> all_predictions_equal sp sps.
+  Proof.
+    firstorder.
+  Qed.
+
+  Lemma ape_cons_head_eq :
+    forall sp sps,
+      all_predictions_equal sp sps
+      -> all_predictions_equal sp (sp :: sps).
+  Proof.
+    intros sp sps ha sp' hi; firstorder; subst; auto.
+  Qed.
+  
   Lemma allPredictionsEqual_prop :
     forall sp sps,
       allPredictionsEqual sp sps = true
-      -> all_predictions_equal sp (sp :: sps).
+      -> all_predictions_equal sp sps.
   Proof.
     intros sp sps ha sp' hi. 
     unfold allPredictionsEqual, allEqual in ha.
-    destruct hi as [hh | ht]; subst; auto.
     eapply forallb_forall with (x := prediction sp') in ha; eauto.
     - symmetry; apply beqGamma_eq_iff; auto.
     - apply in_map_iff; eauto.
   Qed.
 
-  Lemma llTarget_preserves_all_predictions_equal :
+  Lemma ape_false__allPredictionsEqual_false :
+    forall sp sps,
+      ~ all_predictions_equal sp sps
+      -> allPredictionsEqual sp sps = false.
+  Proof.
+    intros sp sps hn; unfold not in hn.
+    destruct (allPredictionsEqual sp sps) eqn:ha; auto.
+    exfalso; apply hn; apply allPredictionsEqual_prop; auto.
+  Qed.
+
+  Lemma llTarget_preserves_ape:
     forall g a x sps sps',
     all_predictions_equal x sps
     -> llTarget g a sps = inr sps'
@@ -928,7 +953,7 @@ Module LLPredictionFn (Import D : Defs.T).
       + inv hl; firstorder.
       + destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
         apply IH in hl; auto.
-        eapply llTarget_preserves_all_predictions_equal; eauto.
+        eapply llTarget_preserves_ape; eauto.
   Qed.
 
   Lemma all_predictions_equal__llPredict'_neq_ambig :
@@ -952,7 +977,7 @@ Module LLPredictionFn (Import D : Defs.T).
       destruct (allPredictionsEqual _ _); tc.
       destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
       apply IH in hl; auto.
-      eapply llTarget_preserves_all_predictions_equal; eauto.
+      eapply llTarget_preserves_ape; eauto.
   Qed. 
 
   Definition initSps (g : grammar) (x : nonterminal) (stk : suffix_stack) : list subparser :=

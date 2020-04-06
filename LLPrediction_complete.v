@@ -756,6 +756,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         apply mcms_succ_final_config in hm'; auto.
         eapply filter_In' in hm; eauto.
         rewrite hf in hm.
+        destruct hm as [hh | ht]; subst; auto.
         eapply allPredictionsEqual_prop; eauto.
     - destruct curr_sps as [| curr_sp curr_sps]; tc.
       destruct (allPredictionsEqual curr_sp curr_sps) eqn:ha.
@@ -764,6 +765,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         apply eq_trans with (y := curr_sp'.(prediction)).
         * eapply mcms_preserves_label; eauto.
         * eapply hi in hm; eauto.
+          destruct hm as [hh | ht]; subst; auto.
           eapply allPredictionsEqual_prop; eauto.
       + dmeq ht; tc.
         eapply IH with (wpre := wpre ++ [(a,l)]) in hl; eauto.
@@ -1385,7 +1387,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         eapply ape_esp_llPredict'_succ; eauto. 
         * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
         * eapply llTarget_preserves_stacks_stable_invar; eauto.
-        * eapply llTarget_preserves_all_predictions_equal in ht; eauto.
+        * eapply llTarget_preserves_ape in ht; eauto.
+          apply ape_cons_head_eq; auto.
         * eapply llTarget_preserves_successful_sp_invar; eauto.
     - destruct (llTarget _ _ _) as [? | sps'] eqn:ht; tc; eauto.
   Qed.

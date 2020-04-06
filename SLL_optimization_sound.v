@@ -75,7 +75,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     - apply approx_predictions_eq; auto.
   Qed.
 
-  (* to do : refactor *)
   Lemma overapprox_allPredictionsEqual_big_small :
     forall x y xs ys,
       overapprox (y :: ys) (x :: xs)
@@ -88,8 +87,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     apply in_map_iff in hi; destruct hi as [x' [? hi]]; subst.
     apply eq_trans with (y := prediction y).
     - symmetry; eapply overapprox_ape_pointwise; eauto; apply in_eq.
-    - eapply overapprox_ape_pointwise; eauto.
-      apply in_cons; auto.
+    - eapply overapprox_ape_pointwise; eauto; apply in_cons; auto.
   Qed.
 
   Lemma overapprox_final_subparsers_succ_eq :
@@ -105,29 +103,9 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     destruct (allPredictionsEqual x xs)  eqn:ha  ; tc; inv hl.
     destruct (allPredictionsEqual y ys)  eqn:ha' ; tc; inv hs.
     eapply overapprox_finalConfig in ho; eauto.
-    eapply overapprox_ape_pointwise; eauto.
-    apply in_eq.
+    eapply overapprox_ape_pointwise; eauto; apply in_eq.
   Qed.
-
-  (*
-  Lemma overapprox_allPredictionsEqual_false :
-    forall sp sps sps',
-      overapprox sps' sps
-      -> allPredictionsEqual sp sps = false
-      -> ~ all_predictions_equal sp sps'.
-  Proof.
-    intros sp sps sps' ho ha ha'.
-    apply allPredictionsEqual_false_exists_diff_rhs in ha.
-    destruct ha as [sp' [hi hneq]]; apply hneq; clear hneq.
-    apply ho in hi; destruct hi as [sp'' [hi ha]]; clear ho.
-    apply eq_trans with (y := prediction sp'').
-    - symmetry; apply approx_predictions_eq; auto.
-    - firstorder.
-  Qed.
-   *)
-
-  (* try proving something about :
-     ~ all_predictions_equal sp sps -> allPredictionsEqual sp sps = false *)
+  
   Lemma overapprox_allPredictionsEqual_false :
     forall x y xs ys,
       overapprox (y :: ys) (x :: xs)
@@ -135,9 +113,35 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       -> allPredictionsEqual y ys = false.
   Proof.
     intros x y xs ys ho ha.
+    apply ape_false__allPredictionsEqual_false; intros ha'.
     apply allPredictionsEqual_false_exists_diff_rhs in ha.
-    destruct ha as [x' [hi hneq]].
-  Abort.
+    destruct ha as [x' [hi hneq]]; apply hneq; clear hneq.
+    apply eq_trans with (y := prediction y).
+    (* These could probably be lemmas *)
+    - apply in_cons with (a := x) in hi.
+      apply ho in hi; destruct hi as [y' [hi hx]].
+      apply approx_predictions_eq in hx.
+      apply ape_cons_head_eq in ha'; apply ha' in hi; tc.
+    - assert (hh : In x (x :: xs)) by apply in_eq.
+      apply ho in hh; destruct hh as [y' [hh hx]].
+      apply approx_predictions_eq in hx.
+      apply ape_cons_head_eq in ha'; apply ha' in hh; tc.
+  Qed.
+
+  Lemma overapprox_handleFinalSubparsers_contra :
+    forall xs ys rhs rhs',
+      overapprox ys xs
+      -> handleFinalSubparsers ys = PredSucc rhs'
+      -> handleFinalSubparsers xs <> PredAmbig rhs.
+  Proof.
+    intros xs ys rhs rhs' ho hh' hh; unfold handleFinalSubparsers in *.
+    destruct (filter _ ys) as [| y' ys'] eqn:hf'; tc.
+    destruct (filter _ xs) as [| x' xs'] eqn:hf ; tc.
+    eapply overapprox_finalConfig in ho; eauto.
+    destruct (allPredictionsEqual x' xs') eqn:ha; tc; inv hh.
+    eapply overapprox_allPredictionsEqual_false in ha; eauto.
+    rewrite ha in hh'; tc.
+  Qed.
 
   Lemma sllPredict'_llPredict'_succ_eq :
     forall g cm ts sps' sps ca ys ca' ys',
@@ -214,13 +218,12 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Proof.
     intros g cm ts; induction ts as [| (a, l) ts IH];
       intros sps sps' ca ca' ys ys' hc ho hs hl; sis.
-    - inv hs.
-      admit.
+    - inv hs; eapply overapprox_handleFinalSubparsers_contra; eauto.
     - destruct sps' as [| sp' sps']; tc.
       destruct sps as [| sp sps]; tc.
       destruct (allPredictionsEqual sp sps) eqn:ha; tc.
-      assert (Hass : allPredictionsEqual sp' sps' = false) by admit.
-      rewrite Hass in hs.
+      eapply overapprox_allPredictionsEqual_false in ha; eauto.
+      rewrite ha in hs.
       destruct (llTarget _ _ _) as [? | sps''] eqn:ht; tc.
       destruct (Cache.find _ _) as [sps''' |] eqn:hf.
       + apply hc in hf.
