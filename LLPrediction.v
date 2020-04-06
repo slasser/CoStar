@@ -660,13 +660,13 @@ Module LLPredictionFn (Import D : Defs.T).
     intros; eapply spClosure_preserves_prediction'; eauto.
   Qed.
 
-  Definition closure (g : grammar) (sps : list subparser) :
+  Definition llClosure (g : grammar) (sps : list subparser) :
     sum prediction_error (list subparser) :=
     aggrClosureResults (map (fun sp => spClosure g (allNts g) sp (lex_nat_pair_wf _)) sps).
 
-  Lemma closure_preserves_prediction :
+  Lemma llClosure_preserves_prediction :
     forall g sp' sps sps',
-      closure g sps = inr sps'
+      llClosure g sps = inr sps'
       -> In sp' sps'
       -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
   Proof.
@@ -682,7 +682,7 @@ Module LLPredictionFn (Import D : Defs.T).
     match move a sps with
     | inl e    => inl e
     | inr sps' =>
-      match closure g sps' with
+      match llClosure g sps' with
       | inl e     => inl e
       | inr sps'' => inr sps''
       end
@@ -808,8 +808,8 @@ Module LLPredictionFn (Import D : Defs.T).
     (* lemma about llTarget preserving prediction *)
     unfold llTarget in hl.
     destruct (move _ _) as [? | sps'] eqn:hm; tc.
-    destruct (closure _ _) as [? | ?] eqn:hc; tc; inv hl.
-    eapply closure_preserves_prediction in hc; eauto.
+    destruct (llClosure _ _) as [? | ?] eqn:hc; tc; inv hl.
+    eapply llClosure_preserves_prediction in hc; eauto.
     destruct hc as [sp' [hi' heq']]; rewrite heq'.
     eapply move_preserves_prediction in hm; eauto.
     destruct hm as [sp [hi heq]]; rewrite heq; firstorder.
@@ -900,9 +900,9 @@ Module LLPredictionFn (Import D : Defs.T).
       + (* lemma *)
         unfold llTarget in hl.
         destruct (move a _) as [m | sps''] eqn:hm; tc.
-        destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
+        destruct (llClosure g sps'') as [m | sps'''] eqn:hc; tc.
         apply IH in hl; destruct hl as [? [? ?]]; subst.
-        eapply closure_preserves_prediction in hc; eauto.
+        eapply llClosure_preserves_prediction in hc; eauto.
         destruct hc as [? [? heq]]; rewrite heq.
         eapply move_preserves_prediction in hm; eauto.
         destruct hm as [? [? ?]]; eauto.
@@ -921,9 +921,9 @@ Module LLPredictionFn (Import D : Defs.T).
       + (* lemma *)
         unfold llTarget in hl.
         destruct (move a _) as [m | sps''] eqn:hm; tc.
-        destruct (closure g sps'') as [m | sps'''] eqn:hc; tc.
+        destruct (llClosure g sps'') as [m | sps'''] eqn:hc; tc.
         apply IH in hl; destruct hl as [? [? ?]]; subst.
-        eapply closure_preserves_prediction in hc; eauto.
+        eapply llClosure_preserves_prediction in hc; eauto.
         destruct hc as [? [? heq]]; rewrite heq.
         eapply move_preserves_prediction in hm; eauto.
         destruct hm as [? [? ?]]; eauto.
@@ -1008,7 +1008,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Definition startState (g : grammar) (x : nonterminal) (stk : suffix_stack) :
     sum prediction_error (list subparser) :=
-    closure g (initSps g x stk).
+    llClosure g (initSps g x stk).
 
   Lemma startState_sp_prediction_in_rhssForNt :
     forall g x stk sp' sps',
@@ -1018,7 +1018,7 @@ Module LLPredictionFn (Import D : Defs.T).
   Proof.
     intros g x (fr, frs) sp' sps' hf hi.
     unfold startState in hf.
-    eapply closure_preserves_prediction in hf; eauto.
+    eapply llClosure_preserves_prediction in hf; eauto.
     destruct hf as [sp [hin heq]]; rewrite heq.
     eapply initSps_prediction_in_rhssForNt; eauto.
   Qed.

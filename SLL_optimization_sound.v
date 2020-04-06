@@ -151,6 +151,10 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       -> sllTarget g cm a sps' = inr sps'''
       -> overapprox sps''' sps''.
   Proof.
+    intros g cm xs ys xs'' ys'' a ho hl hs.
+    unfold llTarget in hl; unfold sllTarget in hs.
+    destruct (move a xs) as [? | xs'] eqn:hm  ; tc.
+    destruct (move a ys) as [? | ys'] eqn:hm' ; tc.
   Admitted.
 
   Lemma sllPredict'_llPredict'_succ_eq :

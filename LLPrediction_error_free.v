@@ -61,13 +61,13 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       + eapply spClosureStep_preserves_suffix_stack_wf_invar; eauto.
   Qed.
   
-  Lemma closure_never_returns_SpInvalidState :
+  Lemma llClosure_never_returns_SpInvalidState :
     forall g sps,
       all_suffix_stacks_wf g sps
-      -> closure g sps <> inl SpInvalidState.
+      -> llClosure g sps <> inl SpInvalidState.
   Proof.
     intros g sps hw; unfold not; intros hc.
-    unfold closure in hc.
+    unfold llClosure in hc.
     apply aggrClosureResults_error_in_input in hc.
     apply in_map_iff in hc; destruct hc as [sp [hs hi]].
     eapply spClosure_never_returns_SpInvalidState; eauto.
@@ -81,7 +81,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       -> startState g x (fr, frs) <> inl SpInvalidState.
   Proof.
     intros g fr frs o x suf hw heq; unfold not; intros hss.
-    eapply closure_never_returns_SpInvalidState; eauto.
+    eapply llClosure_never_returns_SpInvalidState; eauto.
     intros sp hi.
     unfold initSps in hi.
     apply in_map_iff in hi.
@@ -176,14 +176,14 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       + eapply spClosureStep_preserves_suffix_stack_wf_invar; eauto.
   Qed.
   
-  Lemma closure_preserves_suffix_stack_wf_invar :
+  Lemma llClosure_preserves_suffix_stack_wf_invar :
     forall g sps sps',
       all_suffix_stacks_wf g sps
-      -> closure g sps = inr sps'
+      -> llClosure g sps = inr sps'
       -> all_suffix_stacks_wf g sps'.
   Proof.
     intros g sps sps' ha hc.
-    unfold closure in hc.
+    unfold llClosure in hc.
     unfold all_suffix_stacks_wf.
     intros sp' hi.
     eapply aggrClosureResults_succ_in_input in hc; eauto.
@@ -231,11 +231,11 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Lemma all_stacks_stable_after_closure :
     forall g sps sps',
       all_suffix_stacks_wf g sps
-      -> closure g sps = inr sps'
+      -> llClosure g sps = inr sps'
       -> all_stacks_stable sps'.
   Proof.
     intros g sps sps' hw hc.
-    unfold closure in hc.
+    unfold llClosure in hc.
     unfold all_stacks_stable.
     intros sp' hi.
     eapply aggrClosureResults_succ_in_input in hc; eauto.
@@ -255,7 +255,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     intros g a sps hw hs; unfold not; intros ht; unfold llTarget in ht; dmeq hm.
     - inv ht; eapply move_never_returns_SpInvalidState_for_ready_sps; eauto.
     - eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-      dmeq hc; tc; inv ht; eapply closure_never_returns_SpInvalidState; eauto.
+      dmeq hc; tc; inv ht; eapply llClosure_never_returns_SpInvalidState; eauto.
   Qed.
 
   Lemma llTarget_preserves_suffix_stacks_wf_invar :
@@ -267,7 +267,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     intros g a sps sps' hw ht; unfold llTarget in ht.
     dmeq hm; tc; dmeq hc; tc; inv ht.
     eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-    eapply closure_preserves_suffix_stack_wf_invar; eauto.
+    eapply llClosure_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Lemma llTarget_preserves_stacks_stable_invar :
@@ -308,7 +308,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       -> all_suffix_stacks_wf g sps.
   Proof.
     intros g [suf'] frs o x suf sps hw heq hs; sis; subst.
-    eapply closure_preserves_suffix_stack_wf_invar; eauto.
+    eapply llClosure_preserves_suffix_stack_wf_invar; eauto.
     unfold all_suffix_stacks_wf; intros sp hi.
     eapply initSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
@@ -398,10 +398,10 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Lemma closure_never_finds_left_recursion :
     forall g x sps,
       no_left_recursion g
-      -> closure g sps <> inl (SpLeftRecursion x).
+      -> llClosure g sps <> inl (SpLeftRecursion x).
   Proof.
     intros g x sps hn; unfold not; intros hc.
-    unfold closure in hc.
+    unfold llClosure in hc.
     apply aggrClosureResults_error_in_input in hc.
     apply in_map_iff in hc.
     destruct hc as [[pred (fr, frs)] [hs hi]].
