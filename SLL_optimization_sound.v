@@ -1,4 +1,5 @@
 Require Import List.
+Require Import GallStar.Lex.
 Require Import GallStar.SLLPrediction.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
@@ -98,7 +99,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       -> rhs' = rhs.
   Proof.
     intros sps sps' rhs rhs' ho hl hs; unfold handleFinalSubparsers in *.
-    destruct (filter _ sps)  as [| x xs] eqn:hf  ; tc.
+    destruct (filter _ sps ) as [| x xs] eqn:hf  ; tc.
     destruct (filter _ sps') as [| y ys] eqn:hf' ; tc.
     destruct (allPredictionsEqual x xs)  eqn:ha  ; tc; inv hl.
     destruct (allPredictionsEqual y ys)  eqn:ha' ; tc; inv hs.
@@ -143,6 +144,67 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     rewrite ha in hh'; tc.
   Qed.
 
+  (* refactor *)
+  Lemma approx_moveSp :
+    forall a x x' y,
+      approx y x
+      -> moveSp a x = MoveSucc x'
+      -> exists y',
+          moveSp a y = MoveSucc y'
+          /\ approx y' x'.
+  Proof.
+    intros a x x' y hx hm; unfold moveSp in hm.
+    dms; tc; inv hm.
+    destruct y as [pred (fr, frs)]; simpl in hx.
+    destruct hx as [? [ctx heq]]; inv heq.
+    eexists; split.
+    - unfold moveSp; dm; tc.
+    - firstorder; eexists; eauto.
+  Qed.
+  
+  Lemma move_preserves_overapprox :
+    forall a xs xs' ys ys',
+      overapprox ys xs
+      -> move a xs = inr xs'
+      -> move a ys = inr ys'
+      -> overapprox ys' xs'.
+  Proof.
+    intros a xs xs' ys ys' ho hm hm' x' hi.
+    eapply aggrMoveResults_map_backwards in hi; eauto.
+    destruct hi as [x [hi hm'']].
+    apply ho in hi; destruct hi as [y [hi hx]].
+    eapply approx_moveSp in hm''; eauto.
+    destruct hm'' as [y' [hm'' hx']].
+    eapply aggrMoveResults_succ_all_sps_step in hm''; eauto.
+  Qed.
+
+  Lemma llc_sllc_approx :
+    forall g cm av av' x y xs' ys' a a',
+      approx y x
+      -> spClosure g av x a  = inr xs'
+      -> sllc' g cm av' y a' = inr ys'
+      -> overapprox ys' xs'.
+  Admitted.
+  
+  Lemma closure_preserves_overapprox :
+    forall g cm xs xs' ys ys',
+      overapprox ys xs
+      -> llClosure g xs = inr xs'
+      -> sllClosure g cm ys = inr ys'
+      -> overapprox ys' xs'.
+  Proof.
+    intros g cm xs xs'' ys ys'' ho hl hc x'' hi.
+    unfold llClosure in hl.
+    unfold sllClosure in hc.
+    eapply aggrClosureResults_map_backwards in hi; eauto.
+    destruct hi as [x [xs' [hi [hc' hi']]]].
+    apply ho in hi; destruct hi as [y [hi hyx]].
+    eapply aggrClosureResults_map_succ_elt_succ in hc; eauto.
+    destruct hc as [ys' [hs' ha]].
+    eapply llc_sllc_approx in hs'; eauto.
+    apply hs' in hi'; destruct hi' as [? [? ? ]]; eauto.
+  Qed.
+  
   (* probably need some invariant about closure_map here *)
   Lemma target_preserves_overapprox :
     forall g cm sps sps' sps'' sps''' a,
@@ -155,7 +217,11 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     unfold llTarget in hl; unfold sllTarget in hs.
     destruct (move a xs) as [? | xs'] eqn:hm  ; tc.
     destruct (move a ys) as [? | ys'] eqn:hm' ; tc.
-  Admitted.
+    destruct (llClosure _ _   ) eqn:hc ; tc; inv hl.
+    destruct (sllClosure _ _ _) eqn:hc'; tc; inv hs.
+    eapply move_preserves_overapprox in hm'; eauto.
+    eapply closure_preserves_overapprox; eauto.
+  Qed.
 
   Lemma sllPredict'_llPredict'_succ_eq :
     forall g cm ts sps' sps ca ys ca' ys',
