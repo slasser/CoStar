@@ -39,7 +39,7 @@ Module SllPredictionFn (Import D : Defs.T).
     match simReturn cm sp with
     | Some sps' => inr sps'
     | None      =>
-      match spClosureStep g av sp as r return spClosureStep g av sp = r -> _ with
+      match cstep g av sp as r return cstep g av sp = r -> _ with
       | CstepDone       => fun _  => inr [sp]
       | CstepError e    => fun _  => inl e
       | CstepK av' sps' => 
@@ -57,7 +57,7 @@ Module SllPredictionFn (Import D : Defs.T).
       match simReturn cm sp with
       | Some sps' => inr sps'
       | None      =>
-        match spClosureStep g av sp as r return spClosureStep g av sp = r -> _ with
+        match cstep g av sp as r return cstep g av sp = r -> _ with
         | CstepDone       => fun _  => inr [sp]
         | CstepError e    => fun _  => inl e
         | CstepK av' sps' => 
@@ -80,11 +80,11 @@ Module SllPredictionFn (Import D : Defs.T).
            (a   : Acc lex_nat_pair (meas g av sp))
            (sr  : subparser_closure_step_result)
            (cr  : closure_result)
-           (heq : spClosureStep g av sp = sr),
+           (heq : cstep g av sp = sr),
       match simReturn cm sp with
       | Some sps' => inr sps'
       | None      =>
-        match sr as r return spClosureStep g av sp = r -> closure_result with
+        match sr as r return cstep g av sp = r -> closure_result with
         | CstepDone       => fun _  => inr [sp]
         | CstepError e    => fun _  => inl e
         | CstepK av' sps' => 
@@ -99,7 +99,7 @@ Module SllPredictionFn (Import D : Defs.T).
            sr = CstepError e
            \/ exists (sps : list subparser)
                      (av' : NtSet.t)
-                     (hs  : spClosureStep g av sp = CstepK av' sps)
+                     (hs  : cstep g av sp = CstepK av' sps)
                      (crs : list closure_result),
                crs = dmap sps (fun sp' hi => 
                                  sllc' g cm av' sp'
@@ -110,7 +110,7 @@ Module SllPredictionFn (Import D : Defs.T).
            \/ (sr = CstepDone /\ sps = [sp])
            \/ exists (sps' : list subparser)
                      (av'  : NtSet.t)
-                     (hs   : spClosureStep g av sp = CstepK av' sps')
+                     (hs   : cstep g av sp = CstepK av' sps')
                      (crs  : list closure_result),
                crs = dmap sps' (fun sp' hi => 
                                   sllc' g cm av' sp'
@@ -132,10 +132,10 @@ Module SllPredictionFn (Import D : Defs.T).
       sllc' g cm av sp a = cr
       -> match cr with
          | inl e => 
-           spClosureStep g av sp = CstepError e
+           cstep g av sp = CstepError e
            \/ exists (sps : list subparser)
                      (av' : NtSet.t)
-                     (hs  : spClosureStep g av sp = CstepK av' sps)
+                     (hs  : cstep g av sp = CstepK av' sps)
                      (crs : list closure_result),
                crs = dmap sps (fun sp' hi => 
                                  sllc' g cm av' sp'
@@ -143,10 +143,10 @@ Module SllPredictionFn (Import D : Defs.T).
                /\ aggrClosureResults crs = inl e
          | inr sps =>
            simReturn cm sp = Some sps
-           \/ (spClosureStep g av sp = CstepDone /\ sps = [sp])
+           \/ (cstep g av sp = CstepDone /\ sps = [sp])
            \/ exists (sps' : list subparser)
                      (av'  : NtSet.t)
-                     (hs   : spClosureStep g av sp = CstepK av' sps')
+                     (hs   : cstep g av sp = CstepK av' sps')
                      (crs  : list closure_result),
                crs = dmap sps' (fun sp' hi => 
                                   sllc' g cm av' sp'
@@ -163,10 +163,10 @@ Module SllPredictionFn (Import D : Defs.T).
     forall g cm av sp a sps,
       sllc' g cm av sp a = inr sps
       -> simReturn cm sp = Some sps
-         \/ (spClosureStep g av sp = CstepDone /\ sps = [sp])
+         \/ (cstep g av sp = CstepDone /\ sps = [sp])
          \/ exists (sps' : list subparser)
                    (av'  : NtSet.t)
-                   (hs   : spClosureStep g av sp = CstepK av' sps')
+                   (hs   : cstep g av sp = CstepK av' sps')
                    (crs  : list closure_result),
              crs = dmap sps' (fun sp' hi => 
                                 sllc' g cm av' sp'
@@ -179,10 +179,10 @@ Module SllPredictionFn (Import D : Defs.T).
   Lemma sllc'_error_cases :
     forall g cm sp av a e,
       sllc' g cm av sp a = inl e
-      -> spClosureStep g av sp = CstepError e
+      -> cstep g av sp = CstepError e
          \/ exists (sps : list subparser)
                    (av' : NtSet.t)
-                   (hs  : spClosureStep g av sp = CstepK av' sps)
+                   (hs  : cstep g av sp = CstepK av' sps)
                    (crs : list closure_result),
           crs = dmap sps (fun sp' hi => 
                             sllc' g cm av' sp' (acc_after_step _ _ _ _ hs hi a))
@@ -210,9 +210,9 @@ Module SllPredictionFn (Import D : Defs.T).
       eapply dmap_in in hi'; eauto.
       destruct hi' as [sp'' [hi''' [_ heq]]].
       eapply IH in heq; subst; eauto.
-      + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs; auto.
+      + apply cstep_preserves_prediction with (sp' := sp'') in hs; auto.
         rewrite hs; auto.
-      + eapply spClosureStep_meas_lt; eauto.
+      + eapply cstep_meas_lt; eauto.
   Qed.
 
   Lemma sllc'_preserves_prediction :

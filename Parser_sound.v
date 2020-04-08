@@ -770,27 +770,6 @@ Module ParserSoundFn (Import D : Defs.T).
 
   (* to do : these next lemmas should probably be in Prediction *)
 
-  Lemma allPredictionsEqual_false_exists_diff_rhs :
-    forall sp sps,
-      allPredictionsEqual sp sps = false
-      -> exists sp',
-        In sp' sps
-        /\ sp'.(prediction) <> sp.(prediction).
-  Proof.
-    intros sp sps ha; unfold allPredictionsEqual in ha.
-    induction sps as [| sp' sps IH]; simpl in ha.
-    - inv ha.
-    - apply andb_false_iff in ha; destruct ha as [hh | ht].
-      + exists sp'; split.
-        * apply in_eq.
-        * unfold beqGamma in hh.
-          destruct (gamma_eq_dec sp.(prediction) sp'.(prediction)); inv hh; auto.
-      + apply IH in ht.
-        destruct ht as [sp'' [hi hn]].
-        exists sp''; split; auto.
-        apply in_cons; auto.
-  Qed.
-
   (* refactor *)
   Lemma llPredict'_ambig_rhs_leads_to_successful_parse' :
     forall g orig_sps wsuf wpre curr_sps rhs,

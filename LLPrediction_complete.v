@@ -146,15 +146,15 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     - eapply push_preserves_suffix_frames_wf_invar; eauto.
   Qed.    
 
-  Lemma spClosureStep_sound :
+  Lemma cstep_sound :
     forall g av av' sp sp' sps',
       suffix_stack_wf g sp.(stack)
-      -> spClosureStep g av sp = CstepK av' sps'
+      -> cstep g av sp = CstepK av' sps'
       -> In sp' sps'
       -> closure_step g av sp av' sp'.
   Proof.
     intros g av av' sp sp' sps' hw hs hi.
-    unfold spClosureStep in hs; dmeqs h; tc; subst; sis.
+    unfold cstep in hs; dmeqs h; tc; subst; sis.
     - inv hw; inv hs.
       apply in_singleton_eq in hi; subst; auto.
     - inv hs.
@@ -204,23 +204,23 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Lemma closure_multistep_done_eq :
     forall g av av' sp sp',
       closure_multistep g av sp av' sp'
-      -> spClosureStep g av sp = CstepDone
+      -> cstep g av sp = CstepDone
       -> sp = sp'.
   Proof.
-    intros g av av' sp sp' hm hs; unfold spClosureStep in hs; dms; tc;
+    intros g av av' sp sp' hm hs; unfold cstep in hs; dms; tc;
       inv_cm hm hs' hm'; auto; inv hs'.
   Qed.
 
   Lemma closure_multistep_not_done_middle_sp_in_continuation :
     forall g av av' av'' sp sp'' sps',
       closure_multistep g av sp av'' sp''
-      -> spClosureStep g av sp = CstepK av' sps'
+      -> cstep g av sp = CstepK av' sps'
       -> exists sp',
           closure_step g av sp av' sp'
           /\ closure_multistep g av' sp' av'' sp''
           /\ In sp' sps'.
   Proof.
-    intros g av av' av'' sp sp'' sps' hm hs; unfold spClosureStep in hs; dmeqs h; tc; inv hs; eauto.
+    intros g av av' av'' sp sp'' sps' hm hs; unfold cstep in hs; dmeqs h; tc; inv hs; eauto.
     - inv_cm hm hs hm'; inv hs; eexists; repeat split; auto.
       apply in_eq.
     - inv_cm hm hs hm'; inv hs. 
@@ -265,7 +265,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       destruct ha as [hi' [sps''' [heq hall]]].
       apply hall.
       eapply IH; eauto.
-      eapply spClosureStep_meas_lt; eauto.
+      eapply cstep_meas_lt; eauto.
   Qed.
 
   Lemma spClosure_refines_closure_multistep :
@@ -297,7 +297,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     apply spClosure_success_cases in hs.
     destruct hs as [[hdone heq] | [sps' [av' [hs [crs [heq ha]]]]]]; subst.
     - apply in_singleton_eq in hi; subst.
-      apply spClosureStepDone_stable_config in hdone; auto.
+      apply cstepDone_stable_config in hdone; auto.
       destruct sp as [pred ([o suf], frs)].
       inv hdone; eauto.
     - eapply aggrClosureResults_dmap_backwards in ha; eauto.
@@ -306,9 +306,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       + destruct hs' as [av''' hs'].
         exists av'''.
         eapply CMS_trans with (sp' := sp'); eauto.
-        eapply spClosureStep_sound; eauto.
-      + eapply spClosureStep_meas_lt; eauto.
-      + eapply spClosureStep_preserves_suffix_stack_wf_invar; eauto.
+        eapply cstep_sound; eauto.
+      + eapply cstep_meas_lt; eauto.
+      + eapply cstep_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Lemma spClosure_sound_wrt_closure_multistep :
@@ -1229,14 +1229,14 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     firstorder.
   Qed.
 
-  Lemma spClosureStep_preserves_successful_sp_invar :
+  Lemma cstep_preserves_successful_sp_invar :
     forall g av av' sp sps' w,
       gamma_recognize g (unprocStackSyms sp.(stack)) w
-      -> spClosureStep g av sp = CstepK av' sps'
+      -> cstep g av sp = CstepK av' sps'
       -> exists_successful_sp g sps' w.
   Proof.
     intros g av av' sp sps' w hg hs.
-    unfold spClosureStep in hs; dmeqs h; tc; sis; inv hs.
+    unfold cstep in hs; dmeqs h; tc; sis; inv hs.
     - eexists; split; [apply in_eq | auto].
     - apply gamma_recognize_nonterminal_head in hg. 
       destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst. 
@@ -1264,13 +1264,13 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     destruct hs as [[hdone heq] | [sps' [av' [hs [crs [heq ha]]]]]]; subst.
     - firstorder.
     - pose proof hs as hs'. 
-      eapply spClosureStep_preserves_successful_sp_invar in hs'; eauto.
+      eapply cstep_preserves_successful_sp_invar in hs'; eauto.
       destruct hs' as [sp' [hi hg']].
       eapply aggrClosureResults_dmap_succ_elt_succ in ha; eauto.
       destruct ha as [? [? [hs' ha]]].
       eapply IH in hs'; eauto.
       + firstorder.
-      + eapply spClosureStep_meas_lt; eauto.
+      + eapply cstep_meas_lt; eauto.
   Qed.
 
   Lemma spClosure_preserves_successful_sp_invar :

@@ -219,7 +219,7 @@ Module LLPredictionFn (Import D : Defs.T).
   | CstepK     : NtSet.t -> list subparser -> subparser_closure_step_result
   | CstepError : prediction_error -> subparser_closure_step_result.
 
-  Definition spClosureStep (g : grammar) (av : NtSet.t) (sp : subparser) : 
+  Definition cstep (g : grammar) (av : NtSet.t) (sp : subparser) : 
     subparser_closure_step_result :=
     match sp with
     | Sp pred (fr, frs) =>
@@ -247,14 +247,14 @@ Module LLPredictionFn (Import D : Defs.T).
       end
     end.
   
-  Lemma spClosureStep_preserves_prediction :
+  Lemma cstep_preserves_prediction :
     forall g sp sp' sps' av av',
-      spClosureStep g av sp = CstepK av' sps'
+      cstep g av sp = CstepK av' sps'
       -> In sp' sps'
       -> sp.(prediction) = sp'.(prediction).
   Proof.
     intros g sp sp' sps' av av' hs hi.
-    unfold spClosureStep in hs; dms; tc; inv hs.
+    unfold cstep in hs; dms; tc; inv hs.
     - apply in_singleton_eq in hi; subst; auto.
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst; auto.
@@ -457,17 +457,17 @@ Module LLPredictionFn (Import D : Defs.T).
     eapply stackScore_lt_after_push; sis; eauto.
   Defined.
 
-  Lemma spClosureStep_meas_lt :
+  Lemma cstep_meas_lt :
     forall (g      : grammar)
            (sp sp' : subparser)
            (sps'   : list subparser)
            (av av' : NtSet.t),
-      spClosureStep g av sp = CstepK av' sps'
+      cstep g av sp = CstepK av' sps'
       -> In sp' sps'
       -> lex_nat_pair (meas g av' sp') (meas g av sp).
   Proof.
     intros g sp sp' sps' av av' hs hi. 
-    unfold spClosureStep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
+    unfold cstep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
       eapply meas_lt_after_return; eauto.
     - apply in_map_iff in hi.
@@ -479,21 +479,21 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Lemma acc_after_step :
     forall g sp sp' sps' av av',
-      spClosureStep g av sp = CstepK av' sps'
+      cstep g av sp = CstepK av' sps'
       -> In sp' sps'
       -> Acc lex_nat_pair (meas g av sp)
       -> Acc lex_nat_pair (meas g av' sp').
   Proof.
     intros g sp sp' sps' av av' heq hi ha.
     eapply Acc_inv; eauto.
-    eapply spClosureStep_meas_lt; eauto.
+    eapply cstep_meas_lt; eauto.
   Defined.
 
   Fixpoint spClosure (g  : grammar)
                      (av : NtSet.t)
                      (sp : subparser)
                      (a  : Acc lex_nat_pair (meas g av sp)) : closure_result :=
-    match spClosureStep g av sp as r return spClosureStep g av sp = r -> _ with
+    match cstep g av sp as r return cstep g av sp = r -> _ with
     | CstepDone       => fun _  => inr [sp]
     | CstepError e    => fun _  => inl e
     | CstepK av' sps' => 
@@ -507,7 +507,7 @@ Module LLPredictionFn (Import D : Defs.T).
   Lemma spClosure_unfold :
     forall g sp av a,
       spClosure g av sp a =
-      match spClosureStep g av sp as r return spClosureStep g av sp = r -> _ with
+      match cstep g av sp as r return cstep g av sp = r -> _ with
       | CstepDone       => fun _  => inr [sp]
       | CstepError e    => fun _  => inl e
       | CstepK av' sps' => 
@@ -528,8 +528,8 @@ Module LLPredictionFn (Import D : Defs.T).
            (a   : Acc lex_nat_pair (meas g av sp))
            (sr  : subparser_closure_step_result)
            (cr  : closure_result)
-           (heq : spClosureStep g av sp = sr),
-      match sr as r return spClosureStep g av sp = r -> closure_result with
+           (heq : cstep g av sp = sr),
+      match sr as r return cstep g av sp = r -> closure_result with
       | CstepDone       => fun _  => inr [sp]
       | CstepError e    => fun _  => inl e
       | CstepK av' sps' => 
@@ -543,7 +543,7 @@ Module LLPredictionFn (Import D : Defs.T).
            sr = CstepError e
            \/ exists (sps : list subparser)
                      (av' : NtSet.t)
-                     (hs  : spClosureStep g av sp = CstepK av' sps)
+                     (hs  : cstep g av sp = CstepK av' sps)
                      (crs : list closure_result),
                crs = dmap sps (fun sp' hi => 
                                  spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
@@ -552,7 +552,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (sr = CstepDone /\ sps = [sp])
            \/ exists (sps' : list subparser)
                      (av'  : NtSet.t)
-                     (hs   : spClosureStep g av sp = CstepK av' sps')
+                     (hs   : cstep g av sp = CstepK av' sps')
                      (crs  : list closure_result),
                crs = dmap sps' (fun sp' hi => 
                                   spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
@@ -574,19 +574,19 @@ Module LLPredictionFn (Import D : Defs.T).
       spClosure g av sp a = cr
       -> match cr with
          | inl e => 
-           spClosureStep g av sp = CstepError e
+           cstep g av sp = CstepError e
            \/ exists (sps : list subparser)
                      (av' : NtSet.t)
-                     (hs  : spClosureStep g av sp = CstepK av' sps)
+                     (hs  : cstep g av sp = CstepK av' sps)
                      (crs : list closure_result),
                crs = dmap sps (fun sp' hi => 
                                  spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
                /\ aggrClosureResults crs = inl e
          | inr sps =>
-           (spClosureStep g av sp = CstepDone /\ sps = [sp])
+           (cstep g av sp = CstepDone /\ sps = [sp])
            \/ exists (sps' : list subparser)
                      (av'  : NtSet.t)
-                     (hs   : spClosureStep g av sp = CstepK av' sps')
+                     (hs   : cstep g av sp = CstepK av' sps')
                      (crs  : list closure_result),
                crs = dmap sps' (fun sp' hi => 
                                   spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
@@ -601,10 +601,10 @@ Module LLPredictionFn (Import D : Defs.T).
   Lemma spClosure_success_cases :
     forall g sp av a sps,
       spClosure g av sp a = inr sps
-      -> (spClosureStep g av sp = CstepDone /\ sps = [sp])
+      -> (cstep g av sp = CstepDone /\ sps = [sp])
          \/ exists (sps' : list subparser)
                    (av'  : NtSet.t)
-                   (hs   : spClosureStep g av sp = CstepK av' sps')
+                   (hs   : cstep g av sp = CstepK av' sps')
                    (crs  : list closure_result),
           crs = dmap sps' (fun sp' hi => 
                              spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
@@ -616,10 +616,10 @@ Module LLPredictionFn (Import D : Defs.T).
   Lemma spClosure_error_cases :
     forall g sp av a e,
       spClosure g av sp a = inl e
-      -> spClosureStep g av sp = CstepError e
+      -> cstep g av sp = CstepError e
          \/ exists (sps : list subparser)
                    (av' : NtSet.t)
-                   (hs  : spClosureStep g av sp = CstepK av' sps)
+                   (hs  : cstep g av sp = CstepK av' sps)
                    (crs : list closure_result),
           crs = dmap sps (fun sp' hi => 
                             spClosure g av' sp' (acc_after_step _ _ _ _ hs hi a))
@@ -646,9 +646,9 @@ Module LLPredictionFn (Import D : Defs.T).
       eapply dmap_in in hi'; eauto.
       destruct hi' as [sp'' [hi''' [_ heq]]].
       eapply IH in heq; subst; eauto.
-      + apply spClosureStep_preserves_prediction with (sp' := sp'') in hs; auto.
+      + apply cstep_preserves_prediction with (sp' := sp'') in hs; auto.
         rewrite hs; auto.
-      + eapply spClosureStep_meas_lt; eauto.
+      + eapply cstep_meas_lt; eauto.
   Qed.
 
   Lemma spClosure_preserves_prediction :
@@ -1138,15 +1138,15 @@ Module LLPredictionFn (Import D : Defs.T).
     rewrite app_cons_group_l in hi; eauto.
   Qed.
 
-  Lemma spClosureStep_preserves_suffix_stack_wf_invar :
+  Lemma cstep_preserves_suffix_stack_wf_invar :
     forall g sp sp' sps' av av',
       suffix_stack_wf g sp.(stack)
-      -> spClosureStep g av sp = CstepK av' sps'
+      -> cstep g av sp = CstepK av' sps'
       -> In sp' sps'
       -> suffix_stack_wf g sp'.(stack).
   Proof.
     intros g sp sp' sps' av av' hw hs hi.
-    unfold spClosureStep in hs; dms; tc; sis; inv hs.
+    unfold cstep in hs; dms; tc; sis; inv hs.
     - apply in_singleton_eq in hi; subst; sis.
       eapply return_preserves_suffix_frames_wf_invar; eauto.
     - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
@@ -1319,15 +1319,15 @@ Module LLPredictionFn (Import D : Defs.T).
       eapply FR_indirect with (pre' := []); eauto.
   Qed.
 
-  Lemma spClosureStep_preserves_unavailable_nts_invar :
+  Lemma cstep_preserves_unavailable_nts_invar :
     forall g sp sp' sps' av av',
       unavailable_nts_invar g av sp
-      -> spClosureStep g av sp = CstepK av' sps'
+      -> cstep g av sp = CstepK av' sps'
       -> In sp' sps'
       -> unavailable_nts_invar g av' sp'.
   Proof.
     intros g sp sp' sps' av av' hu hs hi.
-    unfold spClosureStep in hs; dmeqs h; inv hs; tc.
+    unfold cstep in hs; dmeqs h; inv hs; tc.
     - apply in_singleton_eq in hi; subst.
       eapply return_preserves_unavailable_nts_invar; eauto.
     - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
