@@ -44,7 +44,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     unfold approx; intros sp sp' ha; dms; destruct ha; auto.
   Qed.
 
-    (* refactor *)
   Lemma approx_moveSp :
     forall a x x' y,
       approx y x
@@ -59,6 +58,43 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eexists; split.
     - unfold moveSp; dm; tc.
     - firstorder; eexists; eauto.
+  Qed.
+
+  Lemma approx_head_frames_eq :
+    forall pred pred' fr fr' frs frs',
+      approx (Sp pred' (fr', frs')) (Sp pred (fr, frs))
+      -> fr' = fr.
+  Proof.
+    intros pred pred' fr fr' frs frs' ha.
+    destruct ha as [? [? heq]]; inv heq; auto.
+  Qed.
+  
+  Lemma approx_ll_done_simReturn_contra :
+    forall g cm av sp sp' sps'',
+      suffix_stack_wf g (stack sp)
+      -> approx sp' sp
+      -> cstep g av sp = CstepDone
+      -> simReturn cm sp' <> Some sps''.
+  Proof.
+    intros g cm av [pred (fr, frs)] [pred' (fr', frs')]sps'' hw ha hs hr.
+    apply approx_head_frames_eq in ha; subst.
+    apply cstepDone_stable_config in hs; auto.
+    apply simReturn_stack_shape in hr.
+    destruct hr as [x heq]; inv heq; inv hs.
+  Qed.
+
+  Lemma approx_ll_done_sll_step_contra :
+    forall g av av' av'' sp sp' sps'',
+      suffix_stack_wf g (stack sp)
+      -> approx sp' sp
+      -> cstep g av sp = CstepDone
+      -> cstep g av' sp' <> CstepK av'' sps''.
+  Proof.
+    intros g av av' av'' [pr (fr, frs)] [pr' (fr', frs')] sps'' hw ha hs hs'.
+    pose proof ha as ha'; apply approx_head_frames_eq in ha'; subst.
+    apply cstepDone_stable_config in hs; auto.
+    sis; dms; tc; inv hs; inv hs'.
+    destruct ha as [? [? heq]]; inv heq.
   Qed.
   
   Definition overapprox (sps' sps : list subparser) : Prop :=
@@ -177,27 +213,37 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply aggrMoveResults_succ_all_sps_step in hm''; eauto.
   Qed.
 
+  Lemma approx_overapprox_singleton :
+    forall x y,
+      approx y x
+      -> overapprox [y] [x].
+  Proof.
+    intros x y ha ? hi; apply in_singleton_eq in hi; subst.
+    eexists; split; [apply in_eq | auto].
+  Qed.
+
   Lemma llc_sllc_approx_overapprox' :
     forall g cm pr (a : Acc lex_nat_pair pr) av av' x y xs' ys' a' a'',
       pr = meas g av x
+      -> suffix_stack_wf g (stack x)
       -> approx y x
       -> llc g av x a' = inr xs'
       -> sllc g cm av' y a'' = inr ys'
       -> overapprox ys' xs'.
   Proof.
     intros g cm pr a''; induction a'' as [pr hlt IH].
-    intros avx avy x y xs''' ys''' a a' ? hx hll hsll; subst.
+    intros avx avy x y xs''' ys''' a a' ? hw hx hll hsll; subst.
     apply llc_success_cases in hll.
     destruct hll as [[hs ?] | [xs' [avx' [hs [? [? ha]]]]]]; subst.
     - (* the LL subparser is done *)
       apply sllc_success_cases in hsll.
       destruct hsll as [hr | [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]; subst.
       + (* SLL subparser simulates a return -- contradiction *)
-        admit.
-      + (* both subparsers are done -- easy, I think *)
-        admit.
+        exfalso; eapply approx_ll_done_simReturn_contra; eauto.
+      + (* both subparsers are done -- easy *)
+        apply approx_overapprox_singleton; auto.
       + (* SLL subparser steps -- contradiction *)
-        admit.
+        exfalso. eapply approx_ll_done_sll_step_contra; eauto.
     - (* the LL subparser steps *)
       apply sllc_success_cases in hsll.
       destruct hsll as [hr | [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]; subst.
@@ -223,9 +269,10 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         destruct Hass as [y' [hiy' hx']].
         eapply aggrClosureResults_dmap_succ_elt_succ in ha'; eauto.
         destruct ha' as [? [ys'' [hsll ha']]].
-        eapply IH in hsll; eauto.
-        * apply hsll in hi''; destruct hi'' as [y'' [hiy'' hx'']]; eauto.
+        eapply IH with (ys' := ys'') in hll; eauto.
+        * apply hll in hi''; destruct hi'' as [y'' [hiy'' hx'']]; eauto.
         * eapply cstep_meas_lt; eauto.
+        * eapply cstep_preserves_suffix_stack_wf_invar; eauto.
   Admitted.
 
   Lemma llc_sllc_approx_overapprox :

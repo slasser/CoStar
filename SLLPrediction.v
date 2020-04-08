@@ -29,6 +29,14 @@ Module SllPredictionFn (Import D : Defs.T).
     intros cm [pred (fr, frs)] sp' sps' hs hi; sis; dms; tc; inv hs.
     apply in_map_iff in hi; destruct hi as [? [? ?]]; subst; auto.
   Qed.
+
+  Lemma simReturn_stack_shape :
+    forall cm sp sps',
+      simReturn cm sp = Some sps'
+      -> exists x, stack sp = (SF (Some x) [], []).
+  Proof.
+    intros cm sp sps' hr; unfold simReturn in hr; dms; inv hr; sis; eauto.
+  Qed.
   
   Fixpoint sllc (g  : grammar)
                 (cm : closure_map)
