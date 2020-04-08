@@ -181,8 +181,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Lemma llc_sllc_approx :
     forall g cm av av' x y xs' ys' a a',
       approx y x
-      -> spClosure g av x a  = inr xs'
-      -> sllc' g cm av' y a' = inr ys'
+      -> llc g av x a  = inr xs'
+      -> sllc g cm av' y a' = inr ys'
       -> overapprox ys' xs'.
   Admitted.
   

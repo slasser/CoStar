@@ -36,7 +36,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     unfold cstep in hs; dms; tc; inv hw.
   Qed.
 
-  Lemma spClosure_never_returns_SpInvalidState :
+  Lemma llc_never_returns_SpInvalidState :
     forall (g    : grammar)
            (pair : nat * nat)
            (a    : Acc lex_nat_pair pair)
@@ -45,12 +45,12 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
            (a'   : Acc lex_nat_pair (meas g av sp)),
       pair = meas g av sp
       -> suffix_stack_wf g sp.(stack)
-      -> spClosure g av sp a' <> inl SpInvalidState.
+      -> llc g av sp a' <> inl SpInvalidState.
   Proof.
     intros g pair a'.
     induction a' as [pair hlt IH].
     intros av sp a heq hw; unfold not; intros hs; subst.
-    apply spClosure_error_cases in hs.
+    apply llc_error_cases in hs.
     destruct hs as [hs | [sps [av' [hs [crs [heq heq']]]]]]; subst.
     - eapply cstep_never_returns_SpInvalidState; eauto.
     - apply aggrClosureResults_error_in_input in heq'.
@@ -70,7 +70,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     unfold llClosure in hc.
     apply aggrClosureResults_error_in_input in hc.
     apply in_map_iff in hc; destruct hc as [sp [hs hi]].
-    eapply spClosure_never_returns_SpInvalidState; eauto.
+    eapply llc_never_returns_SpInvalidState; eauto.
     apply lex_nat_pair_wf.
   Qed.
 
@@ -154,17 +154,17 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     eapply moveSp_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
-  Lemma spClosure_preserves_suffix_stack_wf_invar :
+  Lemma llc_preserves_suffix_stack_wf_invar :
     forall g pr (a : Acc lex_nat_pair pr) av sp sp' a' sps',
       pr = meas g av sp
       -> suffix_stack_wf g sp.(stack)
-      -> spClosure g av sp a' = inr sps'
+      -> llc g av sp a' = inr sps'
       -> In sp' sps'
       -> suffix_stack_wf g sp'.(stack).
   Proof.
     intros g pr a'.
     induction a' as [pr hlt IH]; intros av sp sp' a sps' heq hw hs hi; subst.
-    apply spClosure_success_cases in hs.
+    apply llc_success_cases in hs.
     destruct hs as [[hd heq] | [sps'' [av' [hs [crs [heq heq']]]]]]; subst.
     - apply in_singleton_eq in hi; subst; auto.
     - eapply aggrClosureResults_succ_in_input in heq'; eauto.
@@ -190,7 +190,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     destruct hc as [sps'' [hi' hi'']].
     apply in_map_iff in hi'.
     destruct hi' as [sp [hs hi']]; subst.
-    eapply spClosure_preserves_suffix_stack_wf_invar; eauto.
+    eapply llc_preserves_suffix_stack_wf_invar; eauto.
     apply lex_nat_pair_wf.
   Qed.
 
@@ -205,17 +205,17 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     inv hw; auto.
   Qed.
 
-  Lemma sp_in_spClosure_result_stable_config :
+  Lemma sp_in_llc_result_stable_config :
     forall g pr (a : Acc lex_nat_pair pr) av sp sp' a' sps',
       pr = meas g av sp
       -> suffix_stack_wf g sp.(stack)
-      -> spClosure g av sp a' = inr sps'
+      -> llc g av sp a' = inr sps'
       -> In sp' sps'
       -> stable_config sp'.(stack).
   Proof.
     intros g pr a'.
     induction a' as [pr hlt IH]; intros av sp sp' a sps' heq hw hs hi; subst.
-    apply spClosure_success_cases in hs.
+    apply llc_success_cases in hs.
     destruct hs as [[hd heq] | [sps'' [av' [hs [crs [heq heq']]]]]]; subst.
     - apply in_singleton_eq in hi; subst; auto.
       eapply cstepDone_stable_config; eauto.
@@ -242,7 +242,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     destruct hc as [sps'' [hi' hi'']].
     apply in_map_iff in hi'.
     destruct hi' as [sp [hs hi']].
-    eapply sp_in_spClosure_result_stable_config; eauto.
+    eapply sp_in_llc_result_stable_config; eauto.
     apply lex_nat_pair_wf.
   Qed.
 
@@ -375,16 +375,16 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     firstorder.
   Qed.
 
-  Lemma spClosure_never_finds_left_recursion :
+  Lemma llc_never_finds_left_recursion :
     forall g pr (a : Acc lex_nat_pair pr) av sp a' x,
       no_left_recursion g
       -> unavailable_nts_invar g av sp
       -> pr = meas g av sp
-      -> spClosure g av sp a' <> inl (SpLeftRecursion x).
+      -> llc g av sp a' <> inl (SpLeftRecursion x).
   Proof.
     intros g pr a'; induction a' as [pr hlt IH]. 
     intros av sp a x hn hu heq; unfold not; intros hs; subst.
-    apply spClosure_error_cases in hs.
+    apply llc_error_cases in hs.
     destruct hs as [hs | [sps [av' [hs [crs [hc ha]]]]]]; subst.
     - eapply cstep_never_finds_left_recursion; eauto.
     - apply aggrClosureResults_error_in_input in ha.
@@ -405,7 +405,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     apply aggrClosureResults_error_in_input in hc.
     apply in_map_iff in hc.
     destruct hc as [[pred (fr, frs)] [hs hi]].
-    eapply spClosure_never_finds_left_recursion; eauto.
+    eapply llc_never_finds_left_recursion; eauto.
     - apply lex_nat_pair_wf.
     - eapply unavailable_nts_allNts.
   Qed.        
@@ -519,4 +519,4 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     - eapply llPredict_never_returns_SpLeftRecursion; eauto.
   Qed.
 
-End LLPredictionErrorFreeFn.
+End LLPredictionErrorFreeFn. 
