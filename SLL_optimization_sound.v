@@ -43,6 +43,23 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Proof.
     unfold approx; intros sp sp' ha; dms; destruct ha; auto.
   Qed.
+
+    (* refactor *)
+  Lemma approx_moveSp :
+    forall a x x' y,
+      approx y x
+      -> moveSp a x = MoveSucc x'
+      -> exists y',
+          moveSp a y = MoveSucc y'
+          /\ approx y' x'.
+  Proof.
+    intros a x x' y hx hm; unfold moveSp in hm; dms; tc; inv hm.
+    destruct y as [pred (fr, frs)]; simpl in hx.
+    destruct hx as [? [ctx heq]]; inv heq.
+    eexists; split.
+    - unfold moveSp; dm; tc.
+    - firstorder; eexists; eauto.
+  Qed.
   
   Definition overapprox (sps' sps : list subparser) : Prop :=
     forall sp, In sp sps -> exists sp', In sp' sps' /\ approx sp' sp.
@@ -143,24 +160,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply overapprox_allPredictionsEqual_false in ha; eauto.
     rewrite ha in hh'; tc.
   Qed.
-
-  (* refactor *)
-  Lemma approx_moveSp :
-    forall a x x' y,
-      approx y x
-      -> moveSp a x = MoveSucc x'
-      -> exists y',
-          moveSp a y = MoveSucc y'
-          /\ approx y' x'.
-  Proof.
-    intros a x x' y hx hm; unfold moveSp in hm.
-    dms; tc; inv hm.
-    destruct y as [pred (fr, frs)]; simpl in hx.
-    destruct hx as [? [ctx heq]]; inv heq.
-    eexists; split.
-    - unfold moveSp; dm; tc.
-    - firstorder; eexists; eauto.
-  Qed.
   
   Lemma move_preserves_overapprox :
     forall a xs xs' ys ys',
@@ -178,13 +177,66 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply aggrMoveResults_succ_all_sps_step in hm''; eauto.
   Qed.
 
-  Lemma llc_sllc_approx :
+  Lemma llc_sllc_approx_overapprox' :
+    forall g cm pr (a : Acc lex_nat_pair pr) av av' x y xs' ys' a' a'',
+      pr = meas g av x
+      -> approx y x
+      -> llc g av x a' = inr xs'
+      -> sllc g cm av' y a'' = inr ys'
+      -> overapprox ys' xs'.
+  Proof.
+    intros g cm pr a''; induction a'' as [pr hlt IH].
+    intros avx avy x y xs''' ys''' a a' ? hx hll hsll; subst.
+    apply llc_success_cases in hll.
+    destruct hll as [[hs ?] | [xs' [avx' [hs [? [? ha]]]]]]; subst.
+    - (* the LL subparser is done *)
+      apply sllc_success_cases in hsll.
+      destruct hsll as [hr | [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]; subst.
+      + (* SLL subparser simulates a return -- contradiction *)
+        admit.
+      + (* both subparsers are done -- easy, I think *)
+        admit.
+      + (* SLL subparser steps -- contradiction *)
+        admit.
+    - (* the LL subparser steps *)
+      apply sllc_success_cases in hsll.
+      destruct hsll as [hr | [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]; subst.
+      + (* SLL subparser simulates a return
+           Prove a lemma about a correspondence between 
+           simReturn and a cstep/llc operation *)
+        intros x''' hi'''.
+        eapply aggrClosureResults_succ_in_input in ha; eauto.
+        destruct ha as [xs'' [hd hi'']].
+        eapply dmap_in in hd; eauto.
+        destruct hd as [x' [hi' [? hll]]]. 
+        admit.
+      + (* SLL subparser is done -- contradiction *)
+        admit.
+      + (* both subparser step -- IH *)
+        intros x''' hi'''.
+        eapply aggrClosureResults_succ_in_input in ha; eauto.
+        destruct ha as [xs'' [hd hi'']].
+        eapply dmap_in in hd; eauto.
+        destruct hd as [x' [hi' [? hll]]].
+        assert (Hass : exists y', In y' ys' /\ approx y' x')
+          by admit.
+        destruct Hass as [y' [hiy' hx']].
+        eapply aggrClosureResults_dmap_succ_elt_succ in ha'; eauto.
+        destruct ha' as [? [ys'' [hsll ha']]].
+        eapply IH in hsll; eauto.
+        * apply hsll in hi''; destruct hi'' as [y'' [hiy'' hx'']]; eauto.
+        * eapply cstep_meas_lt; eauto.
+  Admitted.
+
+  Lemma llc_sllc_approx_overapprox :
     forall g cm av av' x y xs' ys' a a',
       approx y x
-      -> llc g av x a  = inr xs'
+      -> llc g av x a = inr xs'
       -> sllc g cm av' y a' = inr ys'
       -> overapprox ys' xs'.
-  Admitted.
+  Proof.
+    intros; eapply llc_sllc_approx_overapprox' with (pr := meas _ _ x); eauto.
+  Qed.
   
   Lemma closure_preserves_overapprox :
     forall g cm xs xs' ys ys',
@@ -201,7 +253,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     apply ho in hi; destruct hi as [y [hi hyx]].
     eapply aggrClosureResults_map_succ_elt_succ in hc; eauto.
     destruct hc as [ys' [hs' ha]].
-    eapply llc_sllc_approx in hs'; eauto.
+    eapply llc_sllc_approx_overapprox in hs'; eauto.
     apply hs' in hi'; destruct hi' as [? [? ? ]]; eauto.
   Qed.
   
