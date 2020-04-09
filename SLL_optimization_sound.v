@@ -257,6 +257,42 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eexists; split; [apply in_eq | auto].
   Qed.
 
+  Inductive frame_closure_step (g : grammar) :
+    suffix_frame -> suffix_frame -> Prop :=
+  | Fstep_final_ret :
+      forall x ys,
+        In (x, ys) g
+        -> frame_closure_step g (SF (Some x) [])
+                                (SF  None    [])
+  | Fstep_nonfinal_ret :
+      forall x y pre suf,
+        In (x, pre ++ NT y :: suf) g
+        -> frame_closure_step g (SF (Some y) [])
+                                (SF (Some x) suf)
+  | Fstep_push :
+      forall o x ys suf,
+        In (x, ys) g
+        -> frame_closure_step g (SF o (NT x :: suf))
+                                (SF (Some x) ys).
+
+  (* to do : prove a correspondence between frame_closure_step 
+     and closure_multistep. This will probably involve making
+     the suffix_stack_wf invariant stronger (the bottom frame
+     should be empty or contain a single nonterminal). Then do
+     the same thing for frame_closure_multistep and closure_multistep *)
+  
+  Lemma simReturn_approx :
+    forall g cm av av' x x' y ys',
+      approx y x
+      -> closure_multistep g av x av' x'
+      -> simReturn cm y = Some ys'
+      -> exists y', In y' ys' /\ approx y' x'.
+  Proof.
+    intros g cm av av' x x' y ys' ha hc hr.
+  Admitted.
+
+  (* Interesting and complicated lemma -- make sure to write
+     a note about it *)
   Lemma llc_sllc_approx_overapprox' :
     forall g cm pr (a : Acc lex_nat_pair pr) av av' x y xs' ys' a' a'',
       pr = meas g av x
@@ -290,7 +326,15 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         destruct ha as [xs'' [hd hi'']].
         eapply dmap_in in hd; eauto.
         destruct hd as [x' [hi' [? hll]]].
-        admit.
+        assert (Hcm : exists av''',
+                   closure_multistep g avx x av''' x''').
+        { pose proof hs as hs''.
+          eapply cstep_sound in hs''; eauto.
+          eapply llc_sound_wrt_closure_multistep in hll; eauto.
+          - destruct hll as [avx''' hcm]; eauto.
+          - eapply closure_step_preserves_suffix_stack_wf_invar; eauto. }
+        destruct Hcm as [av''' Hcm].
+        eapply simReturn_approx; eauto.
       + (* SLL subparser is done -- contradiction *)
         exfalso; eapply approx_ll_step_sll_done_contra; eauto.
       + (* both subparser step -- IH *)
@@ -307,7 +351,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         * apply hll in hi''; destruct hi'' as [y'' [hiy'' hx'']]; eauto.
         * eapply cstep_meas_lt; eauto.
         * eapply cstep_preserves_suffix_stack_wf_invar; eauto.
-  Admitted.
+  Qed.
 
   Lemma llc_sllc_approx_overapprox :
     forall g cm av av' x y xs' ys' a a',
