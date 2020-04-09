@@ -83,7 +83,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     intros g fr frs o x suf hw heq; unfold not; intros hss.
     eapply llClosure_never_returns_SpInvalidState; eauto.
     intros sp hi.
-    unfold initSps in hi.
+    unfold llInitSps in hi.
     apply in_map_iff in hi.
     destruct hi as [rhs [heq' hi]]; subst; simpl.
     (* LEMMA *)
@@ -310,7 +310,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     intros g [suf'] frs o x suf sps hw heq hs; sis; subst.
     eapply llClosure_preserves_suffix_stack_wf_invar; eauto.
     unfold all_suffix_stacks_wf; intros sp hi.
-    eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+    eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Lemma llStartState_all_stacks_stable :
@@ -322,7 +322,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Proof.
     intros g cr o x suf frs sps ? hw hs sp hi.
     eapply all_stacks_stable_after_closure; eauto.
-    eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+    eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Lemma llPredict_never_returns_SpInvalidState :

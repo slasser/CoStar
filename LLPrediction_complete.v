@@ -467,7 +467,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     destruct hs' as [av [sp [hc hg']]].
     repeat eexists; eauto.
     eapply closure_func_refines_closure_multistep; eauto.
-    eapply initSps_result_incl_all_rhss; eauto.
+    eapply llInitSps_result_incl_all_rhss; eauto.
   Qed.
 
   Inductive move_closure_multistep (g : grammar) :
@@ -1111,11 +1111,11 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       eapply closure_ussr_backwards in hs; eauto.
       + destruct hs as [init_sp [av' [hi' [hc hg]]]].
         (* lemma? *)
-        unfold initSps in hi'.
+        unfold llInitSps in hi'.
         apply in_map_iff in hi'.
         destruct hi' as [rhs [heq hi']]; subst; sis.
         apply closure_multistep_preserves_label in hc; sis; subst; auto.
-      + eapply initSps_preserves_suffix_stack_wf_invar; eauto. 
+      + eapply llInitSps_preserves_suffix_stack_wf_invar; eauto. 
     - eapply llStartState_preserves_stacks_wf_invar; eauto. 
     - red. intros sp' hi; sis.
       exists sp'; split; auto.
@@ -1125,7 +1125,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         { eapply stable_config_after_closure_multistep; eauto. }
         destruct sp' as [pred ([suf'], frs')]; sis.
         inv hst; auto.
-      + eapply initSps_preserves_suffix_stack_wf_invar; eauto. 
+      + eapply llInitSps_preserves_suffix_stack_wf_invar; eauto. 
   Qed.
 
   (* Now some facts about how prediction doesn't return Reject when the initial
@@ -1390,11 +1390,11 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     - destruct (llTarget _ _ _) as [? | sps'] eqn:ht; tc; eauto.
   Qed.
   
-  Lemma initSps_preserves_esp_invar :
+  Lemma llInitSps_preserves_esp_invar :
     forall g fr o x suf frs w,
       fr = SF o (NT x :: suf)
       -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> exists_successful_sp g (initSps g x (fr, frs)) w.
+      -> exists_successful_sp g (llInitSps g x (fr, frs)) w.
   Proof.
     intros g fr o x suf frs w ? hg; subst; sis.
     apply gamma_recognize_nonterminal_head in hg.
@@ -1414,7 +1414,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Proof.
     intros g fr o x suf frs w sps ? hr hs; subst.
     eapply closure_preserves_successful_sp_invar; eauto.
-    eapply initSps_preserves_esp_invar; eauto.
+    eapply llInitSps_preserves_esp_invar; eauto.
   Qed.
     
   Lemma ussr_llPredict_neq_reject :

@@ -971,26 +971,26 @@ Module LLPredictionFn (Import D : Defs.T).
       eapply llTarget_preserves_ape; eauto.
   Qed. 
 
-  Definition initSps (g : grammar) (x : nonterminal) (stk : suffix_stack) : list subparser :=
+  Definition llInitSps (g : grammar) (x : nonterminal) (stk : suffix_stack) : list subparser :=
     let (fr, frs) := stk
     in  map (fun rhs => Sp rhs (SF (Some x) rhs, fr :: frs))
             (rhssForNt g x).
 
-  Lemma initSps_prediction_in_rhssForNt :
+  Lemma llInitSps_prediction_in_rhssForNt :
     forall g x stk sp,
-      In sp (initSps g x stk)
+      In sp (llInitSps g x stk)
       -> In sp.(prediction) (rhssForNt g x).
   Proof.
-    intros g x (fr, frs) sp hi; unfold initSps in hi.
+    intros g x (fr, frs) sp hi; unfold llInitSps in hi.
     eapply in_map_iff in hi; firstorder; subst; auto.
   Qed.
 
-  Lemma initSps_result_incl_all_rhss :
+  Lemma llInitSps_result_incl_all_rhss :
     forall g fr o x suf rhs frs,
       fr = SF o (NT x :: suf)
       -> In (x, rhs) g
       -> In (Sp rhs (SF (Some x) rhs, fr :: frs))
-            (initSps g x (fr, frs)).
+            (llInitSps g x (fr, frs)).
   Proof.
     intros g fr o x suf rhs frs ? hi; subst.
     apply in_map_iff; exists rhs; split; auto.
@@ -999,7 +999,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Definition llStartState (g : grammar) (x : nonterminal) (stk : suffix_stack) :
     sum prediction_error (list subparser) :=
-    llClosure g (initSps g x stk).
+    llClosure g (llInitSps g x stk).
 
   Lemma llStartState_sp_prediction_in_rhssForNt :
     forall g x stk sp' sps',
@@ -1011,7 +1011,7 @@ Module LLPredictionFn (Import D : Defs.T).
     unfold llStartState in hf.
     eapply llClosure_preserves_prediction in hf; eauto.
     destruct hf as [sp [hin heq]]; rewrite heq.
-    eapply initSps_prediction_in_rhssForNt; eauto.
+    eapply llInitSps_prediction_in_rhssForNt; eauto.
   Qed.
 
   Definition llPredict (g : grammar) (x : nonterminal) (stk : suffix_stack)
@@ -1146,13 +1146,13 @@ Module LLPredictionFn (Import D : Defs.T).
     - inv hi.
   Qed.
 
-  Lemma initSps_preserves_suffix_stack_wf_invar :
+  Lemma llInitSps_preserves_suffix_stack_wf_invar :
     forall g fr o x suf frs,
       fr = SF o (NT x :: suf)
       -> suffix_stack_wf g (fr, frs)
-      -> all_suffix_stacks_wf g (initSps g x (fr, frs)).
+      -> all_suffix_stacks_wf g (llInitSps g x (fr, frs)).
   Proof.
-    intros g fr o x suf frs ? hw sp hi; subst; unfold initSps in hi.
+    intros g fr o x suf frs ? hw sp hi; subst; unfold llInitSps in hi.
     apply in_map_iff in hi.
     destruct hi as [rhs [? hi]]; subst; sis.
     apply push_preserves_suffix_frames_wf_invar; eauto.

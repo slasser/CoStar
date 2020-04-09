@@ -844,7 +844,7 @@ Module ParserSoundFn (Import D : Defs.T).
     intros g cr ce o x suf frs w rhs ? ? hn hw hl; subst; sis.
     pose proof hl as hl'; apply llPredict_ambig_in_grammar in hl'.
     unfold llPredict in hl.
-    destruct (startState _ _ _) as [m | sps] eqn:hs; tc.
+    destruct (llStartState _ _ _) as [m | sps] eqn:hs; tc.
     eapply llPredict'_ambig_rhs_leads_to_successful_parse'
       with (orig_sps := sps) (wpre := []) in hl; sis.
     - destruct hl as [osp [fsp [osp' [fsp' [rhs' [hi [heq [hm [hf [hi' [heq' [hm' [hf' hn']]]]]]]]]]]]]; subst.
@@ -853,28 +853,26 @@ Module ParserSoundFn (Import D : Defs.T).
         eapply closure_ussr_backwards with (sp' := osp) (w := w) in hs; eauto.
         * destruct hs as [init_sp [av' [hi'' [hc hg]]]].
           (* lemma? *)
-          unfold initSps in hi''.
           apply in_map_iff in hi''.
           destruct hi'' as [rhs [heq hi'']]; subst; sis.
           apply closure_multistep_preserves_label in hc; sis; subst; auto.
         * (* lemma *)
           red. intros init_sp hi''.
-          eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+          eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
       + exists osp'.(prediction); repeat split; auto.
-        * eapply startState_sp_prediction_in_rhssForNt
+        * eapply llStartState_sp_prediction_in_rhssForNt
             with (sp' := osp') in hs; eauto.
           apply rhssForNt_in_iff in hs; auto.
         * eapply mcms'_final_config in hm'; auto.
           eapply closure_ussr_backwards with (sp' := osp') (w := w) in hs; auto.
           -- destruct hs as [init_sp [av' [hi'' [hc hg]]]].
              (* lemma? *)
-             unfold initSps in hi''.
              apply in_map_iff in hi''.
              destruct hi'' as [rhs [heq hi'']]; subst; sis.
              apply closure_multistep_preserves_label in hc; sis; subst; auto.
           -- red; intros init_sp hi''.
-             eapply initSps_preserves_suffix_stack_wf_invar; eauto.
-    - eapply startState_preserves_stacks_wf_invar; eauto. 
+             eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+    - eapply llStartState_preserves_stacks_wf_invar; eauto. 
     - red. intros sp' hi; sis.
       exists sp'; split; auto.
       eapply closure_func_refines_closure_multistep_backward in hi; eauto.
@@ -882,7 +880,7 @@ Module ParserSoundFn (Import D : Defs.T).
         assert (hst : stable_config sp'.(stack)).
         { eapply stable_config_after_closure_multistep; eauto. }
         destruct sp' as [pred ([suf'], frs')]; inv hst; auto.
-      + intros sp hi'; eapply initSps_preserves_suffix_stack_wf_invar; eauto.
+      + intros sp hi'; eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Definition ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u :=
