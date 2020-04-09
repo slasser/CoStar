@@ -96,6 +96,41 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     sis; dms; tc; inv hs; inv hs'.
     destruct ha as [? [? heq]]; inv heq.
   Qed.
+
+  Lemma approx_ll_step_sll_done_contra :
+    forall g cm av av' av'' x y xs',
+      suffix_stack_wf g (stack x)
+      -> approx y x
+      -> simReturn cm y = None
+      -> cstep g av x = CstepK av' xs'
+      -> cstep g av'' y <> CstepDone.
+  Proof.
+    intros g cm ? ? ? [pr (fr, frs)] [pr' (fr', frs')] xs' hw ha hr hs hs'.
+    sis; dms; tc; inv hs; inv hs'; destruct ha as [? [? heq]]; inv heq; inv hw.
+  Qed.
+
+  Lemma approx_cstep :
+    forall g ax ax' ay ay' x x' y xs' ys',
+      approx y x
+      -> cstep g ax x = CstepK ax' xs'
+      -> cstep g ay y = CstepK ay' ys'
+      -> In x' xs'
+      -> exists y', In y' ys' /\ approx y' x'.
+  Proof.
+    intros g ax ax' ay ay' [pr (fr, frs)] x' [pr' (fr', frs')] xs' ys'
+           ha hs hs' hi.
+    unfold cstep in *; dmeqs H; tc; inv hs; inv hs';
+      destruct ha as [? [ctx heq]]; inv heq; try solve [inv hi].
+    - apply in_singleton_eq in hi; subst; eexists; split.
+      + apply in_eq.
+      + split; eauto.
+    - apply in_map_iff in hi; destruct hi as [ys [? hi]]; subst; eexists; split.
+      + apply in_map_iff; eauto.
+      + sis; split; eauto.
+    - exfalso; apply in_map_iff in hi; destruct hi as [ys [? hi]]; subst.
+      apply rhssForNt_in_iff in hi.
+      apply lhs_mem_allNts_true in hi; tc.
+  Qed.
   
   Definition overapprox (sps' sps : list subparser) : Prop :=
     forall sp, In sp sps -> exists sp', In sp' sps' /\ approx sp' sp.
@@ -237,16 +272,16 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     destruct hll as [[hs ?] | [xs' [avx' [hs [? [? ha]]]]]]; subst.
     - (* the LL subparser is done *)
       apply sllc_success_cases in hsll.
-      destruct hsll as [hr | [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]; subst.
+      destruct hsll as [hr | [hr [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]]; subst.
       + (* SLL subparser simulates a return -- contradiction *)
         exfalso; eapply approx_ll_done_simReturn_contra; eauto.
       + (* both subparsers are done -- easy *)
         apply approx_overapprox_singleton; auto.
       + (* SLL subparser steps -- contradiction *)
-        exfalso. eapply approx_ll_done_sll_step_contra; eauto.
+        exfalso; eapply approx_ll_done_sll_step_contra; eauto.
     - (* the LL subparser steps *)
       apply sllc_success_cases in hsll.
-      destruct hsll as [hr | [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]; subst.
+      destruct hsll as [hr | [hr [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]]; subst.
       + (* SLL subparser simulates a return
            Prove a lemma about a correspondence between 
            simReturn and a cstep/llc operation *)
@@ -254,19 +289,18 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         eapply aggrClosureResults_succ_in_input in ha; eauto.
         destruct ha as [xs'' [hd hi'']].
         eapply dmap_in in hd; eauto.
-        destruct hd as [x' [hi' [? hll]]]. 
+        destruct hd as [x' [hi' [? hll]]].
         admit.
       + (* SLL subparser is done -- contradiction *)
-        admit.
+        exfalso; eapply approx_ll_step_sll_done_contra; eauto.
       + (* both subparser step -- IH *)
         intros x''' hi'''.
         eapply aggrClosureResults_succ_in_input in ha; eauto.
         destruct ha as [xs'' [hd hi'']].
         eapply dmap_in in hd; eauto.
-        destruct hd as [x' [hi' [? hll]]].
-        assert (Hass : exists y', In y' ys' /\ approx y' x')
-          by admit.
-        destruct Hass as [y' [hiy' hx']].
+        destruct hd as [x' [? [hi' hll]]].
+        eapply approx_cstep in hi'; eauto.
+        destruct hi' as [y' [hiy' hx']].
         eapply aggrClosureResults_dmap_succ_elt_succ in ha'; eauto.
         destruct ha' as [? [ys'' [hsll ha']]].
         eapply IH with (ys' := ys'') in hll; eauto.

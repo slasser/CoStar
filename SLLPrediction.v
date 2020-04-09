@@ -115,19 +115,20 @@ Module SllPredictionFn (Import D : Defs.T).
                /\ aggrClosureResults crs = inl e
          | inr sps =>
            simReturn cm sp = Some sps
-           \/ (sr = CstepDone /\ sps = [sp])
-           \/ exists (sps' : list subparser)
-                     (av'  : NtSet.t)
-                     (hs   : cstep g av sp = CstepK av' sps')
-                     (crs  : list closure_result),
-               crs = dmap sps' (fun sp' hi => 
-                                  sllc g cm av' sp'
-                                        (acc_after_step _ _ _ _ hs hi a))
-               /\ aggrClosureResults crs = inr sps
+           \/ simReturn cm sp = None
+              /\ ((sr = CstepDone /\ sps = [sp])
+                  \/ exists (sps' : list subparser)
+                            (av'  : NtSet.t)
+                            (hs   : cstep g av sp = CstepK av' sps')
+                            (crs  : list closure_result),
+                     crs = dmap sps' (fun sp' hi => 
+                                        sllc g cm av' sp'
+                                             (acc_after_step _ _ _ _ hs hi a))
+                     /\ aggrClosureResults crs = inr sps)
          end.
   Proof.
     intros g cm av sp a sr cr heq.
-    dms; tc; intros heq'; try solve [inv heq'; eauto | eauto 8].
+    dms; tc; intros heq'; try solve [inv heq'; eauto | eauto 10].
   Qed.
   
   Lemma sllc_cases :
@@ -151,16 +152,17 @@ Module SllPredictionFn (Import D : Defs.T).
                /\ aggrClosureResults crs = inl e
          | inr sps =>
            simReturn cm sp = Some sps
-           \/ (cstep g av sp = CstepDone /\ sps = [sp])
-           \/ exists (sps' : list subparser)
-                     (av'  : NtSet.t)
-                     (hs   : cstep g av sp = CstepK av' sps')
-                     (crs  : list closure_result),
-               crs = dmap sps' (fun sp' hi => 
-                                  sllc g cm av' sp'
-                                        (acc_after_step _ _ _ _ hs hi a))
-               /\ aggrClosureResults crs = inr sps
-           end.
+           \/ simReturn cm sp = None
+              /\ ((cstep g av sp = CstepDone /\ sps = [sp])
+                  \/ exists (sps' : list subparser)
+                            (av'  : NtSet.t)
+                            (hs   : cstep g av sp = CstepK av' sps')
+                            (crs  : list closure_result),
+                     crs = dmap sps' (fun sp' hi => 
+                                        sllc g cm av' sp'
+                                             (acc_after_step _ _ _ _ hs hi a))
+                     /\ aggrClosureResults crs = inr sps)
+                  end.
   Proof.
     intros g cm av sp a cr hs; subst.
     rewrite sllc_unfold.
@@ -171,15 +173,16 @@ Module SllPredictionFn (Import D : Defs.T).
     forall g cm av sp a sps,
       sllc g cm av sp a = inr sps
       -> simReturn cm sp = Some sps
-         \/ (cstep g av sp = CstepDone /\ sps = [sp])
-         \/ exists (sps' : list subparser)
-                   (av'  : NtSet.t)
-                   (hs   : cstep g av sp = CstepK av' sps')
-                   (crs  : list closure_result),
-             crs = dmap sps' (fun sp' hi => 
-                                sllc g cm av' sp'
-                                      (acc_after_step _ _ _ _ hs hi a))
-             /\ aggrClosureResults crs = inr sps.
+         \/ simReturn cm sp = None
+            /\ ((cstep g av sp = CstepDone /\ sps = [sp])
+                \/ exists (sps' : list subparser)
+                          (av'  : NtSet.t)
+                          (hs   : cstep g av sp = CstepK av' sps')
+                          (crs  : list closure_result),
+                   crs = dmap sps' (fun sp' hi => 
+                                      sllc g cm av' sp'
+                                           (acc_after_step _ _ _ _ hs hi a))
+                   /\ aggrClosureResults crs = inr sps).
   Proof.
     intros g cm av sp a sps hs; apply sllc_cases with (cr := inr sps); auto.
   Qed.
@@ -209,7 +212,7 @@ Module SllPredictionFn (Import D : Defs.T).
     intros g cm pair a.
     induction a as [pair hlt IH]; intros av sp sp' sps' a' heq hs hi; subst.
     apply sllc_success_cases in hs.
-    destruct hs as [hs | [[hs heq] | [sps'' [av' [hs [crs [heq heq']]]]]]]; subst.
+    destruct hs as [hr | [hr [[hs heq] | [sps'' [av' [hs [crs [heq heq']]]]]]]]; subst.
     - eapply simReturn_preserves_prediction; eauto. 
     - apply in_singleton_eq in hi; subst; auto.
     - (* lemma *)
