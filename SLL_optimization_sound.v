@@ -403,6 +403,33 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
           -- eapply sllTarget_add_preserves_cache_invar; eauto.
           -- eapply target_preserves_overapprox; eauto. 
   Qed.
+
+  Lemma overapprox_initSps :
+    forall g x fr frs sps sps',
+      llInitSps g x (fr, frs) = sps
+      -> sllInitSps g x = sps'
+      -> overapprox sps' sps.
+  Proof.
+    intros g x fr frs sps sps' hl hs sp hi; subst.
+    apply in_map_iff in hi; destruct hi as [ys [? hi]]; subst.
+    eexists; split.
+    - apply in_map_iff; eauto.
+    - sis; eauto.
+  Qed.
+  
+  Lemma overapprox_startState :
+    forall g cm fr o x suf frs sps sps',
+      fr = SF o (NT x :: suf)
+      -> suffix_stack_wf g (fr, frs)
+      -> llStartState g x (fr, frs) = inr sps
+      -> sllStartState g cm x = inr sps'
+      -> overapprox sps' sps.
+  Proof.
+    intros g cm fr o x suf frs sps sps' ? hw hl hs; subst.
+    eapply closure_preserves_overapprox; eauto.
+    - eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+    - eapply overapprox_initSps; eauto.
+  Qed.
   
   Lemma sllPredict_llPredict_succ_eq :
     forall g cm cr o x suf frs w ca rhs rhs' ca',
@@ -423,9 +450,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     - eapply llStartState_preserves_stacks_wf_invar; eauto.
     - eapply llStartState_all_stacks_stable; eauto.
     - eapply llStartState_preserves_esp_invar; eauto. 
-    - (* overapprox should be true of sllStartState and llStartState *)
-      admit.
-  Admitted.
+    - eapply overapprox_startState; eauto. 
+  Qed.
 
   Lemma sllPredict'_succ__llPredict'_neq_ambig :
     forall g cm ts sps sps' ca ca' ys ys',
@@ -470,9 +496,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     destruct (llStartState _ _ _) as [? | sps]     eqn:hss ; tc.
     eapply sllPredict'_succ__llPredict'_neq_ambig; eauto.
     - eapply llStartState_preserves_stacks_wf_invar; eauto.
-    - (* lemma : overapprox holds after sllStartState, llStartState *)
-    admit.
-  Admitted.
+    - eapply overapprox_startState; eauto. 
+  Qed.
   
   Lemma sllPredict_succ_eq_llPredict_succ :
     forall g cm cr o x suf frs w ca rhs ca',
