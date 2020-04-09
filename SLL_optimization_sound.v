@@ -311,7 +311,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
 
   Lemma llc_sllc_approx_overapprox :
     forall g cm av av' x y xs' ys' a a',
-      approx y x
+      suffix_stack_wf g (stack x)
+      -> approx y x
       -> llc g av x a = inr xs'
       -> sllc g cm av' y a' = inr ys'
       -> overapprox ys' xs'.
@@ -321,16 +322,18 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   
   Lemma closure_preserves_overapprox :
     forall g cm xs xs' ys ys',
-      overapprox ys xs
+      all_suffix_stacks_wf g xs
+      -> overapprox ys xs
       -> llClosure g xs = inr xs'
       -> sllClosure g cm ys = inr ys'
       -> overapprox ys' xs'.
   Proof.
-    intros g cm xs xs'' ys ys'' ho hl hc x'' hi.
+    intros g cm xs xs'' ys ys'' hw ho hl hc x'' hi.
     unfold llClosure in hl.
     unfold sllClosure in hc.
     eapply aggrClosureResults_map_backwards in hi; eauto.
     destruct hi as [x [xs' [hi [hc' hi']]]].
+    pose proof hi as hw'; apply hw in hw'.
     apply ho in hi; destruct hi as [y [hi hyx]].
     eapply aggrClosureResults_map_succ_elt_succ in hc; eauto.
     destruct hc as [ys' [hs' ha]].
@@ -341,18 +344,20 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   (* probably need some invariant about closure_map here *)
   Lemma target_preserves_overapprox :
     forall g cm sps sps' sps'' sps''' a,
-      overapprox sps' sps
+      all_suffix_stacks_wf g sps
+      -> overapprox sps' sps
       -> llTarget g a sps = inr sps''
       -> sllTarget g cm a sps' = inr sps'''
       -> overapprox sps''' sps''.
   Proof.
-    intros g cm xs ys xs'' ys'' a ho hl hs.
+    intros g cm xs ys xs'' ys'' a hw ho hl hs.
     unfold llTarget in hl; unfold sllTarget in hs.
     destruct (move a xs) as [? | xs'] eqn:hm  ; tc.
     destruct (move a ys) as [? | ys'] eqn:hm' ; tc.
     destruct (llClosure _ _   ) eqn:hc ; tc; inv hl.
     destruct (sllClosure _ _ _) eqn:hc'; tc; inv hs.
     eapply move_preserves_overapprox in hm'; eauto.
+    eapply move_preserves_suffix_stack_wf_invar in hw; eauto.
     eapply closure_preserves_overapprox; eauto.
   Qed.
 
@@ -413,24 +418,25 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     intros g cm ? o x suf frs w ca rhs rhs' ca' ? hn hw hc hr hl hs; subst.
     unfold sllPredict in hs; unfold llPredict in hl.
     destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
-    destruct (startState _ _ _) as [? | sps] eqn:hss; tc.
+    destruct (llStartState _ _ _) as [? | sps] eqn:hss; tc.
     eapply sllPredict'_llPredict'_succ_eq; eauto.
-    - eapply startState_preserves_stacks_wf_invar; eauto.
-    - eapply startState_all_stacks_stable; eauto.
-    - eapply startState_preserves_esp_invar; eauto. 
+    - eapply llStartState_preserves_stacks_wf_invar; eauto.
+    - eapply llStartState_all_stacks_stable; eauto.
+    - eapply llStartState_preserves_esp_invar; eauto. 
     - (* overapprox should be true of sllStartState and llStartState *)
       admit.
   Admitted.
 
   Lemma sllPredict'_succ__llPredict'_neq_ambig :
     forall g cm ts sps sps' ca ca' ys ys',
-      cache_stores_target_results g cm ca
+      all_suffix_stacks_wf g sps
+      -> cache_stores_target_results g cm ca
       -> overapprox sps' sps
       -> sllPredict' g cm sps' ts ca = (PredSucc ys, ca')
       -> llPredict' g sps ts <> PredAmbig ys'.
   Proof.
     intros g cm ts; induction ts as [| (a, l) ts IH];
-      intros sps sps' ca ca' ys ys' hc ho hs hl; sis.
+      intros sps sps' ca ca' ys ys' hw hc ho hs hl; sis.
     - inv hs; eapply overapprox_handleFinalSubparsers_contra; eauto.
     - destruct sps' as [| sp' sps']; tc.
       destruct sps as [| sp sps]; tc.
@@ -441,29 +447,34 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       destruct (Cache.find _ _) as [sps''' |] eqn:hf.
       + apply hc in hf.
         eapply IH in hs; eauto.
-        eapply target_preserves_overapprox; eauto.
+        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+        * eapply target_preserves_overapprox; eauto.
       + destruct (sllTarget _ _ _ _) as [? | sps'''] eqn:ht'; tc.
         eapply IH in hs; eauto.
+        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
         * eapply sllTarget_add_preserves_cache_invar; eauto.
         * eapply target_preserves_overapprox; eauto. 
   Qed.
 
   Lemma sllPredict_succ__llPredict_neq_ambig :
-    forall g cm x fr frs ts ca ys ca' ys',
-      cache_stores_target_results g cm ca
+    forall g cm fr o x suf frs ts ca ys ca' ys',
+      fr = SF o (NT x :: suf)
+      -> suffix_stack_wf g (fr, frs)
+      -> cache_stores_target_results g cm ca
       -> sllPredict g cm x ts ca = (PredSucc ys, ca')
       -> llPredict g x (fr, frs) ts <> PredAmbig ys'.
   Proof.
-    intros g cm x fr frs ts ca ys ca' ys' hc hs hl.
+    intros g cm fr o x suf frs ts ca ys ca' ys' ? hw hc hs hl; subst.
     unfold sllPredict in hs; unfold llPredict in hl.
     destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
-    destruct (startState _ _ _) as [? | sps]     eqn:hss ; tc.
+    destruct (llStartState _ _ _) as [? | sps]     eqn:hss ; tc.
     eapply sllPredict'_succ__llPredict'_neq_ambig; eauto.
-    (* lemma : overapprox holds after sllStartState, llStartState *)
+    - eapply llStartState_preserves_stacks_wf_invar; eauto.
+    - (* lemma : overapprox holds after sllStartState, llStartState *)
     admit.
   Admitted.
   
-    Lemma sllPredict_succ_eq_llPredict_succ :
+  Lemma sllPredict_succ_eq_llPredict_succ :
     forall g cm cr o x suf frs w ca rhs ca',
       cr = SF o (NT x :: suf)
       -> no_left_recursion g

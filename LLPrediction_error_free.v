@@ -74,11 +74,11 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     apply lex_nat_pair_wf.
   Qed.
 
-  Lemma startState_never_returns_SpInvalidState :
+  Lemma llStartState_never_returns_SpInvalidState :
     forall g fr frs o x suf,
       suffix_stack_wf g (fr, frs)
       -> fr = SF o (NT x :: suf)
-      -> startState g x (fr, frs) <> inl SpInvalidState.
+      -> llStartState g x (fr, frs) <> inl SpInvalidState.
   Proof.
     intros g fr frs o x suf hw heq; unfold not; intros hss.
     eapply llClosure_never_returns_SpInvalidState; eauto.
@@ -300,11 +300,11 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
         * eapply llTarget_preserves_stacks_stable_invar; eauto.
   Qed.
 
-  Lemma startState_preserves_stacks_wf_invar :
+  Lemma llStartState_preserves_stacks_wf_invar :
     forall g fr frs o x suf sps,
       suffix_stack_wf g (fr, frs)
       -> fr = SF o (NT x :: suf)
-      -> startState g x (fr, frs) = inr sps
+      -> llStartState g x (fr, frs) = inr sps
       -> all_suffix_stacks_wf g sps.
   Proof.
     intros g [suf'] frs o x suf sps hw heq hs; sis; subst.
@@ -313,11 +313,11 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     eapply initSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
-  Lemma startState_all_stacks_stable :
+  Lemma llStartState_all_stacks_stable :
     forall g cr o x suf frs sps,
       cr = SF o (NT x :: suf)
       -> suffix_stack_wf g (cr, frs)
-      -> startState g x (cr, frs) = inr sps
+      -> llStartState g x (cr, frs) = inr sps
       -> all_stacks_stable sps.
   Proof.
     intros g cr o x suf frs sps ? hw hs sp hi.
@@ -335,10 +335,10 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     unfold llPredict in hl.
     dmeq hss.
     - inv hl.
-      eapply startState_never_returns_SpInvalidState; eauto.
+      eapply llStartState_never_returns_SpInvalidState; eauto.
     - eapply llPredict'_never_returns_SpInvalidState; eauto.
-      + eapply startState_preserves_stacks_wf_invar; eauto. 
-      + eapply startState_all_stacks_stable; eauto.
+      + eapply llStartState_preserves_stacks_wf_invar; eauto. 
+      + eapply llStartState_all_stacks_stable; eauto.
   Qed.
 
   (* LEFT RECURSION CASE *)
@@ -482,15 +482,15 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     - eapply llTarget_never_returns_SpLeftRecursion; eauto.
   Qed.
 
-  Lemma startState_never_returns_error :
+  Lemma llStartState_never_returns_error :
     forall g fr frs o x suf e,
       no_left_recursion g
       -> suffix_stack_wf g (fr, frs)
       -> fr = SF o (NT x :: suf)
-      -> startState g x (fr, frs) <> inl e.
+      -> llStartState g x (fr, frs) <> inl e.
   Proof.
     intros ? ? ? ? ? ? e ? ? ?; unfold not; intros hs; subst; destruct e.
-    - eapply startState_never_returns_SpInvalidState; eauto.
+    - eapply llStartState_never_returns_SpInvalidState; eauto.
     - eapply closure_never_finds_left_recursion; eauto.
   Qed.
 

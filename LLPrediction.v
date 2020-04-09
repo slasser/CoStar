@@ -8,7 +8,6 @@ Import ListNotations.
 Open Scope list_scope.
 Set Implicit Arguments.
 
-
 (* Key functions defined in this module:
 
    move
@@ -998,18 +997,18 @@ Module LLPredictionFn (Import D : Defs.T).
     apply rhssForNt_in_iff; auto.
   Qed.
 
-  Definition startState (g : grammar) (x : nonterminal) (stk : suffix_stack) :
+  Definition llStartState (g : grammar) (x : nonterminal) (stk : suffix_stack) :
     sum prediction_error (list subparser) :=
     llClosure g (initSps g x stk).
 
-  Lemma startState_sp_prediction_in_rhssForNt :
+  Lemma llStartState_sp_prediction_in_rhssForNt :
     forall g x stk sp' sps',
-      startState g x stk = inr sps'
+      llStartState g x stk = inr sps'
       -> In sp' sps'
       -> In sp'.(prediction) (rhssForNt g x).
   Proof.
     intros g x (fr, frs) sp' sps' hf hi.
-    unfold startState in hf.
+    unfold llStartState in hf.
     eapply llClosure_preserves_prediction in hf; eauto.
     destruct hf as [sp [hin heq]]; rewrite heq.
     eapply initSps_prediction_in_rhssForNt; eauto.
@@ -1017,7 +1016,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Definition llPredict (g : grammar) (x : nonterminal) (stk : suffix_stack)
              (ts : list token) : prediction_result :=
-    match startState g x stk with
+    match llStartState g x stk with
     | inl msg => PredError msg
     | inr sps => llPredict' g sps ts
     end.
@@ -1031,7 +1030,7 @@ Module LLPredictionFn (Import D : Defs.T).
     dmeq hs; tc.
     apply llPredict'_success_result_in_original_subparsers in hp.
     destruct hp as [sp [hin heq]]; subst.
-    eapply startState_sp_prediction_in_rhssForNt; eauto.
+    eapply llStartState_sp_prediction_in_rhssForNt; eauto.
   Qed.
 
   Lemma llPredict_ambig_in_rhssForNt :
@@ -1044,7 +1043,7 @@ Module LLPredictionFn (Import D : Defs.T).
     dmeq hs; tc.
     apply llPredict'_ambig_result_in_original_subparsers in hf.
     destruct hf as [sp [hin heq]]; subst.
-    eapply startState_sp_prediction_in_rhssForNt; eauto.
+    eapply llStartState_sp_prediction_in_rhssForNt; eauto.
   Qed.
 
   Lemma llPredict_succ_in_grammar :
