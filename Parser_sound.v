@@ -572,11 +572,6 @@ Module ParserSoundFn (Import D : Defs.T).
   Proof.
     intros; eapply multistep_sound_unambig'; eauto.
   Qed.
-
-  Theorem mkClosureMap_result_complete :
-    forall g,
-      closure_map_complete g (mkClosureMap g).
-  Admitted.
   
   Theorem parse_sound_unambig :
     forall (g  : grammar)
