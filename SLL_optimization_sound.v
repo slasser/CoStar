@@ -1,4 +1,4 @@
-Require Import List Relation_Operators.
+Require Import List.
 Require Import GallStar.Lex.
 Require Import GallStar.SLLPrediction.
 Require Import GallStar.Tactics.
@@ -131,6 +131,38 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       apply rhssForNt_in_iff in hi.
       apply lhs_mem_allNts_true in hi; tc.
   Qed.
+
+  (* refactor -- this should probably be several lemmas *)
+  Lemma simReturn_approx :
+    forall g cm av av' x x' y ys',
+      closure_map_complete g cm
+      -> suffix_stack_wf g (stack x)
+      -> approx y x
+      -> closure_multistep g av x av' x'
+      -> simReturn cm y = Some ys'
+      -> exists y', In y' ys' /\ approx y' x'.
+  Proof.
+    intros g cm av av' [pr (fr, frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')] ys'
+           hcm hw ha hc hr.
+    pose proof ha as ha'.
+    apply approx_head_frames_eq in ha'; subst.
+    pose proof hc as heq; pose proof hc as hst.
+    apply closure_multistep_preserves_label in heq; simpl in heq; subst.
+    eapply stable_config_after_closure_multistep in hst; eauto; simpl in hst.
+    eapply closure_multistep__frame_multistep in hc; eauto; simpl in hc.
+    exists (Sp pr' (fr', [])); split.
+    - unfold simReturn in hr; dms; tc; inv hr; sis.
+      destruct ha as [? [ctx heq]]; inv heq.
+      apply in_map_iff.
+      eexists; split; eauto.
+      unfold destFrames.
+      pose proof hc as hc'.
+      apply hcm in hc'.
+      destruct hc' as [frs'' [hf hi]].
+      + eapply stable_config__stable_true; eauto. 
+      + apply FMF.find_mapsto_iff in hf; rewrite hf; auto.
+    - split; eauto. sis; eauto.
+  Qed.
   
   Definition overapprox (sps' sps : list subparser) : Prop :=
     forall sp, In sp sps -> exists sp', In sp' sps' /\ approx sp' sp.
@@ -257,143 +289,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eexists; split; [apply in_eq | auto].
   Qed.
 
-  (* At least some of this stuff will probably move to GA *)
-  
-  Inductive frame_step (g : grammar) :
-    suffix_frame -> suffix_frame -> Prop :=
-  | Fstep_final_ret :
-      forall x ys,
-        In (x, ys) g
-        -> frame_step g (SF (Some x) [])
-                        (SF  None    [])
-  | Fstep_nonfinal_ret :
-      forall x y pre suf,
-        In (x, pre ++ NT y :: suf) g
-        -> frame_step g (SF (Some y) [])
-                        (SF (Some x) suf)
-  | Fstep_push :
-      forall o x ys suf,
-        In (x, ys) g
-        -> frame_step g (SF o (NT x :: suf))
-                      (SF (Some x) ys).
-
-  Hint Constructors frame_step : core.
-
-  Lemma closure_step__frame_step :
-    forall g av av' sp sp' pr pr' fr fr' frs frs',
-      sp     = Sp pr  (fr, frs)
-      -> sp' = Sp pr' (fr', frs')
-      -> suffix_stack_wf g (fr, frs)
-      -> closure_step g av sp av' sp'
-      -> frame_step g fr fr'.
-  Proof.
-    intros g av av' ? ? pr pr' fr fr' frs frs' ? ? hw hc; subst; inv hc; eauto.
-    inv_suffix_frames_wf hw   hi  hw'  ; rew_anr.
-    inv_suffix_frames_wf hw'  hi' hw'' ; eauto.
-  Qed.
-
-
-  Definition frame_multistep (g : grammar) :
-    suffix_frame -> suffix_frame -> Prop :=
-    clos_refl_trans _ (frame_step g).
-
-  Hint Constructors clos_refl_trans : core.
-
-  Lemma closure_multistep__frame_multistep' :
-    forall g av av' sp sp',
-      suffix_stack_wf g (stack sp)
-      -> closure_multistep g av sp av' sp'
-      -> (forall pr pr' fr fr' frs frs',
-             sp     = Sp pr  (fr, frs)
-             -> sp' = Sp pr' (fr', frs')
-             -> frame_multistep g fr fr').
-  Proof.
-    intros g av av' sp sp' hw hc. 
-    induct_cm hc hs hc' IH; intros pr pr' fr fr' ? ? heq heq'; subst; sis.
-    - inv heq; inv heq'; apply rt_refl.
-    - inv heq; inv heq'; apply rt_refl.
-    - pose proof hs as hs'.
-      inv hs'.
-      + (* return case *)
-        eapply closure_step__frame_step in hs; eauto.
-        inv hs.
-        * (* final return case *)
-          inv hw; rew_anr.
-          inv H7.
-          eapply rt_trans.
-          -- sis. eapply rt_step. eapply Fstep_final_ret; eauto.
-          -- eapply IH; eauto. sis; auto. 
-        * (* nonfinal return case *)
-          eapply rt_trans.
-          -- sis. eapply rt_step. eapply Fstep_nonfinal_ret; eauto.
-          -- eapply IH; eauto; sis. eapply return_preserves_suffix_frames_wf_invar; eauto.
-      + (* push case *)
-        eapply closure_step__frame_step in hs; eauto.
-        inv hs.
-        eapply rt_trans.
-        * sis. eapply rt_step. eapply Fstep_push; eauto.
-        * eapply IH; eauto; sis.
-          apply push_preserves_suffix_frames_wf_invar; eauto.
-  Qed.
-
-  Lemma closure_multistep__frame_multistep :
-    forall g av av' sp sp' pr pr' fr fr' frs frs',
-      sp     = Sp pr  (fr, frs)
-      -> sp' = Sp pr' (fr', frs')
-      -> suffix_stack_wf g (stack sp)
-      -> closure_multistep g av sp av' sp'
-      -> frame_multistep g fr fr'.
-  Proof.
-    intros; eapply closure_multistep__frame_multistep'; eauto.
-  Qed.
-
-  Definition closure_map_complete g cm :=
-    forall fr fr',
-      frame_multistep g fr fr'
-      -> stable fr' = true
-      -> exists frs', FM.MapsTo fr frs' cm
-                      /\ In fr' frs'.
-
-  Lemma stable_config__stable_true :
-    forall fr frs,
-      stable_config (fr, frs)
-      -> stable fr = true.
-  Proof.
-    intros fr frs hs; inv hs; auto. 
-  Qed.
-
-  (* refactor -- this should probably be several lemmas *)
-  Lemma simReturn_approx :
-    forall g cm av av' x x' y ys',
-      closure_map_complete g cm
-      -> suffix_stack_wf g (stack x)
-      -> approx y x
-      -> closure_multistep g av x av' x'
-      -> simReturn cm y = Some ys'
-      -> exists y', In y' ys' /\ approx y' x'.
-  Proof.
-    intros g cm av av' [pr (fr, frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')] ys'
-           hcm hw ha hc hr.
-    pose proof ha as ha'.
-    apply approx_head_frames_eq in ha'; subst.
-    pose proof hc as heq; pose proof hc as hst.
-    apply closure_multistep_preserves_label in heq; simpl in heq; subst.
-    eapply stable_config_after_closure_multistep in hst; eauto; simpl in hst.
-    eapply closure_multistep__frame_multistep in hc; eauto; simpl in hc.
-    exists (Sp pr' (fr', [])); split.
-    - unfold simReturn in hr; dms; tc; inv hr; sis.
-      destruct ha as [? [ctx heq]]; inv heq.
-      apply in_map_iff.
-      eexists; split; eauto.
-      unfold destFrames.
-      pose proof hc as hc'.
-      apply hcm in hc'.
-      destruct hc' as [frs'' [hf hi]].
-      + eapply stable_config__stable_true; eauto. 
-      + apply FMF.find_mapsto_iff in hf; rewrite hf; auto.
-    - split; eauto. sis; eauto.
-  Qed.
-
   (* Interesting and complicated lemma -- make sure to write
      a note about it *)
   Lemma llc_sllc_approx_overapprox' :
@@ -492,7 +387,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     apply hs' in hi'; destruct hi' as [? [? ? ]]; eauto.
   Qed.
   
-  (* probably need some invariant about closure_map here *)
   Lemma target_preserves_overapprox :
     forall g cm sps sps' sps'' sps''' a,
       closure_map_complete g cm
@@ -513,6 +407,37 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply closure_preserves_overapprox; eauto.
   Qed.
 
+  Lemma overapprox_initSps :
+    forall g x fr frs sps sps',
+      llInitSps g x (fr, frs) = sps
+      -> sllInitSps g x = sps'
+      -> overapprox sps' sps.
+  Proof.
+    intros g x fr frs sps sps' hl hs sp hi; subst.
+    apply in_map_iff in hi; destruct hi as [ys [? hi]]; subst.
+    eexists; split.
+    - apply in_map_iff; eauto.
+    - sis; eauto.
+  Qed.
+  
+  Lemma overapprox_startState :
+    forall g cm fr o x suf frs sps sps',
+      fr = SF o (NT x :: suf)
+      -> closure_map_complete g cm
+      -> suffix_stack_wf g (fr, frs)
+      -> llStartState g x (fr, frs) = inr sps
+      -> sllStartState g cm x = inr sps'
+      -> overapprox sps' sps.
+  Proof.
+    intros g cm fr o x suf frs sps sps' ? hc hw hl hs; subst.
+    eapply closure_preserves_overapprox; eauto.
+    - eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+    - eapply overapprox_initSps; eauto.
+  Qed.
+
+  (* The main results in this module: correspondences
+     between LL and SLL prediction *)
+  
   Lemma sllPredict'_llPredict'_succ_eq :
     forall g cm ts sps' sps ca ys ca' ys',
       no_left_recursion g
@@ -555,34 +480,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
           -- eapply llTarget_preserves_successful_sp_invar; eauto.
           -- eapply sllTarget_add_preserves_cache_invar; eauto.
           -- eapply target_preserves_overapprox; eauto. 
-  Qed.
-
-  Lemma overapprox_initSps :
-    forall g x fr frs sps sps',
-      llInitSps g x (fr, frs) = sps
-      -> sllInitSps g x = sps'
-      -> overapprox sps' sps.
-  Proof.
-    intros g x fr frs sps sps' hl hs sp hi; subst.
-    apply in_map_iff in hi; destruct hi as [ys [? hi]]; subst.
-    eexists; split.
-    - apply in_map_iff; eauto.
-    - sis; eauto.
-  Qed.
-  
-  Lemma overapprox_startState :
-    forall g cm fr o x suf frs sps sps',
-      fr = SF o (NT x :: suf)
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (fr, frs)
-      -> llStartState g x (fr, frs) = inr sps
-      -> sllStartState g cm x = inr sps'
-      -> overapprox sps' sps.
-  Proof.
-    intros g cm fr o x suf frs sps sps' ? hc hw hl hs; subst.
-    eapply closure_preserves_overapprox; eauto.
-    - eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
-    - eapply overapprox_initSps; eauto.
   Qed.
   
   Lemma sllPredict_llPredict_succ_eq :

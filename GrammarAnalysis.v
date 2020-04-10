@@ -1,5 +1,6 @@
-Require Import List MSets.
+Require Import List MSets Relation_Operators.
 Require Import GallStar.LLPrediction_complete.
+Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.
 
@@ -93,6 +94,14 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     | _                      => false
     end.
 
+  Lemma stable_config__stable_true :
+    forall fr frs,
+      stable_config (fr, frs)
+      -> stable fr = true.
+  Proof.
+    intros fr frs hs; inv hs; auto. 
+  Qed.
+
   Fixpoint stablePositions' x ys : list suffix_frame :=
     match ys with
     | []          => []
@@ -160,4 +169,106 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     | None     => []
     end.
 
+  (* Correctness of grammar static analysis *)
+
+  Inductive frame_step (g : grammar) :
+    suffix_frame -> suffix_frame -> Prop :=
+  | Fstep_final_ret :
+      forall x ys,
+        In (x, ys) g
+        -> frame_step g (SF (Some x) [])
+                        (SF  None    [])
+  | Fstep_nonfinal_ret :
+      forall x y pre suf,
+        In (x, pre ++ NT y :: suf) g
+        -> frame_step g (SF (Some y) [])
+                        (SF (Some x) suf)
+  | Fstep_push :
+      forall o x ys suf,
+        In (x, ys) g
+        -> frame_step g (SF o (NT x :: suf))
+                        (SF (Some x) ys).
+
+  Hint Constructors frame_step : core.
+
+  Lemma closure_step__frame_step :
+    forall g av av' sp sp' pr pr' fr fr' frs frs',
+      sp     = Sp pr  (fr, frs)
+      -> sp' = Sp pr' (fr', frs')
+      -> suffix_stack_wf g (fr, frs)
+      -> closure_step g av sp av' sp'
+      -> frame_step g fr fr'.
+  Proof.
+    intros g av av' ? ? pr pr' fr fr' frs frs' ? ? hw hc; subst; inv hc; eauto.
+    inv_suffix_frames_wf hw   hi  hw'  ; rew_anr.
+    inv_suffix_frames_wf hw'  hi' hw'' ; eauto.
+  Qed.
+
+  Definition frame_multistep (g : grammar) :
+    suffix_frame -> suffix_frame -> Prop :=
+    clos_refl_trans _ (frame_step g).
+
+  Hint Constructors clos_refl_trans : core.
+
+  Lemma closure_multistep__frame_multistep' :
+    forall g av av' sp sp',
+      suffix_stack_wf g (stack sp)
+      -> closure_multistep g av sp av' sp'
+      -> (forall pr pr' fr fr' frs frs',
+             sp     = Sp pr  (fr, frs)
+             -> sp' = Sp pr' (fr', frs')
+             -> frame_multistep g fr fr').
+  Proof.
+    intros g av av' sp sp' hw hc. 
+    induct_cm hc hs hc' IH; intros pr pr' fr fr' ? ? heq heq'; subst; sis.
+    - inv heq; inv heq'; apply rt_refl.
+    - inv heq; inv heq'; apply rt_refl.
+    - pose proof hs as hs'.
+      inv hs'.
+      + (* return case *)
+        eapply closure_step__frame_step in hs; eauto.
+        inv hs.
+        * (* final return case *)
+          inv hw; rew_anr.
+          inv H7.
+          eapply rt_trans.
+          -- sis. eapply rt_step. eapply Fstep_final_ret; eauto.
+          -- eapply IH; eauto. sis; auto. 
+        * (* nonfinal return case *)
+          eapply rt_trans.
+          -- sis. eapply rt_step. eapply Fstep_nonfinal_ret; eauto.
+          -- eapply IH; eauto; sis. eapply return_preserves_suffix_frames_wf_invar; eauto.
+      + (* push case *)
+        eapply closure_step__frame_step in hs; eauto.
+        inv hs.
+        eapply rt_trans.
+        * sis. eapply rt_step. eapply Fstep_push; eauto.
+        * eapply IH; eauto; sis.
+          apply push_preserves_suffix_frames_wf_invar; eauto.
+  Qed.
+
+  Lemma closure_multistep__frame_multistep :
+    forall g av av' sp sp' pr pr' fr fr' frs frs',
+      sp     = Sp pr  (fr, frs)
+      -> sp' = Sp pr' (fr', frs')
+      -> suffix_stack_wf g (stack sp)
+      -> closure_multistep g av sp av' sp'
+      -> frame_multistep g fr fr'.
+  Proof.
+    intros; eapply closure_multistep__frame_multistep'; eauto.
+  Qed.
+
+  (* Correctness spec for the mkClosureMap function *)
+  Definition closure_map_complete g cm :=
+    forall fr fr',
+      frame_multistep g fr fr'
+      -> stable fr' = true
+      -> exists frs', FM.MapsTo fr frs' cm
+                      /\ In fr' frs'.
+  
+  Theorem mkClosureMap_result_complete :
+    forall g,
+      closure_map_complete g (mkClosureMap g).
+  Admitted.
+  
 End GrammarAnalysisFn.
