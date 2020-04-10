@@ -15,21 +15,24 @@ Module ParserSoundFn (Import D : Defs.T).
   Module Export P := ParserFn D.
 
   Inductive frames_wf (g : grammar) : list prefix_frame -> list suffix_frame -> Prop :=
-  | WF_bottom :
-      forall pre suf v,
-        frames_wf g [PF pre v] [SF None suf]
+  | WF_bottom_init :
+      forall x,
+        frames_wf g [PF [] []] [SF None [NT x]]
+  | WF_bottom_final :
+      forall x v,
+        frames_wf g [PF [NT x] [v]] [SF None []]
   | WF_upper :
       forall x o pre pre' suf suf' p_frs s_frs v v',
         In (x, rev pre' ++ suf') g
         -> frames_wf g (PF pre v :: p_frs) 
-                     (SF o (NT x :: suf) :: s_frs)
+                       (SF o (NT x :: suf) :: s_frs)
         -> frames_wf g (PF pre' v' :: PF pre v :: p_frs) 
-                     (SF (Some x) suf' :: SF o (NT x :: suf) :: s_frs).
+                       (SF (Some x) suf' :: SF o (NT x :: suf) :: s_frs).
 
   Hint Constructors frames_wf : core.
 
   Ltac inv_fw hw  hi hw' := 
-    inversion hw as [? ? ? | ? ? ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
+    inversion hw as [? | ? ? | ? ? ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
 
   Lemma frames_wf__suffix_frames_wf :
     forall g p_frs s_frs,
@@ -432,6 +435,7 @@ Module ParserSoundFn (Import D : Defs.T).
       -> p_ce = PF [] []
       -> s_ce = SF (Some x) rhs
       -> no_left_recursion g
+      -> closure_map_complete g cm
       -> stacks_wf g (p_cr, p_frs) (s_cr, s_frs)
       -> cache_stores_target_results g cm ca
       -> adaptivePredict g cm x (s_cr, s_frs) wsuf ca = (PredSucc rhs, ca')
@@ -441,7 +445,7 @@ Module ParserSoundFn (Import D : Defs.T).
                                     (s_ce :: s_cr :: s_frs) wpre wsuf.
   Proof.
     intros g cm ? ? ? ? p_frs s_frs o x pre suf rhs wpre wsuf ca ca' v ? ? ? ?
-           hn hw hc hp hu; subst.
+           hn hm hw hc hp hu; subst.
     assert (heq: wpre = wpre ++ []) by apps; rewrite heq.
     econstructor; eauto; sis.
     - eapply adaptivePredict_succ_in_grammar; eauto. 
@@ -463,6 +467,7 @@ Module ParserSoundFn (Import D : Defs.T).
   Lemma step_preserves_unique_stack_prefix_derivation_invar :
     forall g cm w p_stk p_stk' s_stk s_stk' ts ts' av av' un un' ca ca',
       no_left_recursion g
+      -> closure_map_complete g cm
       -> stacks_wf g p_stk s_stk
       -> cache_stores_target_results g cm ca
       -> unique_stack_prefix_derivation g w p_stk s_stk ts un
@@ -470,7 +475,7 @@ Module ParserSoundFn (Import D : Defs.T).
       -> unique_stack_prefix_derivation g w p_stk' s_stk' ts' un'.
   Proof.
     intros g cm w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
-           ts ts' av av' un un' ca ca' hn hw hc hu hs; red; red in hu; intros hu'.
+           ts ts' av av' un un' ca ca' hn hm hw hc hu hs; red; red in hu; intros hu'.
     unfold step in hs; dmeqs h; inv hs; tc;
       destruct hu as (wpre & heq & hu); subst; auto. 
     - exists wpre; split; auto.
@@ -509,6 +514,7 @@ Module ParserSoundFn (Import D : Defs.T).
            (v      : forest),
       tri = meas g s_stk wsuf av
       -> no_left_recursion g
+      -> closure_map_complete g cm
       -> stacks_wf g p_stk s_stk
       -> unique_stack_prefix_derivation g w p_stk s_stk wsuf un
       -> multistep g cm p_stk s_stk wsuf av un ca hc a' = Accept v
@@ -519,9 +525,9 @@ Module ParserSoundFn (Import D : Defs.T).
   Proof.
     intros g cm tri a.
     induction a as [tri hlt IH].
-    intros w wsuf av p_stk s_stk un ca hc a' v ? hn hw hu hm; subst.
-    apply multistep_accept_cases in hm.
-    destruct hm as [[hf hu'] | he]; subst.
+    intros w wsuf av p_stk s_stk un ca hc a' v ? hn hm hw hu hms; subst.
+    apply multistep_accept_cases in hms.
+    destruct hms as [[hf hu'] | he]; subst.
     - apply step_StepAccept_facts in hf.
       destruct hf as (? & o & ? & (pre & ?)); subst.
       unfold bottomFrameSyms; simpl; rewrite app_nil_r.
@@ -534,8 +540,8 @@ Module ParserSoundFn (Import D : Defs.T).
       rewrite heq in hd. 
       eapply ha in hd; eauto; apps.
       destruct hd as (? & ? & heq'); repeat rewrite rev_involutive in heq'; auto.
-    - destruct he as (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm).
-      eapply IH with (w := w) in hm; eauto.
+    - destruct he as (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hms).
+      eapply IH with (w := w) in hms; eauto.
       + erewrite step_preserves_bottomFrameSyms_invar; eauto.
       + eapply step_meas_lt with (ca := ca); eauto. 
       + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto. 
@@ -555,6 +561,7 @@ Module ParserSoundFn (Import D : Defs.T).
            (ha     : Acc lex_nat_triple (meas g ss wsuf av))
            (v      : forest),
       no_left_recursion g
+      -> closure_map_complete g cm
       -> stacks_wf g ps ss
       -> unique_stack_prefix_derivation g w ps ss wsuf un
       -> multistep g cm ps ss wsuf av un ca hc ha = Accept v
@@ -566,22 +573,30 @@ Module ParserSoundFn (Import D : Defs.T).
     intros; eapply multistep_sound_unambig'; eauto.
   Qed.
 
+  Theorem mkClosureMap_result_complete :
+    forall g,
+      closure_map_complete g (mkClosureMap g).
+  Admitted.
+  
   Theorem parse_sound_unambig :
     forall (g  : grammar)
-           (ys : list symbol)
+           (x  : nonterminal)
            (ts : list token)
            (v  : forest),
       no_left_recursion g
-      -> parse g ys ts = Accept v
-      -> gamma_derivation g ys ts v
+      -> parse g x ts = Accept v
+      -> gamma_derivation g [NT x] ts v
          /\ (forall v',
-                gamma_derivation g ys ts v'
+                gamma_derivation g [NT x] ts v'
                 -> v' = v).
   Proof.
-    intros g ys ts v hn hp.
+    intros g x ts v hn hp.
     unfold parse in hp.
-    eapply multistep_sound_unambig in hp; try red; eauto.
-    apply unique_stack_prefix_derivation_invar_starts_true.
+    eapply multistep_sound_unambig in hp; eauto.
+    - (* LEMMA *)
+      apply mkClosureMap_result_complete.
+    - constructor.
+    - apply unique_stack_prefix_derivation_invar_starts_true.
   Qed.
 
   (* now for the ambiguous case *)
@@ -773,7 +788,7 @@ Module ParserSoundFn (Import D : Defs.T).
   (* refactor *)
   Lemma llPredict'_ambig_rhs_leads_to_successful_parse' :
     forall g orig_sps wsuf wpre curr_sps rhs,
-      all_suffix_stacks_wf g curr_sps
+      all_suffix_stacks_wf g orig_sps
       -> subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
       -> llPredict' g curr_sps wsuf = PredAmbig rhs
       -> exists orig_sp final_sp orig_sp' final_sp' rhs',
@@ -818,16 +833,15 @@ Module ParserSoundFn (Import D : Defs.T).
     - destruct curr_sps as [| csp csps]; tc.
       destruct (allPredictionsEqual _ _); tc.
       destruct (llTarget _ _ _) as [? | sps'] eqn:ht; tc.
-      eapply IH with (wpre := wpre ++ [(a,l)]) in hl.
+      eapply IH with (wpre := wpre ++ [(a,l)]) in hl; eauto.
       + destruct hl as [osp [fsp [osp' [fsp' [rhs' [hi' [heq [hm' [hf [hi'' [heq' [hm'' [hf' hn]]]]]]]]]]]]]; subst.
         rewrite <- app_assoc in *; sis.
         exists osp; exists fsp; exists osp'; exists fsp';
-        exists osp'.(prediction); repeat split; eauto.
-      + eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+          exists osp'.(prediction); repeat split; eauto.
       + eapply llTarget_preserves_subparsers_sound_invar; eauto.
-  Qed.
+   Qed.
 
-    Lemma llPredict_ambig_rhs_unproc_stack_syms' :
+  Lemma llPredict_ambig_rhs_unproc_stack_syms' :
     forall g cr ce o x suf frs w rhs,
       cr    = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
@@ -878,7 +892,8 @@ Module ParserSoundFn (Import D : Defs.T).
       eapply closure_func_refines_closure_multistep_backward in hi; eauto.
       + destruct hi as [av'' [sp [hi hc]]].
         assert (hst : stable_config sp'.(stack)).
-        { eapply stable_config_after_closure_multistep; eauto. }
+        { eapply stable_config_after_closure_multistep; eauto.
+          eapply llInitSps_preserves_suffix_stack_wf_invar; eauto. }
         destruct sp' as [pred ([suf'], frs')]; inv hst; auto.
       + intros sp hi'; eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
   Qed.
@@ -1015,17 +1030,17 @@ Module ParserSoundFn (Import D : Defs.T).
 
   Theorem parse_sound_ambig :
     forall (g  : grammar)
-           (ys : list symbol)
+           (x  : nonterminal)
            (ts : list token)
            (v  : forest),
       no_left_recursion g
-      -> parse g ys ts = Ambig v
-      -> gamma_derivation g ys ts v
+      -> parse g x ts = Ambig v
+      -> gamma_derivation g [NT x] ts v
          /\ (exists v',
-                gamma_derivation g ys ts v'
+                gamma_derivation g [NT x] ts v'
                 /\ v' <> v).
   Proof.
-    intros g ys ts v hn hp.
+    intros g x ts v hn hp.
     unfold parse in hp.
     eapply multistep_sound_ambig in hp; eauto.
     - constructor.

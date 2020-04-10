@@ -467,11 +467,14 @@ Module ParserFn (Import D : Defs.T).
     intros gr cm sps a sps' hf.
     rewrite CacheFacts.empty_o in hf; tc.
   Defined.
-  
-  Definition parse (g : grammar) (gamma : list symbol) (ts : list token) : parse_result :=
-    let cm     := mkClosureMap g      in
-    let p_stk0 := (PF [] [], [])      in
-    let s_stk0 := (SF None gamma, []) in
+
+  (* to do : parse should return a tree, not a forest
+     the new, stronger version of stack well-formedness
+     should guarantee this *)
+  Definition parse (g : grammar) (x : nonterminal) (ts : list token) : parse_result :=
+    let cm     := mkClosureMap g       in
+    let p_stk0 := (PF []   []    , []) in
+    let s_stk0 := (SF None [NT x], []) in
     multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache
               (empty_cache_stores_target_results g cm) (lex_nat_triple_wf _).
 
