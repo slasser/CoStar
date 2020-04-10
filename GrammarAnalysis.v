@@ -22,14 +22,50 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   End MDT_Edge.
   Module Edge_as_DT   := Make_UDT(MDT_Edge).
   Module EdgeSet      := MSetWeakList.Make Edge_as_DT.
-  Module EdgeSetFacts := WFactsOn Edge_as_DT EdgeSet.
   Module ES           := EdgeSet.
+  Module EF           := WFactsOn Edge_as_DT EdgeSet.
+  Module EP           := EqProperties EdgeSet.
+  Module ED           := WDecideOn Edge_as_DT EdgeSet.
+
+  Lemma subset_subset_diffs :
+    forall a b c : ES.t,
+      ES.Subset a b
+      -> ES.Subset (ES.diff c b) (ES.diff c a).
+  Proof.
+    ED.fsetdec.
+  Defined.
 
   Definition setOf (es : list edge) : ES.t :=
     fold_right ES.add ES.empty es.
 
+  Lemma setOf_subset_app :
+    forall es es',
+      ES.Subset (setOf es') (setOf (es ++ es')).
+  Proof.
+    intros es es'; induction es as [| e es IH]; sis; ED.fsetdec.
+  Qed.
+
+  Lemma setOf_in_iff :
+    forall e es,
+      ES.In e (setOf es) <-> In e es.
+  Proof.
+    intros e es; split; intros hi;
+      induction es as [| e' es IH]; sis; try ED.fsetdec.
+    - apply ES.add_spec in hi; destruct hi as [hh | ht]; eauto.
+    - destruct hi as [hh | ht]; subst.
+      + ED.fsetdec.
+      + apply IH in ht; ED.fsetdec.
+  Qed.
+
   Definition bin (e : edge) (es : list edge) : bool :=
     if in_dec edge_eq_dec e es then true else false.
+
+  Lemma bin_in_iff :
+    forall e es,
+      bin e es = true <-> In e es.
+  Proof.
+    intros e es; split; intros hi; unfold bin in *; destruct (in_dec _ _ _); tc.
+  Qed.
 
   Definition src (e : edge) : suffix_frame := fst e.
   Definition dst (e : edge) : suffix_frame := snd e.
@@ -71,21 +107,94 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       if suffix_frame_eq_dec s' s then d :: dsts es' s else dsts es' s
     end.
 
-  Definition newEdges' (es : list edge) (e : edge) : list edge :=
+  Definition newEdges'' (e : edge) (es' : list edge) : list edge :=
     let (a, b) := e in
-    let cs     := filter (fun c => negb (bin (a, c) es)) (dsts es b)
+    let cs     := filter (fun c => negb (bin (a, c) es')) (dsts es' b)
     in  oneToMany a cs.
 
+  Lemma in_new_edges__not_in_old'' :
+    forall e e'' es' es'',
+      newEdges'' e es' = es''
+      -> In e'' es''
+      -> ~ In e'' es'.
+  Proof.
+    intros (a,b) e'' es' es'' ? hi hi'; subst.
+    unfold newEdges'' in hi.
+    apply in_map_iff in hi ; destruct hi as [c [? hi]]; subst.
+    apply filter_In  in hi ; destruct hi as [hi hn].
+    apply negb_true_iff in hn.
+    eapply bin_in_iff in hi'; tc.
+  Qed.
+
+  Definition newEdges' (es es' : list edge) : list edge :=
+    flat_map (fun e => newEdges'' e es') es.
+
+  Lemma in_new_edges__not_in_old' :
+    forall es es' es'' e'',
+      newEdges' es es' = es''
+      -> In e'' es''
+      -> ~ In e'' es'.
+  Proof.
+    intros es; induction es as [| e es IH];
+      intros es' es'' e'' hn hi hi'; sis; subst.
+    - inv hi.
+    - apply in_app_or in hi; destruct hi as [hp | hs].
+      + eapply in_new_edges__not_in_old''; eauto. 
+      + eapply IH; eauto.
+  Qed.
+  
   Definition newEdges (es : list edge) : list edge :=
-    flat_map (newEdges' es) es.
+    newEdges' es es.
 
-  Definition allSrcs es : list suffix_frame := map src es.
-  Definition allDsts es : list suffix_frame := map dst es.
+  Lemma in_new_edges__not_in_old :
+    forall es es' e',
+      newEdges es = es'
+      -> In e' es'
+      -> ~ ES.In e' (setOf es).
+  Proof.
+    intros es es' e' hn hi hi'; unfold newEdges in hn.
+    eapply in_new_edges__not_in_old'; eauto.
+    apply setOf_in_iff; auto.
+  Qed.
 
-  Definition allEdges es : list edge := 
-    let ss := allSrcs es in
-    let ds := allDsts es in
-    flat_map (fun s => oneToMany s ds) ss.
+  (* idea : use this for closure_step / closure_multistep *)
+  Lemma clos_t_rt :
+    forall (A : Type) (R : relation A) (x y z : A),
+      clos_trans A R x y
+      -> clos_refl_trans A R y z
+      -> clos_trans A R x z.
+  Proof.
+    intros A R x y z ht hr.
+    induction hr; eauto.
+    eapply t_trans; eauto.
+    apply t_step; auto.
+  Qed.
+  
+  Lemma in_new_edges__not_in_old_cons :
+    forall es es' e',
+      newEdges es = e' :: es'
+      -> ~ ES.In e' (setOf es).
+  Proof.
+    intros es es' e' hn hi.
+    eapply in_new_edges__not_in_old; eauto.
+    apply in_eq.
+  Qed.
+
+  Fixpoint allFrames'' x ys : list suffix_frame :=
+    match ys with
+    | []       => SF (Some x) [] :: []
+    | y :: ys' => SF (Some x) ys :: allFrames'' x ys'
+    end.
+
+  Definition allFrames' (g : grammar) : list suffix_frame :=
+    flat_map (fun p => allFrames'' (lhs p) (rhs p)) g.
+
+  Definition allFrames (g : grammar) : list suffix_frame :=
+    SF None [] :: allFrames' g.
+
+  Definition allEdges (g : grammar) : list edge :=
+    let frs := allFrames g
+    in  flat_map (fun fr => oneToMany fr frs) frs.
 
   Definition stable (fr : suffix_frame) : bool :=
     match fr with
@@ -116,24 +225,54 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition reflEdges (g : grammar) : list edge :=
     map (fun p => (p, p)) (stablePositions g).
 
-  Definition m (es : list edge) : nat :=
-    ES.cardinal (ES.diff (setOf (allEdges es)) (setOf es)).
+  Definition m (g : grammar) (es : list edge) : nat :=
+    ES.cardinal (ES.diff (setOf (allEdges g)) (setOf es)).
 
   Axiom magic : forall A, A.
 
-  Program Fixpoint transClosure (es : list edge)
-          { measure (m es) } : list edge :=
+  (* idea : use the old measure, which doesn't need to refer to g *)
+  Program Fixpoint transClosure (g  : grammar)
+                                (es : list edge)
+                                (pf : forall e, In e es -> In e (allEdges g))
+          { measure (m g es) } : list edge :=
     let es' := newEdges es in
     match es' as es'' return es' = es'' -> _ with
-    | []     => fun _   => es
-    | _ :: _ => fun heq => transClosure (es' ++ es)
+    | []         => fun _   => es
+    | e' :: es'' => fun heq => transClosure g (es' ++ es) _
     end eq_refl.
   Next Obligation.
+    apply in_app_or in H.
+    destruct H as [hp | hs]; eauto.
+    
+    - admit.
+    - eauto.
+    
     rewrite heq; simpl.
     unfold m.
-    apply magic.
-  Defined.
+    apply EP.MP.subset_cardinal_lt with (x := e').
+    - apply subset_subset_diffs.
+      apply setOf_subset_app with (es := e' :: _).
+    - pose proof heq as hn.
+      eapply in_new_edges__not_in_old_cons in hn; eauto.
+      assert (ES.In e' (setOf (allEdges g))) by admit.
+      ED.fsetdec.
+    - intros hi; eapply ES.diff_spec in hi; destruct hi as [? hi].
+      eapply hi; simpl; ED.fsetdec.
+  Admitted.
 
+  Lemma nullablePass_neq_candidates_lt :
+    forall ps nu,
+      ~ NtSet.Equal nu (nullablePass ps nu)
+      -> countNullCands ps (nullablePass ps nu) < countNullCands ps nu.
+  Proof.
+    intros ps nu Hneq.
+    apply nullablePass_neq_exists in Hneq.
+    firstorder.
+    apply NtSetEqProps.MP.subset_cardinal_lt with (x := x); try ND.fsetdec.
+    apply subset_subset_diffs.
+    apply nullablePass_subset.
+  Defined.
+  
   Definition dstStable (e : edge) : bool :=
     let (_, b) := e in stable b.
 
