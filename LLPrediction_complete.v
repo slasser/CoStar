@@ -420,11 +420,14 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
 
   Lemma stable_config_after_closure_multistep :
     forall g av av' sp sp',
-      closure_multistep g av sp av' sp'
+      suffix_stack_wf g sp.(stack)
+      -> closure_multistep g av sp av' sp'
       -> stable_config sp'.(stack).
   Proof.
-    intros g av av' sp sp' hc.
-    induction hc; try constructor; auto.
+    intros g av av' sp sp' hw hc.
+    induct_cm hc  hs hc' IH; try constructor; sis.
+    - inv hw; auto.
+    - apply IH; eapply closure_step_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Lemma llStartState_closure_multistep_from_orig_sp' :
@@ -667,7 +670,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       destruct hc as [av'' [sp'' [hc hg'']]].
       eapply IH in hg''; eauto.
       + destruct hg'' as [sp''' hmcms]; eauto.
-      + eapply stable_config_after_closure_multistep; eauto.
+      + eapply stable_config_after_closure_multistep
+          with (sp := sp'); eauto.
+        eapply move_step_preserves_suffix_stack_wf_invar; eauto.
       + eapply closure_multistep_preserves_suffix_stack_wf_invar; eauto.
         eapply move_step_preserves_suffix_stack_wf_invar; eauto.
   Qed.
@@ -812,7 +817,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       destruct hm as [sp' [hm hm']].
       apply hall in hm; subst; auto.
       apply closure_multistep_preserves_label in hc; auto.
-    - eapply stable_config_after_closure_multistep; eauto.
+    - eapply stable_config_after_closure_multistep; eauto; sis.
+      eapply push_preserves_suffix_frames_wf_invar; eauto.
     - eapply closure_multistep_preserves_suffix_stack_wf_invar; eauto; sis.
       apply push_preserves_suffix_frames_wf_invar; auto.
   Qed.
@@ -948,9 +954,25 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     apply closure_multistep_preserves_label in H0; tc.
   Qed.
 
+  (* refactor *)
+  Lemma mcms'_preserves_suffix_stack_wf_invar :
+    forall g sp sp' w w',
+      move_closure_multistep' g sp w sp' w'
+      -> suffix_stack_wf g sp.(stack)
+      -> suffix_stack_wf g sp'.(stack).
+  Proof.
+    intros g sp sp' w w' hm.
+    induction hm; intros; sis; auto.
+    apply IHhm.
+    eapply closure_multistep_preserves_suffix_stack_wf_invar; eauto.
+    pose proof H as H'; inv H; sis; subst.
+    eapply move_step_preserves_suffix_stack_wf_invar with (g := g) in H'; eauto.
+  Qed.
+
+  (* refactor? *)
   Lemma move_closure_op_preserves_subparsers_sound_invar :
     forall g a l wpre wsuf sps sps' sps'' sps''',
-      all_suffix_stacks_wf g sps'
+      all_suffix_stacks_wf g sps
       -> subparsers_sound_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
       -> move a sps' = inr sps''
       -> llClosure g sps'' = inr sps'''
@@ -959,6 +981,12 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     intros g a l wpre wsuf sps sps' sps'' sps''' ha hi hm hc. 
     unfold subparsers_sound_wrt_originals in *.
     rewrite <- app_assoc; simpl; intros sp''' hi'''.
+    (* lemma *)
+    assert (ha' : all_suffix_stacks_wf g sps').
+    { intros sp' hi'.
+      apply hi in hi'.
+      destruct hi' as [sp [hi' hmcms]].
+      eapply mcms'_preserves_suffix_stack_wf_invar; eauto. }
     assert (ha'' : all_suffix_stacks_wf g sps'').
     { eapply move_preserves_suffix_stack_wf_invar; eauto. }
     assert (ha''' : all_suffix_stacks_wf g sps''').
@@ -975,12 +1003,14 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     eapply mcms'_transitive_three_groups; eauto.
     econstructor; eauto.
     apply stable_config_after_closure_multistep in hc.
-    destruct sp''' as [pred ([suf], frs)]; inv hc; auto.
+    - destruct sp''' as [pred ([suf], frs)]; inv hc; auto.
+    - eapply move_step_preserves_suffix_stack_wf_invar; eauto.
+      eapply mcms'_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Lemma llTarget_preserves_subparsers_sound_invar :
     forall g a l wpre wsuf sps sps' sps'',
-      all_suffix_stacks_wf g sps'
+      all_suffix_stacks_wf g sps
       -> subparsers_sound_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
       -> llTarget g a sps' = inr sps''
       -> subparsers_sound_wrt_originals g sps (wpre ++ [(a,l)]) sps'' wsuf.
@@ -992,7 +1022,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
 
   Lemma llPredict'_ambig_rhs_leads_to_successful_parse :
     forall g orig_sps wsuf wpre curr_sps rhs,
-      all_suffix_stacks_wf g curr_sps
+      all_suffix_stacks_wf g orig_sps
       -> subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
       -> llPredict' g curr_sps wsuf = PredAmbig rhs
       -> exists orig_sp final_sp,
@@ -1021,11 +1051,10 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     - destruct curr_sps as [| sp' sps']; tc.
       destruct (allPredictionsEqual _ _); tc.
       dmeq ht; tc.
-      eapply IH with (wpre := wpre ++ [(a,l)]) in hl.
+      eapply IH with (wpre := wpre ++ [(a,l)]) in hl; auto.
       + destruct hl as [osp [fsp [hi' [heq [hm' hf]]]]].
         exists osp; exists fsp; repeat split; auto.
         rewrite <- app_assoc in hm'; auto.
-      + eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
       + eapply llTarget_preserves_subparsers_sound_invar; eauto.
   Qed.
 
@@ -1122,7 +1151,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       eapply closure_func_refines_closure_multistep_backward in hi; eauto.
       + destruct hi as [av'' [sp0 [hi hc]]].
         assert (hst : stable_config sp'.(stack)).
-        { eapply stable_config_after_closure_multistep; eauto. }
+        { eapply stable_config_after_closure_multistep; eauto.
+          eapply llInitSps_preserves_suffix_stack_wf_invar; eauto. }
         destruct sp' as [pred ([suf'], frs')]; sis.
         inv hst; auto.
       + eapply llInitSps_preserves_suffix_stack_wf_invar; eauto. 

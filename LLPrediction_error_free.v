@@ -19,8 +19,8 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   | SC_empty :
       stable_config (SF None [], [])
   | SC_terminal :
-      forall o a suf frs,
-        stable_config (SF o (T a :: suf), frs).
+      forall x a suf frs,
+        stable_config (SF (Some x) (T a :: suf), frs).
 
   Hint Constructors stable_config : core.
 
@@ -201,8 +201,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       -> stable_config sp.(stack).
   Proof.
     intros g av sp hw hs.
-    unfold cstep in hs; dms; tc; sis; auto.
-    inv hw; auto.
+    unfold cstep in hs; dms; tc; sis; inv hw; auto.
   Qed.
 
   Lemma sp_in_llc_result_stable_config :

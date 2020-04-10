@@ -1071,9 +1071,11 @@ Module LLPredictionFn (Import D : Defs.T).
   (* The stack predicate is defined in terms of the following
    predicate over a list of locations *)
   Inductive suffix_frames_wf (g : grammar) : list suffix_frame -> Prop :=
-  | WF_bottom :
-      forall suf,
-        suffix_frames_wf g [SF None suf]
+  | WF_bottom_init :
+      forall x,
+        suffix_frames_wf g [SF None [NT x]]
+  | WF_bottom_final :
+      suffix_frames_wf g [SF None []]
   | WF_upper :
       forall x pre' suf suf' o frs,
         In (x, pre' ++ suf') g
@@ -1083,8 +1085,8 @@ Module LLPredictionFn (Import D : Defs.T).
   Hint Constructors suffix_frames_wf : core.
 
   (* invert a suffix_suffix_frames_wf judgment, naming the hypotheses hi and hw' *)
-  Ltac inv_suffix_frames_wf hw hi hw' :=
-    inversion hw as [ ? | ? ? ? ? ? ? hi hw']; subst; clear hw.
+  Ltac inv_suffix_frames_wf hw  hi hw' :=
+    inversion hw as [ ? | | ? ? ? ? ? ? hi hw']; subst; clear hw.
 
   Ltac wf_upper_nil := eapply WF_upper with (pre' := []); sis; eauto. 
 

@@ -1,4 +1,4 @@
-Require Import List.
+Require Import List Relation_Operators.
 Require Import GallStar.Lex.
 Require Import GallStar.SLLPrediction.
 Require Import GallStar.Tactics.
@@ -257,39 +257,142 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eexists; split; [apply in_eq | auto].
   Qed.
 
-  Inductive frame_closure_step (g : grammar) :
+  (* At least some of this stuff will probably move to GA *)
+  
+  Inductive frame_step (g : grammar) :
     suffix_frame -> suffix_frame -> Prop :=
   | Fstep_final_ret :
       forall x ys,
         In (x, ys) g
-        -> frame_closure_step g (SF (Some x) [])
-                                (SF  None    [])
+        -> frame_step g (SF (Some x) [])
+                        (SF  None    [])
   | Fstep_nonfinal_ret :
       forall x y pre suf,
         In (x, pre ++ NT y :: suf) g
-        -> frame_closure_step g (SF (Some y) [])
-                                (SF (Some x) suf)
+        -> frame_step g (SF (Some y) [])
+                        (SF (Some x) suf)
   | Fstep_push :
       forall o x ys suf,
         In (x, ys) g
-        -> frame_closure_step g (SF o (NT x :: suf))
-                                (SF (Some x) ys).
+        -> frame_step g (SF o (NT x :: suf))
+                      (SF (Some x) ys).
 
-  (* to do : prove a correspondence between frame_closure_step 
-     and closure_multistep. This will probably involve making
-     the suffix_stack_wf invariant stronger (the bottom frame
-     should be empty or contain a single nonterminal). Then do
-     the same thing for frame_closure_multistep and closure_multistep *)
-  
+  Hint Constructors frame_step : core.
+
+  Lemma closure_step__frame_step :
+    forall g av av' sp sp' pr pr' fr fr' frs frs',
+      sp     = Sp pr  (fr, frs)
+      -> sp' = Sp pr' (fr', frs')
+      -> suffix_stack_wf g (fr, frs)
+      -> closure_step g av sp av' sp'
+      -> frame_step g fr fr'.
+  Proof.
+    intros g av av' ? ? pr pr' fr fr' frs frs' ? ? hw hc; subst; inv hc; eauto.
+    inv_suffix_frames_wf hw   hi  hw'  ; rew_anr.
+    inv_suffix_frames_wf hw'  hi' hw'' ; eauto.
+  Qed.
+
+
+  Definition frame_multistep (g : grammar) :
+    suffix_frame -> suffix_frame -> Prop :=
+    clos_refl_trans _ (frame_step g).
+
+  Hint Constructors clos_refl_trans : core.
+
+  Lemma closure_multistep__frame_multistep' :
+    forall g av av' sp sp',
+      suffix_stack_wf g (stack sp)
+      -> closure_multistep g av sp av' sp'
+      -> (forall pr pr' fr fr' frs frs',
+             sp     = Sp pr  (fr, frs)
+             -> sp' = Sp pr' (fr', frs')
+             -> frame_multistep g fr fr').
+  Proof.
+    intros g av av' sp sp' hw hc. 
+    induct_cm hc hs hc' IH; intros pr pr' fr fr' ? ? heq heq'; subst; sis.
+    - inv heq; inv heq'; apply rt_refl.
+    - inv heq; inv heq'; apply rt_refl.
+    - pose proof hs as hs'.
+      inv hs'.
+      + (* return case *)
+        eapply closure_step__frame_step in hs; eauto.
+        inv hs.
+        * (* final return case *)
+          inv hw; rew_anr.
+          inv H7.
+          eapply rt_trans.
+          -- sis. eapply rt_step. eapply Fstep_final_ret; eauto.
+          -- eapply IH; eauto. sis; auto. 
+        * (* nonfinal return case *)
+          eapply rt_trans.
+          -- sis. eapply rt_step. eapply Fstep_nonfinal_ret; eauto.
+          -- eapply IH; eauto; sis. eapply return_preserves_suffix_frames_wf_invar; eauto.
+      + (* push case *)
+        eapply closure_step__frame_step in hs; eauto.
+        inv hs.
+        eapply rt_trans.
+        * sis. eapply rt_step. eapply Fstep_push; eauto.
+        * eapply IH; eauto; sis.
+          apply push_preserves_suffix_frames_wf_invar; eauto.
+  Qed.
+
+  Lemma closure_multistep__frame_multistep :
+    forall g av av' sp sp' pr pr' fr fr' frs frs',
+      sp     = Sp pr  (fr, frs)
+      -> sp' = Sp pr' (fr', frs')
+      -> suffix_stack_wf g (stack sp)
+      -> closure_multistep g av sp av' sp'
+      -> frame_multistep g fr fr'.
+  Proof.
+    intros; eapply closure_multistep__frame_multistep'; eauto.
+  Qed.
+
+  Definition closure_map_complete g cm :=
+    forall fr fr',
+      frame_multistep g fr fr'
+      -> stable fr' = true
+      -> exists frs', FM.find fr cm = Some frs'
+                      /\ In fr' frs'.
+
+  Lemma stable_config__stable_true :
+    forall fr frs,
+      stable_config (fr, frs)
+      -> stable fr = true.
+  Proof.
+    intros fr frs hs; inv hs; auto. 
+  Qed.
+
+  (* refactor -- this should probably be several lemmas *)
   Lemma simReturn_approx :
     forall g cm av av' x x' y ys',
-      approx y x
+      closure_map_complete g cm
+      -> suffix_stack_wf g (stack x)
+      -> approx y x
       -> closure_multistep g av x av' x'
       -> simReturn cm y = Some ys'
       -> exists y', In y' ys' /\ approx y' x'.
   Proof.
-    intros g cm av av' x x' y ys' ha hc hr.
-  Admitted.
+    intros g cm av av' [pr (fr, frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')] ys'
+           hcm hw ha hc hr.
+    pose proof ha as ha'.
+    apply approx_head_frames_eq in ha'; subst.
+    pose proof hc as heq; pose proof hc as hst.
+    apply closure_multistep_preserves_label in heq; simpl in heq; subst.
+    eapply stable_config_after_closure_multistep in hst; eauto; simpl in hst.
+    eapply closure_multistep__frame_multistep in hc; eauto; simpl in hc.
+    exists (Sp pr' (fr', [])); split.
+    - unfold simReturn in hr; dms; tc; inv hr; sis.
+      destruct ha as [? [ctx heq]]; inv heq.
+      apply in_map_iff.
+      eexists; split; eauto.
+      unfold destFrames.
+      pose proof hc as hc'.
+      apply hcm in hc'.
+      destruct hc' as [frs'' [hf hi]].
+      + eapply stable_config__stable_true; eauto. 
+      + rewrite hf; auto.
+    - split; eauto. sis; eauto.
+  Qed.
 
   (* Interesting and complicated lemma -- make sure to write
      a note about it *)
@@ -318,7 +421,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     - (* the LL subparser steps *)
       apply sllc_success_cases in hsll.
       destruct hsll as [hr | [hr [[hs' ?] | [ys' [avy' [hs' [? [? ha']]]]]]]]; subst.
-      + (* SLL subparser simulates a return
+      + (* INTERESTING CASE 
+           SLL subparser simulates a return
            Prove a lemma about a correspondence between 
            simReturn and a cstep/llc operation *)
         intros x''' hi'''.
