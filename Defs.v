@@ -254,9 +254,11 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Module FrameSet      := MSetWeakList.Make SF_as_DT.
   Module FrameSetFacts := WFactsOn SF_as_DT FrameSet.
   Module FrameMap      := FMapWeakList.Make SF_as_DT.
+  Module FrameMapFacts := WFacts_fun SF_as_DT FrameMap.
   Module FS            := FrameSet.
   Module FM            := FrameMap.
-
+  Module FMF           := FrameMapFacts.
+  
   Definition suffix_stack := (suffix_frame * list suffix_frame)%type. 
 
   Fixpoint unprocTailSyms (frs : list suffix_frame) : list symbol :=
