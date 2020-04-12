@@ -35,6 +35,15 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     ED.fsetdec.
   Defined.
 
+  Lemma subset_subset__subset_diffs :
+    forall u u' a b : ES.t,
+      ES.Subset u u'
+      -> ES.Subset a b
+      -> ES.Subset (ES.diff u b) (ES.diff u' a).
+  Proof.
+    ED.fsetdec.
+  Defined.
+
   Definition setOf (es : list edge) : ES.t :=
     fold_right ES.add ES.empty es.
 
@@ -66,9 +75,6 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Proof.
     intros e es; split; intros hi; unfold bin in *; destruct (in_dec _ _ _); tc.
   Qed.
-
-  Definition src (e : edge) : suffix_frame := fst e.
-  Definition dst (e : edge) : suffix_frame := snd e.
 
   Fixpoint pushEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
     match ys with 
@@ -156,7 +162,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     eapply in_new_edges__not_in_old'; eauto.
     apply setOf_in_iff; auto.
   Qed.
-
+  
   (* idea : use this for closure_step / closure_multistep *)
   Lemma clos_t_rt :
     forall (A : Type) (R : relation A) (x y z : A),
@@ -169,6 +175,47 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     eapply t_trans; eauto.
     apply t_step; auto.
   Qed.
+
+  Definition src (e : edge) : suffix_frame := fst e.
+  Definition dst (e : edge) : suffix_frame := snd e.
+
+  Definition allSrcs es : list suffix_frame := map src es.
+  Definition allDsts es : list suffix_frame := map dst es.
+
+  Definition allPossibleEdges es : list edge := 
+    let ss := allSrcs es in
+    let ds := allDsts es in
+    flat_map (fun s => oneToMany s ds) ss.
+
+  Lemma allPossibleEdges_src_in_allSrcs :
+    forall a b es,
+      In (a, b) (allPossibleEdges es)
+      -> In a (allSrcs es).
+  Proof.
+    intros a b es hi.
+    apply in_flat_map in hi; destruct hi as [a' [hi hi']].
+    apply oneToMany_src_eq in hi'; subst; auto.
+  Qed.
+
+  Lemma allPossibleEdges_dst_in_allDsts :
+    forall a b es,
+      In (a, b) (allPossibleEdges es)
+      -> In b (allDsts es).
+  Proof.
+    intros a b es hi.
+    apply in_flat_map in hi; destruct hi as [a' [hi hi']].
+    eapply oneToMany_dst_in; eauto.
+  Qed.
+
+  Lemma allPossibleEdges_exists_dst_for_src :
+    forall a b es,
+      In (a, b) (allPossibleEdges es)
+      -> exists b',
+        In (a, b') es.
+  Proof.
+    intros a b es hi; apply allPossibleEdges_src_in_allSrcs in hi.
+    apply in_map_iff in hi; destruct hi as [(?, ?) [? ?]]; sis; subst; eauto.
+  Qed.
   
   Lemma in_new_edges__not_in_old_cons :
     forall es es' e',
@@ -180,22 +227,152 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply in_eq.
   Qed.
 
+  Definition list_subset {X} (xs xs' : list X) :=
+    forall x, In x xs -> In x xs'.
+
+  Lemma subset__list_subset :
+    forall xs ys,
+      ES.Subset (setOf xs) (setOf ys)
+      -> list_subset xs ys.
+  Proof.
+    intros xs ys hs x hi.
+    apply setOf_in_iff; apply hs; apply setOf_in_iff; auto.
+  Qed.
+
+  Lemma in_allPossibleEdges__in_edges :
+    forall e es,
+      In e es
+      -> In e (allPossibleEdges es).
+  Proof.
+    intros (a, b) es hi.
+    apply in_flat_map.
+    exists a; split.
+    - (* lemma *)
+      apply in_map_iff; firstorder.
+    - apply in_map_iff; eexists; split; eauto.
+      apply in_map_iff; firstorder.
+  Qed.
+  
+  Lemma in_allPossibleEdges_app__in_allSrcs :
+    forall a b es es',
+      ES.Subset (setOf es') (setOf (allPossibleEdges es))
+      -> In (a, b) (allPossibleEdges (es' ++ es))
+      -> In a (allSrcs es).
+  Admitted.
+
+  Lemma in_allPossibleEdges_app__in_allDsts :
+    forall a b es es',
+      ES.Subset (setOf es') (setOf (allPossibleEdges es))
+      -> In (a, b) (allPossibleEdges (es' ++ es))
+      -> In b (allDsts es).
+  Admitted.
+  
+  Lemma in_allSrcs_in_allDsts__in_allPossibleEdges :
+    forall a b es,
+      In a (allSrcs es)
+      -> In b (allDsts es)
+      -> In (a, b) (allPossibleEdges es).
+  Proof.
+    intros a b es hi hi'; apply in_flat_map.
+    eexists; split; eauto.
+    apply in_map_iff; eauto.
+  Qed.
+
+  Lemma allSrcs_allDsts_allPossibleEdges_in_iff :
+    forall a b es,
+      (In a (allSrcs es) /\ In b (allDsts es))
+      <-> In (a, b) (allPossibleEdges es).
+    Proof. 
+      intros a b es; split; [intros [hs hd] | intros hi].
+      - apply in_flat_map.
+        eexists; split; eauto.
+        apply in_map_iff; eauto.
+      - apply in_flat_map in hi. destruct hi as [a' [hi hi']]; split.
+        + apply oneToMany_src_eq in hi'; subst; auto.
+        + apply oneToMany_dst_in in hi'; auto.
+    Qed.
+      
+  Lemma allPossibleEdges_app_subset__equal :
+    forall es es',
+      ES.Subset (setOf es') (setOf (allPossibleEdges es))
+      -> ES.Equal (setOf (allPossibleEdges (es' ++ es)))
+                  (setOf (allPossibleEdges         es)).
+  Proof.
+    intros es es' hs (a, b); split; intros hi;
+      apply setOf_in_iff; apply setOf_in_iff in hi;
+        apply subset__list_subset in hs.
+    - (* harder direction *)
+      apply allSrcs_allDsts_allPossibleEdges_in_iff in hi.
+      destruct hi as [ha hb].
+      apply in_allSrcs_in_allDsts__in_allPossibleEdges.
+      + apply in_map_iff in ha; destruct ha as [(a', b') [heq hi]]; sis; subst.
+        apply in_app_or in hi; destruct hi as [hes' | hes]; auto.
+        * apply hs in hes'.
+          eapply allPossibleEdges_src_in_allSrcs; eauto.
+        * apply in_map_iff; exists (a, b'); auto. 
+      + apply in_map_iff in hb; destruct hb as [(a', b') [heq hi]]; sis; subst.
+        apply in_app_or in hi; destruct hi as [hes' | hes]; auto.
+        * apply hs in hes'.
+          eapply allPossibleEdges_dst_in_allDsts; eauto.
+        * apply in_map_iff; exists (a', b); auto. 
+    - (* easier direction *)
+      apply in_allSrcs_in_allDsts__in_allPossibleEdges;
+        unfold allSrcs, allDsts; rewrite map_app; apply in_or_app.
+      + apply allPossibleEdges_src_in_allSrcs in hi; auto.
+      + apply allPossibleEdges_dst_in_allDsts in hi; auto.
+  Qed.
+  
+  (*
+  Lemma allPossibleEdges_newEdges_equal :
+    forall es es',
+      ES.Subset (setOf es') (setOf (allPossibleEdges es))
+      -> ES.Equal (setOf (allPossibleEdges (es' ++ es)))
+                  (setOf (allPossibleEdges         es)).
+  Proof.
+    intros. ED.fsetdec.
+    intros es es'; induction es' as [| e' es' IH]; intros hs.
+    - ED.fsetdec.
+    - simpl in hs.
+      assert (hs' : ES.Subset (setOf es') (setOf (allPossibleEdges es))) by ED.fsetdec.
+      apply IH in hs'.
+
+      simpl in 
+    intros es es' hn e; split; intros hi.
+    - apply setOf_in_iff.
+      apply setOf_in_iff in hi.
+      induction es as [| e' es IH].
+      + 
+    . unfold ES.Equal.
+    intros es es'; induction es' as [| e' es' IH]; intros hn.
+    - ED.fsetdec.
+    - 
+    intros es es'; induction es' as [| e' es' IH]; in
+ heq : newEdges es = e' :: es'
+  ============================
+  ES.Equal (setOf (allPossibleEdges (e' :: es' ++ es)))
+    (setOf (allPossibleEdges es))
+*)
+  
+  (*
   Fixpoint allFrames'' x ys : list suffix_frame :=
     match ys with
     | []       => SF (Some x) [] :: []
     | y :: ys' => SF (Some x) ys :: allFrames'' x ys'
     end.
 
+
+  
   Definition allFrames' (g : grammar) : list suffix_frame :=
     flat_map (fun p => allFrames'' (lhs p) (rhs p)) g.
 
   Definition allFrames (g : grammar) : list suffix_frame :=
     SF None [] :: allFrames' g.
 
+
   Definition allEdges (g : grammar) : list edge :=
     let frs := allFrames g
     in  flat_map (fun fr => oneToMany fr frs) frs.
-
+*)
   Definition stable (fr : suffix_frame) : bool :=
     match fr with
     | SF None []             => true
@@ -225,36 +402,28 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition reflEdges (g : grammar) : list edge :=
     map (fun p => (p, p)) (stablePositions g).
 
-  Definition m (g : grammar) (es : list edge) : nat :=
-    ES.cardinal (ES.diff (setOf (allEdges g)) (setOf es)).
+  Definition m (es : list edge) : nat :=
+    ES.cardinal (ES.diff (setOf (allPossibleEdges es)) (setOf es)).
 
   Axiom magic : forall A, A.
 
   (* idea : use the old measure, which doesn't need to refer to g *)
   Program Fixpoint transClosure (g  : grammar)
                                 (es : list edge)
-                                (pf : forall e, In e es -> In e (allEdges g))
-          { measure (m g es) } : list edge :=
+                                { measure (m es) } : list edge :=
     let es' := newEdges es in
     match es' as es'' return es' = es'' -> _ with
-    | []         => fun _   => es
-    | e' :: es'' => fun heq => transClosure g (es' ++ es) _
+    | []        => fun _   => es
+    | e' :: es' => fun heq => transClosure g (e' :: es' ++ es)
     end eq_refl.
   Next Obligation.
-    apply in_app_or in H.
-    destruct H as [hp | hs]; eauto.
-    
-    - admit.
-    - eauto.
-    
-    rewrite heq; simpl.
     unfold m.
     apply EP.MP.subset_cardinal_lt with (x := e').
-    - apply subset_subset_diffs.
-      apply setOf_subset_app with (es := e' :: _).
-    - pose proof heq as hn.
-      eapply in_new_edges__not_in_old_cons in hn; eauto.
-      assert (ES.In e' (setOf (allEdges g))) by admit.
+    - apply subset_subset__subset_diffs.
+      + apply sis. admit.
+      + apply setOf_subset_app with (es := e' :: _).
+    - pose proof heq as hn; eapply in_new_edges__not_in_old_cons in hn; eauto.
+      assert (ES.In e' (setOf (allPossibleEdges es))) by admit.
       ED.fsetdec.
     - intros hi; eapply ES.diff_spec in hi; destruct hi as [? hi].
       eapply hi; simpl; ED.fsetdec.

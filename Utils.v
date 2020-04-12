@@ -206,3 +206,22 @@ Qed.
 
 Definition oneToMany {A B : Type} (s : A) (ds : list B) : list (A * B) :=
   map (pair s) ds.
+
+Lemma oneToMany_src_eq :
+  forall A B (a a' : A) (b : B) (bs : list B),
+    In (a, b) (oneToMany a' bs)
+    -> a' = a.
+Proof.
+  intros A B a a' b bs hi.
+  apply in_map_iff in hi. destruct hi as [b' [heq hi]]; inv heq; auto.
+Qed.
+
+Lemma oneToMany_dst_in :
+  forall A B (a a' : A) (b : B) (bs : list B),
+    In (a, b) (oneToMany a' bs)
+    -> In b bs.
+Proof.
+  intros A B a a' b bs hi.
+  apply in_map_iff in hi; destruct hi as [? [heq ?]]; inv heq; auto.
+Qed.
+
