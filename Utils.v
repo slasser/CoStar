@@ -1,4 +1,4 @@
-Require Import List Omega.
+Require Import List Omega Relations Relation_Operators.
 Require Import GallStar.Tactics.
         Import ListNotations.
 
@@ -225,3 +225,15 @@ Proof.
   apply in_map_iff in hi; destruct hi as [? [heq ?]]; inv heq; auto.
 Qed.
 
+(* idea : use this for closure_step / closure_multistep *)
+Lemma clos_t_rt :
+  forall (A : Type) (R : relation A) (x y z : A),
+    clos_trans A R x y
+    -> clos_refl_trans A R y z
+    -> clos_trans A R x z.
+Proof.
+  intros A R x y z ht hr.
+  induction hr; eauto.
+  eapply t_trans; eauto.
+  apply t_step; auto.
+Qed.
