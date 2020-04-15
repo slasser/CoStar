@@ -100,6 +100,15 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       + apply in_cons; auto.
   Qed.
 
+  Lemma lhss_exists_rhs :
+    forall g x,
+      In x (lhss g)
+      -> exists ys, In (x, ys) g.
+  Proof.
+    intros g x hi.
+    apply in_map_iff in hi; destruct hi as [(?, ?) [? ?]]; sis; subst; eauto.
+  Qed.
+
   Definition rhs (p : production) : list symbol :=
     let (_, gamma) := p in gamma.
 
