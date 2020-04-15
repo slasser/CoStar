@@ -331,37 +331,37 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     destruct (in_dec _ _ _); tc.
   Qed.
 
-  Definition newEdges'' (e : edge) (es' : list edge) : list edge :=
+  Definition newEdges' (e : edge) (es' : list edge) : list edge :=
     let (a, b) := e in
     let cs     := filter (fun c => negb (bin (a, c) es')) (dsts b es')
     in  oneToMany a cs.
 
-  Lemma in_new_edges__not_in_old'' :
+  Lemma in_new_edges__not_in_old' :
     forall e e'' es' es'',
-      newEdges'' e es' = es''
+      newEdges' e es' = es''
       -> In e'' es''
       -> ~ In e'' es'.
   Proof.
     intros (a,b) e'' es' es'' ? hi hi'; subst.
-    unfold newEdges'' in hi.
+    unfold newEdges' in hi.
     apply in_map_iff in hi ; destruct hi as [c [? hi]]; subst.
     apply filter_In  in hi ; destruct hi as [hi hn].
     apply negb_true_iff in hn.
     eapply bin_in_iff in hi'; tc.
   Qed.
 
-  Lemma newEdges''_src_eq :
+  Lemma newEdges'_src_eq :
     forall a a' b c es,
-      In (a', c) (newEdges'' (a, b) es)
+      In (a', c) (newEdges' (a, b) es)
       -> a' = a.
   Proof.
     intros a a' b c es hi.
     apply in_map_iff in hi; destruct hi as [? [heq ?]]; inv heq; auto.
   Qed.
 
-  Lemma newEdges''_dst_in_dsts :
+  Lemma newEdges'_dst_in_dsts :
     forall a a' b c es,
-      In (a', c) (newEdges'' (a, b) es)
+      In (a', c) (newEdges' (a, b) es)
       -> In c (dsts b es).
   Proof.
     intros a a' b c es hi.
@@ -369,54 +369,17 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply filter_In in hi; destruct hi; auto.
   Qed.
 
-  Lemma newEdges''_dst_in_allDsts :
+  Lemma newEdges'_dst_in_allDsts :
     forall a a' b c es,
-      In (a', c) (newEdges'' (a, b) es)
+      In (a', c) (newEdges' (a, b) es)
       -> In c (allDsts es).
   Proof.
     intros a a' b c es hi.
-    eapply dsts_allDsts; eapply newEdges''_dst_in_dsts; eauto.
+    eapply dsts_allDsts; eapply newEdges'_dst_in_dsts; eauto.
   Qed.
-
-  Definition newEdges' (es es' : list edge) : list edge :=
-    flat_map (fun e => newEdges'' e es') es.
-
-  Lemma in_new_edges__not_in_old' :
-    forall es es' es'' e'',
-      newEdges' es es' = es''
-      -> In e'' es''
-      -> ~ In e'' es'.
-  Proof.
-    intros es; induction es as [| e es IH];
-      intros es' es'' e'' hn hi hi'; sis; subst.
-    - inv hi.
-    - apply in_app_or in hi; destruct hi as [hp | hs].
-      + eapply in_new_edges__not_in_old''; eauto. 
-      + eapply IH; eauto.
-  Qed.
-
-  Lemma newEdges'_allSrcs :
-    forall a b es es',
-      In (a, b) (newEdges' es es') -> In a (allSrcs es).
-  Proof.
-    intros a'' b'' es es' hi.
-    apply in_flat_map in hi; destruct hi as [(a, b) [hi hi']].
-    apply newEdges''_src_eq in hi'; subst.
-    eapply src_in_allSrcs; eauto.
-  Qed.
-
-  Lemma newEdges'_allDsts :
-    forall a c es es',
-      In (a, c) (newEdges' es es') -> In c (allDsts es').
-  Proof.
-    intros a c es es' hi.
-    apply in_flat_map in hi; destruct hi as [(a', b) [hi hi']].
-    eapply newEdges''_dst_in_allDsts; eauto.
-  Qed.
-
 
   Definition newEdges (es : list edge) : list edge :=
-    flat_map (fun e => newEdges'' e es) es.
+    flat_map (fun e => newEdges' e es) es.
 
   Lemma newEdges_allSrcs :
     forall a b es,
@@ -424,7 +387,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Proof.
     intros a'' b'' es hi.
     apply in_flat_map in hi; destruct hi as [(a, b) [hi hi']].
-    apply newEdges''_src_eq in hi'; subst.
+    apply newEdges'_src_eq in hi'; subst.
     eapply src_in_allSrcs; eauto.
   Qed.
 
@@ -434,23 +397,28 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Proof.
     intros a c es hi.
     apply in_flat_map in hi; destruct hi as [(a', b) [hi hi']].
-    eapply newEdges''_dst_in_allDsts; eauto.
+    eapply newEdges'_dst_in_allDsts; eauto.
   Qed.
 
-  (*
-  (* To do : it might be possible to remove the middle newEdges layer
-     I.e., have two functions instead of three *)
-  Definition newEdges (es : list edge) : list edge :=
-    newEdges' es es.
-*)
+  Lemma in_new_edges__not_in_old :
+    forall es es'' e'',
+      newEdges es = es''
+      -> In e'' es''
+      -> ~ In e'' es.
+  Proof.
+    intros es es'' e'' hn hi hi''; subst.
+    apply in_flat_map in hi; destruct hi as [(a', b) [hi hi']].
+    eapply in_new_edges__not_in_old'; eauto.
+  Qed.
+
   Lemma newEdges_allPossibleEdges :
     forall e es,
       In e (newEdges es) -> In e (allPossibleEdges es).
   Proof.
     intros (a, b) es hi.
     apply allSrcs_allDsts_allPossibleEdges_in_iff; split.
-    - eapply newEdges''_allSrcs; eauto.
-    - eapply newEdges'_allDsts; eauto. 
+    - eapply newEdges_allSrcs; eauto.
+    - eapply newEdges_allDsts; eauto. 
   Qed.
   
   Lemma newEdges_subset_allPossibleEdges :
@@ -462,24 +430,14 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply newEdges_allPossibleEdges; auto.
   Qed.
     
-  Lemma in_new_edges__not_in_old :
-    forall es es' e',
-      newEdges es = es'
-      -> In e' es'
-      -> ~ ES.In e' (setOf es).
-  Proof.
-    intros es es' e' hn hi hi'; unfold newEdges in hn.
-    eapply in_new_edges__not_in_old'; eauto.
-    apply setOf_in_iff; auto.
-  Qed.
-
   Lemma newEdges_cons__not_in_old :
     forall es es' e',
       newEdges es = e' :: es'
       -> ~ ES.In e' (setOf es).
   Proof.
     intros es es' e' hn hi.
-    eapply in_new_edges__not_in_old; eauto.
+    apply setOf_in_iff in hi.
+    eapply in_new_edges__not_in_old; eauto. 
     apply in_eq.
   Qed.
 
@@ -582,15 +540,33 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition edges_sound (g : grammar) (es : list edge) :=
     forall x y, In (x, y) es -> frame_multistep g x y.
 
-  Lemma transClosure_sound :
-    forall g es es' ha,
-      transClosure es ha = es'
+  Lemma transClosure_sound' :
+    forall g c (ha : Acc lt c) es es' ha',
+      c = m es
+      -> edges_sound g es
+      -> transClosure es ha' = es'
       -> edges_sound g es'.
   Proof.
-    intros g es es' ha ht x y hi.
+    intros g c ha'.
+    induction ha' as [ha' hlt IH]; intros es es'' ha ? hs ht.
+    apply transClosure_cases in ht.
+    destruct ht as [[hn ?] | [e' [es' [heq' ht]]]]; subst; auto.
+    eapply IH with (y := m (e' :: es' ++ es)); eauto.
+    - apply newEdges_cons_meas_lt; auto.
+    - (* newEdges preserves soundness *)
+      red. intros s d hi.
+      apply in_app_or with (l := e' :: es') in hi.
+      destruct hi as [hf | hb]; auto.
+      admit.
   Admitted.
 
-  Lemma 
+  Lemma transClosure_sound :
+    forall g es ha,
+      edges_sound g es
+      -> edges_sound g (transClosure es ha).
+  Proof.
+    intros; eapply transClosure_sound'; eauto.
+  Qed.
     
   Definition edges_correct_wrt_frame_multistep (g : grammar) (es : list edge) :=
     forall x y, frame_multistep g x y <-> In (x, y) es.
