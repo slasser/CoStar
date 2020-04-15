@@ -111,6 +111,13 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition allSrcs es : list suffix_frame := map src es.
   Definition allDsts es : list suffix_frame := map dst es.
 
+  Lemma src_in_allSrcs :
+    forall a b es,
+      In (a, b) es -> In a (allSrcs es).
+  Proof.
+    intros a b es hi; apply in_map_iff; exists (a, b); split; auto.
+  Qed.
+
   Definition allPossibleEdges es : list edge := 
     let ss := allSrcs es in
     let ds := allDsts es in
@@ -158,7 +165,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply in_map_iff in hi; destruct hi as [(a', b') [heq hi]]; sis; subst.
     apply in_app_or in hi; destruct hi as [hes' | hes]; auto.
     - apply hs in hes'; eapply allPossibleEdges_src_in_allSrcs; eauto.
-    - apply in_map_iff; exists (a, b'); auto.
+    - eapply src_in_allSrcs; eauto. 
   Qed.
 
   Lemma subset_allDsts_app__allDsts :
@@ -195,7 +202,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Proof.
     intros es es' hs (a, b) hi; apply subset__list_subset in hs;
     apply setOf_in_iff; apply setOf_in_iff in hi.
-    apply allSrcs_allDsts_allPossibleEdges_in_iff in hi; destruct hi as [ha hb].
+    apply allSrcs_allDsts_allPossibleEdges_in_iff in hi;
+    destruct hi as [ha hb].
     apply allSrcs_allDsts_allPossibleEdges_in_iff; split.
     - eapply subset_allSrcs_app__allSrcs; eauto.
     - eapply subset_allDsts_app__allDsts; eauto.
@@ -210,6 +218,15 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       if suffix_frame_eq_dec s' s then d :: dsts s es' else dsts s es'
     end.
 
+  Lemma dsts_allDsts :
+    forall s d es,
+      In d (dsts s es) -> In d (allDsts es).
+  Proof.
+    intros s d es hi; induction es as [| (s', d') es IH]; sis.
+    - inv hi.
+    - dmeq heq; subst; inv hi; auto.
+  Qed.
+
   Definition bin (e : edge) (es : list edge) : bool :=
     if in_dec edge_eq_dec e es then true else false.
 
@@ -217,7 +234,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     forall e es,
       bin e es = true <-> In e es.
   Proof.
-    intros e es; split; intros hi; unfold bin in *; destruct (in_dec _ _ _); tc.
+    intros e es; split; intros hi; unfold bin in *;
+    destruct (in_dec _ _ _); tc.
   Qed.
 
   Definition newEdges'' (e : edge) (es' : list edge) : list edge :=
@@ -239,6 +257,34 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     eapply bin_in_iff in hi'; tc.
   Qed.
 
+  Lemma newEdges''_src_eq :
+    forall a a' b c es,
+      In (a', c) (newEdges'' (a, b) es)
+      -> a' = a.
+  Proof.
+    intros a a' b c es hi.
+    apply in_map_iff in hi; destruct hi as [? [heq ?]]; inv heq; auto.
+  Qed.
+
+  Lemma newEdges''_dst_in_dsts :
+    forall a a' b c es,
+      In (a', c) (newEdges'' (a, b) es)
+      -> In c (dsts b es).
+  Proof.
+    intros a a' b c es hi.
+    apply in_map_iff in hi; destruct hi as [? [heq hi]]; inv heq.
+    apply filter_In in hi; destruct hi; auto.
+  Qed.
+
+  Lemma newEdges''_dst_in_allDsts :
+    forall a a' b c es,
+      In (a', c) (newEdges'' (a, b) es)
+      -> In c (allDsts es).
+  Proof.
+    intros a a' b c es hi.
+    eapply dsts_allDsts; eapply newEdges''_dst_in_dsts; eauto.
+  Qed.
+
   Definition newEdges' (es es' : list edge) : list edge :=
     flat_map (fun e => newEdges'' e es') es.
 
@@ -255,10 +301,48 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       + eapply in_new_edges__not_in_old''; eauto. 
       + eapply IH; eauto.
   Qed.
+
+  Lemma newEdges'_allSrcs :
+    forall a b es es',
+      In (a, b) (newEdges' es es') -> In a (allSrcs es).
+  Proof.
+    intros a'' b'' es es' hi.
+    apply in_flat_map in hi; destruct hi as [(a, b) [hi hi']].
+    apply newEdges''_src_eq in hi'; subst.
+    eapply src_in_allSrcs; eauto.
+  Qed.
+
+  Lemma newEdges'_allDsts :
+    forall a c es es',
+      In (a, c) (newEdges' es es') -> In c (allDsts es').
+  Proof.
+    intros a c es es' hi.
+    apply in_flat_map in hi; destruct hi as [(a', b) [hi hi']].
+    eapply newEdges''_dst_in_allDsts; eauto.
+  Qed.
   
   Definition newEdges (es : list edge) : list edge :=
     newEdges' es es.
 
+  Lemma newEdges_allPossibleEdges :
+    forall e es,
+      In e (newEdges es) -> In e (allPossibleEdges es).
+  Proof.
+    intros (a, b) es hi.
+    apply allSrcs_allDsts_allPossibleEdges_in_iff; split.
+    - eapply newEdges'_allSrcs; eauto.
+    - eapply newEdges'_allDsts; eauto. 
+  Qed.
+  
+  Lemma newEdges_subset_allPossibleEdges :
+    forall es es',
+      newEdges es = es'
+      -> ES.Subset (setOf es') (setOf (allPossibleEdges es)).
+  Proof.
+    intros es es' ? e hi; subst; apply setOf_in_iff; apply setOf_in_iff in hi.
+    apply newEdges_allPossibleEdges; auto.
+  Qed.
+    
   Lemma in_new_edges__not_in_old :
     forall es es' e',
       newEdges es = es'
@@ -270,7 +354,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply setOf_in_iff; auto.
   Qed.
 
-  Lemma in_new_edges__not_in_old_cons :
+  Lemma newEdges_cons__not_in_old :
     forall es es' e',
       newEdges es = e' :: es'
       -> ~ ES.In e' (setOf es).
@@ -280,31 +364,41 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply in_eq.
   Qed.
 
+  Lemma newEdges_cons__allPossibleEdges :
+    forall e' es es',
+      newEdges es = e' :: es'
+      -> ES.In e' (setOf (allPossibleEdges es)).
+  Proof.
+    intros e' es es' hn; apply setOf_in_iff.
+    apply newEdges_allPossibleEdges; rewrite hn; apply in_eq.
+  Qed.
+
   Definition m (es : list edge) : nat :=
     ES.cardinal (ES.diff (setOf (allPossibleEdges es)) (setOf es)).
 
-  Program Fixpoint transClosure (g  : grammar)
-                                (es : list edge)
+  Program Fixpoint transClosure (es : list edge)
                                 { measure (m es) } : list edge :=
     let es' := newEdges es in
     match es' as es'' return es' = es'' -> _ with
     | []        => fun _   => es
-    | e' :: es' => fun heq => transClosure g (e' :: es' ++ es)
+    | e' :: es' => fun heq => transClosure (e' :: es' ++ es)
     end eq_refl.
   Next Obligation.
     unfold m.
     apply EP.MP.subset_cardinal_lt with (x := e').
     - apply equal_subset__subset_diffs.
       + apply allPossibleEdges_subset__app_subset
-              with (es' := e' :: es').
-        admit.
+          with (es' := e' :: es').
+        apply newEdges_subset_allPossibleEdges; auto.
       + apply setOf_subset_app with (es := e' :: _).
-    - pose proof heq as hn; eapply in_new_edges__not_in_old_cons in hn; eauto.
-      assert (ES.In e' (setOf (allPossibleEdges es))) by admit.
+    - assert (hn : ~ ES.In e' (setOf es)).
+      { eapply newEdges_cons__not_in_old; eauto. }
+      assert (hi : ES.In e' (setOf (allPossibleEdges es))).
+      { eapply newEdges_cons__allPossibleEdges; eauto. }
       ED.fsetdec.
     - intros hi; eapply ES.diff_spec in hi; destruct hi as [? hi].
       eapply hi; simpl; ED.fsetdec.
-  Admitted.
+  Defined.
 
   Definition stable (fr : suffix_frame) : bool :=
     match fr with
@@ -321,6 +415,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     intros fr frs hs; inv hs; auto. 
   Qed.
 
+  (*
   Fixpoint stablePositions' x ys : list suffix_frame :=
     match ys with
     | []          => []
@@ -334,6 +429,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   (* might not be necessary *)
   Definition reflEdges (g : grammar) : list edge :=
     map (fun p => (p, p)) (stablePositions g).
+   *)
   
   Definition dstStable (e : edge) : bool :=
     let (_, b) := e in stable b.
@@ -341,9 +437,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition stableEdges (es : list edge) : list edge :=
     filter dstStable es.
 
-  (* Maybe we don't need the refl edges *)
   Definition mkGraphEdges (g : grammar) : list edge :=
-    stableEdges (transClosure (epsilonEdges g)) ++ (reflEdges g).
+    stableEdges (transClosure (epsilonEdges g)).
 
   (* A closure graph is a map where each key K is a suffix frame 
      (i.e., grammar location), and each value V is a list of frames 
@@ -364,7 +459,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition mkClosureMap (g : grammar) : closure_map :=
     fromEdges (mkGraphEdges g).
 
-  Definition destFrames (cm : closure_map) (fr : suffix_frame) : list suffix_frame :=
+  Definition destFrames (fr : suffix_frame) (cm : closure_map) : list suffix_frame :=
     match FM.find fr cm with
     | Some frs => frs
     | None     => []
@@ -404,6 +499,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     inv_suffix_frames_wf hw   hi  hw'  ; rew_anr.
     inv_suffix_frames_wf hw'  hi' hw'' ; eauto.
   Qed.
+
+  (* To do : take out the refl *)
 
   Definition frame_multistep (g : grammar) :
     suffix_frame -> suffix_frame -> Prop :=
