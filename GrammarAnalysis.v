@@ -13,7 +13,15 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition src (e : edge) : suffix_frame := fst e.
   Definition dst (e : edge) : suffix_frame := snd e.
 
+(*
+  X --> [a,Y]
+  Y --> [Z,c]
+  Z --> [   ]
+
+ *)
   (* Correctness spec *)
+  (* to do : need an initial push case,
+     and a corresponding function for computing those edges *)
   Inductive frame_step (g : grammar) :
     suffix_frame -> suffix_frame -> Prop :=
   | Fstep_final_ret :
@@ -27,10 +35,11 @@ Module GrammarAnalysisFn (Import D : Defs.T).
         -> frame_step g (SF (Some y) [])
                         (SF (Some x) suf)
   | Fstep_push :
-      forall o x ys suf,
-        In (x, ys) g
-        -> frame_step g (SF o (NT x :: suf))
-                        (SF (Some x) ys).
+      forall x y pre suf rhs,
+        In (x, pre ++ NT y :: suf) g
+        -> In (y, rhs) g
+        -> frame_step g (SF (Some x) (NT y :: suf))
+                        (SF (Some y) rhs).
 
   Hint Constructors frame_step : core.
 
@@ -40,7 +49,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition step_edges_complete (g : grammar) (es : list edge) :=
     forall x y, frame_step g x y -> In (x, y) es.
 
-
+  
 
   Definition frame_multistep (g : grammar) :
     suffix_frame -> suffix_frame -> Prop :=
@@ -53,6 +62,9 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Definition mstep_edges_complete (g : grammar) (es : list edge) :=
     forall x y, frame_multistep g x y -> In (x, y) es.
+
+  Definition mstep_edges_correct (g : grammar) (es : list edge) :=
+    mstep_edges_sound g es /\ mstep_edges_complete g es.
 
   (* COMPUTATION OF SINGLE-STEP FRAME CLOSURE EDGES *)
   
@@ -76,12 +88,27 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     induction suf as [| [a|y] suf IH]; sis; intros pre hi' hi; rew_anr.
     - inv hi.
     - apply IH with (pre := pre ++ [T a]); apps.
-    - apply in_app_or in hi. destruct hi as [hi | hi].
+    - apply in_app_or in hi; destruct hi as [hi | hi].
       + apply in_map_iff in hi; destruct hi as [rhs [heq hi]].
-        inv heq; apply rhssForNt_in_iff in hi; auto.
+        inv heq; apply rhssForNt_in_iff in hi; eauto.
       + apply IH with (pre := pre ++ [NT y]); apps.
   Qed.
-  
+
+  Lemma pushEdges'_complete :
+    forall g x y rhs pre suf rhs',
+      rhs = pre ++ NT y :: suf
+      -> In (y, rhs') g
+      -> In (SF (Some x) (NT y :: suf), SF (Some y) rhs')
+            (pushEdges' g x rhs).
+  Proof.
+    intros g x y rhs; induction rhs as [| [a | y'] suf' IH]; intros pre suf rhs' heq hi; sis.
+    - apply app_cons_not_nil in heq; inv heq.
+    - destruct pre; sis; inv heq; eauto.
+    - destruct pre; sis; inv heq; apply in_or_app; eauto.
+      left; apply in_map_iff; eexists; split; eauto.
+      apply rhssForNt_in_iff; auto.
+  Qed.
+
   Definition pushEdges (g : grammar) : list edge :=
     flat_map (fun p => pushEdges' g (lhs p) (rhs p)) g.
 
@@ -93,6 +120,18 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     intros g s d hi.
     apply in_flat_map in hi; destruct hi as [(x, ys) [hi hi']]; sis.
     eapply pushEdges'_sound with (pre := []); eauto.
+  Qed.
+
+  Lemma pushEdges_complete :
+    forall g x y pre suf rhs,
+      In (x, pre ++ NT y :: suf) g
+      -> In (y, rhs) g
+      -> In (SF (Some x) (NT y :: suf), SF (Some y) rhs)
+            (pushEdges g).
+  Proof.
+    intros g x y pre suf rhs hi hi'.
+    apply in_flat_map; exists (x, pre ++ NT y :: suf); split; auto; sis.
+    eapply pushEdges'_complete; eauto.
   Qed.
   
   Fixpoint returnEdges' (x : nonterminal) (ys : list symbol) : list edge :=
@@ -117,6 +156,18 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       + inv hh; eauto.
       + apply IH with (pre := pre ++ [NT y]); apps.
   Qed.
+  
+  Lemma returnEdges'_complete :
+    forall x y rhs pre suf,
+      rhs = pre ++ NT y :: suf
+      -> In (SF (Some y) [], SF (Some x) suf)
+            (returnEdges' x rhs).
+  Proof.
+    intros x y rhs; induction rhs as [| [a | y'] suf' IH]; intros pre suf heq; sis.
+    - apply app_cons_not_nil in heq; inv heq.
+    - destruct pre; sis; inv heq; eauto.
+    - destruct pre; sis; inv heq; eauto.
+  Qed.
 
   Definition returnEdges (g : grammar) : list edge :=
     flat_map (fun p => returnEdges' (lhs p) (rhs p)) g.
@@ -128,6 +179,16 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     intros g s d hi.
     apply in_flat_map in hi; destruct hi as [(x, ys) [hi hi']]; sis.
     eapply returnEdges'_sound with (pre := []); eauto.
+  Qed.
+
+  Lemma returnEdges_complete :
+    forall g x y pre suf,
+      In (x, pre ++ NT y :: suf) g
+      -> In (SF (Some y) [], SF (Some x) suf) (returnEdges g).
+  Proof.
+    intros g x y pre suf hi.
+    apply in_flat_map; eexists; split; eauto; sis.
+    eapply returnEdges'_complete; eauto.
   Qed.
 
   Definition finalReturnEdges g : list edge :=
@@ -142,21 +203,49 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply lhss_exists_rhs in hi; destruct hi as [ys hi]; eauto.
   Qed.
 
+  Lemma finalReturnEdges_complete :
+    forall g x ys,
+      In (x, ys) g
+      -> In (SF (Some x) [], SF None []) (finalReturnEdges g).
+  Proof.
+    intros g x ys hi.
+    apply in_map_iff; eexists; split; eauto.
+    eapply production_lhs_in_lhss; eauto.
+  Qed.
+  
   Definition epsilonEdges g : list edge :=
     pushEdges g ++ returnEdges g ++ finalReturnEdges g.
 
-  Lemma epsilonEdges_sound :
-    forall g es s d,
-      epsilonEdges g = es
-      -> In (s, d) es
-      -> frame_step g s d.
+  Lemma epsilonEdges__step_edges_sound :
+    forall g,
+      step_edges_sound g (epsilonEdges g).
   Proof.
-    intros g es s d he hi; subst; apply in_app_or in hi.
+    intros g s d hi; apply in_app_or in hi.
     destruct hi as [hp | hrf];
       [.. | apply in_app_or in hrf; destruct hrf as [hr | hf]].
     - apply pushEdges_sound        ; auto.
     - apply returnEdges_sound      ; auto.
     - apply finalReturnEdges_sound ; auto.
+  Qed.
+
+  Lemma epsilonEdges__step_edges_complete :
+    forall g,
+      step_edges_complete g (epsilonEdges g).
+  Proof.
+    intros g s d hs; unfold epsilonEdges; inv hs.
+    - do 2 (apply in_or_app; right).
+      eapply finalReturnEdges_complete; eauto.
+    - apply in_or_app; right; apply in_or_app; left.
+      eapply returnEdges_complete; eauto.
+    - apply in_or_app; left.
+      eapply pushEdges_complete; eauto.
+  Qed.
+
+  Lemma step_edges_sound__mstep_edges_sound :
+    forall g es,
+      step_edges_sound g es -> mstep_edges_sound g es.
+  Proof.
+    intros g es hs s d hi; apply t_step; auto.
   Qed.
 
   (* FINITE SETS OF EDGES -- USED IN TRANSITIVE CLOSURE TERMINATION PROOF *)
@@ -724,7 +813,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       -> transClosure es ha = es'
       -> mstep_edges_complete g es'.
   Proof.
-    intros g es es' ha hc ht x y hm; subst; induction hm.
+    intros g es es' ha hc ht x y hm; subst. induction hm.
     - eapply transClosure_preserves_step_edges_complete; eauto.
     - eapply transClosure_result_trans; eauto.
   Qed.
@@ -767,8 +856,34 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     filter dstStable es.
 
   Definition mkGraphEdges (g : grammar) : list edge :=
-    stableEdges (transClosure (epsilonEdges g)).
+    stableEdges (transClosure (epsilonEdges g) (lt_wf _)).
 
+  Lemma mkGraphEdges_sound :
+    forall g s d,
+      In (s, d) (mkGraphEdges g)
+      -> frame_multistep g s d /\ stable d = true.
+  Proof.
+    intros g s d hi; unfold mkGraphEdges in hi.
+    apply filter_In in hi; destruct hi as [hi hs]; split.
+    - eapply transClosure_preserves_soundness; eauto.
+      apply step_edges_sound__mstep_edges_sound.
+      apply epsilonEdges__step_edges_sound.
+    - unfold dstStable in hs; auto.
+  Qed.
+
+  Lemma mkGraphEdges_complete :
+    forall g s d,
+      frame_multistep g s d
+      -> stable d = true
+      -> In (s, d) (mkGraphEdges g).
+  Proof.
+    intros g s d hm hs; unfold mkGraphEdges.
+    apply filter_In; split.
+    - eapply transClosure_complete; eauto.
+      apply epsilonEdges__step_edges_complete.
+    - unfold dstStable; auto.
+  Qed.
+  
   (* A closure graph is a map where each key K is a suffix frame 
      (i.e., grammar location), and each value V is a list of frames 
      that are epsilon-reachable from K *)
@@ -785,10 +900,80 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition fromEdges (es : list edge) : closure_map :=
     fold_right addEdge (FM.empty (list suffix_frame)) es.
 
+  Lemma fromEdges_sound :
+    forall es s d ds,
+      FM.MapsTo s ds (fromEdges es)
+      -> In d ds
+      -> In (s, d) es.
+  Proof.
+    intros es; induction es as [| (s', d') es IH]; intros s d ds hm hi.
+    - eapply FMF.empty_mapsto_iff; eauto.
+    - simpl in hm; dmeq hf.
+      + (* value already exists for key *)
+        apply FMF.add_mapsto_iff in hm.
+        destruct hm as [[heq heq'] | [hneq hm]]; subst.
+        * destruct hi as [hh | ht]; subst.
+          -- apply in_eq.
+          -- apply FMF.find_mapsto_iff in hf.
+             eapply IH in hf; eauto.
+             apply in_cons; auto.
+        * eapply IH in hm; eauto.
+          apply in_cons; auto.
+      + apply FMF.add_mapsto_iff in hm.
+        destruct hm as [[heq heq'] | [hneq hm]]; subst.
+        * apply in_singleton_eq in hi; subst.
+          apply in_eq.
+        * eapply IH in hm; eauto.
+          apply in_cons; auto.
+  Qed.
+
+  Lemma fromEdges_complete :
+    forall es s d,
+      In (s, d) es
+      -> (exists ds,
+             FM.MapsTo s ds (fromEdges es)
+             /\ In d ds).
+  Proof.
+    intros es; induction es as [| (s', d') es IH]; intros s d hi.
+    - inv hi. 
+    - destruct hi as [hh | ht]; sis.
+      + inv hh.
+        destruct (FM.find _ _) as [ds' |] eqn:hf.
+        * (* value already exists for key *)
+          exists (d :: ds'); split.
+          -- apply FMF.add_mapsto_iff; auto.
+          -- apply in_eq.
+        * exists [d]; split.
+          -- apply FMF.add_mapsto_iff; auto.
+          -- apply in_eq.
+      + destruct (FM.find _ _) as [ds' |] eqn:hf.
+        * destruct (FMF.eq_dec s' s); subst.
+          -- exists (d' :: ds'); split.
+             ++ apply FMF.add_mapsto_iff; auto.
+             ++ apply IH in ht.
+                destruct ht as [ds [hm hi]].
+                apply FMF.find_mapsto_iff in hf.
+                eapply FMF.MapsTo_fun in hm; eauto; subst.
+                apply in_cons; auto.
+          -- apply IH in ht.
+             destruct ht as [ds [hm hi]].
+             exists ds; split; auto.
+             apply FMF.add_mapsto_iff; auto.
+        * destruct (FMF.eq_dec s' s); subst.
+          -- exfalso.
+             apply IH in ht.
+             destruct ht as [ds [hm hi]].
+             apply FMF.find_mapsto_iff in hm; tc.
+          -- apply IH in ht.
+             destruct ht as [ds [hm hi]].
+             exists ds; split; auto.
+             apply FMF.add_mapsto_iff; auto.
+  Qed.
+
   Definition mkClosureMap (g : grammar) : closure_map :=
     fromEdges (mkGraphEdges g).
-
-  Definition destFrames (fr : suffix_frame) (cm : closure_map) : list suffix_frame :=
+  
+   Definition destFrames (fr : suffix_frame) (cm : closure_map) : list suffix_frame :=
     match FM.find fr cm with
     | Some frs => frs
     | None     => []
@@ -805,23 +990,24 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       -> frame_step g fr fr'.
   Proof.
     intros g av av' ? ? pr pr' fr fr' frs frs' ? ? hw hc; subst; inv hc; eauto.
-    inv_suffix_frames_wf hw   hi  hw'  ; rew_anr.
-    inv_suffix_frames_wf hw'  hi' hw'' ; eauto.
-  Qed.
+    - inv_suffix_frames_wf hw   hi  hw'  ; rew_anr.
+      inv_suffix_frames_wf hw'  hi' hw'' ; eauto.
+    - admit. 
+  Admitted.
 
-  Lemma closure_multistep__frame_multistep' :
+  Lemma closure_multistep__frame_step_trc' :
     forall g av av' sp sp',
       suffix_stack_wf g (stack sp)
       -> closure_multistep g av sp av' sp'
       -> (forall pr pr' fr fr' frs frs',
              sp     = Sp pr  (fr, frs)
              -> sp' = Sp pr' (fr', frs')
-             -> frame_multistep g fr fr').
+             -> clos_refl_trans_1n _ (frame_step g) fr fr').
   Proof.
     intros g av av' sp sp' hw hc. 
     induct_cm hc hs hc' IH; intros pr pr' fr fr' ? ? heq heq'; subst; sis.
-    - inv heq; inv heq'; apply rt_refl.
-    - inv heq; inv heq'; apply rt_refl.
+    - inv heq; inv heq'; apply rt1n_refl.
+    - inv heq; inv heq'; apply rt1n_refl.
     - pose proof hs as hs'.
       inv hs'.
       + (* return case *)
@@ -830,44 +1016,76 @@ Module GrammarAnalysisFn (Import D : Defs.T).
         * (* final return case *)
           inv hw; rew_anr.
           inv H7.
-          eapply rt_trans.
-          -- sis. eapply rt_step. eapply Fstep_final_ret; eauto.
+          eapply rt1n_trans.
+          -- sis; eapply Fstep_final_ret; eauto.
           -- eapply IH; eauto. sis; auto. 
         * (* nonfinal return case *)
-          eapply rt_trans.
-          -- sis. eapply rt_step. eapply Fstep_nonfinal_ret; eauto.
-          -- eapply IH; eauto; sis. eapply return_preserves_suffix_frames_wf_invar; eauto.
+          eapply rt1n_trans.
+          -- sis; eapply Fstep_nonfinal_ret; eauto.
+          -- eapply IH; eauto; sis.
+             eapply return_preserves_suffix_frames_wf_invar; eauto.
       + (* push case *)
         eapply closure_step__frame_step in hs; eauto.
         inv hs.
-        eapply rt_trans.
-        * sis. eapply rt_step. eapply Fstep_push; eauto.
+        eapply rt1n_trans.
+        * sis; eapply Fstep_push; eauto.
         * eapply IH; eauto; sis.
           apply push_preserves_suffix_frames_wf_invar; eauto.
   Qed.
 
-  Lemma closure_multistep__frame_multistep :
+  Lemma closure_multistep__frame_step_trc :
     forall g av av' sp sp' pr pr' fr fr' frs frs',
       sp     = Sp pr  (fr, frs)
       -> sp' = Sp pr' (fr', frs')
       -> suffix_stack_wf g (stack sp)
       -> closure_multistep g av sp av' sp'
-      -> frame_multistep g fr fr'.
+      -> clos_refl_trans_1n _ (frame_step g) fr fr'.
   Proof.
-    intros; eapply closure_multistep__frame_multistep'; eauto.
+    intros; eapply closure_multistep__frame_step_trc'; eauto.
   Qed.
 
-  (* Correctness spec for the mkClosureMap function *)
+  Definition closure_map_sound g cm :=
+    forall fr fr' frs',
+      FM.MapsTo fr frs' cm
+      -> In fr' frs'
+      -> (frame_multistep g fr fr' /\ stable fr' = true).
+
   Definition closure_map_complete g cm :=
     forall fr fr',
       frame_multistep g fr fr'
       -> stable fr' = true
-      -> exists frs', FM.MapsTo fr frs' cm
-                      /\ In fr' frs'.
-  
-  Theorem mkClosureMap_result_complete :
+      -> exists frs',
+          FM.MapsTo fr frs' cm
+          /\ In fr' frs'.
+
+  Definition closure_map_correct g cm :=
+    closure_map_sound g cm /\ closure_map_complete g cm.
+
+  Lemma mkClosureMap_sound :
+    forall g,
+      closure_map_sound g (mkClosureMap g).
+  Proof.
+    intros g s d ds hm hi; unfold mkClosureMap in hm.
+    eapply fromEdges_sound in hm; eauto.
+    apply mkGraphEdges_sound; auto.
+  Qed.
+
+  Lemma mkClosureMap_complete :
     forall g,
       closure_map_complete g (mkClosureMap g).
-  Admitted.
+  Proof.
+    intros g s d hf hs; unfold mkClosureMap.
+    apply fromEdges_complete.
+    apply mkGraphEdges_complete; auto.
+  Qed.
+    
+  Theorem mkClosureMap_result_correct :
+    forall g,
+      closure_map_correct g (mkClosureMap g).
+  Proof.
+    intros g; split.
+    - apply mkClosureMap_sound.
+    - apply mkClosureMap_complete.
+  Qed.
   
 End GrammarAnalysisFn.
