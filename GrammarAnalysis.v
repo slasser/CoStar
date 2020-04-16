@@ -29,10 +29,19 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Hint Constructors frame_step : core.
 
+  Definition frame_multistep (g : grammar) :
+    suffix_frame -> suffix_frame -> Prop :=
+    clos_trans _ (frame_step g).
+
+  Hint Constructors clos_trans : core.
+
   Definition edge := (suffix_frame * suffix_frame)%type.
 
   Definition src (e : edge) : suffix_frame := fst e.
   Definition dst (e : edge) : suffix_frame := snd e.
+
+  Definition edges_sound (g : grammar) (es : list edge) :=
+    forall x y, In (x, y) es -> frame_multistep g x y.
 
   (* COMPUTATION OF SINGLE-STEP FRAME CLOSURE EDGES *)
   
@@ -320,6 +329,15 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     - dmeq heq; subst; inv hi; auto.
   Qed.
 
+  Lemma dsts_in :
+    forall a b es,
+      In b (dsts a es) -> In (a, b) es.
+  Proof.
+    intros a b es hi; induction es as [| (a', b') es IH]; sis.
+    - inv hi.
+    - dm; subst; inv hi; auto.
+  Qed.
+
   Definition bin (e : edge) (es : list edge) : bool :=
     if in_dec edge_eq_dec e es then true else false.
 
@@ -359,6 +377,17 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply in_map_iff in hi; destruct hi as [? [heq ?]]; inv heq; auto.
   Qed.
 
+  Lemma newEdges'_rew_src :
+    forall a a' b c es,
+      In (a', c) (newEdges' (a, b) es)
+      -> In (a, c) (newEdges' (a, b) es).
+  Proof.
+    intros a a' b c es; intros hi.
+    assert (heq : a' = a).
+    { eapply newEdges'_src_eq; eauto. }
+    subst; auto.
+  Qed.
+
   Lemma newEdges'_dst_in_dsts :
     forall a a' b c es,
       In (a', c) (newEdges' (a, b) es)
@@ -376,6 +405,29 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Proof.
     intros a a' b c es hi.
     eapply dsts_allDsts; eapply newEdges'_dst_in_dsts; eauto.
+  Qed.
+
+  Lemma newEdges'_midpt_endpt :
+    forall a a' b c es,
+      In (a', c) (newEdges' (a, b) es)
+      -> In (b, c) es.
+  Proof.
+    intros a a' b c es hi.
+    apply dsts_in.
+    eapply newEdges'_dst_in_dsts; eauto.
+  Qed.
+    
+  Lemma newEdges'_preserves_soundness :
+    forall g s s' d d' es,
+      edges_sound g es
+      -> In (s, d) es
+      -> In (s', d') (newEdges' (s, d) es)
+      -> frame_multistep g s' d'.
+  Proof.
+    intros g s s' d d' es hs hi hi'.
+    apply t_trans with (y := d); apply hs.
+    - apply newEdges'_src_eq in hi'; subst; auto.
+    - eapply newEdges'_midpt_endpt; eauto.
   Qed.
 
   Definition newEdges (es : list edge) : list edge :=
@@ -485,6 +537,18 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply newEdges_cons_meas_lt; auto.
   Defined.
 
+  Lemma newEdges_preserves_soundness :
+    forall g es es',
+      edges_sound g es
+      -> newEdges es = es'
+      -> edges_sound g (es' ++ es).
+  Proof.
+    intros g es es' hs hn s d hi; subst.
+    apply in_app_or in hi; destruct hi as [hf | hb]; auto.
+    apply in_flat_map in hf; destruct hf as [(s', d') [hi hi']].
+    eapply newEdges'_preserves_soundness; eauto.
+  Qed.
+
   Fixpoint transClosure (es : list edge) (ha : Acc lt (m es)) {struct ha} : list edge :=
     match newEdges es as n return newEdges es = n -> _ with
     | []        => fun _   => es
@@ -531,15 +595,6 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     eapply transClosure_cases'; eauto.
   Qed.          
 
-  Definition frame_multistep (g : grammar) :
-    suffix_frame -> suffix_frame -> Prop :=
-    clos_trans _ (frame_step g).
-
-  Hint Constructors clos_trans : core.
-
-  Definition edges_sound (g : grammar) (es : list edge) :=
-    forall x y, In (x, y) es -> frame_multistep g x y.
-
   Lemma transClosure_sound' :
     forall g c (ha : Acc lt c) es es' ha',
       c = m es
@@ -553,12 +608,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     destruct ht as [[hn ?] | [e' [es' [heq' ht]]]]; subst; auto.
     eapply IH with (y := m (e' :: es' ++ es)); eauto.
     - apply newEdges_cons_meas_lt; auto.
-    - (* newEdges preserves soundness *)
-      red. intros s d hi.
-      apply in_app_or with (l := e' :: es') in hi.
-      destruct hi as [hf | hb]; auto.
-      admit.
-  Admitted.
+    - eapply newEdges_preserves_soundness with (es' := e' :: es'); eauto.
+  Qed.
 
   Lemma transClosure_sound :
     forall g es ha,
