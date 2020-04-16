@@ -237,3 +237,27 @@ Proof.
   eapply t_trans; eauto.
   apply t_step; auto.
 Qed.
+
+
+Lemma flat_map_nil__f_nil :
+  forall X Y (f : X -> list Y) xs x,
+    flat_map f xs = []
+    -> In x xs
+    -> f x = [].
+Proof.
+  intros X Y f xs x hf hi; induction xs as [| x' xs IH]; sis.
+  - inv hi.
+  - destruct hi; subst; apply app_eq_nil in hf; destruct hf; auto.
+Qed.    
+
+Lemma filter_nil__f_false :
+  forall X (f : X -> bool) (x : X) (xs : list X),
+    filter f xs = []
+    -> In x xs
+    -> f x = false.
+Proof.
+  intros X f x xs hf hi.
+  induction xs as [| x' xs IH]; sis.
+  - inv hi.
+  - destruct hi as [hh | ht]; subst; dm; auto; inv hf.
+Qed.

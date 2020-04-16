@@ -8,6 +8,11 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Module Export LLPC := LLPredictionCompleteFn D.
 
+  Definition edge := (suffix_frame * suffix_frame)%type.
+
+  Definition src (e : edge) : suffix_frame := fst e.
+  Definition dst (e : edge) : suffix_frame := snd e.
+
   (* Correctness spec *)
   Inductive frame_step (g : grammar) :
     suffix_frame -> suffix_frame -> Prop :=
@@ -29,19 +34,25 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Hint Constructors frame_step : core.
 
+  Definition step_edges_sound (g : grammar) (es : list edge) :=
+    forall x y, In (x, y) es -> frame_step g x y.
+
+  Definition step_edges_complete (g : grammar) (es : list edge) :=
+    forall x y, frame_step g x y -> In (x, y) es.
+
+
+
   Definition frame_multistep (g : grammar) :
     suffix_frame -> suffix_frame -> Prop :=
     clos_trans _ (frame_step g).
 
   Hint Constructors clos_trans : core.
 
-  Definition edge := (suffix_frame * suffix_frame)%type.
-
-  Definition src (e : edge) : suffix_frame := fst e.
-  Definition dst (e : edge) : suffix_frame := snd e.
-
-  Definition edges_sound (g : grammar) (es : list edge) :=
+  Definition mstep_edges_sound (g : grammar) (es : list edge) :=
     forall x y, In (x, y) es -> frame_multistep g x y.
+
+  Definition mstep_edges_complete (g : grammar) (es : list edge) :=
+    forall x y, frame_multistep g x y -> In (x, y) es.
 
   (* COMPUTATION OF SINGLE-STEP FRAME CLOSURE EDGES *)
   
@@ -329,26 +340,28 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     - dmeq heq; subst; inv hi; auto.
   Qed.
 
-  Lemma dsts_in :
+  Lemma dsts_in_iff :
     forall a b es,
-      In b (dsts a es) -> In (a, b) es.
+      In b (dsts a es) <-> In (a, b) es.
   Proof.
-    intros a b es hi; induction es as [| (a', b') es IH]; sis.
-    - inv hi.
+    intros a b es; split; intros hi; induction es as [| (a', b') es IH]; sis; try solve [inv hi].
     - dm; subst; inv hi; auto.
+    - destruct hi as [hh | ht]; dms; tc; subst.
+      + inv hh; apply in_eq.
+      + apply in_cons; auto.
   Qed.
 
   Definition bin (e : edge) (es : list edge) : bool :=
     if in_dec edge_eq_dec e es then true else false.
 
-  Lemma bin_in_iff :
+  Lemma bin_true_in_iff :
     forall e es,
       bin e es = true <-> In e es.
   Proof.
     intros e es; split; intros hi; unfold bin in *;
     destruct (in_dec _ _ _); tc.
   Qed.
-
+  
   Definition newEdges' (e : edge) (es' : list edge) : list edge :=
     let (a, b) := e in
     let cs     := filter (fun c => negb (bin (a, c) es')) (dsts b es')
@@ -365,7 +378,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply in_map_iff in hi ; destruct hi as [c [? hi]]; subst.
     apply filter_In  in hi ; destruct hi as [hi hn].
     apply negb_true_iff in hn.
-    eapply bin_in_iff in hi'; tc.
+    eapply bin_true_in_iff in hi'; tc.
   Qed.
 
   Lemma newEdges'_src_eq :
@@ -413,13 +426,13 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       -> In (b, c) es.
   Proof.
     intros a a' b c es hi.
-    apply dsts_in.
+    apply dsts_in_iff.
     eapply newEdges'_dst_in_dsts; eauto.
   Qed.
     
   Lemma newEdges'_preserves_soundness :
     forall g s s' d d' es,
-      edges_sound g es
+      mstep_edges_sound g es
       -> In (s, d) es
       -> In (s', d') (newEdges' (s, d) es)
       -> frame_multistep g s' d'.
@@ -428,6 +441,19 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply t_trans with (y := d); apply hs.
     - apply newEdges'_src_eq in hi'; subst; auto.
     - eapply newEdges'_midpt_endpt; eauto.
+  Qed.
+
+  Lemma newEdges'_nil_trans :
+    forall es x y z,
+      newEdges' (x, y) es = []
+      -> In (y, z) es
+      -> In (x, z) es.
+  Proof.
+    intros es x y z hn hi.
+    apply map_eq_nil in hn.
+    apply filter_nil__f_false with (x := z) in hn.
+    - apply bin_true_in_iff; apply negb_false_iff; auto.
+    - apply dsts_in_iff; auto.
   Qed.
 
   Definition newEdges (es : list edge) : list edge :=
@@ -539,16 +565,28 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Lemma newEdges_preserves_soundness :
     forall g es es',
-      edges_sound g es
+      mstep_edges_sound g es
       -> newEdges es = es'
-      -> edges_sound g (es' ++ es).
+      -> mstep_edges_sound g (es' ++ es).
   Proof.
     intros g es es' hs hn s d hi; subst.
     apply in_app_or in hi; destruct hi as [hf | hb]; auto.
     apply in_flat_map in hf; destruct hf as [(s', d') [hi hi']].
     eapply newEdges'_preserves_soundness; eauto.
   Qed.
-
+  
+  Lemma newEdges_result_trans :
+    forall es x y z,
+      newEdges es = []
+      -> In (x, y) es
+      -> In (y, z) es
+      -> In (x, z) es.
+  Proof.
+    intros es x y z hn hi hi'.
+    apply flat_map_nil__f_nil with (x := (x, y)) in hn; auto.
+    eapply newEdges'_nil_trans; eauto.
+  Qed.
+  
   Fixpoint transClosure (es : list edge) (ha : Acc lt (m es)) {struct ha} : list edge :=
     match newEdges es as n return newEdges es = n -> _ with
     | []        => fun _   => es
@@ -595,12 +633,14 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     eapply transClosure_cases'; eauto.
   Qed.          
 
-  Lemma transClosure_sound' :
+  (* Soundness of transitive closure algorithm *)
+  
+  Lemma transClosure_preserves_soundness' :
     forall g c (ha : Acc lt c) es es' ha',
       c = m es
-      -> edges_sound g es
+      -> mstep_edges_sound g es
       -> transClosure es ha' = es'
-      -> edges_sound g es'.
+      -> mstep_edges_sound g es'.
   Proof.
     intros g c ha'.
     induction ha' as [ha' hlt IH]; intros es es'' ha ? hs ht.
@@ -611,87 +651,83 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     - eapply newEdges_preserves_soundness with (es' := e' :: es'); eauto.
   Qed.
 
-  Lemma transClosure_sound :
+  Lemma transClosure_preserves_soundness :
     forall g es ha,
-      edges_sound g es
-      -> edges_sound g (transClosure es ha).
+      mstep_edges_sound g es
+      -> mstep_edges_sound g (transClosure es ha).
   Proof.
-    intros; eapply transClosure_sound'; eauto.
+    intros; eapply transClosure_preserves_soundness'; eauto.
   Qed.
-    
-  Definition edges_correct_wrt_frame_multistep (g : grammar) (es : list edge) :=
-    forall x y, frame_multistep g x y <-> In (x, y) es.
 
-  Lemma transClosure_complete :
-    forall g es es' ha,
-      transClosure es ha = es'
-      -> es'.
+  (* Completeness of transitive closure algorithm *)
+
+  Lemma transClosure_retains_elements' :
+    forall c (ha : Acc lt c) es es' ha' x y,
+      c = m es
+      -> In (x, y) es
+      -> transClosure es ha' = es'
+      -> In (x, y) es'.
   Proof.
-    intros g es es' ha ht x y hm.
-    induction hm.
-    - admit.
-    - assert (Hass : forall x y z,
-                 In (x, y) es'
-                 -> In (y, z) es'
-                 -> In (x, z) es') by admit.
-      eauto.
-    forall g c (ha : Acc lt c) es (ha' : Acc lt (m es)) es',
+    intros c ha; induction ha as  [ha' hlt IH]; intros es es'' ha x y ? hi ht.
+    apply transClosure_cases in ht.
+    destruct ht as [[hn ?] | [e' [es' [heq' ht]]]]; subst; auto.
+    eapply IH  with (es := e' :: es' ++ es); eauto.
+    + apply newEdges_cons_meas_lt; auto.
+    + apply in_or_app with (l := e' :: es'); auto.
+  Qed.
+
+  Lemma transClosure_retains_elements :
+    forall es ha x y,
+      In (x, y) es
+      -> In (x, y) (transClosure es ha).
+  Proof.
+    intros; eapply transClosure_retains_elements'; eauto.
+  Qed.
+
+  Lemma transClosure_preserves_step_edges_complete :
+    forall g es ha,
+      step_edges_complete g es
+      -> step_edges_complete g (transClosure es ha).
+  Proof.
+    intros g es ha hc x y hs; apply transClosure_retains_elements; auto.
+  Qed.
+
+  Lemma transClosure_result_trans' :
+    forall c (ha : Acc lt c) es es' ha' x y z,
       c = m es
       -> transClosure es ha' = es'
-      -> frame_multistep_edges_complete g es'.
+      -> In (x, y) es'
+      -> In (y, z) es'
+      -> In (x, z) es'.
   Proof.
-    intros 
-  
-  Lemma transClosure_complete :
-    forall g c (ha : Acc lt c) es (ha' : Acc lt (m es)) es',
-      c = m es
-      -> transClosure es ha' = es'
-      -> frame_multistep_edges_complete g es'.
-  Proof.
-    intros 
-
-    
-    intros g c ha. induction ha as [c hlt IH].
-    intros es ha' es'' heq ht.
+    intros c ha'; induction ha' as [ha' hlt IH].
+    intros es es'' ha x y z ? ht hi hi'.
     apply transClosure_cases in ht.
     destruct ht as [[hn ?] | [e' [es' [heq' ht]]]]; subst.
-    - (* lemma *)
-      admit.
-    - eapply IH with (y := m (e' :: es' ++ es)); eauto.
+    - eapply newEdges_result_trans; eauto.
+    - eapply IH; eauto.
       apply newEdges_cons_meas_lt; auto.
-    rewrite transClosure_eq_body in htc; sis.
-    destruct (newEdges es).
-    intros g es; remember (m es) as card; generalize dependent es.
-    induction card using lt_wf_ind; intros es ? es'; subst.
-    
-    intros 
+  Qed.
 
-    Lemma mkNullableSet'_complete :
-  forall g nu,
-    nullable_set_complete (mkNullableSet' g.(prods) nu) g.
-Proof.
-  intros g nu.
-  remember (countNullCands g.(prods) nu) as card.
-  generalize dependent nu.
-  induction card using lt_wf_ind.
-  intros nu Hcard; subst.
-  rewrite mkNullableSet'_eq_body; simpl.
-  destruct (NtSet.eq_dec nu (nullablePass g.(prods) nu)) as [Heq | Hneq].
-  - apply nullablePass_equal_complete; auto.
-  - eapply H; clear H; eauto.
-    apply nullablePass_neq_candidates_lt; auto.
-Qed.
-
-Theorem mkNullableSet_complete :
-  forall g,
-    nullable_set_complete (mkNullableSet g) g.
-Proof.
-  intros g.
-  unfold mkNullableSet.
-  apply mkNullableSet'_complete.
-Qed.
-
+  Lemma transClosure_result_trans  :
+    forall es ha x y z,
+      In    (x, y) (transClosure es ha)
+      -> In (y, z) (transClosure es ha)
+      -> In (x, z) (transClosure es ha).
+  Proof.
+    intros; eapply transClosure_result_trans'; eauto.
+  Qed.
   
+  Lemma transClosure_complete :
+    forall g es es' ha,
+      step_edges_complete g es
+      -> transClosure es ha = es'
+      -> mstep_edges_complete g es'.
+  Proof.
+    intros g es es' ha hc ht x y hm; subst; induction hm.
+    - eapply transClosure_preserves_step_edges_complete; eauto.
+    - eapply transClosure_result_trans; eauto.
+  Qed.
 
   Definition stable (fr : suffix_frame) : bool :=
     match fr with
