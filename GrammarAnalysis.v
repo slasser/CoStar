@@ -1083,13 +1083,14 @@ Module GrammarAnalysisFn (Import D : Defs.T).
           -- eapply IH; eauto; sis.
              eapply return_preserves_suffix_frames_wf_invar; eauto.
       + (* push case *)
-        eapply closure_step__frame_step in hs; eauto.
+        eapply closure_step__frame_step in hs; eauto; sis.
         inv hs.
-        * (*  inv hw.
-          eapply rt1n_trans; eauto.
-          -- sis; eapply Fstep_noninitial_push; eauto.
-        * eapply IH; eauto; sis.
-          apply push_preserves_suffix_frames_wf_invar; eauto.
+        * eapply rt1n_trans; eauto.
+          eapply IH; eauto.
+          apply push_preserves_suffix_frames_wf_invar; auto.
+        * eapply rt1n_trans; eauto.
+          eapply IH; eauto.
+          apply push_preserves_suffix_frames_wf_invar; auto.
   Qed.
 
   Lemma closure_multistep__frame_step_trc :
