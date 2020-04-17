@@ -33,8 +33,13 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       forall x y pre suf,
         In (x, pre ++ NT y :: suf) g
         -> frame_step g (SF (Some y) [])
-                        (SF (Some x) suf)
-  | Fstep_push :
+                      (SF (Some x) suf)
+  | Fstep_initial_push :
+      forall x rhs,
+        In (x, rhs) g
+        -> frame_step g (SF None     [NT x])
+                        (SF (Some x) rhs)
+  | Fstep_noninitial_push :
       forall x y pre suf rhs,
         In (x, pre ++ NT y :: suf) g
         -> In (y, rhs) g
@@ -67,6 +72,55 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     mstep_edges_sound g es /\ mstep_edges_complete g es.
 
   (* COMPUTATION OF SINGLE-STEP FRAME CLOSURE EDGES *)
+
+  Definition initialPushEdges' (g : grammar) (x : nonterminal) : list edge :=
+    map (fun rhs => (SF None [NT x], SF (Some x) rhs))
+        (rhssForNt g x).
+
+  Lemma initialPushEdges'_sound :
+    forall g s d x,
+      In (s, d) (initialPushEdges' g x)
+      -> frame_step g s d.
+  Proof.
+    intros g s d x hi.
+    apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; inv heq.
+    apply rhssForNt_in_iff in hi; auto.
+  Qed.
+
+  Lemma initialPushEdges'_complete :
+    forall g x rhs,
+      In (x, rhs) g
+      -> In (SF None [NT x], SF (Some x) rhs)
+            (initialPushEdges' g x).
+  Proof.
+    intros g x rhs hi.
+    apply in_map_iff; eexists; split; eauto.
+    apply rhssForNt_in_iff; auto.
+  Qed.
+
+  Definition initialPushEdges (g : grammar) :=
+    flat_map (initialPushEdges' g) (lhss g).
+
+  Lemma initialPushEdges_sound :
+    forall g s d,
+   In (s, d) (initialPushEdges g)
+   -> frame_step g s d.
+  Proof.
+    intros g s d hi.
+    apply in_flat_map in hi; destruct hi as [x [hi hi']].
+    eapply initialPushEdges'_sound; eauto.
+  Qed.
+
+  Lemma initialPushEdges_complete :
+    forall g x rhs,
+      In (x, rhs) g
+      -> In (SF None [NT x], SF (Some x) rhs) (initialPushEdges g).
+  Proof.
+    intros g x rhs hi.
+    apply in_flat_map; exists x; split.
+    - eapply production_lhs_in_lhss; eauto.
+    - apply initialPushEdges'_complete; auto.
+  Qed.
   
   Fixpoint pushEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
     match ys with 
@@ -214,18 +268,20 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Qed.
   
   Definition epsilonEdges g : list edge :=
-    pushEdges g ++ returnEdges g ++ finalReturnEdges g.
+    initialPushEdges g ++ pushEdges g ++ returnEdges g ++ finalReturnEdges g.
 
+  (* to do : write ltac for in_app_or *)
   Lemma epsilonEdges__step_edges_sound :
     forall g,
       step_edges_sound g (epsilonEdges g).
   Proof.
-    intros g s d hi; apply in_app_or in hi.
-    destruct hi as [hp | hrf];
-      [.. | apply in_app_or in hrf; destruct hrf as [hr | hf]].
-    - apply pushEdges_sound        ; auto.
-    - apply returnEdges_sound      ; auto.
-    - apply finalReturnEdges_sound ; auto.
+    intros g s d hi; apply in_app_or in hi; destruct hi as [hi | hprf].
+    - apply initialPushEdges_sound; auto. 
+    - apply in_app_or in hprf; destruct hprf as [hp | hrf].
+      + apply pushEdges_sound ; auto.
+      + apply in_app_or in hrf; destruct hrf as [hr | hf].
+        * apply returnEdges_sound      ; auto.
+        * apply finalReturnEdges_sound ; auto.
   Qed.
 
   Lemma epsilonEdges__step_edges_complete :
@@ -233,11 +289,13 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       step_edges_complete g (epsilonEdges g).
   Proof.
     intros g s d hs; unfold epsilonEdges; inv hs.
-    - do 2 (apply in_or_app; right).
+    - do 3 (apply in_or_app; right).
       eapply finalReturnEdges_complete; eauto.
-    - apply in_or_app; right; apply in_or_app; left.
+    - do 2 (apply in_or_app; right); apply in_or_app; left.
       eapply returnEdges_complete; eauto.
     - apply in_or_app; left.
+      eapply initialPushEdges_complete; eauto.
+    - apply in_or_app; right; apply in_or_app; left.
       eapply pushEdges_complete; eauto.
   Qed.
 
@@ -990,10 +1048,10 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       -> frame_step g fr fr'.
   Proof.
     intros g av av' ? ? pr pr' fr fr' frs frs' ? ? hw hc; subst; inv hc; eauto.
-    - inv_suffix_frames_wf hw   hi  hw'  ; rew_anr.
+    - inv_suffix_frames_wf hw   hi  hw'  ; eauto.
       inv_suffix_frames_wf hw'  hi' hw'' ; eauto.
-    - admit. 
-  Admitted.
+    - inv_suffix_frames_wf hw   hi  hw'  ; eauto.
+  Qed.
 
   Lemma closure_multistep__frame_step_trc' :
     forall g av av' sp sp',
@@ -1027,8 +1085,9 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       + (* push case *)
         eapply closure_step__frame_step in hs; eauto.
         inv hs.
-        eapply rt1n_trans.
-        * sis; eapply Fstep_push; eauto.
+        * (*  inv hw.
+          eapply rt1n_trans; eauto.
+          -- sis; eapply Fstep_noninitial_push; eauto.
         * eapply IH; eauto; sis.
           apply push_preserves_suffix_frames_wf_invar; eauto.
   Qed.
