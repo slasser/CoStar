@@ -1,4 +1,4 @@
-Require Import List.
+Require Import List Relation_Operators Operators_Properties.
 Require Import GallStar.Lex.
 Require Import GallStar.SLLPrediction.
 Require Import GallStar.Tactics.
@@ -132,38 +132,44 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       apply lhs_mem_allNts_true in hi; tc.
   Qed.
 
-  (* refactor -- this should probably be several lemmas *)
+    (* refactor -- this should probably be several lemmas *)
   Lemma simReturn_approx :
-    forall g cm av av' x x' y ys',
+    forall g cm av av' av'' x x' x'' y ys'',
       closure_map_complete g cm
       -> suffix_stack_wf g (stack x)
       -> approx y x
-      -> closure_multistep g av x av' x'
-      -> simReturn cm y = Some ys'
-      -> exists y', In y' ys' /\ approx y' x'.
+      -> closure_step g av x av' x'
+      -> closure_multistep g av' x' av'' x''
+      -> simReturn cm y = Some ys''
+      -> exists y'', In y'' ys'' /\ approx y'' x''.
   Proof.
-    intros g cm av av' [pr (fr, frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')] ys'
-           hcm hw ha hc hr.
-    pose proof ha as ha'.
-    apply approx_head_frames_eq in ha'; subst.
-    pose proof hc as heq; pose proof hc as hst.
-    apply closure_multistep_preserves_label in heq; simpl in heq; subst.
-    eapply stable_config_after_closure_multistep in hst; eauto; simpl in hst.
-    eapply closure_multistep__frame_multistep in hc; eauto; simpl in hc.
-    exists (Sp pr' (fr', [])); split.
-    - unfold simReturn in hr; dms; tc; inv hr; sis.
-      destruct ha as [? [ctx heq]]; inv heq.
-      apply in_map_iff.
-      eexists; split; eauto.
-      unfold destFrames.
-      pose proof hc as hc'.
-      apply hcm in hc'.
-      destruct hc' as [frs'' [hf hi]].
-      + eapply stable_config__stable_true; eauto. 
-      + apply FMF.find_mapsto_iff in hf; rewrite hf; auto.
-    - split; eauto. sis; eauto.
+    intros g cm av av' av'' [pr (fr, frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')]
+           [pr''' (fr''', frs''')] ys'' hcm hw ha hs hm hr; simpl in hw.
+    assert (heq : pr'' = pr).
+    { apply closure_step_preserves_label in hs; sis; subst.
+      apply closure_multistep_preserves_label in hm; sis; subst; auto. } subst.
+    assert (hw' : suffix_stack_wf g (fr', frs')).
+    { apply closure_step_preserves_suffix_stack_wf_invar in hs; sis; auto. }
+    assert (hst : stable_config (fr'', frs'')).
+    { apply stable_config_after_closure_multistep in hm; sis; auto. }
+    eapply closure_step__frame_step in hs; eauto.
+    eapply closure_multistep__frame_step_trc in hm; eauto.
+    assert (hfm : frame_multistep g fr fr'').
+    { eapply clos_t_rt; eauto.
+      apply clos_rt_rt1n_iff; auto. }
+    exists (Sp pr (fr'', [])); split; sis; eauto.
+    dms; tc; inv hr; sis.
+    destruct ha as [? [ctx heq]]; inv heq.
+    apply in_map_iff.
+    eexists; split; eauto.
+    unfold destFrames.
+    pose proof hfm as hfm'.
+    apply hcm in hfm'.
+    destruct hfm' as [v [hf hi]].
+    + eapply stable_config__stable_true; eauto.
+    + apply FMF.find_mapsto_iff in hf; rewrite hf; auto.
   Qed.
-  
+
   Definition overapprox (sps' sps : list subparser) : Prop :=
     forall sp, In sp sps -> exists sp', In sp' sps' /\ approx sp' sp.
   
@@ -327,13 +333,14 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         eapply dmap_in in hd; eauto.
         destruct hd as [x' [hi' [? hll]]].
         assert (Hcm : exists av''',
-                   closure_multistep g avx x av''' x''').
+                   closure_step g avx x avx' x'
+                   /\ closure_multistep g avx' x' av''' x''').
         { pose proof hs as hs''.
           eapply cstep_sound in hs''; eauto.
           eapply llc_sound_wrt_closure_multistep in hll; eauto.
           - destruct hll as [avx''' hcm]; eauto.
           - eapply closure_step_preserves_suffix_stack_wf_invar; eauto. }
-        destruct Hcm as [av''' Hcm].
+        destruct Hcm as [av''' [Hcs Hcm]].
         eapply simReturn_approx; eauto.
       + (* SLL subparser is done -- contradiction *)
         exfalso; eapply approx_ll_step_sll_done_contra; eauto.

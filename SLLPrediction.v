@@ -14,7 +14,7 @@ Module SllPredictionFn (Import D : Defs.T).
   Definition simReturn (cm : closure_map) (sp : subparser) : option (list subparser) :=
     match sp with
     | Sp pred (SF (Some x) [], []) =>
-      let dsts := destFrames cm (SF (Some x) []) in
+      let dsts := destFrames (SF (Some x) []) cm in
       let sps' := map (fun d => Sp pred (d, [])) dsts
       in  Some sps'
     | _ => None
