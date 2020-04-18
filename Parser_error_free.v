@@ -200,6 +200,21 @@ Module ParserErrorFreeFn (Import D : Defs.T).
 
   (* Errors never arise during prediction, given a non-left-recursive grammar *)
 
+  Lemma step_never_returns_prediction_error :
+    forall g cm ps ss ts av un ca e,
+      no_left_recursion g
+      -> closure_map_correct g cm
+      -> cache_stores_target_results g cm ca
+      -> stacks_wf g ps ss
+      -> step g cm ps ss ts av un ca <> StepError (PredictionError e).
+  Proof.
+    intros g cm ps ss ts av un ca e hn hm hc hw hs.
+    unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
+    eapply adaptivePredict_neq_error; eauto.
+    eapply frames_wf__suffix_frames_wf; eauto.
+  Qed.
+
+  (*
   Lemma step_never_returns_SpInvalidState :
     forall g cm ps ss ts av un ca,
       stacks_wf g ps ss
@@ -207,6 +222,8 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Proof.
     intros g cm ps ss ts av un ca hw hs.
     unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
+    eapply adaptivePredict_neq_error; eauto.
+    - 
     eapply llPredict_never_returns_SpInvalidState; eauto.
     eapply frames_wf__suffix_frames_wf; eauto.
   Qed.
@@ -221,69 +238,70 @@ Module ParserErrorFreeFn (Import D : Defs.T).
     unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
     eapply llPredict_never_returns_SpLeftRecursion; eauto.
   Qed.
-
+   *)
+  
   Lemma multistep_never_returns_prediction_error :
     forall (g      : grammar)
+           (cm     : closure_map)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
-           (p_stk  : prefix_stack)
-           (s_stk  : suffix_stack)
+           (ps     : prefix_stack)
+           (ss     : suffix_stack)
            (ts     : list token)
            (av     : NtSet.t)
-           (u      : bool)
-           (a'     : Acc lex_nat_triple (meas g s_stk ts av))
+           (un     : bool)
+           (ca     : cache)
+           (hc     : cache_stores_target_results g cm ca)
+           (a'     : Acc lex_nat_triple (meas g ss ts av))
            (e      : prediction_error),
       no_left_recursion g
-      -> tri = meas g s_stk ts av
-      -> stacks_wf g p_stk s_stk
-      -> multistep g p_stk s_stk ts av u a' <> Error (PredictionError e).
+      -> closure_map_correct g cm 
+      -> tri = meas g ss ts av
+      -> stacks_wf g ps ss
+      -> multistep g cm ps ss ts av un ca hc a' <> Error (PredictionError e).
   Proof.
-    intros g tri a.
+    intros g cm tri a.
     induction a as [tri hlt IH].
-    intros ps ss ts av un a' e hn ? hw; unfold not; intros hm; subst. 
+    intros ps ss ts av un ca hc a' e hn hcm ? hw hm; subst.
     apply multistep_prediction_error_cases in hm.
     destruct hm as [hs | hm].
-    - destruct e as [ | x].
-      + (* InvalidState case *)
-        eapply step_never_returns_SpInvalidState in hs; eauto.
-      + (* LeftRecursion case *)
-        eapply step_never_returns_SpLeftRecursion in hs; eauto.
-    - destruct hm as (ps' & ss' & ts' & av' & un' & a'' & hs & hm). 
+    - eapply step_never_returns_prediction_error in hs; eauto.
+    - destruct hm as (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm). 
       eapply IH in hm; eauto.
-      + eapply step_meas_lt; eauto.
-      + eapply step_preserves_stacks_wf_invar; eauto.
+      + eapply step_meas_lt with (ca := ca); eauto.
+      + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
   Qed.
 
   Lemma parse_never_returns_prediction_error :
-    forall (g : grammar)
-           (ys : list symbol)
+    forall (g  : grammar)
+           (x  : nonterminal)
            (ts : list token)
            (e  : prediction_error),
       no_left_recursion g
-      -> parse g ys ts <> Error (PredictionError e).
+      -> parse g x ts <> Error (PredictionError e).
   Proof.
-    intros g ys ts e hn; unfold not; intros hp.
-    unfold parse in hp.
+    intros g x ts e hn hp; unfold parse in hp.
     eapply multistep_never_returns_prediction_error in hp; eauto.
     - apply lex_nat_triple_wf.
+    - apply mkClosureMap_result_correct.
     - constructor.
   Qed.
 
-  Theorem parser_terminates_without_error :
+  Theorem parse_terminates_without_error :
     forall (g  : grammar)
-           (ys : list symbol)
+           (x  : nonterminal)
            (ts : list token)
            (e  : parse_error),
       no_left_recursion g
-      -> parse g ys ts <> Error e.
+      -> parse g x ts <> Error e.
   Proof.
-    intros g ys ts e; unfold not; intros hp; destruct e.
+    intros g x ts e hn hp; destruct e.
     - (* invalid state case *)
-      eapply parser_never_reaches_invalid_state; eauto.
+      eapply parse_never_reaches_invalid_state; eauto.
     - (* left recursion case *)
-      apply parser_doesn't_find_left_recursion_in_non_left_recursive_grammar; auto.
+      eapply parse_doesn't_find_left_recursion_in_non_left_recursive_grammar; eauto.
     - (* prediction error case *)
-      apply parse_never_returns_prediction_error; auto.
+      eapply parse_never_returns_prediction_error; eauto.
   Qed.
 
 End ParserErrorFreeFn.

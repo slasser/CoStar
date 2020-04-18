@@ -1,11 +1,5 @@
 Require Import Bool List String.
-Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import Prediction.
-Require Import GallStar.Prediction_error_free.
-Require Import GallStar.Prediction_complete.
-Require Import GallStar.Parser.
-Require Import GallStar.Parser_sound.
 Require Import GallStar.Parser_error_free.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.

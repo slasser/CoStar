@@ -1,7 +1,7 @@
 Require Import FMaps Omega PeanoNat String. 
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.SLL_optimization_sound.
+Require Import GallStar.SLLPrediction_error_free.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
 Require Import GallStar.Utils.
@@ -10,7 +10,7 @@ Open Scope list_scope.
 
 Module ParserFn (Import D : Defs.T).
 
-  Module Export SOS := SllOptimizationSoundFn D.
+  Module Export SOS := SllPredictionErrorFreeFn D.
 
   Inductive parse_error :=
   | InvalidState    : parse_error
