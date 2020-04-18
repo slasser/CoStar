@@ -426,6 +426,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Proof.
     intros g av av' sp sp' hw hc.
     induct_cm hc  hs hc' IH; try constructor; sis.
+    apply IH; eapply closure_step_preserves_suffix_stack_wf_invar; eauto.
     - inv hw; auto.
     - apply IH; eapply closure_step_preserves_suffix_stack_wf_invar; eauto.
   Qed.

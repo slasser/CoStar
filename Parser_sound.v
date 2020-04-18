@@ -589,7 +589,7 @@ Module ParserSoundFn (Import D : Defs.T).
     unfold parse in hp.
     eapply multistep_sound_unambig in hp; eauto.
     - (* LEMMA *)
-      apply mkClosureMap_result_complete.
+      apply mkClosureMap_complete.
     - constructor.
     - apply unique_stack_prefix_derivation_invar_starts_true.
   Qed.

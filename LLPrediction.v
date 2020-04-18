@@ -1120,7 +1120,7 @@ Module LLPredictionFn (Import D : Defs.T).
   Proof.
     intros; wf_upper_nil. 
   Qed.
-
+       
   Lemma consume_preserves_suffix_frames_wf_invar :
     forall g o suf a frs,
       suffix_frames_wf g (SF o (T a :: suf) :: frs)

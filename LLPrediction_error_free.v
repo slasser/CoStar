@@ -19,8 +19,8 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   | SC_empty :
       stable_config (SF None [], [])
   | SC_terminal :
-      forall x a suf frs,
-        stable_config (SF (Some x) (T a :: suf), frs).
+      forall o a suf frs,
+        stable_config (SF o (T a :: suf), frs).
 
   Hint Constructors stable_config : core.
 

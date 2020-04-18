@@ -478,6 +478,4 @@ Module ParserFn (Import D : Defs.T).
     multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache
               (empty_cache_stores_target_results g cm) (lex_nat_triple_wf _).
 
-  Print Assumptions parse.  
-
 End ParserFn.
