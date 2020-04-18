@@ -454,18 +454,15 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma llPredict_never_returns_SpLeftRecursion :
-    forall g o x x' fr frs ts suf,
+    forall g x x' fr frs ts,
       no_left_recursion g
-      -> fr = SF o (NT x :: suf)
       -> llPredict g x (fr, frs) ts <> PredError (SpLeftRecursion x').
   Proof.
-    intros g o x x' fr frs ts suf hn heq; unfold not; intros hl.
-    unfold llPredict in hl.
-    dmeq hss.
-    - inv hl. eapply closure_never_finds_left_recursion; eauto. 
+    intros g x x' fr frs ts hn hl; unfold llPredict in hl; dmeq hss.
+    - inv hl; eapply closure_never_finds_left_recursion; eauto. 
     - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
   Qed.
-
+  
   (* For convenience, some lemmas that generalize over both 
      types of prediction errors *)
 

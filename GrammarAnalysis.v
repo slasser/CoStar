@@ -879,7 +879,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition stable (fr : suffix_frame) : bool :=
     match fr with
     | SF None []             => true
-    | SF (Some x) (T _ :: _) => true
+    | SF _        (T _ :: _) => true
     | _                      => false
     end.
 
@@ -888,7 +888,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       stable_config (fr, frs)
       -> stable fr = true.
   Proof.
-    intros fr frs hs; inv hs; auto. 
+    intros fr frs hs; inv hs; auto.
+    sis; dm; tc.
   Qed.
 
   (*

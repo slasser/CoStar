@@ -234,37 +234,6 @@ Module SllPredictionFn (Import D : Defs.T).
   Proof.
     intros; eapply sllc_preserves_prediction'; eauto.
   Qed.
-
-  Lemma sllc_all_stacks_stable :
-    forall g cm pr (a : Acc lex_nat_pair pr) av sp sp' a' sps',
-      pr = meas g av sp
-      -> stack_top_wf g sp.(stack)
-      -> sllc g cm av sp a' = inr sps'
-      -> all_stacks_stable sps'. In sp' sps'
-      -> stable_config sp'.(stack).
-  Proof.
-    intros g pr a'.
-    induction a' as [pr hlt IH]; intros av sp sp' a sps' heq hw hs hi; subst.
-    apply llc_success_cases in hs.
-    destruct hs as [[hd heq] | [sps'' [av' [hs [crs [heq heq']]]]]]; subst.
-    - apply in_singleton_eq in hi; subst; auto.
-      eapply cstepDone_stable_config; eauto.
-    - eapply aggrClosureResults_succ_in_input in heq'; eauto.
-      destruct heq' as [sps''' [hi' hi'']].
-      eapply dmap_in in hi'; eauto.
-      destruct hi' as [sp'' [hi' [hi''' heq]]].
-      eapply IH in heq; eauto.
-      + eapply cstep_meas_lt; eauto.
-      + eapply cstep_preserves_suffix_stack_wf_invar; eauto.
-  Qed.
-
-  sllc g cm (allNts g) sp
-         (lex_nat_pair_wf (meas g (allNts g) sp)) =
-       inr sps''
-  hi' : In sp sps
-  hi'' : In sp' sps''
-  ============================
-  stable_config (stack sp')
   
   Definition sllClosure (g : grammar) (cm : closure_map) (sps : list subparser) :
     sum prediction_error (list subparser) :=
@@ -284,21 +253,6 @@ Module SllPredictionFn (Import D : Defs.T).
     eapply sllc_preserves_prediction; eauto.
   Qed.
 
-  Lemma sllClosure_all_stack_stable :
-    forall g cm sps sps',
-      sllClosure g cm sps = inr sps'
-      -> all_stacks_stable sps'.
-  Proof.
-    intros g cm sps sps' hs sp' hi.
-    eapply aggrClosureResults_succ_in_input in hs; eauto.
-    destruct hs as [sps'' [hi' hi'']].
-    apply in_map_iff in hi'; destruct hi' as [sp [hs hi']].
-    eapply sp_in_llc_result_stable_config; eauto.
-    apply lex_nat_pair_wf.
-  Qed.
-  sllClosure g cm l = inr sps'
-  ============================
-  all_stacks_stable sps'
 
   (* SLL prediction *)
 
@@ -350,17 +304,6 @@ Module SllPredictionFn (Import D : Defs.T).
     eapply move_preserves_prediction in hm; eauto.
     destruct hm as [? [? ?]]; eauto.
   Qed.
-
-  Lemma sllTarget_all_stacks_stable :
-    forall g cm a sps sps',
-      sllTarget g cm sps a = inr sps'
-      -> all_stacks_stable sps'.
-  Proof.
-    intros g cm a sps sps' ht; unfold sllTarget in ht; dmeqs H; tc; inv ht.
-    
-    
-    
-    
 
   Definition cache_stores_target_results g cm ca :=
     forall sps a sps',
