@@ -34,47 +34,54 @@ Module ParserCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma push_succ_preserves_ussr :
-    forall g cr ce frs o x suf rhs w,
+    forall g cm cr ce frs o x suf rhs w ca ca',
       cr    = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
+      -> closure_map_correct g cm
+      -> cache_stores_target_results g cm ca
       -> suffix_stack_wf g (cr, frs)
-      -> llPredict g x (cr, frs) w = PredSucc rhs
+      -> adaptivePredict g cm x (cr, frs) w ca = (PredSucc rhs, ca')
       -> gamma_recognize g (unprocStackSyms (cr, frs)) w
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g ? ? frs o x suf rhs w ? ? hn hw hl hg; subst; sis.
+    intros g cm ? ? frs o x suf rhs w ca ca'
+           ? ? hn [hs hc] hc' hw hp hg; subst; sis.
     apply gamma_recognize_nonterminal_head in hg.
     destruct hg as (rhs' & wp & wms & ? & hi' & hg & hg'); subst.
     apply gamma_recognize_split in hg'.
     destruct hg' as (wm & ws & ? & hg' & hg''); subst.
-    eapply llPredict_succ_at_most_one_rhs_applies in hl; eauto; subst; sis; repeat (apply gamma_recognize_app; auto).
+    eapply adaptivePredict_succ_at_most_one_rhs_applies in hp; eauto;
+    subst; repeat (apply gamma_recognize_app; auto).
   Qed.
 
   Lemma push_ambig_preserves_ussr :
-    forall g cr ce frs o x suf rhs w,
+    forall g cm cr ce frs o x suf rhs w ca ca',
       cr    = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
       -> suffix_stack_wf g (cr, frs)
-      -> llPredict g x (cr, frs) w = PredAmbig rhs
+      -> adaptivePredict g cm x (cr, frs) w ca = (PredAmbig rhs, ca')
       -> gamma_recognize g (unprocStackSyms (cr, frs)) w
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g ? ? frs o x suf rhs w ? ? hn hw hl hg; subst; sis.
-    eapply llPredict_ambig_rhs_unproc_stack_syms in hl; eauto.
-    sis; auto.
+    intros g cm ? ? frs o x suf rhs w ca ca'
+           ? ? hn hw hl hg; subst; sis.
+    eapply adaptivePredict_ambig_rhs_unproc_stack_syms; eauto.
   Qed.
 
   Lemma step_preserves_ussr :
-    forall g ps ps' ss ss' ts ts' av av' un un',
+    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
       no_left_recursion g
+      -> closure_map_correct g cm
+      -> cache_stores_target_results g cm ca
       -> suffix_stack_wf g ss
       -> gamma_recognize g (unprocStackSyms ss) ts
-      -> step g ps ss ts av un = StepK ps' ss' ts' av' un'
+      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> gamma_recognize g (unprocStackSyms ss') ts'.
   Proof.
-    intros g ps ps' ss ss' ts ts' av av' un un' hn hw hr hs.
+    intros g cm ps ps' ss ss' ts ts' av av' un un' ca ca'
+           hn hm hc hw hr hs.
     unfold step in hs; dmeqs h; tc; inv hs.
     - eapply return_preserves_ussr; eauto.
     - eapply consume_preserves_ussr; eauto.
@@ -84,26 +91,30 @@ Module ParserCompleteFn (Import D : Defs.T).
 
   Lemma ussr__multistep_doesn't_reject' :
     forall (g      : grammar)
+           (cm     : closure_map)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
-           (p_stk  : prefix_stack)
-           (s_stk  : suffix_stack)
+           (ps     : prefix_stack)
+           (ss     : suffix_stack)
            (ts     : list token)
            (av     : NtSet.t)
-           (u      : bool)
-           (a'     : Acc lex_nat_triple (meas g s_stk ts av))
+           (un     : bool)
+           (ca     : cache)
+           (hc     : cache_stores_target_results g cm ca)
+           (a'     : Acc lex_nat_triple (meas g ss ts av))
            (s      : string),
-      tri = meas g s_stk ts av
+      tri = meas g ss ts av
       -> no_left_recursion g
-      -> stacks_wf g p_stk s_stk
-      -> gamma_recognize g (unprocStackSyms s_stk) ts
-      -> multistep g p_stk s_stk ts av u a' <> Reject s.
+      -> closure_map_correct g cm
+      -> stacks_wf g ps ss
+      -> gamma_recognize g (unprocStackSyms ss ) ts
+      -> multistep g cm ps ss ts av un ca hc a' <> Reject s.
   Proof.
-    intros g tri a.
-    induction a as [tri hlt IH].
-    intros ps ss ts av u a' s ? hn hw hg; unfold not; intros hm; subst.
+    intros g cm tri a'.
+    induction a' as [tri hlt IH].
+    intros ps ss ts av un ca hc a s ? hn hcm hw hg hm; subst. 
     apply multistep_reject_cases in hm.
-    destruct hm as [hs | (ps' & ss' & ts' & av' & u' & a'' & hs & hm)]. 
+    destruct hm as [hs | (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm)]. 
     - (* lemma *)
       clear hlt IH.
       unfold step in hs; dmeqs h; tc; inv hs; sis.
@@ -115,79 +126,87 @@ Module ParserCompleteFn (Import D : Defs.T).
         inv H2. 
         inv H1. 
         tc.
-      + eapply ussr_llPredict_neq_reject; eauto.
-        eapply frames_wf__suffix_frames_wf; eauto.
+      + eapply ussr_adaptivePredict_neq_reject; eauto.
+        eapply frames_wf__suffix_frames_wf; eauto. 
       + inv hg. 
         inv H1.
         apply lhs_mem_allNts_true in H0. 
         tc.
     - eapply IH with (y := meas g ss' ts' av'); eauto. 
-      + eapply step_meas_lt; eauto.
-      + eapply step_preserves_stacks_wf_invar; eauto.
-      + eapply step_preserves_ussr; eauto.
+      + eapply step_meas_lt with (ca := ca); eauto.
+      + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
+      + eapply step_preserves_ussr with (ca := ca); eauto.
         eapply stacks_wf__suffix_stack_wf; eauto.
   Qed.
 
   Lemma ussr_implies_multistep_doesn't_reject :
     forall (g      : grammar)
-           (p_stk  : prefix_stack)
-           (s_stk  : suffix_stack)
+           (cm     : closure_map)
+           (ps     : prefix_stack)
+           (ss     : suffix_stack)
            (ts     : list token)
            (av     : NtSet.t)
-           (u      : bool)
-           (a      : Acc lex_nat_triple (meas g s_stk ts av))
+           (un     : bool)
+           (ca     : cache)
+           (hc     : cache_stores_target_results g cm ca)
+           (a      : Acc lex_nat_triple (meas g ss ts av))
            (s      : string),
       no_left_recursion g
-      -> stacks_wf g p_stk s_stk
-      -> gamma_recognize g (unprocStackSyms s_stk) ts
-      -> multistep g p_stk s_stk ts av u a <> Reject s.
+      -> closure_map_correct g cm
+      -> stacks_wf g ps ss
+      -> gamma_recognize g (unprocStackSyms ss) ts
+      -> multistep g cm ps ss ts av un ca hc a <> Reject s.
   Proof.
     intros; eapply ussr__multistep_doesn't_reject'; eauto.
   Qed.
 
   Theorem valid_derivation_implies_parser_doesn't_reject :
-    forall g ys w s,
+    forall g x w s,
       no_left_recursion g
-      -> gamma_recognize g ys w
-      -> parse g ys w <> Reject s.
+      -> sym_recognize g (NT x) w
+      -> parse g x w <> Reject s.
   Proof.
-    intros g ys w s hn hg; unfold not; intros hp.
-    unfold parse in hp.
+    intros g x w s hn hg hp; unfold parse in hp.
     eapply ussr_implies_multistep_doesn't_reject; eauto; simpl; apps.
+    - apply mkClosureMap_result_correct.
+    - (* lemma *)
+      rew_nil_r w; eauto.
   Qed.
 
   Theorem parse_complete :
     forall (g  : grammar)
-           (ys : list symbol)
+           (x  : nonterminal)
            (w  : list token)
            (v  : forest),
       no_left_recursion g
-      -> gamma_derivation g ys w v
+      -> gamma_derivation g [NT x] w v
       -> exists (v' : forest),
-          parse g ys w = Accept v'
-          \/ parse g ys w = Ambig v'.
+          parse g x w = Accept v'
+          \/ parse g x w = Ambig v'.
   Proof.
-    intros g ys w v hn hg.
-    destruct (parse g ys w) as [v' | v' | s | e] eqn:hp; eauto.
+    intros g x w v hn hg.
+    destruct (parse g x w) as [v' | v' | s | e] eqn:hp; eauto.
     - exfalso. 
       apply gamma_derivation__gamma_recognize in hg.
       apply valid_derivation_implies_parser_doesn't_reject in hp; auto.
+    (* clean this up *)
+      inv hg. inv H3. rew_anr; auto.
     - exfalso.
-      apply parser_terminates_without_error in hp; auto.
+      apply parse_terminates_without_error in hp; auto.
   Qed.
 
   (* Completeness theorem for unambiguous derivations *)
   Theorem parse_complete_unique_derivation :
     forall (g  : grammar)
-           (ys : list symbol)
+           (x  : nonterminal)
            (w  : list token)
            (v  : forest),
       no_left_recursion g
-      -> gamma_derivation g ys w v
-      -> (forall v', gamma_derivation g ys w v' -> v' = v)
-      -> parse g ys w = Accept v.
+      -> gamma_derivation g [NT x] w v
+      -> (forall v', gamma_derivation g [NT x] w v' -> v' = v)
+      -> parse g x w = Accept v.
   Proof.
-    intros g ys w v hn hg hu.
+    intros g x w v hn hg hu.
     apply parse_complete in hg; auto.
     destruct hg as (v' & [hp | hp]); pose proof hp as hp'.
     - apply parse_sound_unambig in hp; auto.
@@ -202,24 +221,27 @@ Module ParserCompleteFn (Import D : Defs.T).
   (* Completeness theorem for ambiguous derivations *)
   Theorem parse_complete_ambiguous_derivations :
     forall (g    : grammar)
-           (ys   : list symbol)
+           (x    : nonterminal)
            (w    : list token)
            (v v' : forest),
       no_left_recursion g
-      -> gamma_derivation g ys w v
-      -> gamma_derivation g ys w v'
+      -> gamma_derivation g [NT x] w v
+      -> gamma_derivation g [NT x] w v'
       -> v <> v'
       -> exists v'',
-          parse g ys w = Ambig v''.
+          parse g x w = Ambig v''
+          /\ gamma_derivation g [NT x] w v''.
   Proof.
-    intros g ys w v v' hn hg hg'' hneq.
+    intros g x w v v' hn hg hg'' hneq.
     pose proof hg as hg'.
     apply parse_complete in hg; auto.
     destruct hg as (v'' & [hp | hp]); eauto.
-    exfalso.
-    apply parse_sound_unambig in hp; auto.
-    destruct hp as (hg & ha).
-    apply ha in hg'; apply ha in hg''; subst; tc.
+    - exfalso.
+      apply parse_sound_unambig in hp; auto.
+      destruct hp as (hg & ha).
+      apply ha in hg'; apply ha in hg''; subst; tc.
+    - eexists; split; eauto.
+      eapply parse_sound_ambig; eauto.
   Qed.
 
 End ParserCompleteFn.

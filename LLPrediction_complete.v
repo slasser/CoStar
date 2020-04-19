@@ -1118,7 +1118,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     eapply closure_multistep_ussr_backward; eauto.
   Qed.
 
-    Lemma llPredict_ambig_rhs_unproc_stack_syms :
+  (* to do : get rid of unprocStackSyms in the conclusion *)
+  Lemma llPredict_ambig_rhs_unproc_stack_syms :
     forall g cr ce o x suf frs w rhs,
       cr = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
@@ -1446,7 +1447,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     eapply llInitSps_preserves_esp_invar; eauto.
   Qed.
     
-  Lemma ussr_llPredict_neq_reject :
+  Theorem ussr_llPredict_neq_reject :
     forall g fr o x suf frs w,
       fr = SF o (NT x :: suf)
       -> suffix_stack_wf g (fr, frs)

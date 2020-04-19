@@ -1,7 +1,7 @@
 Require Import FMaps Omega PeanoNat String. 
 Require Import GallStar.Defs.
 Require Import GallStar.Lex.
-Require Import GallStar.SLLPrediction_error_free.
+Require Import GallStar.SLLPrediction_complete.
 Require Import GallStar.Tactics.
 Require Import GallStar.Termination.
 Require Import GallStar.Utils.
@@ -10,7 +10,7 @@ Open Scope list_scope.
 
 Module ParserFn (Import D : Defs.T).
 
-  Module Export SOS := SllPredictionErrorFreeFn D.
+  Module Export SOS := SllPredictionCompleteFn D.
 
   Inductive parse_error :=
   | InvalidState    : parse_error

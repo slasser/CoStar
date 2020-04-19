@@ -598,7 +598,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply sllPredict_succ_eq_llPredict_succ; eauto.
   Qed.
 
-  Lemma adaptivePredict_succ_at_most_one_rhs_applies :
+  Theorem adaptivePredict_succ_at_most_one_rhs_applies :
     forall g cm cr o x suf frs w ca rhs rhs' ca',
       cr = SF o (NT x :: suf)
       -> no_left_recursion g
@@ -615,7 +615,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eapply adaptivePredict_succ_eq_llPredict_succ in ha; eauto.
     - eapply llPredict_succ_at_most_one_rhs_applies; eauto.
     - eapply gamma_recognize_fold_head_nt; eauto.
-  Qed. 
+  Qed.
 
   Lemma adaptivePredict_ambig_llPredict_ambig :
     forall g cm x ss w ca rhs ca',
@@ -624,5 +624,28 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Proof.
     unfold adaptivePredict; intros; dms; tc. 
   Qed.
-  
+
+  Theorem adaptivePredict_ambig_rhs_unproc_stack_syms:
+    forall (g : grammar)
+           (cm : closure_map)
+           (cr : suffix_frame)
+           (o : option nonterminal)
+           (x : nonterminal)
+           (suf : list symbol)
+           (frs : list suffix_frame)
+           (w : list token)
+           (ca ca' : cache)
+           (rhs : list symbol),
+      cr = SF o (NT x :: suf) 
+      -> no_left_recursion g
+      -> suffix_stack_wf g (cr, frs)
+      -> adaptivePredict g cm x (cr, frs) w ca = (PredAmbig rhs, ca')
+      -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w.
+  Proof.
+    intros g cm cr o x suf frs w ca ca' rhs ? hn hw hp; subst.
+    apply adaptivePredict_ambig_llPredict_ambig in hp.
+    eapply llPredict_ambig_rhs_unproc_stack_syms in hp; eauto.
+    sis; auto.
+  Qed.
+    
 End SllOptimizationSoundFn.
