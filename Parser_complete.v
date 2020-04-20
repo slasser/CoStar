@@ -177,71 +177,22 @@ Module ParserCompleteFn (Import D : Defs.T).
     forall (g  : grammar)
            (x  : nonterminal)
            (w  : list token)
-           (v  : forest),
+           (t  : tree),
       no_left_recursion g
-      -> gamma_derivation g [NT x] w v
-      -> exists (v' : forest),
-          parse g x w = Accept v'
-          \/ parse g x w = Ambig v'.
+      -> sym_derivation g (NT x) w t
+      -> exists (t' : tree),
+          parse g x w = Accept t'
+          \/ parse g x w = Ambig t'.
   Proof.
     intros g x w v hn hg.
     destruct (parse g x w) as [v' | v' | s | e] eqn:hp; eauto.
-    - exfalso. 
-      apply gamma_derivation__gamma_recognize in hg.
+    - exfalso.
+      apply sym_derivation__sym_recognize in hg.
       apply valid_derivation_implies_parser_doesn't_reject in hp; auto.
-    (* clean this up *)
-      inv hg. inv H3. rew_anr; auto.
-    - exfalso.
-      apply parse_terminates_without_error in hp; auto.
-  Qed.
-
-  (* Completeness theorem for unambiguous derivations *)
-  Theorem parse_complete_unique_derivation :
-    forall (g  : grammar)
-           (x  : nonterminal)
-           (w  : list token)
-           (v  : forest),
-      no_left_recursion g
-      -> gamma_derivation g [NT x] w v
-      -> (forall v', gamma_derivation g [NT x] w v' -> v' = v)
-      -> parse g x w = Accept v.
-  Proof.
-    intros g x w v hn hg hu.
-    apply parse_complete in hg; auto.
-    destruct hg as (v' & [hp | hp]); pose proof hp as hp'.
-    - apply parse_sound_unambig in hp; auto.
-      destruct hp as (hg & _).
-      apply hu in hg; subst; auto.
-    - exfalso.
-      apply parse_sound_ambig in hp; auto.
-      destruct hp as (hg' & (v'' & hg & hneq)).
-      apply hu in hg; apply hu in hg'; subst; tc.
-  Qed.
-
-  (* Completeness theorem for ambiguous derivations *)
-  Theorem parse_complete_ambiguous_derivations :
-    forall (g    : grammar)
-           (x    : nonterminal)
-           (w    : list token)
-           (v v' : forest),
-      no_left_recursion g
-      -> gamma_derivation g [NT x] w v
-      -> gamma_derivation g [NT x] w v'
-      -> v <> v'
-      -> exists v'',
-          parse g x w = Ambig v''
-          /\ gamma_derivation g [NT x] w v''.
-  Proof.
-    intros g x w v v' hn hg hg'' hneq.
-    pose proof hg as hg'.
-    apply parse_complete in hg; auto.
-    destruct hg as (v'' & [hp | hp]); eauto.
-    - exfalso.
-      apply parse_sound_unambig in hp; auto.
-      destruct hp as (hg & ha).
-      apply ha in hg'; apply ha in hg''; subst; tc.
-    - eexists; split; eauto.
-      eapply parse_sound_ambig; eauto.
+    - exfalso; destruct e.
+      + eapply parse_never_reaches_invalid_state; eauto.
+      + eapply parse_doesn't_find_left_recursion_in_non_left_recursive_grammar; eauto.
+      + eapply parse_never_returns_prediction_error; eauto.
   Qed.
 
 End ParserCompleteFn.

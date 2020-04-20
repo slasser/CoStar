@@ -287,21 +287,4 @@ Module ParserErrorFreeFn (Import D : Defs.T).
     - constructor.
   Qed.
 
-  Theorem parse_terminates_without_error :
-    forall (g  : grammar)
-           (x  : nonterminal)
-           (ts : list token)
-           (e  : parse_error),
-      no_left_recursion g
-      -> parse g x ts <> Error e.
-  Proof.
-    intros g x ts e hn hp; destruct e.
-    - (* invalid state case *)
-      eapply parse_never_reaches_invalid_state; eauto.
-    - (* left recursion case *)
-      eapply parse_doesn't_find_left_recursion_in_non_left_recursive_grammar; eauto.
-    - (* prediction error case *)
-      eapply parse_never_returns_prediction_error; eauto.
-  Qed.
-
 End ParserErrorFreeFn.

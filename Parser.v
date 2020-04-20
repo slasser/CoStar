@@ -18,13 +18,13 @@ Module ParserFn (Import D : Defs.T).
   | PredictionError : prediction_error -> parse_error.
 
   (* to do : move this lower *)
-  Inductive parse_result := Accept : forest -> parse_result
-                          | Ambig  : forest -> parse_result
+  Inductive parse_result := Accept : tree -> parse_result
+                          | Ambig  : tree -> parse_result
                           | Reject : string -> parse_result
                           | Error  : parse_error -> parse_result.
 
   Inductive step_result :=
-  | StepAccept : forest -> step_result
+  | StepAccept : tree -> step_result
   | StepReject : string -> step_result
   | StepK      : prefix_stack -> suffix_stack -> list token -> NtSet.t
                  -> bool -> cache -> step_result
@@ -47,7 +47,11 @@ Module ParserFn (Import D : Defs.T).
         (* empty stacks --> terminate *)
         | [], [] => 
           match ts with
-          | []     => StepAccept (rev v)
+          | [] =>
+            match v with
+            | [t] => StepAccept t
+            | _   => StepError InvalidState
+            end
           | _ :: _ => StepReject "stack exhausted, tokens remain"
           end
         (* nonempty stacks --> return to caller frames *)
@@ -99,16 +103,16 @@ Module ParserFn (Import D : Defs.T).
     end.
   
   Lemma step_StepAccept_facts :
-    forall g cm ps ss ts av un ca v,
-      step g cm ps ss ts av un ca = StepAccept v
+    forall g cm ps ss ts av un ca t,
+      step g cm ps ss ts av un ca = StepAccept t
       -> ts = []
          /\ exists o, ss = (SF o [], [])
          /\ exists pre,
-             ps = (PF pre (rev v), []).
+             ps = (PF pre [t], []).
   Proof.
     intros g cm ps ss ts av un ca v hs.
     unfold step in hs; dms; tc.
-    inv hs; rewrite rev_involutive; eauto.
+    inv hs; eauto.
   Qed.
 
   Lemma step_LeftRecursion_facts :
@@ -340,12 +344,12 @@ Module ParserFn (Import D : Defs.T).
            (ca : cache)
            (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
-           (f  : forest),
-      multistep gr cm ps ss ts av un ca hc ha = Accept f
-      -> (step gr cm ps ss ts av un ca = StepAccept f /\ un = true)
+           (t  : tree),
+      multistep gr cm ps ss ts av un ca hc ha = Accept t
+      -> (step gr cm ps ss ts av un ca = StepAccept t /\ un = true)
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
                 step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Accept f).
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Accept t).
   Proof.
     intros ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
     destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.
@@ -362,12 +366,12 @@ Module ParserFn (Import D : Defs.T).
            (ca : cache)
            (hc : cache_stores_target_results gr cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
-           (f  : forest),
-      multistep gr cm ps ss ts av un ca hc ha = Ambig f
-      -> (step gr cm ps ss ts av un ca = StepAccept f /\ un = false)
+           (t  : tree),
+      multistep gr cm ps ss ts av un ca hc ha = Ambig t 
+      -> (step gr cm ps ss ts av un ca = StepAccept t /\ un = false)
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
                 step gr cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Ambig f).
+                /\ multistep gr cm ps' ss' ts' av' un' ca' hc' ha' = Ambig t).
   Proof.
     intros ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
     destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ hm); auto.

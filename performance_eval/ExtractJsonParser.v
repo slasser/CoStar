@@ -81,11 +81,13 @@ End D.
 
 (* The parser generator itself. *)
 Module Export PG := Make D.
-Print Assumptions parseSymbol_sound_unambig.
-Print Assumptions parseSymbol_sound_ambig.
-Print Assumptions parseSymbol_error_free.
-Print Assumptions parseSymbol_complete_unique_derivation.
-Print Assumptions parseSymbol_complete_ambiguous_derivations.
+Print PG.ParserAndProofs.PEF.PS.P.
+
+Print Assumptions parse_sound__unique_derivation. 
+Print Assumptions parse_sound__ambiguous_derivation.
+Print Assumptions parse_terminates_without_error.
+Print Assumptions parse_complete__unique_derivation.
+Print Assumptions parse_complete__ambiguous_derivation.
 
 (* The JSON grammar itself *)
 Definition jsonGrammar : grammar :=
@@ -133,4 +135,4 @@ Definition jsonGrammar : grammar :=
     (EltsTl, [T Comma; NT Value; NT EltsTl])
   ].
 
-Extraction "performance_eval/myJsonParser.ml" D PG jsonGrammar.
+Extraction "performance_eval/myJsonParser.ml" D PG jsonGrammar parse.

@@ -128,12 +128,12 @@ let run_gparser_trial (fname : string) : float * float =
   let lexbuf         = Lexing.from_channel (open_in fname) in
   let (lextime, ts) = benchmark (JsonTokenizer.top Lexer.vread) lexbuf in
   let ts'           = map gtoken_of_token ts in
-  let (parsetime, v) = benchmark (PG.parseSymbol jsonGrammar Value) ts' in
+  let (parsetime, v) = benchmark (PG.ParserAndProofs.PEF.PS.P.parse jsonGrammar Value) ts' in
   (match v with
-   | Acc t -> print_string "Acc tree "; print_int (countnodes t); print_string "\n";
-   | Amb t -> print_string "Amb tree"
-   | Rej l -> print_string "Rej l"
-   | Err e -> print_string "Err e");
+   | Accept t -> print_string "Accept tree "; print_int (countnodes t); print_string "\n";
+   | Ambig t -> print_string "Ambig tree"
+   | Reject l -> print_string "Reject l"
+   | Error e -> print_string "Error e");
    (*  let (parsetime, v) = benchmark (PG.parseSymbol jsonGrammar (NT Value)) ts' in *)
   (lextime, parsetime)
 

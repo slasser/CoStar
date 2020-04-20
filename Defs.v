@@ -514,6 +514,17 @@ Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
   Scheme sym_recognize_mutual_ind   := Induction for sym_recognize Sort Prop
     with gamma_recognize_mutual_ind := Induction for gamma_recognize Sort Prop.
 
+  Lemma sym_derivation__sym_recognize :
+    forall g s w v,
+      sym_derivation g s w v
+      -> sym_recognize g s w.
+  Proof.
+    intros g ys w v hs.
+    induction hs using sym_derivation_mutual_ind
+      with (P0 := fun ys w f (hg : gamma_derivation g ys w f) => 
+                    gamma_recognize g ys w); eauto.
+  Qed.
+
   Lemma gamma_recognize_terminal_head :
     forall g a suf w,
       gamma_recognize g (T a :: suf) w

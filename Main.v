@@ -12,129 +12,111 @@ Module Make (Export D : Defs.T).
 
   Module Export ParserAndProofs := ParserCompleteFn D.
 
-  Inductive parse_result :=
-  | Acc : tree -> parse_result
-  | Amb : tree -> parse_result
-  | Rej : string -> parse_result
-  | Err : parse_error -> parse_result.
+  (* Soundness theorems for unique 
+     and ambiguous derivations *)
 
-  (* to do : this can be replaced by parse *)
-  Definition parseSymbol (g : grammar)
-                         (x : nonterminal)
-                         (w : list token) : parse_result :=
-    match parse g x w with
-    | Accept [v] => Acc v
-    | Ambig  [v] => Amb v
-    | Reject str => Rej str
-    | Error e    => Err e
-    | _          => Err InvalidState
-    end.
-
-  (* Soundness theorems for unambiguous and ambiguous derivations *)
-
-  Theorem parseSymbol_sound_unambig :
-    forall (g : grammar)
-           (x : nonterminal)
-           (w : list token)
-           (t : tree),
+  Theorem parse_sound__unique_derivation :
+    forall (g  : grammar)
+           (x  : nonterminal)
+           (ts : list token)
+           (v  : tree),
       no_left_recursion g
-      -> parseSymbol g x w = Acc t
-      -> sym_derivation g (NT x) w t
-         /\ (forall t', sym_derivation g (NT x) w t' -> t' = t).
+      -> parse g x ts = Accept v
+      -> sym_derivation g (NT x) ts v
+         /\ (forall v',
+                sym_derivation g (NT x) ts v'
+                -> v' = v).
   Proof.
-    intros g x w t hn hp.
-    unfold parseSymbol in hp.
-    destruct (parse _ _ _) as [v | v | str | e] eqn:hp'; tc.
-    - apply parse_sound_unambig in hp'; auto.
-      destruct hp' as (hg & ha).
+    intros g x ts v hn hp.
+    unfold parse in hp.
+    eapply multistep_sound_unambig with (w := ts) in hp; eauto.
+    - destruct hp as [hg hu]; unfold bottomFrameSyms in *; sis.
       (* lemma *)
-      inv hg.
-      inv H4; rew_anr.
-      inv hp.
+      inv hg. inv H5; rew_anr.
       split; auto.
-      intros g' hs.
-      assert (gamma_derivation g [NT x] wpre [g']).
+      intros v' hs.
+      assert (hg : gamma_derivation g [NT x] wpre [v']).
       { rew_nil_r wpre; eauto. }
-      apply ha in H; inv H; auto.
-    - destruct v as [ | ? [ | ? ? ]]; tc.
+      apply hu in hg; inv hg; auto.
+    - apply mkClosureMap_complete.
+    - constructor.
+    - apply unique_stack_prefix_derivation_invar_starts_true.
   Qed.
 
-  Theorem parseSymbol_sound_ambig :
-    forall (g : grammar)
-           (x : nonterminal)
-           (w : list token)
-           (t : tree),
+  Theorem parse_sound__ambiguous_derivation :
+    forall (g  : grammar)
+           (x  : nonterminal)
+           (ts : list token)
+           (t  : tree),
       no_left_recursion g
-      -> parseSymbol g x w = Amb t
-      -> sym_derivation g (NT x) w t
-         /\ (exists t', sym_derivation g (NT x) w t' /\ t' <> t).
+      -> parse g x ts = Ambig t
+      -> sym_derivation g (NT x) ts t
+         /\ (exists t',
+                sym_derivation g (NT x) ts t'
+                /\ t' <> t).
   Proof.
-    intros g x w t hn hp.
-    unfold parseSymbol in hp.
-    destruct (parse _ _ _) as [v | v | str | e] eqn:hp'; tc.
-    - destruct v as [ | ? [ | ? ? ]]; tc.
-    - apply parse_sound_ambig in hp'; auto.
-      destruct hp' as (hg & (v' & hg' & hneq)). 
+    intros g x ts v hn hp.
+    unfold parse in hp.
+    eapply multistep_sound_ambig with (w := ts) in hp; eauto.
+    - destruct hp as [hg [v' [hg' hneq]]]. unfold bottomFrameSyms in *; sis.
       (* lemma *)
       inv hg.
-      inv H4; rewrite app_nil_r in *.
-      inv hp.
-      inv hg'.
-      inv H5; rewrite app_nil_r in *.
+      inv H5; rew_anr.
       split; auto.
+      inv hg'.
+      inv H5; rew_anr.
       eexists; split; eauto.
-      unfold not; intros; subst; tc.
+      intros heq; subst; tc.
+    - constructor.
+    - exists []; eauto. 
+    - apply ambiguous_stack_prefix_derivation_invar_starts_true.
   Qed.
 
   (* Error-free termination theorem *)
 
-  Theorem parseSymbol_error_free :
+  Theorem parse_terminates_without_error :
     forall (g  : grammar)
            (x  : nonterminal)
            (ts : list token)
            (e  : parse_error),
       no_left_recursion g
-      -> parseSymbol g x ts <> Err e.
+      -> parse g x ts <> Error e.
   Proof.
-    intros g x ts e hn; unfold not; intros hp.
-    unfold parseSymbol in hp.
-    destruct (parse _ _ _) eqn:hp'; tc.
-    - apply parse_sound_unambig in hp'; auto.
-      destruct hp' as (hg & _).
-      inv hg. inv H4. tc.
-    - apply parse_sound_ambig in hp'; auto.
-      destruct hp' as (hg & _).
-      inv hg. inv H4. tc.
-    - apply parse_terminates_without_error in hp'; auto.
+    intros g x ts e hn hp; destruct e.
+    - (* invalid state case *)
+      eapply parse_never_reaches_invalid_state; eauto.
+    - (* left recursion case *)
+      eapply parse_doesn't_find_left_recursion_in_non_left_recursive_grammar; eauto.
+    - (* prediction error case *)
+      eapply parse_never_returns_prediction_error; eauto.
   Qed.
 
-  (* Completeness theorems for unambiguous and ambiguous derivations *)
+  (* Completeness theorems for unique
+     and ambiguous derivations *)
 
-  Theorem parseSymbol_complete_unique_derivation :
-    forall (g : grammar)
-           (x : nonterminal)
-           (w : list token)
-           (t : tree),
+  Theorem parse_complete__unique_derivation :
+    forall (g  : grammar)
+           (x  : nonterminal)
+           (w  : list token)
+           (t  : tree),
       no_left_recursion g
       -> sym_derivation g (NT x) w t
       -> (forall t', sym_derivation g (NT x) w t' -> t' = t)
-      -> parseSymbol g x w = Acc t.
+      -> parse g x w = Accept t.
   Proof.
-    intros g x w t hn hs ha.
-    assert (hg : gamma_derivation g [NT x] w [t]).
-    { rew_nil_r w; eauto. }
-    apply parse_complete_unique_derivation in hg; auto.
-    - unfold parseSymbol; rewrite hg; auto.
-    - (* lemma *)
-      inv hg.
-      inv H5; rewrite app_nil_r in *.
-      intros v' hg'.
-      inv hg'.
-      inv H5; rewrite app_nil_r in *.
-      apply ha in H1; subst; auto.
+    intros g x w v hn hg hu.
+    apply parse_complete in hg; auto.
+    destruct hg as (v' & [hp | hp]); pose proof hp as hp'.
+    - apply parse_sound__unique_derivation in hp; auto.
+      destruct hp as (hg & _).
+      apply hu in hg; subst; auto.
+    - exfalso.
+      apply parse_sound__ambiguous_derivation in hp; auto.
+      destruct hp as (hg' & (v'' & hg & hneq)).
+      apply hu in hg; apply hu in hg'; subst; tc.
   Qed.
 
-  Theorem parseSymbol_complete_ambiguous_derivations :
+  Theorem parse_complete__ambiguous_derivation :
     forall (g    : grammar)
            (x    : nonterminal)
            (w    : list token)
@@ -143,24 +125,20 @@ Module Make (Export D : Defs.T).
       -> sym_derivation g (NT x) w t
       -> sym_derivation g (NT x) w t'
       -> t <> t'
-      -> exists t'', parseSymbol g x w = Amb t''.
+      -> exists t'',
+          parse g x w = Ambig t''
+          /\ sym_derivation g (NT x) w t''.
   Proof.
-    intros g x w t t' hn hs hs' hneq.
-    assert (hg : gamma_derivation g [NT x] w [t]).
-    { rew_nil_r w; eauto. }
-    assert (hg' : gamma_derivation g [NT x] w [t']).
-    { rew_nil_r w; eauto. }
-    assert (hneq' : [t] <> [t']).
-    { unfold not; intros ?; subst; tc. }
-    eapply parse_complete_ambiguous_derivations in hg; eauto.
-    destruct hg as (v'' & hp & hg).
-    pose proof hp as hp'.
-    apply parse_sound_ambig in hp; auto.
-    destruct hp as (hg'' & _).
-    inv hg''.
-    inv H4; rew_anr.
-    unfold parseSymbol.
-    rewrite hp'; eauto.
+    intros g x w v v' hn hg hg'' hneq.
+    pose proof hg as hg'.
+    apply parse_complete in hg; auto.
+    destruct hg as (v'' & [hp | hp]); eauto.
+    - exfalso.
+      apply parse_sound__unique_derivation in hp; auto.
+      destruct hp as (hg & ha).
+      apply ha in hg'; apply ha in hg''; subst; tc.
+    - eexists; split; eauto.
+      eapply parse_sound__ambiguous_derivation; eauto.
   Qed.
 
 End Make.
