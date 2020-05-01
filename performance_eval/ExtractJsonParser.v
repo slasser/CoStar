@@ -81,8 +81,6 @@ End D.
 
 (* The parser generator itself. *)
 Module Export PG := Make D.
-Print PG.ParserAndProofs.PEF.PS.P.
-
 Print Assumptions parse_sound__unique_derivation. 
 Print Assumptions parse_sound__ambiguous_derivation.
 Print Assumptions parse_terminates_without_error.
