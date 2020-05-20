@@ -89,6 +89,29 @@ Module ParserCompleteFn (Import D : Defs.T).
     - eapply push_ambig_preserves_ussr; eauto.
   Qed.
 
+  Lemma ussr__step_neq_reject :
+    forall g cm ps ss ts av un ca s,
+      no_left_recursion g
+      -> closure_map_correct g cm
+      -> cache_stores_target_results g cm ca
+      -> stacks_wf g ps ss
+      -> gamma_recognize g (unprocStackSyms ss) ts
+      -> step g cm ps ss ts av un ca <> StepReject s.
+  Proof.
+    intros g cm ps ss ts av un ca s
+           hn hm hc hw hg hs.
+    unfold step in hs; dmeqs h; tc; inv hs; sis.
+    - inv hg.
+    - inversion hg as [| ? ? wpre wsuf hs hg' heq heq']; subst; clear hg.
+      inv hs; inv heq'.
+    - inversion hg as [| ? ? wpre wsuf hs hg' heq heq']; subst; clear hg.
+      inv hs; inv heq'; tc.
+    - eapply ussr_adaptivePredict_neq_reject; eauto.
+      eapply frames_wf__suffix_frames_wf; eauto.
+    - inversion hg as [| ? ? wpre wsuf hs hg' heq heq']; subst; clear hg.
+      inv_sr hs  hi hg''; apply lhs_mem_allNts_true in hi; tc.
+  Qed.
+
   Lemma ussr__multistep_doesn't_reject' :
     forall (g      : grammar)
            (cm     : closure_map)
@@ -108,30 +131,13 @@ Module ParserCompleteFn (Import D : Defs.T).
       -> closure_map_correct g cm
       -> stacks_wf g ps ss
       -> gamma_recognize g (unprocStackSyms ss ) ts
-      -> multistep g cm ps ss ts av un ca hc a' <> Reject s.
-  Proof.
+      -> multistep g cm ps ss ts av un ca hc a' <> Reject s.  Proof.
     intros g cm tri a'.
     induction a' as [tri hlt IH].
     intros ps ss ts av un ca hc a s ? hn hcm hw hg hm; subst. 
     apply multistep_reject_cases in hm.
     destruct hm as [hs | (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm)]. 
-    - (* lemma *)
-      clear hlt IH.
-      unfold step in hs; dmeqs h; tc; inv hs; sis.
-      + inv hg.
-      + inv hg.
-        inv H2.
-        inv H1.
-      + inv hg. 
-        inv H2. 
-        inv H1. 
-        tc.
-      + eapply ussr_adaptivePredict_neq_reject; eauto.
-        eapply frames_wf__suffix_frames_wf; eauto. 
-      + inv hg. 
-        inv H1.
-        apply lhs_mem_allNts_true in H0. 
-        tc.
+    - eapply ussr__step_neq_reject; eauto.
     - eapply IH with (y := meas g ss' ts' av'); eauto. 
       + eapply step_meas_lt with (ca := ca); eauto.
       + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
