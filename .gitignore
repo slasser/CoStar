@@ -36,3 +36,5 @@ myJsonParser.mli
 
 CoqMakefile
 CoqMakefile.conf
+
+*.class

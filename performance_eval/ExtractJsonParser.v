@@ -1,7 +1,5 @@
 Require Import List String ExtrOcamlBasic ExtrOcamlString.
-Require Import GallStar.Defs.
-Require Import GallStar.Lex.
-Require Import GallStar.Main.
+Require Import GallStar.Defs GallStar.Main.
 Import ListNotations.
 Open Scope list_scope.
 
@@ -81,12 +79,13 @@ End D.
 
 (* The parser generator itself. *)
 Module Export PG := Make D.
+(*
 Print Assumptions parse_sound__unique_derivation. 
 Print Assumptions parse_sound__ambiguous_derivation.
 Print Assumptions parse_terminates_without_error.
 Print Assumptions parse_complete__unique_derivation.
 Print Assumptions parse_complete__ambiguous_derivation.
-
+ *)
 (* The JSON grammar itself *)
 Definition jsonGrammar : grammar :=
   [
