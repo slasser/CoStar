@@ -938,7 +938,8 @@ Module LLPredictionFn (Import D : Defs.T).
     - unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| sp' sps'] eqn:hf; tc.
       dm; tc; inv hl.
-      eapply all_predictions_equal_filter in hf; firstorder.
+      eapply all_predictions_equal_filter in hf; eauto.
+      red in hf; firstorder.
     - destruct sps as [| sp' sps']; tc.
       destruct (allPredictionsEqual sp' sps').
       + inv hl; firstorder.

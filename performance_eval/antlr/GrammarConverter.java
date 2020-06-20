@@ -5,9 +5,11 @@ import nl.bigo.rrdantlr4.*;
 
 public class GrammarConverter {
 
-    public static void convert(String inPath, String outPath) throws Exception {
-	DiagramGenerator gen = new DiagramGenerator(inPath);	
-	PrintWriter writer = new PrintWriter(outPath, "UTF-8");
+    public static void convert(String antlrGrammarPath, String pythonDirPath) throws Exception {
+	String grammarName = new File(antlrGrammarPath).getName().split("\\.")[0];
+	String pythonGrammarPath = pythonDirPath + "/" + grammarName + ".py";
+	PrintWriter writer = new PrintWriter(pythonGrammarPath, "UTF-8");
+	DiagramGenerator gen = new DiagramGenerator(antlrGrammarPath);
 	for (Entry<String,String> e : gen.getRules().entrySet()) {
 	    String lhs = e.getKey();
 	    if (Character.isLowerCase(lhs.charAt(0))) {
@@ -34,8 +36,7 @@ public class GrammarConverter {
     }
 
     public static void main(String[] args) throws Exception {
-	System.out.println(args[0]);
-	convertAll(args[0], args[1]);
+	convert(args[0], args[1]);
     }
 }
 

@@ -17,7 +17,76 @@ type symbol = T of string
 type bnf_rule    = string * symbol list
                                    
 type bnf_grammar = bnf_rule list
-                     
+
+let explode (s : string) : char list = List.init (String.length s) (String.get s)
+
+let is_alpha = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
+let is_digit = function '0' .. '9' -> true | _ -> false
+let is_coq_char c = is_alpha c || is_digit c || Char.equal c '_'
+
+let legal_coq_constr s = for_all is_coq_char (explode s)
+                            (* 
+    static String normalize(String s) {
+	switch (s) {
+	case "("  : return "lparen";
+	case ")"  : return "rparen";
+	case "["  : return "lbrack";
+	case "]"  : return "rbrack";
+	case "\\" : return "bslash";
+	case "/"  : return "fslash";
+	case "->" : return "arrow" ;
+	case "-"  : return "dash"  ;
+	case "."  : return "period";
+	case ":"  : return "colon" ;
+	case ";"  : return "semi"  ;
+	default   : return s;
+	}
+    }
+                             *)
+                                 (*
+let legal_coq_equiv (s : string) : string =
+  match s with
+  | "("  -> "lparen"
+  | ")"  -> "rparen"
+  | "["  -> "lsquare"
+  | "]"  -> "rsquare"
+  | "{"  -> "lcurly"
+  | "}"  -> "rcurly"
+  | "<"  -> "langle"
+  | ">"  -> "rangle" 
+  | "\\" -> "bslash"
+  | "/"  -> "fslash"
+  | "->" -> "arrow" 
+  | "-"  -> "dash"  
+  | "."  -> "period"
+  | ","  -> "comma"
+  | ":"  -> "colon" 
+  | ";"  -> "semi"
+  | "/>" -> "fslash_rangle"
+  | "="  -> "equals"
+  | _    -> failwith ("unrecognized literal: " ^ s)
+                                  *)
+
+let legal_coq_equiv (k : string) : string =
+  let open Yojson.Basic                          in
+  let open Yojson.Basic.Util                     in
+  let subs = from_file "name_substitutions.json" in
+  match member k subs with
+  | `String v -> v
+  | _         -> failwith ("unrecognized literal: " ^ k)
+
+let normalize_terminal_name (s : string) : string =
+  let r = Str.regexp {|^Lit_\(.*\)$|} in
+  if Str.string_match r s 0 then
+    (* the terminal is a literal in the grammar *)
+    let literal = Str.matched_group 1 s in
+    if legal_coq_constr literal then
+      s
+    else
+      "Lit_" ^ legal_coq_equiv literal
+  else
+    s
+    
 let optional_count = ref 0
 let star_count     = ref 0
 let plus_count     = ref 0
@@ -25,7 +94,8 @@ let group_count    = ref 0
                                  
 let normalize_ebnf_elt (e : elt) : symbol * ebnf_rule list =
   match e with
-  | Terminal s    -> (T s,  [])
+  | Terminal s    -> let s' = normalize_terminal_name s
+                     in  (T s',  [])
   | NonTerminal s -> (NT s, [])
   | Optional e'   -> let s = "optional_" ^ string_of_int !optional_count in
                      let _ = optional_count := !optional_count + 1       in
@@ -116,12 +186,12 @@ let coq_nonterminal_defs (g : bnf_grammar) : string =
     "Inductive nonterminal' :=\n%s.\n\nDefinition nonterminal := nonterminal'."
     (coq_symbol_constructors (nonterminals g))
 
-let coq_match_clause (name : string) : string =
-  let constr = coq_constr name in
-  Printf.sprintf "| %s => %s" constr (coq_str_lit constr)
-                                                 
-let coq_match_clauses (names : string list) : string =
-  String.concat "\n" (map coq_match_clause names)
+let coq_match_clause (lhs : string) (rhs : string) : string =
+  Printf.sprintf "| %s => %s" lhs rhs
+
+let coq_show_clauses (names : string list) : string =
+  String.concat "\n"
+    (map (fun s -> coq_match_clause (coq_constr s) (coq_str_lit s)) names)
 
 let coq_showT_def (g : bnf_grammar) : string =
   Printf.sprintf
@@ -129,7 +199,7 @@ let coq_showT_def (g : bnf_grammar) : string =
      "match a with\n"                                ^^
      "%s\n"                                          ^^
      "end.")
-    (coq_match_clauses (terminals g))
+    (coq_show_clauses (terminals g))
 
 let coq_showNT_def (g : bnf_grammar) : string =
   Printf.sprintf
@@ -137,7 +207,21 @@ let coq_showNT_def (g : bnf_grammar) : string =
      "match x with\n"                                    ^^
      "%s\n"                                              ^^
      "end.")
-    (coq_match_clauses (nonterminals g))
+    (coq_show_clauses (nonterminals g))
+
+let coq_terminalOfString_clauses (names : string list) : string =
+  let clauses = (map (fun s -> coq_match_clause (coq_str_lit s) (coq_constr s)) names) in
+  let comment = "(* This clause should be unreachable *)"                 in
+  let catch_all = coq_match_clause "_" (hd (rev names))                   in
+  String.concat "\n" (clauses @ [comment ; catch_all])
+
+let coq_terminalOfString_def (g : bnf_grammar) : string =
+  Printf.sprintf
+    ("Definition terminalOfString (s : string) : terminal :=\n" ^^
+     "match s with\n"                                           ^^
+     "%s\n"                                                     ^^
+     "end.")
+    (coq_terminalOfString_clauses (terminals g))
 
 let coq_bnf_rule ((x, ys) : bnf_rule) : string =
   "(" ^ coq_constr x ^ ", " ^ coq_list_repr (map coq_symbol ys) ^ ")"
@@ -148,6 +232,7 @@ let coq_grammar (g : bnf_grammar) : string =
 
 let coq_grammar (g : bnf_grammar) : string =
   "[ " ^ String.concat "\n; " (map coq_bnf_rule g) ^ "\n]"
+                                                       
 let coq_grammar_def (name : string) (g : bnf_grammar) : string =
   Printf.sprintf "Definition %sGrammar : grammar :=\n%s." name (coq_grammar g)
 
@@ -177,6 +262,7 @@ let coq_types_module (g : bnf_grammar) (g_name : string) : string =
                        ; coq_nt_eq_dec
                        ; coq_showT_def  g
                        ; coq_showNT_def g
+                       ; coq_terminalOfString_def g
                        ; coq_types_module_end g_name
                        ]
 
@@ -190,16 +276,17 @@ let coq_export_pg : string =
   "Module Export PG := Make D."
 
 let coq_imports : string =
-  String.concat "\n" [ "Require Import List String ExtrOcamlBasic ExtrOcamlString."
+  String.concat "\n" [ "Require Import List String ExtrOcamlBasic ExtrOcamlNativeString."
                      ; "Require Import GallStar.Defs GallStar.Main."
                      ; "Import ListNotations."
                      ; "Open Scope list_scope."
+                     ; "Open Scope string_scope."
                      ]
 
 let coq_extraction_command (g_name : string) : string =
   Printf.sprintf "Extraction \"%sParser.ml\" D PG %sGrammar parse." g_name g_name
 
-let coq_file_contents (g : bnf_grammar) (g_name : string) : string =
+let coq_grammar_file_contents (g : bnf_grammar) (g_name : string) : string =
   String.concat "\n\n"
                 [ coq_imports
                 ; coq_types_module g g_name
@@ -209,7 +296,15 @@ let coq_file_contents (g : bnf_grammar) (g_name : string) : string =
                 ; coq_extraction_command g_name
                 ]
 
-(* grammar for s-expressions *)
+let write_coq_grammar_file (g : ebnf_grammar) (g_name : string) (f_name : string) : unit =
+  let g' = bnf_of g                                               in
+  let oc = open_out f_name                                        in
+  let _  = output_string oc (coq_grammar_file_contents g' g_name) in
+  close_out oc
+
+
+            (*
+            (* grammar for s-expressions *)
 let sexpr_grammar : ebnf_grammar = [
 
     ("sexpr", [ZeroOrMore (NonTerminal "item"); Terminal "EOF"]);
@@ -231,5 +326,4 @@ let sexpr_grammar : ebnf_grammar = [
     ("atom", [Terminal "DOT"])
       
   ]
-                      
-let g = bnf_of sexpr_grammar
+             *)        
