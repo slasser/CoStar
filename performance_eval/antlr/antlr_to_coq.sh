@@ -2,15 +2,17 @@ ANTLR_DIR=antlr4_grammars
 PY_DIR=python_ebnf_grammars
 OCAML_DIR=ocaml_ebnf_grammars
 COQ_DIR=coq_grammars
+EVAL_DIR=evaluation_grammars
 
 # Create directories for different grammar representations
-for dir in $PY_DIR $OCAML_DIR $COQ_DIR; do
+for dir in $PY_DIR $OCAML_DIR $COQ_DIR $EVAL_DIR; do
     mkdir -p $dir
 done
 
 javac -cp .:rrd-antlr4-0.1.2.jar GrammarConverter.java
 
-GRAMMARS="Json XMLParser"
+#GRAMMARS="Java"
+GRAMMARS="Erlang"
 
 for G in $GRAMMARS ; do
     # Convert ANTLR4 grammar to a Python object representation
@@ -24,4 +26,8 @@ for G in $GRAMMARS ; do
           #use \"normalize_rules.ml\"                            ;;
           #use \"${OCAML_DIR}/${G}.ml\"                          ;;
           write_coq_grammar_file rules \"${G}\" \"${COQ_FNAME}\" ;;" | utop
+    # to do
+    coqc -R ../.. GallStar $COQ_FNAME
+    mv ${G}Parser.ml ${G}Parser.mli $EVAL_DIR
+    
 done

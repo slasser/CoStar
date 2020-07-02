@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.antlr.v4.runtime.CharStreams;
@@ -34,35 +35,15 @@ public class TokenizeTestData {
 	}
     }
 
-    static String normalize(String s) {
-	return nameSubs.getString(s);
+    static boolean legalCoqConstr(String s) {
+	Pattern p = Pattern.compile("[^a-zA-Z0-9_]");
+	boolean hasIllegalChar = p.matcher(s).find();
+	return !hasIllegalChar;
     }
-
-    // to do : put this in a JSON file so that the tokenizer
-    // and the grammar converter can share the same mapping
-    /*
+    
     static String normalize(String s) {
-	switch (s) {
-	case "("  : return "lparen" ;
-	case ")"  : return "rparen" ;
-	case "["  : return "lsquare";
-	case "]"  : return "rsquare";
-	case "{"  : return "lcurly" ;
-	case "}"  : return "rcurly" ;
-	case "<"  : return "langle" ;
-	case ">"  : return "rangle" ;
-	case "\\" : return "bslash" ;
-	case "/"  : return "fslash" ;
-	case "->" : return "arrow"  ;
-	case "-"  : return "dash"   ;
-	case "."  : return "period" ;
-	case ","  : return "comma"  ;
-	case ":"  : return "colon"  ;
-	case ";"  : return "semi"   ;
-	default   : return s        ;
-	}
+	return legalCoqConstr(s) ? s : nameSubs.getString(s);
     }
-    */
     
     static JSONObject jsonTokenRepr(Vocabulary v, Token t) {
 	String literal = t.getText();
@@ -89,6 +70,7 @@ public class TokenizeTestData {
     
     static void tokenizeAllFiles(String lexerPath, String dataDir, String tokensDir) throws Exception {
 	for (File f : new File(dataDir).listFiles()) {
+	    System.out.println(f.getName());
 	    JSONArray tokens = getJsonTokens(lexerPath, f.getPath());
 	    String tokensPath = tokensDir + "/" + f.getName().split("\\.")[0] + ".json";
 	    PrintWriter writer = new PrintWriter(tokensPath, "UTF-8");

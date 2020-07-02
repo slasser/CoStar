@@ -3,6 +3,7 @@
 Tactics.v
 Utils.v
 Lex.v
+Orders.v
 
 Defs.v
 Termination.v

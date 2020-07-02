@@ -142,3 +142,8 @@ Module Make (Export D : Defs.T).
   Qed.
 
 End Make.
+
+Module Type MakeT (D : Defs.T).
+  Include      D.
+  Include Make D.
+End MakeT.

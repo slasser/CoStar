@@ -4,7 +4,7 @@ Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.
 
-Module TerminationFn (Import D : Defs.T).
+Module TerminationFn (Export D : Defs.T).
 
   (* Definitions related to well-founded measures *)
 
