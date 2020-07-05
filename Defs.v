@@ -1,4 +1,5 @@
-Require Import FMaps List MSets Omega PeanoNat String.
+Require Import FMaps List MSets Omega OrderedType OrderedTypeAlt OrderedTypeEx PeanoNat String.
+Require Import GallStar.Orders.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.
@@ -14,6 +15,26 @@ Module Type SYMBOL_TYPES.
   Hypothesis nt_eq_dec : forall x x' : nonterminal,
       {x = x'} + {x <> x'}.
 
+  Parameter compareT : terminal -> terminal -> comparison.
+
+  Hypothesis compareT_sym :
+    forall x y : terminal,
+      compareT y x = CompOpp (compareT x y).
+
+  Hypothesis compareT_trans :
+    forall (c : comparison) (x y z : terminal),
+      compareT x y = c -> compareT y z = c -> compareT x z = c.
+
+  Parameter compareNT : nonterminal -> nonterminal -> comparison.
+  
+  Hypothesis compareNT_sym :
+    forall x y : nonterminal,
+      compareNT y x = CompOpp (compareNT x y).
+
+  Hypothesis compareNT_trans :
+    forall (c : comparison) (x y z : nonterminal),
+      compareNT x y = c -> compareNT y z = c -> compareNT x z = c.
+  
   Parameter showT  : terminal    -> string.
   Parameter showNT : nonterminal -> string.
   
@@ -37,6 +58,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | right _ => false
     end.
 
+  Module NT_as_OT <: OrderedType.
+
+    Module A <: OrderedTypeAlt.
+      Definition t := nonterminal.
+      Definition compare := compareNT.
+      Definition compare_sym := Ty.compareNT_sym.
+      Definition compare_trans := Ty.compareNT_trans.
+    End A.
+
+    Include OrderedType_from_Alt A.
+    
+  End NT_as_OT.
+
   Inductive symbol := T  : terminal -> symbol 
                     | NT : nonterminal -> symbol.
 
@@ -46,6 +80,42 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     decide equality; try apply t_eq_dec; try apply nt_eq_dec.
   Defined.
 
+  Module Symbol_as_OT <: OrderedType.
+
+    Module Symbol_as_OT_Alt <: OrderedTypeAlt.
+
+      Definition t := symbol.
+
+      Definition compare (s s' : symbol) :=
+        match s, s' with
+        | T x, T y   => compareT x y
+        | T _, NT _  => Lt
+        | NT _, T _  => Gt
+        | NT x, NT y => compareNT x y
+        end.
+
+      Lemma compare_sym : forall x y,
+          compare y x = CompOpp (compare x y).
+      Proof.
+        intros x y; destruct x; destruct y; sis; auto.
+        - apply Ty.compareT_sym.
+        - apply Ty.compareNT_sym.
+      Qed.
+
+      Lemma compare_trans : forall c x y z,
+          compare x y = c -> compare y z = c -> compare x z = c.
+      Proof.
+        intros c x y z hc hc'; destruct x; destruct y; destruct z; sis; tc; auto. 
+        - eapply Ty.compareT_trans; eauto.
+        - eapply Ty.compareNT_trans; eauto.
+      Qed.
+
+    End Symbol_as_OT_Alt.
+
+    Include OrderedType_from_Alt Symbol_as_OT_Alt.
+    
+  End Symbol_as_OT.
+  
   Lemma gamma_eq_dec :
     forall gamma gamma' : list symbol,
       {gamma = gamma'} + {gamma <> gamma'}.
@@ -62,7 +132,11 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     unfold beqGamma; split; intros; dms; tc. 
   Qed.
 
+  Module Gamma_as_OT <: OrderedType := List_as_OT Symbol_as_OT.
+  
   (* Finite sets of nonterminals *)
+  (* to do : MSetWeakList should be replaced by a more
+     efficient functor, now that nonterminals are ordered *)
   Module MDT_NT.
     Definition t      := nonterminal.
     Definition eq_dec := Ty.nt_eq_dec.
@@ -254,6 +328,43 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
   Qed.
 
+  Module SF_as_OT <: OrderedType.
+
+    Module O  := Option_as_OT NT_as_OT.
+    Module L  := List_as_OT Symbol_as_OT.
+    Module P  := PairOrderedType O L.
+    Module P' := OrderedType_to_Alt P.
+
+    Module A <: OrderedTypeAlt.
+    
+      Definition t := suffix_frame.
+
+      Definition compare x y :=
+        match x, y with
+        | SF o suf, SF o' suf' =>
+          P'.compare (o, suf) (o', suf')
+        end.
+
+      Lemma compare_sym : forall (x y : suffix_frame),
+          compare y x = CompOpp (compare x y).
+      Proof.
+        intros x y; destruct x as [o suf]; destruct y as [o' suf']; sis.
+        apply P'.compare_sym.
+      Qed.
+
+      Lemma compare_trans : forall c x y z,
+          compare x y = c -> compare y z = c -> compare x z = c.
+      Proof.
+        intros c x y z hc hc'; destruct x; destruct y; destruct z; sis.
+        eapply P'.compare_trans; eauto.
+      Qed.
+
+    End A.
+
+    Include OrderedType_from_Alt A.
+
+  End SF_as_OT.
+  
   (* Finite sets and maps for suffix frames *)
   Module MDT_SF.
     Definition t       := suffix_frame.

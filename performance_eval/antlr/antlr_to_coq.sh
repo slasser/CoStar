@@ -11,8 +11,7 @@ done
 
 javac -cp .:rrd-antlr4-0.1.2.jar GrammarConverter.java
 
-#GRAMMARS="Java"
-GRAMMARS="Erlang"
+GRAMMARS="Json"
 
 for G in $GRAMMARS ; do
     # Convert ANTLR4 grammar to a Python object representation
