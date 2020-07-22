@@ -8,30 +8,24 @@ Import ListNotations.
 Module Type SYMBOL_TYPES.
 
   Parameters terminal nonterminal : Type.
-  
-  Hypothesis t_eq_dec : forall a a' : terminal,
-      {a = a'} + {a <> a'}.
-  
-  Hypothesis nt_eq_dec : forall x x' : nonterminal,
-      {x = x'} + {x <> x'}.
 
   Parameter compareT : terminal -> terminal -> comparison.
 
-  Hypothesis compareT_sym :
+  Parameter compareT_eq :
     forall x y : terminal,
-      compareT y x = CompOpp (compareT x y).
+      compareT x y = Eq <-> x = y. 
 
-  Hypothesis compareT_trans :
+  Parameter compareT_trans :
     forall (c : comparison) (x y z : terminal),
       compareT x y = c -> compareT y z = c -> compareT x z = c.
 
   Parameter compareNT : nonterminal -> nonterminal -> comparison.
-  
-  Hypothesis compareNT_sym :
-    forall x y : nonterminal,
-      compareNT y x = CompOpp (compareNT x y).
 
-  Hypothesis compareNT_trans :
+  Parameter compareNT_eq :
+    forall x y : nonterminal,
+      compareNT x y = Eq <-> x = y. 
+
+  Parameter compareNT_trans :
     forall (c : comparison) (x y z : nonterminal),
       compareNT x y = c -> compareNT y z = c -> compareNT x z = c.
   
@@ -43,33 +37,53 @@ End SYMBOL_TYPES.
 (* Core definitions, parameterized by grammar symbol types *)
 Module DefsFn (Export Ty : SYMBOL_TYPES).
 
-  Definition t_eq_dec  := Ty.t_eq_dec.
-  Definition nt_eq_dec := Ty.nt_eq_dec.
+  Definition t_eq_dec : forall x y : terminal,
+    {x = y} + {x <> y}.
+  Proof.
+    intros x y; destruct (compareT x y) eqn:hc.
+    - left; apply compareT_eq; auto.
+    - right; intros heq. apply compareT_eq in heq; tc.
+    - right; intros heq; apply compareT_eq in heq; tc.
+  Defined.
 
-  Definition beqNt (x x' : nonterminal) : bool :=
-    match nt_eq_dec x' x with
-    | left _  => true
-    | right _ => false
-    end.
+  Definition nt_eq_dec : forall x y : nonterminal,
+    {x = y} + {x <> y}.
+  Proof.
+    intros x y; destruct (compareNT x y) eqn:hc.
+    - left; apply compareNT_eq; auto.
+    - right; intros heq. apply compareNT_eq in heq; tc.
+    - right; intros heq; apply compareNT_eq in heq; tc.
+  Defined.
 
   Definition beqT (a a' : terminal) : bool :=
     match t_eq_dec a' a with
     | left _  => true
     | right _ => false
     end.
+  
+  Definition beqNt (x x' : nonterminal) : bool :=
+    match nt_eq_dec x' x with
+    | left _  => true
+    | right _ => false
+    end.
 
-  Module NT_as_OT <: OrderedType.
+  Module T_as_UCT <: UsualComparableType.
+    Definition t := terminal.
+    Definition compare := compareT.
+    Definition compare_eq := compareT_eq.
+    Definition compare_trans := compareT_trans.
+  End T_as_UCT.
 
-    Module A <: OrderedTypeAlt.
-      Definition t := nonterminal.
-      Definition compare := compareNT.
-      Definition compare_sym := Ty.compareNT_sym.
-      Definition compare_trans := Ty.compareNT_trans.
-    End A.
-
-    Include OrderedType_from_Alt A.
+  Module T_as_UOT <: UsualOrderedType := UOT_from_UCT T_as_UCT.
+  
+  Module NT_as_UCT <: UsualComparableType.
+    Definition t := nonterminal.
+    Definition compare := compareNT.
+    Definition compare_eq := compareNT_eq.
+    Definition compare_trans := compareNT_trans.
+  End NT_as_UCT.
     
-  End NT_as_OT.
+  Module NT_as_UOT <: UsualOrderedType := UOT_from_UCT NT_as_UCT.
 
   Inductive symbol := T  : terminal -> symbol 
                     | NT : nonterminal -> symbol.
@@ -80,41 +94,96 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     decide equality; try apply t_eq_dec; try apply nt_eq_dec.
   Defined.
 
-  Module Symbol_as_OT <: OrderedType.
-
-    Module Symbol_as_OT_Alt <: OrderedTypeAlt.
-
-      Definition t := symbol.
-
-      Definition compare (s s' : symbol) :=
-        match s, s' with
-        | T x, T y   => compareT x y
-        | T _, NT _  => Lt
-        | NT _, T _  => Gt
-        | NT x, NT y => compareNT x y
-        end.
-
-      Lemma compare_sym : forall x y,
-          compare y x = CompOpp (compare x y).
-      Proof.
-        intros x y; destruct x; destruct y; sis; auto.
-        - apply Ty.compareT_sym.
-        - apply Ty.compareNT_sym.
-      Qed.
-
-      Lemma compare_trans : forall c x y z,
-          compare x y = c -> compare y z = c -> compare x z = c.
-      Proof.
-        intros c x y z hc hc'; destruct x; destruct y; destruct z; sis; tc; auto. 
-        - eapply Ty.compareT_trans; eauto.
-        - eapply Ty.compareNT_trans; eauto.
-      Qed.
-
-    End Symbol_as_OT_Alt.
-
-    Include OrderedType_from_Alt Symbol_as_OT_Alt.
+  Module Symbol_as_UOT <: UsualOrderedType.
     
-  End Symbol_as_OT.
+    Definition t := symbol.
+
+    Definition eq       := @eq symbol.
+    Definition eq_refl  := @eq_refl symbol.
+    Definition eq_sym   := @eq_sym symbol.
+    Definition eq_trans := @eq_trans symbol.
+
+    Definition lt (x y : symbol) : Prop :=
+      match x, y with
+      | T a, T b   => T_as_UOT.lt a b
+      | T _, NT _  => True
+      | NT _, T _  => False
+      | NT a, NT b => NT_as_UOT.lt a b
+      end.
+
+    Lemma lt_trans :
+      forall x y z, lt x y -> lt y z -> lt x z.
+    Proof.
+      unfold lt; intros x y z hlt hlt'; destruct x as [a | a];
+        destruct y as [b | b]; destruct z as [c | c]; try contradiction; auto.
+      - eapply T_as_UOT.lt_trans; eauto.
+      - eapply NT_as_UOT.lt_trans; eauto.
+    Qed.
+    
+    Lemma lt_not_eq :
+      forall x y, lt x y -> ~ x = y.
+    Proof.
+      unfold lt; intros x y hl heq; destruct x as [a | a];
+        destruct y as [b | b]; inv heq; auto.
+      - eapply T_as_UOT.lt_not_eq; eauto.
+      - eapply NT_as_UOT.lt_not_eq; eauto.
+    Qed.
+
+    Lemma compareNT_refl :
+      forall x, compareNT x x = Eq.
+    Proof.
+      intros x; apply compareNT_eq; auto.
+    Qed.
+
+    Lemma compareNT_sym :
+      forall x y, compareNT x y = CompOpp (compareNT y x).
+    Proof.
+      intros x y; destruct (compareNT x y) eqn:hc.
+      - apply compareNT_eq in hc; subst.
+        rewrite compareNT_refl; auto.
+      - destruct (compareNT y x) eqn:hc'; auto.
+        + exfalso; apply compareNT_eq in hc'; subst.
+          rewrite compareNT_refl in hc; tc.
+        + exfalso; eapply compareNT_trans in hc'; eauto.
+          rewrite compareNT_refl in hc'; tc.
+      - destruct (compareNT y x) eqn:hc'; auto.
+        + exfalso; apply compareNT_eq in hc'; subst.
+          rewrite compareNT_refl in hc; tc.
+        + exfalso; eapply compareNT_trans in hc'; eauto.
+          rewrite compareNT_refl in hc'; tc.
+    Qed.
+
+    Definition compare :
+      forall x y,
+        Compare lt eq x y.
+    Proof.
+      intros x y; destruct x as [a | a]; destruct y as [b | b]; auto. 
+      - destruct (T_as_UOT.compare a b) as [hlt | heq | hgt]. 
+        + apply LT; auto.
+        + apply EQ; unfold eq; unfold T_as_UOT.eq in heq; subst; auto.
+        + apply GT; auto.
+      - apply LT; unfold lt; auto.
+      - apply GT; unfold lt; auto.
+      - destruct (NT_as_UOT.compare a b) as [hlt | heq | hgt]. 
+        + apply LT; auto.
+        + apply EQ; unfold eq; unfold NT_as_UOT.eq in heq; subst; auto.
+        + apply GT; auto.
+    Defined.
+
+    Definition eq_dec :
+      forall x y : symbol,
+        {x = y} + {x <> y}.
+    Proof.
+      intros x y; destruct x as [a | a]; destruct y as [b | b].
+      - destruct (T_as_UOT.eq_dec a b); subst; auto.
+        right; intros heq; tc.
+      - right; intros heq; tc.
+      - right; intros heq; tc.
+      - destruct (NT_as_UOT.eq_dec a b); subst; auto.
+        right; intros heq; tc.
+    Defined.
+
+  End Symbol_as_UOT.
   
   Lemma gamma_eq_dec :
     forall gamma gamma' : list symbol,

@@ -348,7 +348,48 @@ let coq__compareNT_trans_lemma =
                      ; "eapply Nat_as_OT_Alt.compare_trans; eauto."
                      ; "Qed."
                      ]
-               
+
+let coq__ltb_clause (s, s') =
+  let b = if compare s s' < 0 then "true" else "false"
+  in  Printf.sprintf "| %s, %s => %s" s s' b
+
+let coq__ltb_clauses prs =
+  String.concat "\n" (List.map coq__ltb_clause prs)
+
+let coq__terminal_ltb_def g =
+  Printf.sprintf
+    ("Definition terminal_ltb (t t' : terminal) :=\n" ^^
+     "match t, t' with\n"                             ^^
+     "%s\n"                                           ^^
+     "end.")
+    (coq__ltb_clauses (all_pairs (terminals g)))
+
+let coq__terminal_ltb_not_eq_lemma =
+  String.concat "\n" [ "Lemma terminal_ltb_not_eq :"
+                     ; "forall x y : terminal,"
+                     ; "terminal_ltb x y = true -> x <> y."
+                     ; "Proof."
+                     ; "unfold terminal_ltb; intros x y ht heq; destruct x; destruct y; try congruence."
+                     ; "Qed."
+                     ]
+    
+let coq__terminal_ltb_trans_lemma =
+  String.concat "\n" [ "Lemma terminal_ltb_trans :"
+                     ; "forall x y z : terminal,"
+                     ; "terminal_ltb x y = true -> terminal_ltb y z = true -> terminal_ltb x z = true."
+                     ; "Proof."
+                     ; "intros x y z; destruct x; destruct y; destruct z; auto."
+                     ; "Qed."
+                     ]
+                
+(*let coq__ltb_nonterminal_def g =
+  Printf.sprintf
+    ("Definition ltb_nonterminal (x x' : nonterminal) :=\n" ^^
+     "match x, x' with\n"                                   ^^
+     "%s\n"                                                 ^^
+     "end.")
+    (coq__ltb_clauses (all_pairs (nonterminals g)))
+ *)             
 let coq_types_module (g : bnf_grammar) (g_name : string) : string =
   String.concat "\n\n" [ coq_types_module_start g_name
                        ; coq_terminal_defs g
@@ -365,6 +406,9 @@ let coq_types_module (g : bnf_grammar) (g_name : string) : string =
                        ; coq__compareT_trans_lemma
                        ; coq__compareNT_sym_lemma
                        ; coq__compareNT_trans_lemma
+                       ; coq__terminal_ltb_def g
+                       ; coq__terminal_ltb_not_eq_lemma
+                       ; coq__terminal_ltb_trans_lemma
                        ; coq_showT_def  g
                        ; coq_showNT_def g
                        ; coq_terminalOfString_def g
