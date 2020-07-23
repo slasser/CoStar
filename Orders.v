@@ -2,6 +2,44 @@ Require Import List OrderedType OrderedTypeAlt OrderedTypeEx.
 Require Import GallStar.Tactics.
 Import ListNotations.
 
+Module UOT_Facts (U : UsualOrderedType).
+
+  Lemma lt_refl_contra :
+    forall x,
+      ~ U.lt x x.
+  Proof.
+    intros x hl; eapply U.lt_not_eq; eauto; red; auto.
+  Qed.
+  
+  Lemma lt_compare_LT :
+    forall x y,
+      U.lt x y
+      -> exists hl, U.compare x y = LT hl.
+  Proof.
+    intros x y hl.
+    destruct (U.compare x y) as [hl' | he | hl']; eauto.
+    - exfalso.
+      red in he; subst.
+      eapply lt_refl_contra; eauto.
+    - exfalso.
+      eapply U.lt_trans in hl'; eauto.
+      eapply lt_refl_contra; eauto.
+  Qed.
+
+  Lemma eq_compare_EQ :
+    forall x y,
+      (exists heq, U.compare x y = EQ heq) <-> x = y.
+  Proof.
+    unfold U.eq; intros x y; split; [intros hex | intros heq]; subst.
+    - destruct hex; auto.
+    - destruct (U.compare y y).
+      + exfalso; eapply lt_refl_contra; eauto. 
+      + red in e; subst; eauto.
+      + exfalso; eapply lt_refl_contra; eauto.
+  Qed.
+
+End UOT_Facts.
+
 Module Type UsualComparableType.
 
   Parameter t : Type.
@@ -103,6 +141,8 @@ End UOT_from_UCT.
 
 Module Option_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
 
+  Module F := UOT_Facts E.
+
   Definition t := option E.t.
 
   Definition eq       := @eq t.
@@ -132,8 +172,7 @@ Module Option_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
       lt x y -> ~ x = y.
   Proof.
     intros x y hl heq; destruct x as [x |]; destruct y as [y |]; tc; auto.
-    inv heq; eapply E.lt_not_eq; eauto.
-    red; auto.
+    inv heq; eapply F.lt_refl_contra; eauto. 
   Qed.
 
   Definition compare :
@@ -164,6 +203,8 @@ Module Option_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
 End Option_as_UOT.
 
 Module List_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
+
+  Module F := UOT_Facts E.
 
   Definition t := list E.t.
 
@@ -196,7 +237,7 @@ Module List_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
       destruct (E.compare y x) as [hel' | hee' | hel'];
       try contradiction; auto.
     eapply E.lt_trans in hel'; eauto.
-    exfalso; eapply E.lt_not_eq; eauto; red; auto.
+    exfalso; eapply F.lt_refl_contra; eauto.
   Qed.
 
   Lemma lt_inv_cons :
@@ -206,7 +247,7 @@ Module List_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
   Proof.
     intros x xs ys hl; red in hl.
     destruct (E.compare x x); try contradiction; auto.
-    exfalso; eapply E.lt_not_eq; eauto; red; auto.
+    exfalso; eapply F.lt_refl_contra; eauto. 
   Qed.
 
   Lemma lt_trans_heads_lt_or_eq :
@@ -256,7 +297,7 @@ Module List_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
   Definition compare :
     forall xs ys,
       Compare lt eq xs ys.
-  Proof.
+  Proof.    
     intros xs; induction xs as [| x xs IH]; intros ys; destruct ys as [| y ys].
     - apply EQ; red; auto.
     - apply LT; red; auto.
@@ -271,9 +312,9 @@ Module List_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
       + apply GT; red.
         destruct (E.compare y x) as [hl' | he' | hl']; auto.
         * red in he'; subst.
-          exfalso; eapply E.lt_not_eq; eauto; red; auto.
+          exfalso; eapply F.lt_refl_contra; eauto.
         * eapply E.lt_trans in hl'; eauto.
-          eapply E.lt_not_eq; eauto; red; auto.
+          eapply F.lt_refl_contra; eauto.
   Defined.
 
   Definition eq_dec :
@@ -289,6 +330,115 @@ Module List_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
 
 End List_as_UOT.
 
+Module Pair_as_UOT (A : UsualOrderedType) (B : UsualOrderedType) <: UsualOrderedType.
+
+  Module FA := UOT_Facts A.
+  Module FB := UOT_Facts B.
+
+  Definition t := (A.t * B.t)%type.
+
+  Definition eq       := @eq t.
+  Definition eq_refl  := @eq_refl t.
+  Definition eq_sym   := @eq_sym t.
+  Definition eq_trans := @eq_trans t.
+
+  Definition lt x y :=
+    match x, y with
+    | (a, b), (a', b') =>
+      match A.compare a a' with
+      | LT _ => True
+      | GT _ => False
+      | EQ _ =>
+        match B.compare b b' with
+        | LT _ => True
+        | _    => False
+        end
+      end
+    end.
+
+  Lemma lt_trans :
+    forall x y z,
+      lt x y -> lt y z -> lt x z.
+  Proof.
+    unfold lt; intros (a, b) (a', b') (a'', b'') hl hl'.
+    destruct (A.compare a a') as [ha | ha | ha]; try contradiction.
+    - destruct (A.compare a' a'') as [ha' | ha' | ha']; try contradiction.
+      + eapply A.lt_trans in ha'; eauto.
+        apply FA.lt_compare_LT in ha'.
+        destruct ha' as (hl'' & heq); rewrite heq; auto.
+      + red in ha'; subst.
+        apply FA.lt_compare_LT in ha.
+        destruct ha as (hl'' & heq); rewrite heq; auto.
+    - red in ha; subst.
+      destruct (A.compare a' a'') as [ha' | ha' | ha']; try contradiction; auto.
+      destruct (B.compare b b') as [hb | hb | hb]; try contradiction.
+      destruct (B.compare b' b'') as [hb' | hb' | hb']; try contradiction.
+      eapply B.lt_trans in hb'; eauto.
+      apply FB.lt_compare_LT in hb'.
+      destruct hb' as (hl'' & heq); rewrite heq; auto.
+  Qed.
+
+  Lemma lt_not_eq :
+    forall x y,
+      lt x y -> ~ x = y.
+  Proof.
+    unfold lt; intros (a, b) (a', b') hl he; inv he.
+    assert (heq  : a' = a') by auto. 
+    apply FA.eq_compare_EQ in heq.
+    destruct heq as (heq & hc); rewrite hc in hl.
+    assert (heq'  : b' = b') by auto. 
+    apply FB.eq_compare_EQ in heq'.
+    destruct heq' as (heq' & hc'); rewrite hc' in hl.
+    contradiction.
+  Qed.
+
+  Definition compare :
+    forall x y,
+      Compare lt eq x y.
+  Proof.
+    refine (fun x y =>
+              match x, y with
+              | (a, b), (a', b') =>
+                match A.compare a a' with
+                | LT hl => LT _
+                | GT hl => GT _
+                | EQ he =>
+                  match B.compare b b' with
+                  | LT hl  => LT _
+                  | GT hl  => GT _
+                  | EQ he' => EQ _
+                  end
+                end
+              end); red.
+    - apply FA.lt_compare_LT in hl.
+      destruct hl as [hl heq]; rewrite heq; auto.
+    - apply FA.eq_compare_EQ in he.
+      destruct he as [he hc]; rewrite hc.
+      apply FB.lt_compare_LT in hl.
+      destruct hl as [hl hc']; rewrite hc'; auto.
+    - red in he; red in he'; subst; auto.
+    - symmetry in he.
+      apply FA.eq_compare_EQ in he; destruct he as [he hc]; rewrite hc.
+      apply FB.lt_compare_LT in hl.
+      destruct hl as [hl hc']; rewrite hc'; auto.
+    - apply FA.lt_compare_LT in hl.
+      destruct hl as [hl hc]; rewrite hc; auto.
+  Defined.
+
+  Definition eq_dec :
+    forall x y : t,
+      {x = y} + {x <> y}.
+  Proof.
+    intros (a, b) (a', b').
+    destruct (A.eq_dec a a') as [hay | han].
+    - destruct (B.eq_dec b b') as [hby | hbn].
+      + left; red in hay; red in hby; subst; auto.
+      + right; intros heq; inv heq; unfold B.eq in hbn; eauto.
+    - right; intros heq; inv heq; unfold A.eq in han; eauto.
+  Defined.
+
+End Pair_as_UOT.
+  
 Module Nat_as_OT_Alt <: OrderedTypeAlt := OrderedType_to_Alt Nat_as_OT.
 
 (* Dumping this here for now *)

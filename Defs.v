@@ -185,7 +185,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   End Symbol_as_UOT.
   
-  Lemma gamma_eq_dec :
+  (*Lemma gamma_eq_dec :
     forall gamma gamma' : list symbol,
       {gamma = gamma'} + {gamma <> gamma'}.
   Proof. 
@@ -199,16 +199,16 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     forall xs ys, beqGamma xs ys = true <-> xs = ys.
   Proof.
     unfold beqGamma; split; intros; dms; tc. 
-  Qed.
+  Qed.*)
 
-  Module Gamma_as_OT <: OrderedType := List_as_OT Symbol_as_OT.
+  Module Gamma_as_UOT <: UsualOrderedType := List_as_UOT Symbol_as_UOT.
   
   (* Finite sets of nonterminals *)
   (* to do : MSetWeakList should be replaced by a more
      efficient functor, now that nonterminals are ordered *)
   Module MDT_NT.
     Definition t      := nonterminal.
-    Definition eq_dec := Ty.nt_eq_dec.
+    Definition eq_dec := nt_eq_dec.
   End MDT_NT.
   Module NT_as_DT     := Make_UDT(MDT_NT).
   Module NtSet        := MSetWeakList.Make NT_as_DT.
@@ -262,7 +262,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     match ps with
     | []                 => []
     | (x', gamma) :: ps' => 
-      if Ty.nt_eq_dec x' x then 
+      if nt_eq_dec x' x then 
         gamma :: rhssForNt ps' x
       else 
         rhssForNt ps' x
@@ -275,14 +275,14 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Proof.
     intros g x ys; split; intros hi.
     - induction g as [| (x', ys') g]; sis; tc.
-      destruct (Ty.nt_eq_dec x' x); subst; auto.
+      destruct (nt_eq_dec x' x); subst; auto.
       inv hi; auto.
     - induction g as [| (x', ys') g]; sis; tc.
       destruct hi as [heq | hi].
       + inv heq.
-        destruct (Ty.nt_eq_dec x x); tc.
+        destruct (nt_eq_dec x x); tc.
         apply in_eq.
-      + destruct (Ty.nt_eq_dec x' x); subst; auto.
+      + destruct (nt_eq_dec x' x); subst; auto.
         apply in_cons; auto.
   Qed.
   Hint Resolve rhssForNt_in_iff : core.
@@ -293,7 +293,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Proof.
     intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
     - inv Hin.
-    - destruct (Ty.nt_eq_dec x' x); subst; auto.
+    - destruct (nt_eq_dec x' x); subst; auto.
       destruct Hin as [Heq | Hin]; subst; auto.
   Qed.
 
@@ -397,10 +397,45 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
   Qed.
 
-  Module SF_as_OT <: OrderedType.
+  Module SF_as_UOT <: UsualOrderedType.
 
-    Module O  := Option_as_OT NT_as_OT.
-    Module L  := List_as_OT Symbol_as_OT.
+    Module O  := Option_as_UOT NT_as_UOT.
+    Module L  := List_as_UOT Symbol_as_UOT.
+
+    Definition t := suffix_frame.
+
+    Definition eq       := @eq t.
+    Definition eq_refl  := @eq_refl t.
+    Definition eq_sym   := @eq_sym t.
+    Definition eq_trans := @eq_trans t.
+
+    Definition lt x y :=
+      match x, y with
+      | SF o suf, SF o' suf' =>
+        match O.compare o o' with
+        | LT _ => True
+        | EQ _ =>
+          match L.compare suf suf' with
+          | LT _ => True
+          | EQ _ => False
+          | GT _ => False
+          end
+        | GT _ => False
+        end
+      end.
+
+    Lemma lt_trans :
+      forall x y z,
+        lt x y -> lt y z -> lt x z.
+  Proof.
+    unfold lt; intros x y z hlt hlt';
+      destruct x as [o suf]; destruct y as [o' suf']; destruct z as [o'' suf''].
+    destruct (O.compare o o') as [hl | he | hl] eqn:hoc;
+      destruct (O.compare o' o'') as [hl' | he' | hl'] eqn:hoc'.
+    - eapply O.lt_trans in hoc'.
+      destruct (O.compare o  o'') eqn:hoc''; tc; auto.
+
+
     Module P  := PairOrderedType O L.
     Module P' := OrderedType_to_Alt P.
 
