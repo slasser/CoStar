@@ -401,6 +401,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
     Module O  := Option_as_UOT NT_as_UOT.
     Module L  := List_as_UOT Symbol_as_UOT.
+    Module P  := Pair_as_UOT O L.
 
     Definition t := suffix_frame.
 
@@ -412,63 +413,47 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     Definition lt x y :=
       match x, y with
       | SF o suf, SF o' suf' =>
-        match O.compare o o' with
-        | LT _ => True
-        | EQ _ =>
-          match L.compare suf suf' with
-          | LT _ => True
-          | EQ _ => False
-          | GT _ => False
-          end
-        | GT _ => False
-        end
+        P.lt (o, suf) (o', suf')
       end.
 
     Lemma lt_trans :
       forall x y z,
         lt x y -> lt y z -> lt x z.
-  Proof.
-    unfold lt; intros x y z hlt hlt';
-      destruct x as [o suf]; destruct y as [o' suf']; destruct z as [o'' suf''].
-    destruct (O.compare o o') as [hl | he | hl] eqn:hoc;
-      destruct (O.compare o' o'') as [hl' | he' | hl'] eqn:hoc'.
-    - eapply O.lt_trans in hoc'.
-      destruct (O.compare o  o'') eqn:hoc''; tc; auto.
+    Proof.
+      unfold lt; intros [o suf] [o' suf'] [o'' suf'']; eapply P.lt_trans; eauto.
+    Qed.
 
+    Lemma lt_not_eq :
+      forall x y, lt x y -> ~ x = y.
+    Proof.
+      unfold lt; intros [o suf] [o' suf'] hl he; inv he.
+      eapply P.lt_not_eq; eauto.
+    Qed.
 
-    Module P  := PairOrderedType O L.
-    Module P' := OrderedType_to_Alt P.
+    Definition compare (x y : suffix_frame) : Compare lt eq x y.
+      refine (match x, y with
+              | SF o suf, SF o' suf' =>
+                match P.compare (o, suf) (o', suf') with
+                | LT hl => LT _
+                | GT he => GT _
+                | EQ hl => EQ _
+                end
+              end); red; tc.
+    Defined.
+      
+    Definition eq_dec (x y : suffix_frame) : {x = y} + {x <> y}.
+      refine (match x, y with
+              | SF o suf, SF o' suf' =>
+                match P.eq_dec (o, suf) (o', suf') with
+                | left he  => left _
+                | right hn => right _
+                end
+              end); tc.
+    Defined.
 
-    Module A <: OrderedTypeAlt.
-    
-      Definition t := suffix_frame.
+  End SF_as_UOT.
 
-      Definition compare x y :=
-        match x, y with
-        | SF o suf, SF o' suf' =>
-          P'.compare (o, suf) (o', suf')
-        end.
-
-      Lemma compare_sym : forall (x y : suffix_frame),
-          compare y x = CompOpp (compare x y).
-      Proof.
-        intros x y; destruct x as [o suf]; destruct y as [o' suf']; sis.
-        apply P'.compare_sym.
-      Qed.
-
-      Lemma compare_trans : forall c x y z,
-          compare x y = c -> compare y z = c -> compare x z = c.
-      Proof.
-        intros c x y z hc hc'; destruct x; destruct y; destruct z; sis.
-        eapply P'.compare_trans; eauto.
-      Qed.
-
-    End A.
-
-    Include OrderedType_from_Alt A.
-
-  End SF_as_OT.
-  
+  (* To do : replace these sets and maps with faster versions *)
   (* Finite sets and maps for suffix frames *)
   Module MDT_SF.
     Definition t       := suffix_frame.

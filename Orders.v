@@ -38,6 +38,14 @@ Module UOT_Facts (U : UsualOrderedType).
       + exfalso; eapply lt_refl_contra; eauto.
   Qed.
 
+  Lemma compare_refl :
+    forall x,
+      (exists heq,
+          U.compare x x = EQ heq).
+  Proof.
+    intros x; apply eq_compare_EQ; auto. 
+  Qed.
+
 End UOT_Facts.
 
 Module Type UsualComparableType.
@@ -175,29 +183,49 @@ Module Option_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
     inv heq; eapply F.lt_refl_contra; eauto. 
   Qed.
 
-  Definition compare :
-    forall x y,
-      Compare lt eq x y.
-  Proof.
-    intros x y; destruct x as [x |]; destruct y as [y |].
-    - destruct (E.compare x y) as [hl | he | hl].
-      + apply LT; unfold lt; auto.
-      + apply EQ; red; red in he; subst; auto.
-      + apply GT; unfold lt; auto.
-    - apply GT; red; auto.
-    - apply LT; red; auto.
-    - apply EQ; red; auto.
+  Definition compare (x y : t) : Compare lt eq x y.
+    refine (match x as x' return x = x' -> _ with
+            | None =>
+              fun heq =>
+                match y as y' return y = y' -> _ with
+                | None    => fun heq' => EQ _
+                | Some e' => fun heq' => LT _
+                end (eq_refl y)
+            | Some e =>
+              fun heq =>
+                match y as y' return y = y' -> _ with
+                | None    => fun heq' => GT _
+                | Some e' => fun heq' =>
+                               match E.compare e e' with
+                               | LT hl => LT _
+                               | GT hl => GT _
+                               | EQ he => EQ _
+                               end
+                end (eq_refl y)
+            end (eq_refl x));
+      red; unfold E.eq in *; subst; auto.
   Defined.
-
-  Definition eq_dec :
-    forall x y : t,
-      {x = y} + {x <> y}.
-  Proof.
-    intros x y; destruct (compare x y) as [hl | he | hl].
-    - right; apply lt_not_eq; auto.
-    - left; subst; auto.
-    - right; intros he; subst.
-      eapply lt_not_eq; eauto.
+  
+  Definition eq_dec (x y : t) : {x = y} + {x <> y}.
+    refine (match x as x' return x = x' -> _ with
+            | None =>
+              fun heq =>
+                match y as y' return y = y' -> _ with
+                | None    => fun heq' => left _
+                | Some e' => fun heq' => right _
+                end (eq_refl y)
+            | Some e =>
+              fun heq =>
+                match y as y' return y = y' -> _ with
+                | None    => fun heq' => right _
+                | Some e' => fun heq' =>
+                               match E.eq_dec e e' with
+                               | left he => left _
+                               | right hn => right _
+                               end
+                end (eq_refl y)
+            end (eq_refl x));
+      unfold not, E.eq in *; subst; tc.
   Defined.
 
 End Option_as_UOT.
@@ -294,38 +322,65 @@ Module List_as_UOT (E : UsualOrderedType) <: UsualOrderedType.
     - eapply IH; eauto. 
   Qed.
 
-  Definition compare :
-    forall xs ys,
-      Compare lt eq xs ys.
-  Proof.    
-    intros xs; induction xs as [| x xs IH]; intros ys; destruct ys as [| y ys].
-    - apply EQ; red; auto.
-    - apply LT; red; auto.
-    - apply GT; red; auto.
-    - destruct (E.compare x y) as [hl | he | hl] eqn:hc.
-      + apply LT; red; rewrite hc; auto.
-      + red in he; subst.
-        destruct (IH ys) as [hl' | he' | hl'].
-        * apply LT; red; rewrite hc; auto.
-        * apply EQ; tc.
-        * apply GT; red; rewrite hc; auto.
-      + apply GT; red.
-        destruct (E.compare y x) as [hl' | he' | hl']; auto.
-        * red in he'; subst.
-          exfalso; eapply F.lt_refl_contra; eauto.
-        * eapply E.lt_trans in hl'; eauto.
-          eapply F.lt_refl_contra; eauto.
+  Fixpoint compare (xs ys : list E.t) : Compare lt eq xs ys.
+    refine (match xs as xs' return xs = xs' -> _ with
+            | [] =>
+              fun heq =>
+                match ys as ys' return ys = ys' -> _ with
+                | []     => fun heq' => EQ _
+                | _ :: _ => fun heq' => LT _
+                end (eq_refl ys)
+            | x :: xs' =>
+              fun heq =>
+                match ys as ys' return ys = ys' -> _ with
+                | []       => fun heq' => GT _
+                | y :: ys' => fun heq' =>
+                                match E.compare x y with
+                                | LT hl => LT _
+                                | GT hl => GT _
+                                | EQ he =>
+                                  match compare xs' ys' with
+                                  | LT hl  => LT _
+                                  | GT hl  => GT _
+                                  | EQ he' => EQ _
+                                  end
+                                end
+                end (eq_refl ys)
+            end (eq_refl xs));
+      unfold eq, E.eq in *; try red; subst; auto.
+    - apply F.lt_compare_LT in hl.
+      destruct hl as [hl hc]; rewrite hc; auto.
+    - pose proof (F.compare_refl y) as heq.
+      destruct heq as [heq hc]; rewrite hc; auto.
+    - pose proof (F.compare_refl y) as heq.
+      destruct heq as [heq hc]; rewrite hc; auto.
+    - apply F.lt_compare_LT in hl.
+      destruct hl as [hl hc]; rewrite hc; auto.
   Defined.
 
-  Definition eq_dec :
-    forall xs ys : t,
-      {xs = ys} + {xs <> ys}.
-  Proof.
-    intros xs ys; destruct (compare xs ys) as [hl | he | hl].
-    - right; apply lt_not_eq; auto.
-    - left; subst; auto.
-    - right; intros he; subst.
-      eapply lt_not_eq; eauto.
+  Fixpoint eq_dec (xs ys : t) : {xs = ys} + {xs <> ys}.
+    refine (match xs as xs' return xs = xs' -> _ with
+            | [] =>
+              fun heq =>
+                match ys as ys' return ys = ys' -> _ with
+                | []     => fun heq' => left _
+                | _ :: _ => fun heq' => right _
+                end (eq_refl ys)
+            | x :: xs' =>
+              fun heq =>
+                match ys as ys' return ys = ys' -> _ with
+                | []       => fun heq' => right _
+                | y :: ys' => fun heq' =>
+                                match E.eq_dec x y with
+                                | left _ =>
+                                  match eq_dec xs' ys' with
+                                  | left _  => left _
+                                  | right _ => right _
+                                  end
+                                | right _ => right _
+                                end
+                end (eq_refl ys)
+            end (eq_refl xs)); tc.
   Defined.
 
 End List_as_UOT.
@@ -392,49 +447,46 @@ Module Pair_as_UOT (A : UsualOrderedType) (B : UsualOrderedType) <: UsualOrdered
     contradiction.
   Qed.
 
-  Definition compare :
-    forall x y,
-      Compare lt eq x y.
-  Proof.
-    refine (fun x y =>
-              match x, y with
-              | (a, b), (a', b') =>
-                match A.compare a a' with
-                | LT hl => LT _
-                | GT hl => GT _
-                | EQ he =>
-                  match B.compare b b' with
-                  | LT hl  => LT _
-                  | GT hl  => GT _
-                  | EQ he' => EQ _
-                  end
+  Definition compare (x y : t) : Compare lt eq x y.
+    refine (match x, y with
+            | (a, b), (a', b') =>
+              match A.compare a a' with
+              | LT hl => LT _
+              | GT hl => GT _
+              | EQ he =>
+                match B.compare b b' with
+                | LT hl  => LT _
+                | GT hl  => GT _
+                | EQ he' => EQ _
                 end
-              end); red.
+              end
+            end);
+      unfold A.eq, B.eq in *; try red; subst; auto.
     - apply FA.lt_compare_LT in hl.
       destruct hl as [hl heq]; rewrite heq; auto.
-    - apply FA.eq_compare_EQ in he.
-      destruct he as [he hc]; rewrite hc.
+    - destruct (FA.compare_refl a') as [heq hc]; rewrite hc. 
       apply FB.lt_compare_LT in hl.
       destruct hl as [hl hc']; rewrite hc'; auto.
-    - red in he; red in he'; subst; auto.
-    - symmetry in he.
-      apply FA.eq_compare_EQ in he; destruct he as [he hc]; rewrite hc.
+    - destruct (FA.compare_refl a') as [heq hc]; rewrite hc.
       apply FB.lt_compare_LT in hl.
       destruct hl as [hl hc']; rewrite hc'; auto.
     - apply FA.lt_compare_LT in hl.
       destruct hl as [hl hc]; rewrite hc; auto.
   Defined.
 
-  Definition eq_dec :
-    forall x y : t,
-      {x = y} + {x <> y}.
-  Proof.
-    intros (a, b) (a', b').
-    destruct (A.eq_dec a a') as [hay | han].
-    - destruct (B.eq_dec b b') as [hby | hbn].
-      + left; red in hay; red in hby; subst; auto.
-      + right; intros heq; inv heq; unfold B.eq in hbn; eauto.
-    - right; intros heq; inv heq; unfold A.eq in han; eauto.
+  Definition eq_dec (x y : t) : {x = y} + {x <> y}.
+    refine (match x, y with
+            | (a, b), (a', b') =>
+              match A.eq_dec a a' with
+              | left _ =>
+                match B.eq_dec b b' with
+                | left _  => left _
+                | right _ => right _
+                end
+              | right _ => right _
+              end
+            end);
+      unfold A.eq, B.eq in *; tc.
   Defined.
 
 End Pair_as_UOT.
