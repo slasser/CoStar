@@ -25,8 +25,8 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Module Export Term := TerminationFn D.
 
-  Definition t_eq_dec  := D.SymTy.t_eq_dec.
-  Definition nt_eq_dec := D.SymTy.nt_eq_dec.
+(*  Definition t_eq_dec  := D.SymTy.t_eq_dec.
+  Definition nt_eq_dec := D.SymTy.nt_eq_dec.*)
 
   Record subparser := Sp { prediction : list symbol
                          ; stack      : suffix_stack }.

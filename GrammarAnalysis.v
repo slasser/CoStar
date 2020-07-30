@@ -878,17 +878,19 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
 
   (* More efficient implementation of transClosure *)
-  Module FS' := FSetAVL.Make SF_as_OT.
+  Module FS' := FSetAVL.Make SF_as_UOT.
   Module FSF' := FSetFacts.Facts FS'.
-  Module FM' <: FMapInterface.S := FMapAVL.Make SF_as_OT.
+  Module FM' <: FMapInterface.S := FMapAVL.Make SF_as_UOT.
   Module FMF' := FMapFacts.Facts FM'.
   Module TC  := TransClos.Make FS' FM'.
 
+  Definition liftEdge (e : edge) : option (suffix_frame * list suffix_frame) :=
+    match e with
+    | (s, d) => Some (s, [d])
+    end.
+  
   Definition transClos' (es : list edge) : FM'.t FS'.t :=
-    let f e := match e with
-               | (s, d) => Some (s, [d])
-               end
-    in  TC.trans_clos_list f es.
+    TC.trans_clos_list liftEdge es.
 
   (* Now we keep only the "stable" edges" *)
 
@@ -1026,33 +1028,206 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     intros fr s; split; intros hi.
     - eapply FSF'.elements_iff.
       eapply In_InA; eauto.
-      apply FSF'.E_ST.
-    - eapply FSF'.elements_iff in hi.
-      eapply InA_alt in hi.
-      destruct hi as [fr' [heq hi]]; auto.
-  Abort.
-(*      constructor.
-      + red; intros x.
-        apply FS'.E.eq_refl.
-      + red; intros x y hc.
-        rewrite SF_as_OT.A.compare_sym.
-        rewrite hc; auto.
-      + red; intros x y z hc hc'.
-        eapply SF_as_OT.A.compare_trans; eauto.
-    - 
-        pose proof hc as hc'.
-        
-        rewrite <- hc.
-        eapply SF_as_OT.A.compare_sym in hc.
- *)
+    - eapply FSF'.elements_iff in hi. 
+      eapply InA_alt in hi; destruct hi as [fr' [heq hi]]; subst; auto.
+  Qed.
+
+  Definition tc_soundness_invar g cm :=
+    forall s d,
+      TC.G.rel cm s d
+      -> frame_multistep g s d.
+
+  Definition tc_soundness_invar_list g prs :=
+    forall s d ds,
+      In (s, ds) prs
+      -> FS'.In d ds
+      -> frame_multistep g s d.
+
+  Lemma tc_soundness_invar_list_tail :
+    forall g s ds prs,
+      tc_soundness_invar_list g ((s, ds) :: prs)
+      -> tc_soundness_invar_list g prs.
+  Proof.
+    intros g s ds prs hs; red; red in hs; intros; eapply hs; eauto.
+    apply in_cons; auto.
+  Qed.
+
+  Lemma in_elements_find_iff :
+    forall s (ds : FS'.t) cm,
+      In (s, ds) (FM'.elements cm)
+      <-> FM'.find s cm = Some ds.
+  Proof.
+    intros s ds cm; split; intros hi.
+    - apply FMF'.find_mapsto_iff.
+      apply FMF'.elements_mapsto_iff.
+      apply In_InA; auto.
+      (* lemma *)
+      constructor.
+      + repeat red; intros; auto.
+      + repeat red; intros x y he; destruct he; auto.
+      + repeat red. intros (a, b) (c, d) (e, f) he he'; sis.
+        repeat red in he, he'; sis; destruct he; destruct he'; subst; auto.
+    - apply FMF'.find_mapsto_iff in hi.
+      apply FM'.elements_1 in hi.
+      apply InA_alt in hi.
+      destruct hi as [(s', ds') [he hi]].
+      repeat red in he; sis; destruct he; subst; auto.
+  Qed.
+
+  Lemma invars_equiv :
+    forall g cm,
+      tc_soundness_invar g cm <-> tc_soundness_invar_list g (FM'.elements cm).
+  Proof.
+    intros g cm; split; intros hs.
+    - intros s d ds hi hi'.
+      apply hs; eexists; split; eauto.
+      apply in_elements_find_iff; auto.
+    - intros s d hr.
+      destruct hr as [ds [hf hi]].
+      eapply hs; eauto.
+      apply in_elements_find_iff; auto.
+  Qed.
+      
+  Lemma add_edge_pres_soundness :
+    forall g s d cm,
+      frame_multistep g s d
+      -> tc_soundness_invar g cm
+      -> tc_soundness_invar g (TC.G.add_edge s d cm).
+  Proof.
+    intros g s d cm hf hs.
+    unfold TC.G.add_edge.
+    red; intros s' d' hr; red in hr.
+    destruct hr as [ds' [hfi hin]].
+    destruct (SF_as_UOT.eq_dec s' s) as [he | hn]; subst.
+    - rewrite FMF'.add_eq_o in hfi; auto; inv hfi.
+      destruct (SF_as_UOT.eq_dec d' d) as [he' | hn']; subst; auto.
+      apply FS'.add_3 in hin; auto.
+      apply hs; apply TC.G.In_succs_rel; auto.
+    - rewrite FMF'.add_neq_o in hfi; auto.
+      apply hs; red; eauto.
+  Qed.
+
+  Lemma fold_add_edge_preserves_soundness :
+    forall g s ds cm,
+      (forall d, In d ds -> frame_multistep g s d)
+      -> tc_soundness_invar g cm
+      -> tc_soundness_invar g
+                            (fold_left
+                               (fun (a : TC.G.graph) (e : FS'.elt) =>
+                                  TC.G.add_edge s e a)
+                               ds cm).
+  Proof.
+    intros g s ds; induction ds as [| d ds IH]; intros cm ha hs; sis; auto.
+    apply IH; auto.
+    apply add_edge_pres_soundness; auto.
+  Qed.
+
+  Lemma in_elements_add :
+    forall x y zs,
+      In x (FS'.elements (FS'.add y zs))
+      -> x = y \/ In x (FS'.elements zs).
+  Proof.
+    intros x y zs hi.
+    apply in_elements_iff_in_FS in hi.
+    apply FSF'.add_iff in hi; destruct hi; auto.
+    right; apply in_elements_iff_in_FS; auto.
+  Qed.
+
+  Lemma add_pred_preserves_soundness :
+    forall g cm cm' s s' d ds',
+      frame_multistep g s d
+      -> (forall d', FS'.In d' ds' -> frame_multistep g s' d')
+      -> tc_soundness_invar g cm
+      -> tc_soundness_invar g cm'
+      -> tc_soundness_invar g
+                            (TC.add_pred s (FS'.add d (TC.G.succs d cm)) s' ds' cm').
+  Proof.
+    intros g cm cm' s s' d ds' hf ha hs hs'.
+    unfold TC.add_pred; dmeq heq; auto.
+    rewrite FS'.fold_1; apply fold_add_edge_preserves_soundness; auto.
+    intros d' hi.
+    assert (hf' : frame_multistep g s' d).
+    { eapply t_trans; eauto.
+      apply ha; apply FSF'.mem_iff; auto. }
+    apply in_elements_add in hi; destruct hi as [? | hi]; subst; auto.
+    eapply t_trans; eauto.
+    apply hs; eauto.
+    apply TC.G.In_succs_rel; auto.
+    apply in_elements_iff_in_FS; auto.
+  Qed.
+
+  Lemma fold_add_pred_preserves_tc_soundness_invar :
+    forall g prs cm cm' s d,
+      frame_multistep g s d
+      -> tc_soundness_invar_list g prs
+      -> tc_soundness_invar g cm
+      -> tc_soundness_invar g cm'
+      -> tc_soundness_invar g
+                            (fold_left
+                               (fun (a : TC.G.graph) (p : FM'.key * FS'.t) =>
+                                  TC.add_pred s (FS'.add d (TC.G.succs d cm)) 
+                                              (fst p) (snd p) a)
+                               prs cm').
+  Proof.
+    intros g prs; induction prs as [| (s', ds') prs IH]; intros cm cm' s d hf hs hs' hs''; sis; auto.
+    apply IH; auto.
+    - eapply tc_soundness_invar_list_tail; eauto. 
+    - eapply add_pred_preserves_soundness; eauto.
+      intros d' hi; eapply hs; eauto.
+      apply in_eq.
+  Qed.
+      
+  Lemma trans_add_edge_preserves_tc_soundness_invar :
+    forall g cm s d,
+      frame_multistep g s d
+      -> tc_soundness_invar g cm
+    -> tc_soundness_invar g (TC.trans_add_edge s d cm).
+  Proof.
+    intros g cm s d hf hs.
+    unfold TC.trans_add_edge; dm; auto.
+    rewrite FM'.fold_1.
+    apply fold_add_pred_preserves_tc_soundness_invar; auto.
+    - apply invars_equiv; auto.
+    - (* adding the successors preserves soundness *)
+      admit.
+  Admitted.
   
+  Lemma fold_left_preserves_tc_soundness_invar :
+    forall g es cm,
+      mstep_edges_sound g es
+      -> tc_soundness_invar g cm
+      -> tc_soundness_invar g (fold_left (TC.trans_add_edge_list liftEdge) es cm).
+  Proof.
+    intros g es; induction es as [| (s, d) es IH]; intros cm hs hs'; sis; auto.
+    apply IH; clear IH.
+    - red; intros; apply hs; apply in_cons; auto.
+    - unfold TC.trans_add_edge_list; unfold TC.trans_add_edge'; sis.
+      apply trans_add_edge_preserves_tc_soundness_invar; auto.
+      apply hs; apply in_eq.
+  Qed.
+
+  Lemma transClos'_result_sound :
+    forall g,
+      tc_soundness_invar g (transClos' (epsilonEdges g)).
+  Proof.
+    intros g; unfold transClos', TC.trans_clos_list.
+    apply fold_left_preserves_tc_soundness_invar.
+    - apply step_edges_sound__mstep_edges_sound.
+      apply epsilonEdges__step_edges_sound.
+    - (* lemma *)
+      red. intros s d hr.
+      red in hr.
+      destruct hr as [ds [hf hi]].
+      rewrite FMF'.empty_o in hf; inv hf.
+  Qed.
+    
   Lemma mkClosureMap_sound :
     forall g,
       closure_map_sound g (mkClosureMap g).
   Proof.
     intros g s d ds hm hi; unfold mkClosureMap in hm.
     split.
-    -(* lemma about keepStableEdges *)
+    - (* lemma about keepStableEdges *)
       assert (hex : exists ds',
                  FM'.MapsTo s ds' (transClos' (epsilonEdges g))
                  /\ FS'.In d ds').
@@ -1060,7 +1235,45 @@ Module GrammarAnalysisFn (Import D : Defs.T).
         destruct hm as [ds' [? hm]]; subst; eauto.
         eexists; split; eauto.
         unfold keepStableNodes in hi.
-        eapply in_elements_iff_in_FS.
+        eapply in_elements_iff_in_FS in hi.
+        apply FSF'.filter_iff in hi.
+        - destruct hi; auto.
+        - repeat red; intros; subst; auto. }
+      destruct hex as [ds' [hm' hi']].
+      apply FMF'.find_mapsto_iff in hm'.
+      apply transClos'_result_sound; red; eauto.
+    - admit.
+  Admitted.
+
+
+
+  assert (H : TC.G.rel (transClos' (epsilonEdges g)) s d).
+      { eexists; split; eauto.
+        apply FMF'.find_mapsto_iff; auto. }
+      pose proof (TC.rel_trans_clos_list liftEdge (epsilonEdges g)) as P.
+      red in P.
+      destruct P as [hin hin'].
+      red in hin, hin'.
+      apply hin in H; clear hin.
+      induction H.
+      + red in H.
+
+
+
+
+
+
+        destruct H as [s [hf hi'']].
+      eapply transClos'_preserves_soundness; eauto.
+      apply step_edges_sound__mstep_edges_sound.
+      apply epsilonEdges__step_edges_sound.
+      pose proof (TC.transitive_trans_clos_list liftEdge (epsilonEdges g)) as ht.
+      red in ht.
+      unfold TC.G.rel in ht.
+      unfold transClos' in hm'.
+      eapply filter_In.
+
+        
         apply In_InA
           with (eqA := fun x0 y : SF_as_OT.A.t =>
                          SF_as_OT.A.compare x0 y = Eq)

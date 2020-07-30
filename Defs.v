@@ -184,24 +184,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     Defined.
 
   End Symbol_as_UOT.
-  
-  (*Lemma gamma_eq_dec :
-    forall gamma gamma' : list symbol,
-      {gamma = gamma'} + {gamma <> gamma'}.
-  Proof. 
-    decide equality. apply symbol_eq_dec. 
-  Defined.
+
+  Module Gamma_as_UOT <: UsualOrderedType := List_as_UOT Symbol_as_UOT.
 
   Definition beqGamma (xs ys : list symbol) : bool :=
-    if gamma_eq_dec xs ys then true else false.
+    if Gamma_as_UOT.eq_dec xs ys then true else false.
 
   Lemma beqGamma_eq_iff :
     forall xs ys, beqGamma xs ys = true <-> xs = ys.
   Proof.
     unfold beqGamma; split; intros; dms; tc. 
-  Qed.*)
-
-  Module Gamma_as_UOT <: UsualOrderedType := List_as_UOT Symbol_as_UOT.
+  Qed.
   
   (* Finite sets of nonterminals *)
   (* to do : MSetWeakList should be replaced by a more
