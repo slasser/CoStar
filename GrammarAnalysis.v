@@ -884,6 +884,17 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Module FMF' := FMapFacts.Facts FM'.
   Module TC  := TransClos.Make FS' FM'.
 
+  Lemma in_elements_iff_in_FS :
+    forall fr s,
+      In fr (FS'.elements s) <-> FS'.In fr s.
+  Proof.
+    intros fr s; split; intros hi.
+    - eapply FSF'.elements_iff.
+      eapply In_InA; eauto.
+    - eapply FSF'.elements_iff in hi. 
+      eapply InA_alt in hi; destruct hi as [fr' [heq hi]]; subst; auto.
+  Qed.
+
   Definition liftEdge (e : edge) : option (suffix_frame * list suffix_frame) :=
     match e with
     | (s, d) => Some (s, [d])
@@ -900,6 +911,12 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     | SF _        (T _ :: _) => true
     | _                      => false
     end.
+
+  Lemma stable_compat_bool :
+    compat_bool eq stable.
+  Proof.
+    repeat red; intros; subst; auto.
+  Qed.
 
   Lemma stable_config__stable_true :
     forall fr frs,
@@ -918,6 +935,18 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Definition keepStableNodes (s : FS'.t) : list suffix_frame :=
     FS'.elements (FS'.filter stable s).
+
+  Lemma keepStableNodes_stable :
+    forall fr frs,
+      In fr (keepStableNodes frs)
+      -> stable fr = true.
+  Proof.
+    intros fr frs hi.
+    unfold keepStableNodes in hi.
+    apply in_elements_iff_in_FS in hi.
+    eapply FS'.filter_2; eauto.
+    apply stable_compat_bool.
+  Qed.
 
   (* A closure graph is a map where each key K is a suffix frame 
      (i.e., grammar location), and each value V is a list of frames 
@@ -1020,17 +1049,6 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Definition closure_map_correct g cm :=
     closure_map_sound g cm /\ closure_map_complete g cm.
-
-  Lemma in_elements_iff_in_FS :
-    forall fr s,
-      In fr (FS'.elements s) <-> FS'.In fr s.
-  Proof.
-    intros fr s; split; intros hi.
-    - eapply FSF'.elements_iff.
-      eapply In_InA; eauto.
-    - eapply FSF'.elements_iff in hi. 
-      eapply InA_alt in hi; destruct hi as [fr' [heq hi]]; subst; auto.
-  Qed.
 
   Definition tc_soundness_invar g cm :=
     forall s d,
@@ -1189,10 +1207,15 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply fold_add_pred_preserves_tc_soundness_invar; auto.
     - apply invars_equiv; auto.
     - (* adding the successors preserves soundness *)
-      admit.
-  Admitted.
+      (* lemma *)
+      rewrite FS'.fold_1; apply fold_add_edge_preserves_soundness; auto.
+      intros d' hi; apply in_elements_add in hi.
+      destruct hi as [? | hi]; subst; auto.
+      apply t_trans with (y := d); auto.
+      apply hs; apply TC.G.In_succs_rel; apply in_elements_iff_in_FS; auto.
+  Qed.
   
-  Lemma fold_left_preserves_tc_soundness_invar :
+  Lemma fold_trans_add_edge_preserves_tc_soundness_invar :
     forall g es cm,
       mstep_edges_sound g es
       -> tc_soundness_invar g cm
@@ -1211,10 +1234,10 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       tc_soundness_invar g (transClos' (epsilonEdges g)).
   Proof.
     intros g; unfold transClos', TC.trans_clos_list.
-    apply fold_left_preserves_tc_soundness_invar.
+    apply fold_trans_add_edge_preserves_tc_soundness_invar. 
     - apply step_edges_sound__mstep_edges_sound.
       apply epsilonEdges__step_edges_sound.
-    - (* lemma *)
+    - (* lemma : invariant starts true *)
       red. intros s d hr.
       red in hr.
       destruct hr as [ds [hf hi]].
@@ -1242,51 +1265,117 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       destruct hex as [ds' [hm' hi']].
       apply FMF'.find_mapsto_iff in hm'.
       apply transClos'_result_sound; red; eauto.
-    - admit.
-  Admitted.
-
-
-
-  assert (H : TC.G.rel (transClos' (epsilonEdges g)) s d).
-      { eexists; split; eauto.
-        apply FMF'.find_mapsto_iff; auto. }
-      pose proof (TC.rel_trans_clos_list liftEdge (epsilonEdges g)) as P.
-      red in P.
-      destruct P as [hin hin'].
-      red in hin, hin'.
-      apply hin in H; clear hin.
-      induction H.
-      + red in H.
-
-
-
-
-
-
-        destruct H as [s [hf hi'']].
-      eapply transClos'_preserves_soundness; eauto.
-      apply step_edges_sound__mstep_edges_sound.
-      apply epsilonEdges__step_edges_sound.
-      pose proof (TC.transitive_trans_clos_list liftEdge (epsilonEdges g)) as ht.
-      red in ht.
-      unfold TC.G.rel in ht.
-      unfold transClos' in hm'.
-      eapply filter_In.
-
-        
-        apply In_InA
-          with (eqA := fun x0 y : SF_as_OT.A.t =>
-                         SF_as_OT.A.compare x0 y = Eq)
-          in   hi; auto.
-        - apply FSF'.elements_iff in hi.
-          eapply FS'.filter_1; eauto.
-          unfold compat_bool. 
-              unfold keepStableEdges in hm.
-    
-    eapply fromEdges_sound in hm; eauto.
-    apply mkGraphEdges_sound; auto.
+    - apply FMF'.map_mapsto_iff in hm.
+      destruct hm as [ds' [he hm]]; subst.
+      eapply keepStableNodes_stable; eauto.
   Qed.
 
+  Definition closure_map_complete_wrt_edges cm es :=
+    forall x y, In (x, y) es -> TC.G.rel cm x y.
+
+  Lemma add_edge_preserves_old_edges :
+    forall x x' y y' cm,
+      TC.G.rel cm x y
+      -> TC.G.rel (TC.G.add_edge x' y' cm) x y.
+  Proof.
+    intros x x' y y' cm hr; red; red in hr.
+    destruct hr as [ys [hf hi]].
+    unfold TC.G.add_edge.
+    destruct (SF_as_UOT.eq_dec x' x) as [he | hn]; subst.
+    - destruct (SF_as_UOT.eq_dec y' y) as [he' | hn']; subst.
+      + eexists; split.
+        * rewrite FMF'.add_eq_o; auto.
+        * apply FS'.add_1; auto.
+      + eexists; split.
+        * rewrite FMF'.add_eq_o; auto.
+        * apply FS'.add_2.
+          unfold TC.G.succs; rewrite hf; auto.
+    - eexists; split; eauto.
+      rewrite FMF'.add_neq_o; auto.
+  Qed.
+
+  Lemma add_edge_adds_edge :
+    forall x y cm,
+      TC.G.rel (TC.G.add_edge x y cm) x y.
+  Proof.
+    intros x y cm; red; unfold TC.G.add_edge.
+    eexists; split.
+    - rewrite FMF'.add_eq_o; eauto.
+    - apply FS'.add_1; auto.
+  Qed.
+
+  Lemma trans_add_edge_preserves_cm_complete_invar :
+    forall cm es x y,
+      closure_map_complete_wrt_edges cm es
+      -> closure_map_complete_wrt_edges (TC.trans_add_edge x y cm) (es ++ [(x, y)]).
+  Proof.
+    intros cm es x y hc.
+    red. intros x' y' hi.
+    apply TC.add_edge_incl_trans.
+    apply in_app_or in hi; destruct hi as [hi | hi].
+    - apply hc in hi.
+      apply add_edge_preserves_old_edges; auto.
+    - apply in_singleton_eq in hi; inv hi.
+      (* another lemma about add_edge *)
+      apply add_edge_adds_edge.
+  Qed.
+  
+  Lemma fold_trans_add_edge_list_keeps_old_edges :
+    forall suf pre cm,
+      closure_map_complete_wrt_edges cm pre
+      -> closure_map_complete_wrt_edges (fold_left (TC.trans_add_edge_list liftEdge) suf cm) (pre ++ suf).
+  Proof.
+    intros suf; induction suf as [| (x, y) suf IH]; intros pre cm hc; rew_anr; sis; auto.
+    rewrite cons_app_singleton; rewrite app_assoc; apply IH.
+    unfold TC.trans_add_edge_list; sis.
+    unfold TC.trans_add_edge'.
+    apply trans_add_edge_preserves_cm_complete_invar; auto.
+  Qed.
+
+  Lemma transClos'_holds_orig_edges :
+    forall es x y,
+      In (x, y) es
+      -> TC.G.rel (transClos' es) x y.
+  Proof.
+    intros es x y hi.
+    unfold transClos', TC.trans_clos_list.
+    apply fold_trans_add_edge_list_keeps_old_edges with (pre := []); auto.
+    red; intros x' y' hc; inv hc.
+  Qed.
+  
+  Lemma transClos'_complete :
+    forall g s d,
+      frame_multistep g s d
+      -> TC.G.rel (transClos' (epsilonEdges g)) s d.
+  Proof.
+    intros g s d hf; induction hf.
+    - apply transClos'_holds_orig_edges.
+      apply epsilonEdges__step_edges_complete; auto.
+    - eapply TC.transitive_trans_clos_list; eauto.
+  Qed.
+
+  Lemma mkClosureMap_complete :
+    forall g,
+      closure_map_complete g (mkClosureMap g).
+  Proof.
+    intros g s d hf hs.
+    unfold mkClosureMap.
+    apply transClos'_complete in hf.
+    red in hf.
+    destruct hf as [ds [hf hi]].
+    exists (FS'.elements (FS'.filter stable ds)).
+    unfold keepStableEdges, keepStableNodes.
+    
+    apply FMF'.find_mapsto_iff in hf.
+    unfold keepStableNodes.
+    (* to do -- prove *)
+
+  Qed.
+  
+
+
+
+  
   Lemma mkClosureMap_complete :
     forall g,
       closure_map_complete g (mkClosureMap g).
