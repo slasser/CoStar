@@ -903,7 +903,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition transClos' (es : list edge) : FM'.t FS'.t :=
     TC.trans_clos_list liftEdge es.
 
-  (* Now we keep only the "stable" edges" *)
+  (* Now we keep only the "stable" edges *)
 
   Definition stable (fr : suffix_frame) : bool :=
     match fr with
@@ -1363,26 +1363,13 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     apply transClos'_complete in hf.
     red in hf.
     destruct hf as [ds [hf hi]].
-    exists (FS'.elements (FS'.filter stable ds)).
-    unfold keepStableEdges, keepStableNodes.
-    
-    apply FMF'.find_mapsto_iff in hf.
-    unfold keepStableNodes.
-    (* to do -- prove *)
-
-  Qed.
-  
-
-
-
-  
-  Lemma mkClosureMap_complete :
-    forall g,
-      closure_map_complete g (mkClosureMap g).
-  Proof.
-    intros g s d hf hs; unfold mkClosureMap.
-    apply fromEdges_complete.
-    apply mkGraphEdges_complete; auto.
+    exists (FS'.elements (FS'.filter stable ds)); split.
+    - apply FMF'.map_mapsto_iff.
+      exists ds; split; auto.
+      apply FMF'.find_mapsto_iff; auto.
+    - apply in_elements_iff_in_FS.
+      apply FS'.filter_3; auto.
+      apply stable_compat_bool.
   Qed.
     
   Theorem mkClosureMap_result_correct :
@@ -1394,10 +1381,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     - apply mkClosureMap_complete.
   Qed.
 
-  
-    fromEdges (mkGraphEdges g).
-  
-   Definition destFrames (fr : suffix_frame) (cm : closure_map) : list suffix_frame :=
+(*   Definition destFrames (fr : suffix_frame) (cm : closure_map) : list suffix_frame :=
     match FM.find fr cm with
     | Some frs => frs
     | None     => []
@@ -1521,6 +1505,6 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Qed.
 
   Definition mkClosureMap (g : grammar) : closure_map :=
-    fromEdges (mkGraphEdges g).
+    fromEdges (mkGraphEdges g). *)
   
 End GrammarAnalysisFn.
