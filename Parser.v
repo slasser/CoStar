@@ -126,11 +126,11 @@ Module ParserFn (Import D : Defs.T).
     intros g cm ps ss ts av un ca x hs.
     unfold step in hs; repeat dmeq h; tc; inv hs; sis;
       repeat split; eauto.
-    - unfold not; intros hi; apply NtSet.mem_spec in hi; tc.
-    - apply NtSet.mem_spec; auto.
+    - unfold not; intros hi; apply NF.mem_iff in hi; tc.
+    - apply NF.mem_iff; auto.
   Qed.
 
-    Lemma step_preserves_cache_invar :
+  Lemma step_preserves_cache_invar :
     forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
       cache_stores_target_results g cm ca
       -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
@@ -194,7 +194,7 @@ Module ParserFn (Import D : Defs.T).
       apply triple_fst_lt; auto.
     - destruct ps as ([pre v], p_frs).
       destruct (NtSet.mem x av) eqn:hm; [.. | dms; tc].
-      apply NtSet.mem_spec in hm.
+      apply NF.mem_iff in hm.
       destruct (adaptivePredict _ _ _ _ _ _) eqn:hp; dms; tc; inv hs.
       + eapply meas_lt_after_push; eauto.
         eapply adaptivePredict_succ_in_grammar; eauto.

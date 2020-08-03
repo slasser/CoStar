@@ -354,8 +354,8 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     unfold cstep in hs; repeat dmeq h; tc; inv hs; sis.
     repeat split; eauto.
     - unfold not; intros hi.
-      apply NtSet.mem_spec in hi; tc.
-    - apply NtSet.mem_spec; auto.
+      apply NF.mem_iff in hi; tc.
+    - apply NF.mem_iff; auto.
   Qed.
 
   Lemma cstep_never_finds_left_recursion :

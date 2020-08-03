@@ -101,7 +101,7 @@ Module TerminationFn (Export D : Defs.T).
       NtSet.mem x s = true -> NtSet.cardinal s <> 0.
   Proof.
     intros x s Hm; unfold not; intros Heq.
-    rewrite NtSet.mem_spec in Hm.
+    apply NF.mem_iff in Hm.
     apply cardinal_inv_1 in Heq.
     unfold NtSet.Empty in Heq. 
     eapply Heq; eauto.
@@ -216,7 +216,7 @@ Module TerminationFn (Export D : Defs.T).
   Proof.
     intros g callee caller o o' x suf' av rhs locs
            Hcallee Hcaller Hin Hin'; subst; simpl.
-    apply NtSet.mem_spec in Hin.
+    apply NF.mem_iff in Hin.
     rewrite remove_cardinal_1; auto.
     unfold headFrameScore; unfold headFrameSize.
     unfold tailFrameScore; unfold tailFrameSize; simpl.

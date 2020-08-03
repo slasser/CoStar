@@ -648,7 +648,8 @@ Module ParserSoundFn (Import D : Defs.T).
     inv_afd ha  ha' heq hf hg hg' hi hi' hneq hr; inv hp; inv hs; sis.
     - (* ambig push case *)
       inv hp'; inv hs'; rew_anr.
-      eapply fd_inv_cons in hf; eauto.
+      (* start *)
+      eapply fd_inv_cons in hf; auto.
       destruct hf as (wp & wp' & heq & hf & hg'); subst.
       apply gamma_recognize_split in hr.
       destruct hr as (w & w' & heq & hr & hr'); subst.
@@ -669,7 +670,7 @@ Module ParserSoundFn (Import D : Defs.T).
         eapply trees_eq__gammas_eq_words_eq with
             (ys := rev pre') in hr; eauto; firstorder.
     - (* sem case *)
-      eapply fd_inv_cons in hf; eauto.
+      eapply fd_inv_cons in hf; auto.
       destruct hf as (wp & wp' & heq' & hf' & hg'); subst.
       rewrite <- app_assoc.
       eapply AFD_sem with (wmid' := wp' ++ wmid')
@@ -964,8 +965,7 @@ Module ParserSoundFn (Import D : Defs.T).
       (* lemma *)
       inv_afd ha  ha' heq hf hg hg' hi hi' hneq hr.
       + inv hp; inv hs; rew_anr; subst.
-        inv hr; inv hf; rew_anr; sis.
-        firstorder.
+        inv hr; inv hf; rew_anr; sis; eauto.
       + inv ha'.
     - destruct he as (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.

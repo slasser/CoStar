@@ -464,7 +464,7 @@ Module LLPredictionFn (Import D : Defs.T).
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
       eapply meas_lt_after_push; eauto.
-      + apply NtSet.mem_spec; auto.
+      + apply NF.mem_iff; auto.
       + apply rhssForNt_in_iff; auto.
   Defined.
 
@@ -1338,3 +1338,5 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
 
 End LLPredictionFn.
+
+ 

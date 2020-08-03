@@ -161,7 +161,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
       constructor.
-      + apply NtSet.mem_spec; auto.
+      + apply NF.mem_iff; auto.
       + apply rhssForNt_in_iff; auto.
     - inv hs; inv hi.
   Qed.
@@ -379,7 +379,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         - destruct hn' as (? & ? & ? & ? & ? & heq & heq' & hnp); subst.
           eapply frnp_grammar_nullable_path in hnp; eauto.
           firstorder.
-        - apply NtSet.mem_spec; eapply lhs_mem_allNts_true; eauto. }
+        - apply NF.mem_iff; eapply lhs_mem_allNts_true; eauto. }
       specialize IH with 
           (sp := Sp pred (SF (Some x) rhs, (SF o (NT x :: suf) :: frs))).
       edestruct IH as [av' [sp' [hcm hg'']]]; eauto.
@@ -1292,14 +1292,15 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     induction a' as [pr hlt IH]; intros av sp a sps'' w ? hs hg; subst.
     apply llc_success_cases in hs.
     destruct hs as [[hdone heq] | [sps' [av' [hs [crs [heq ha]]]]]]; subst.
-    - firstorder.
+    - eexists; split; eauto.
+      apply in_eq.
     - pose proof hs as hs'. 
       eapply cstep_preserves_successful_sp_invar in hs'; eauto.
       destruct hs' as [sp' [hi hg']].
       eapply aggrClosureResults_dmap_succ_elt_succ in ha; eauto.
       destruct ha as [? [? [hs' ha]]].
       eapply IH in hs'; eauto.
-      + firstorder.
+      + destruct hs' as [? [? ?]]; eexists; split; eauto.
       + eapply cstep_meas_lt; eauto.
   Qed.
 

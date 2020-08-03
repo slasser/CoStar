@@ -1,4 +1,5 @@
-Require Import FMaps List MSets Omega OrderedType OrderedTypeAlt OrderedTypeEx PeanoNat String.
+Require Import FSets FSets.FMapAVL List Omega String.
+Require Import CoLoR.Util.FGraph.TransClos.
 Require Import GallStar.Orders.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
@@ -37,23 +38,26 @@ End SYMBOL_TYPES.
 (* Core definitions, parameterized by grammar symbol types *)
 Module DefsFn (Export Ty : SYMBOL_TYPES).
 
-  Definition t_eq_dec : forall x y : terminal,
-    {x = y} + {x <> y}.
-  Proof.
-    intros x y; destruct (compareT x y) eqn:hc.
-    - left; apply compareT_eq; auto.
-    - right; intros heq. apply compareT_eq in heq; tc.
-    - right; intros heq; apply compareT_eq in heq; tc.
-  Defined.
+  Module T_as_UCT <: UsualComparableType.
+    Definition t             := terminal.
+    Definition compare       := compareT.
+    Definition compare_eq    := compareT_eq.
+    Definition compare_trans := compareT_trans.
+  End T_as_UCT.
 
-  Definition nt_eq_dec : forall x y : nonterminal,
-    {x = y} + {x <> y}.
-  Proof.
-    intros x y; destruct (compareNT x y) eqn:hc.
-    - left; apply compareNT_eq; auto.
-    - right; intros heq. apply compareNT_eq in heq; tc.
-    - right; intros heq; apply compareNT_eq in heq; tc.
-  Defined.
+  Module T_as_UOT <: UsualOrderedType := UOT_from_UCT T_as_UCT.
+  
+  Module NT_as_UCT <: UsualComparableType.
+    Definition t             := nonterminal.
+    Definition compare       := compareNT.
+    Definition compare_eq    := compareNT_eq.
+    Definition compare_trans := compareNT_trans.
+  End NT_as_UCT.
+    
+  Module NT_as_UOT <: UsualOrderedType := UOT_from_UCT NT_as_UCT.
+
+  Definition t_eq_dec  := T_as_UOT.eq_dec.
+  Definition nt_eq_dec := NT_as_UOT.eq_dec.
 
   Definition beqT (a a' : terminal) : bool :=
     match t_eq_dec a' a with
@@ -67,32 +71,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | right _ => false
     end.
 
-  Module T_as_UCT <: UsualComparableType.
-    Definition t := terminal.
-    Definition compare := compareT.
-    Definition compare_eq := compareT_eq.
-    Definition compare_trans := compareT_trans.
-  End T_as_UCT.
-
-  Module T_as_UOT <: UsualOrderedType := UOT_from_UCT T_as_UCT.
-  
-  Module NT_as_UCT <: UsualComparableType.
-    Definition t := nonterminal.
-    Definition compare := compareNT.
-    Definition compare_eq := compareNT_eq.
-    Definition compare_trans := compareNT_trans.
-  End NT_as_UCT.
-    
-  Module NT_as_UOT <: UsualOrderedType := UOT_from_UCT NT_as_UCT.
-
   Inductive symbol := T  : terminal -> symbol 
                     | NT : nonterminal -> symbol.
-
-  Lemma symbol_eq_dec : forall s s' : symbol,
-      {s = s'} + {s <> s'}.
-  Proof. 
-    decide equality; try apply t_eq_dec; try apply nt_eq_dec.
-  Defined.
 
   Module Symbol_as_UOT <: UsualOrderedType.
     
@@ -129,58 +109,61 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       - eapply NT_as_UOT.lt_not_eq; eauto.
     Qed.
 
-    Lemma compareNT_refl :
-      forall x, compareNT x x = Eq.
-    Proof.
-      intros x; apply compareNT_eq; auto.
-    Qed.
-
-    Lemma compareNT_sym :
-      forall x y, compareNT x y = CompOpp (compareNT y x).
-    Proof.
-      intros x y; destruct (compareNT x y) eqn:hc.
-      - apply compareNT_eq in hc; subst.
-        rewrite compareNT_refl; auto.
-      - destruct (compareNT y x) eqn:hc'; auto.
-        + exfalso; apply compareNT_eq in hc'; subst.
-          rewrite compareNT_refl in hc; tc.
-        + exfalso; eapply compareNT_trans in hc'; eauto.
-          rewrite compareNT_refl in hc'; tc.
-      - destruct (compareNT y x) eqn:hc'; auto.
-        + exfalso; apply compareNT_eq in hc'; subst.
-          rewrite compareNT_refl in hc; tc.
-        + exfalso; eapply compareNT_trans in hc'; eauto.
-          rewrite compareNT_refl in hc'; tc.
-    Qed.
-
-    Definition compare :
-      forall x y,
-        Compare lt eq x y.
-    Proof.
-      intros x y; destruct x as [a | a]; destruct y as [b | b]; auto. 
-      - destruct (T_as_UOT.compare a b) as [hlt | heq | hgt]. 
-        + apply LT; auto.
-        + apply EQ; unfold eq; unfold T_as_UOT.eq in heq; subst; auto.
-        + apply GT; auto.
-      - apply LT; unfold lt; auto.
-      - apply GT; unfold lt; auto.
-      - destruct (NT_as_UOT.compare a b) as [hlt | heq | hgt]. 
-        + apply LT; auto.
-        + apply EQ; unfold eq; unfold NT_as_UOT.eq in heq; subst; auto.
-        + apply GT; auto.
+    Definition compare (x y : symbol) : Compare lt eq x y.
+      refine (match x as x' return x = x' -> _ with
+              | T a =>
+                fun he => 
+                  match y as y' return y = y' -> _ with
+                  | T a' =>
+                    fun he' => 
+                      match T_as_UOT.compare a a' with
+                      | LT _ => LT _
+                      | GT _ => GT _
+                      | EQ _ => EQ _
+                      end
+                  | NT _ => fun _ => LT _
+                  end (eq_refl y)
+              | NT b =>
+                fun he =>
+                  match y as y' return y = y' -> _ with
+                  | T _   => fun _ => GT _
+                  | NT b' =>
+                    fun he' =>
+                      match NT_as_UOT.compare b b' with
+                      | LT _ => LT _
+                      | GT _ => GT _
+                      | EQ _ => EQ _
+                      end
+                  end (eq_refl y)
+              end (eq_refl x));
+        red; unfold T_as_UOT.eq in *; unfold NT_as_UOT.eq in *; subst; auto.
     Defined.
 
-    Definition eq_dec :
-      forall x y : symbol,
-        {x = y} + {x <> y}.
-    Proof.
-      intros x y; destruct x as [a | a]; destruct y as [b | b].
-      - destruct (T_as_UOT.eq_dec a b); subst; auto.
-        right; intros heq; tc.
-      - right; intros heq; tc.
-      - right; intros heq; tc.
-      - destruct (NT_as_UOT.eq_dec a b); subst; auto.
-        right; intros heq; tc.
+    Definition eq_dec (x y : symbol) : {x = y} + {x <> y}.
+      refine (match x as x' return x = x' -> _ with
+              | T a =>
+                fun he => 
+                  match y as y' return y = y' -> _ with
+                  | T a' =>
+                    fun he' => 
+                      match T_as_UOT.eq_dec a a' with
+                      | left _  => left _
+                      | right _ => right _
+                      end
+                  | NT _ => fun _ => right _
+                  end (eq_refl y)
+              | NT b =>
+                fun he =>
+                  match y as y' return y = y' -> _ with
+                  | T _   => fun _ => right _
+                  | NT b' =>
+                    fun he' =>
+                      match NT_as_UOT.eq_dec b b' with
+                      | left _  => left _
+                      | right _ => right _
+                      end
+                  end (eq_refl y)
+              end (eq_refl x)); tc.
     Defined.
 
   End Symbol_as_UOT.
@@ -197,18 +180,11 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Qed.
   
   (* Finite sets of nonterminals *)
-  (* to do : MSetWeakList should be replaced by a more
-     efficient functor, now that nonterminals are ordered *)
-  Module MDT_NT.
-    Definition t      := nonterminal.
-    Definition eq_dec := nt_eq_dec.
-  End MDT_NT.
-  Module NT_as_DT     := Make_UDT(MDT_NT).
-  Module NtSet        := MSetWeakList.Make NT_as_DT.
-  Module Export NF    := WFactsOn NT_as_DT NtSet.
-  Module Export NP    := MSetProperties.Properties NtSet.
-  Module Export NE    := EqProperties NtSet.
-  Module Export ND    := WDecideOn NT_as_DT NtSet.
+  Module NtSet        := FSetAVL.Make NT_as_UOT.
+  Module Export NF    := FSetFacts.Facts NtSet.
+  Module Export NP    := FSetProperties.Properties NtSet.
+  Module Export NE    := FSetEqProperties.EqProperties NtSet.
+  Module Export ND    := FSetDecide.Decide NtSet.
 
   (* Hide an alternative definition of "sum" from NtSet *)
   Definition sum := Datatypes.sum.
@@ -268,16 +244,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Proof.
     intros g x ys; split; intros hi.
     - induction g as [| (x', ys') g]; sis; tc.
-      destruct (nt_eq_dec x' x); subst; auto.
+      dm; subst; auto.
       inv hi; auto.
     - induction g as [| (x', ys') g]; sis; tc.
       destruct hi as [heq | hi].
       + inv heq.
-        destruct (nt_eq_dec x x); tc.
+        dm; tc.
         apply in_eq.
-      + destruct (nt_eq_dec x' x); subst; auto.
+      + dm; subst; auto. 
         apply in_cons; auto.
   Qed.
+
   Hint Resolve rhssForNt_in_iff : core.
 
   Lemma rhssForNt_rhss :
@@ -286,7 +263,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Proof.
     intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
     - inv Hin.
-    - destruct (nt_eq_dec x' x); subst; auto.
+    - dm; subst; auto.
       destruct Hin as [Heq | Hin]; subst; auto.
   Qed.
 
@@ -359,7 +336,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       -> NtSet.mem x (allNts g) = true.
   Proof.
     intros g x ys hi.
-    apply NtSet.mem_spec.
+    apply NF.mem_iff.
     apply allNts_lhss_iff. 
     eapply production_lhs_in_lhss; eauto.
   Qed.
@@ -383,12 +360,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Inductive suffix_frame :=
   | SF : option nonterminal -> list symbol -> suffix_frame.
-
-  Lemma suffix_frame_eq_dec :
-    forall fr fr' : suffix_frame, {fr = fr'} + {fr <> fr'}.
-  Proof.
-    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
-  Qed.
 
   Module SF_as_UOT <: UsualOrderedType.
 
@@ -446,20 +417,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   End SF_as_UOT.
 
-  (* To do : replace these sets and maps with faster versions *)
-  (* Finite sets and maps for suffix frames *)
-  Module MDT_SF.
-    Definition t       := suffix_frame.
-    Definition eq_dec  := suffix_frame_eq_dec.
-  End MDT_SF.
-  Module SF_as_DT      := Make_UDT(MDT_SF).
-  Module FrameSet      := MSetWeakList.Make SF_as_DT.
-  Module FrameSetFacts := WFactsOn SF_as_DT FrameSet.
-  Module FrameMap      := FMapWeakList.Make SF_as_DT.
-  Module FrameMapFacts := WFacts_fun SF_as_DT FrameMap.
-  Module FS            := FrameSet.
-  Module FM            := FrameMap.
-  Module FMF           := FrameMapFacts.
+  (* Finite sets of suffix frames *)
+  Module FS  := FSetAVL.Make SF_as_UOT.
+  Module FSF := FSetFacts.Facts FS.
+
+  (* Finite maps with suffix frame keys *)
+  Module FM  := FMapAVL.Make SF_as_UOT.
+  Module FMF := FMapFacts.Facts FM.
+
+  (* Module for finding the transitive closure
+     of a finite graph with suffix frame nodes *)
+  Module TC  := TransClos.Make FS FM.
   
   Definition suffix_stack := (suffix_frame * list suffix_frame)%type. 
 
@@ -476,17 +444,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | (SF _ suf, frs) => suf ++ unprocTailSyms frs
     end.
 
-  (*
-Definition bottomFramePrefix (p_stk : prefix_stack) : list symbol :=
-  match bottomElt p_stk with
-  | PF pre _ => pre
-  end.
-
-Definition bottomFrameSuffix (s_stk : suffix_stack) : list symbol :=
-  match bottomElt s_stk with
-  | SF suf => suf
-  end.
-   *)
   Definition bottomFrameSyms p_stk s_stk := 
     match bottomElt p_stk, bottomElt s_stk with
     | PF pre _, SF _ suf => rev pre ++ suf
