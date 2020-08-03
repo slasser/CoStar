@@ -167,7 +167,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     apply hcm in hfm'.
     destruct hfm' as [v [hf hi]].
     + eapply stable_config__stable_true; eauto.
-    + apply FMF.find_mapsto_iff in hf; rewrite hf; auto.
+    + apply FMF'.find_mapsto_iff in hf; rewrite hf; auto.
   Qed.
 
   Definition overapprox (sps' sps : list subparser) : Prop :=

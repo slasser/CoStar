@@ -917,9 +917,9 @@ Module ParserSoundFn (Import D : Defs.T).
       destruct hp as (wpre & heq & hd); subst.
       exists wpre; split; auto.
       rew_nil_r wpre.
-      eapply adaptivePredict_ambig_llPredict_ambig in h4; eauto.
+      apply adaptivePredict_ambig_llPredict_ambig in h4.
       pose proof h4 as h4'; apply llPredict_ambig_in_grammar in h4'.
-      eapply llPredict_ambig_rhs_unproc_stack_syms' in h4; eauto.
+      eapply llPredict_ambig_rhs_unproc_stack_syms' in h4; auto.
       + destruct h4 as [hr [rhs' [hi [hneq hr']]]].
         eapply AFD_push; eauto.
       + eapply frames_wf__suffix_frames_wf; eauto.
