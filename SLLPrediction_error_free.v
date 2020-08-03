@@ -138,7 +138,7 @@ Module SllPredictionErrorFreeFn (Import D : Defs.T).
     unfold destFrames in hi.
     dmeq hf; tc.
     - (* lemma *)
-      apply FMF'.find_mapsto_iff in hf.
+      apply FMF.find_mapsto_iff in hf.
       eapply hs in hi; eauto.
       destruct hi as [hm hst].
       destruct fr as [[y |] [| [a | y'] suf]]; inv hst; auto.
@@ -231,7 +231,7 @@ Module SllPredictionErrorFreeFn (Import D : Defs.T).
     unfold simReturn in hr; dms; tc; inv hr.
     apply in_map_iff in hi; destruct hi as [fr [heq hi]]; subst; sis.
     unfold destFrames in hi; dmeq hf; try solve [inv hi].
-    apply FMF'.find_mapsto_iff in hf; eapply hs in hi; eauto.
+    apply FMF.find_mapsto_iff in hf; eapply hs in hi; eauto.
     destruct hi as [_ hst].
     destruct fr as [[x |] [| [a|y] suf]]; sis; tc; auto.
   Qed.
