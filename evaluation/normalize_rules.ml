@@ -330,7 +330,30 @@ let coq__compareNT_sym_lemma =
                      ; "intros x y; repeat rewrite compareNT__compare_nat; apply Nat_as_OT_Alt.compare_sym."
                      ; "Qed."
                      ]
+(* to do : we can probably use compareT__compare_nat 
+   to avoid the destructs here *)
+let coq__compareT_eq_lemma =
+  String.concat "\n" [ "Lemma compareT_eq :"
+                     ; "  forall x y : terminal,"
+                     ; "    compareT x y = Eq <-> x = y."
+                     ; "Proof."
+                     ; "  intros x y; split; [intros hc | intros he; subst]."
+                     ; "  - destruct x; destruct y; simpl in *; congruence."
+                     ; "  - destruct y; auto."
+                     ; "Qed."
+                     ]
 
+let coq__compareNT_eq_lemma =
+  String.concat "\n" [ "Lemma compareNT_eq :"
+                     ; "  forall x y : nonterminal,"
+                     ; "    compareNT x y = Eq <-> x = y."
+                     ; "Proof."
+                     ; "  intros x y; split; [intros hc | intros he; subst]."
+                     ; "  - destruct x; destruct y; simpl in *; congruence."
+                     ; "  - destruct y; auto."
+                     ; "Qed."
+                     ]
+                
 let coq__compareT_trans_lemma =
   String.concat "\n" [ "Lemma compareT_trans : forall c (x y z : terminal),"
                      ; "compareT x y = c -> compareT y z = c -> compareT x z = c."
@@ -393,22 +416,24 @@ let coq__terminal_ltb_trans_lemma =
 let coq_types_module (g : bnf_grammar) (g_name : string) : string =
   String.concat "\n\n" [ coq_types_module_start g_name
                        ; coq_terminal_defs g
-                       ; coq_nonterminal_defs g
-                       ; coq_t_eq_dec
-                       ; coq_nt_eq_dec
                        ; coq_compareT_def g
-                       ; coq_compareNT_def g
                        ; coq__nat_of_t_def g
-                       ; coq__nat_of_nt_def g
                        ; coq__compareT_compare_nat_lemma
-                       ; coq__compareNT_compare_nat_lemma
-                       ; coq__compareT_sym_lemma
+                       ; coq__compareT_eq_lemma
                        ; coq__compareT_trans_lemma
-                       ; coq__compareNT_sym_lemma
+                       ; coq_nonterminal_defs g
+(*                       ; coq_t_eq_dec
+                       ; coq_nt_eq_dec *)
+                       ; coq_compareNT_def g
+                       ; coq__nat_of_nt_def g
+                       ; coq__compareNT_compare_nat_lemma
+                       (*; coq__compareT_sym_lemma*)
+                       ; coq__compareNT_eq_lemma
+                       (*                       ; coq__compareNT_sym_lemma *)
                        ; coq__compareNT_trans_lemma
-                       ; coq__terminal_ltb_def g
+              (*         ; coq__terminal_ltb_def g
                        ; coq__terminal_ltb_not_eq_lemma
-                       ; coq__terminal_ltb_trans_lemma
+                       ; coq__terminal_ltb_trans_lemma *)
                        ; coq_showT_def  g
                        ; coq_showNT_def g
                        ; coq_terminalOfString_def g
@@ -426,7 +451,6 @@ let coq_export_pg : string =
 
 let coq_imports : string =
   String.concat "\n" [ "Require Import OrderedType OrderedTypeAlt OrderedTypeEx."
-                     ; "Require Extraction."
                      ; "Require Import List String ExtrOcamlBasic ExtrOcamlString."
                      ; "Require Import GallStar.Defs GallStar.Main GallStar.Orders."
                      ; "Import ListNotations."
@@ -444,7 +468,7 @@ let coq_grammar_file_contents (g : bnf_grammar) (g_name : string) : string =
                 ; coq_defs_module g_name
                 ; coq_export_pg
                 ; coq_grammar_def g_name g
-                ; coq_extraction_command g_name
+                                  (*                ; coq_extraction_command g_name*)
                 ]
 
 let write_coq_grammar_file (g : ebnf_grammar) (g_name : string) (f_name : string) : unit =
