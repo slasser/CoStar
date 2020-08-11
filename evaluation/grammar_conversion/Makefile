@@ -2,14 +2,14 @@
 ANTLR_EBNF  := antlr4_grammars
 PYTHON_EBNF := python_ebnf_grammars
 OCAML_EBNF  := ocaml_ebnf_grammars
-COQ_BNF     := coq_grammars
-OCAML_BNF   := evaluation_grammars
+COQ_BNF     := coq_bnf_grammars
+OCAML_BNF   := ocaml_bnf_grammars
 
 RRDANTLR4_OUTPUT := output
 
 GRAMMARS    := Json
 
-all: $(COQ_BNF)
+all: .depend
 
 GrammarConverter.class:
 	javac -cp .:rrd-antlr4-0.1.2.jar GrammarConverter.java
@@ -33,10 +33,25 @@ $(COQ_BNF): $(OCAML_EBNF)
                    #use \"normalize_rules.ml\"                                 ;; \n \
                    #use \"$(OCAML_EBNF)/$(G).ml\"                              ;; \n \
 	           write_coq_grammar_file rules \"$(G)\" \"$(COQ_BNF)/$(G).v\" ;;" | utop; )
+
+$(OCAML_BNF): $(COQ_BNF)
+	mkdir -p $(OCAML_BNF)
+	coqc -Q ../../parser GallStar $(COQ_BNF)/*.v
+	@echo "Require Extraction.\nRequire Import $(GRAMMARS).\nSeparate Extraction $(GRAMMARS)." \
+	> $(COQ_BNF)/ExtractGrammars.v
+	cd $(COQ_BNF) && coqc -Q ../../../parser GallStar ExtractGrammars.v
+	mv $(COQ_BNF)/*.ml $(COQ_BNF)/*.mli $(OCAML_BNF)
+
+.depend: $(OCAML_BNF)
+	ocamldep $(OCAML_BNF)/*.mli $(OCAML_BNF)/*.ml run_eval.ml > .depend
+
+include .depend
+
 clean:
 	rm -f  GrammarConverter.class
 	rm -rf $(PYTHON_EBNF)
 	rm -rf $(OCAML_EBNF)
 	rm -rf $(COQ_BNF)
+	rm -rf $(OCAML_BNF)
 
 .PHONY: all clean
