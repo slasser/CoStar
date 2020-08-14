@@ -18,10 +18,10 @@ let read_tokens_from_file (t_of_string : coq_string -> 'a) (fname : string) : ('
 
 (* Functions for reading JSON encodings of CoStar tokens from a file *)
       
-(*let read_json_tokens   = read_tokens_from_file JsonParser.D.SymTy.terminalOfString
-let read_xml_tokens    = read_tokens_from_file XMLParser.D.SymTy.terminalOfString
-let read_dot_tokens    = read_tokens_from_file DOTParser.D.SymTy.terminalOfString*)
-(*let read_erlang_tokens = read_tokens_from_file ErlangParser.D.SymTy.terminalOfString*)
+let read_json_tokens   = read_tokens_from_file Json.D.SymTy.terminalOfString
+(*let read_xml_tokens    = read_tokens_from_file XMLParser.D.SymTy.terminalOfString
+let read_dot_tokens    = read_tokens_from_file DOTParser.D.SymTy.terminalOfString
+let read_erlang_tokens = read_tokens_from_file ErlangParser.D.SymTy.terminalOfString*)
                                              
 
 let json_data_dir = "tokenized_data/json"
@@ -31,10 +31,10 @@ let erlang_data_dir  = "tokenized_data/erlang"
 
 (* Functions for parsing various formats.
    Each is partially applied to a grammar and start symbol. *)
-(*let parse_json = JsonParser.PG.ParserAndProofs.PEF.PS.P.parse JsonParser.jsonGrammar Coq_jsonText
-let parse_xml  = XMLParser.PG.ParserAndProofs.PEF.PS.P.parse XMLParser.xMLGrammar Document
-let parse_dot  = DOTParser.PG.ParserAndProofs.PEF.PS.P.parse DOTParser.dOTGrammar Graph*)
-(*let parse_erlang = ErlangParser.PG.ParserAndProofs.PEF.PS.P.parse ErlangParser.erlangGrammar Coq_forms*)
+let parse_json = Json.PG.ParserAndProofs.PEF.PS.P.parse Json.coq_JsonGrammar Coq_jsonText
+(*let parse_xml  = XMLParser.PG.ParserAndProofs.PEF.PS.P.parse XMLParser.xMLGrammar Document
+let parse_dot  = DOTParser.PG.ParserAndProofs.PEF.PS.P.parse DOTParser.dOTGrammar Graph
+let parse_erlang = ErlangParser.PG.ParserAndProofs.PEF.PS.P.parse ErlangParser.erlangGrammar Coq_forms*)
 (*
 let get_json_test (data_dir : string) (fname : string) : Bench.Test.t =
   let ts : JsonParser.D.Defs.token list = read_json_tokens (data_dir ^ "/" ^ fname) in
@@ -72,14 +72,14 @@ let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
 (*let get_dot_tokens () =
   let data_files = Array.to_list (Sys.readdir dot_data_dir) in
   List.map (fun fname -> read_dot_tokens (dot_data_dir ^ "/" ^ fname)) data_files*)
-
-(*let get_erlang_tokens () =
+(*
+let get_erlang_tokens () =
   let data_files = Array.to_list (Sys.readdir erlang_data_dir) in
   List.map (fun fname -> read_erlang_tokens (erlang_data_dir ^ "/" ^ fname)) data_files
 
 let tss = get_erlang_tokens ()
-let ts  = List.nth tss 32 *)
-
+let ts  = List.nth tss 32
+ *)
                   (*           
 let () =
   let format = Sys.argv.(1) in
@@ -114,3 +114,5 @@ let () =
   Bench.bench ~run_config:(Bench.Run_config.create ~quota:(Span (Span.of_string "1s")) ()) ~save_to_file:Bench.Measurement.name (get_dot_tests ())
   | _      -> failwith "unrecognized format argument"
 *)
+
+let () = print_string "hello world"

@@ -29,7 +29,7 @@ let legal_coq_constr s = for_all is_coq_char (explode s)
 let legal_coq_equiv (k : string) : string =
   let open Yojson.Basic                          in
   let open Yojson.Basic.Util                     in
-  let subs = from_file "name_substitutions.json" in
+  let subs = from_file "../resources/name_substitutions.json" in
   match member k subs with
   | `String v -> v
   | _         -> failwith ("unrecognized literal: " ^ k)
