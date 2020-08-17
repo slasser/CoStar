@@ -180,7 +180,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Qed.
   
   (* Finite sets of nonterminals *)
-  Module NtSet        := FSetAVL.Make NT_as_UOT.
+  (*Module NtSet        := FSetAVL.Make NT_as_UOT.*)
+  (*Module NtSet        := FSetList.Make NT_as_UOT.*)
+  Module NtSet        := FSetWeakList.Make NT_as_UOT.
   Module Export NF    := FSetFacts.Facts NtSet.
   Module Export NP    := FSetProperties.Properties NtSet.
   Module Export NE    := FSetEqProperties.EqProperties NtSet.

@@ -472,14 +472,16 @@ Module ParserFn (Import D : Defs.T).
     rewrite CacheFacts.empty_o in hf; tc.
   Defined.
 
-  (* to do : parse should return a tree, not a forest
-     the new, stronger version of stack well-formedness
-     should guarantee this *)
-  Definition parse (g : grammar) (x : nonterminal) (ts : list token) : parse_result :=
-    let cm     := mkClosureMap g       in
+  Definition parse' (g : grammar) (cm : closure_map) (x : nonterminal) (ts : list token) : parse_result :=
     let p_stk0 := (PF []   []    , []) in
     let s_stk0 := (SF None [NT x], []) in
     multistep g cm p_stk0 s_stk0 ts (allNts g) true empty_cache
               (empty_cache_stores_target_results g cm) (lex_nat_triple_wf _).
+
+  (* Separating parse' from parse enables us to partially apply the parser to a grammar
+     and compute the closure map once, instead of each time we parse an input *)
+  Definition parse (g : grammar) : nonterminal -> list token -> parse_result :=
+    let cm := mkClosureMap g
+    in  parse' g cm.
 
 End ParserFn.
