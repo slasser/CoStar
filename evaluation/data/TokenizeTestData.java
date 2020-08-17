@@ -60,7 +60,6 @@ public class TokenizeTestData {
     }
     
     static JSONArray getJsonTokens(String lexerPath, String dataPath) throws Exception {
-	System.out.println(lexerPath);
 	LexerGrammar lg = new LexerGrammar(readFile(lexerPath));
 	LexerInterpreter li = lg.createLexerInterpreter(CharStreams.fromFileName(dataPath));
 	Vocabulary v = li.getVocabulary();
@@ -76,7 +75,6 @@ public class TokenizeTestData {
 	    JSONArray tokens = getJsonTokens(lexerPath, f.getPath());
 	    String tokensPath = tokensDir + "/" + f.getName().split("\\.")[0] + ".json";
 	    PrintWriter writer = new PrintWriter(tokensPath, "UTF-8");
-	    System.out.println(tokens.toString(2));
 	    writer.print(tokens.toString(4));
 	    writer.close();
 	}

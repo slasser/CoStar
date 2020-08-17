@@ -6,6 +6,7 @@ module Yu = Yojson.Basic.Util
 
 type coq_string = char list
 let coq_string_of (s : string) : coq_string = List.init (String.length s) (String.get s)
+let string_of_coq_str (cs : coq_string) : string = String.concat "" (List.map Char.escaped cs)
                                                  
 let costar_token_of (f : char list -> 'a) (json_tok : Yb.t) : 'a * char list =
   let terminal = json_tok |> Yu.member "terminal" |> Yu.to_string |> coq_string_of |> f in
@@ -18,7 +19,7 @@ let read_tokens_from_file (t_of_string : coq_string -> 'a) (fname : string) : ('
 
 (* Functions for reading JSON encodings of CoStar tokens from a file *)
       
-let read_json_tokens   = read_tokens_from_file Json.D.SymTy.terminalOfString
+let read_json_tokens : string -> (Json.D.SymTy.terminal * coq_string) list = read_tokens_from_file Json.D.SymTy.terminalOfString
 (*let read_xml_tokens    = read_tokens_from_file XMLParser.D.SymTy.terminalOfString
 let read_dot_tokens    = read_tokens_from_file DOTParser.D.SymTy.terminalOfString
 let read_erlang_tokens = read_tokens_from_file ErlangParser.D.SymTy.terminalOfString*)
@@ -31,7 +32,7 @@ let erlang_data_dir  = "tokenized_data/erlang"
 
 (* Functions for parsing various formats.
    Each is partially applied to a grammar and start symbol. *)
-let parse_json = Json.PG.ParserAndProofs.PEF.PS.P.parse Json.coq_JsonGrammar Coq_jsonText
+let parse_json = Json.PG.ParserAndProofs.PEF.PS.P.parse Json.coq_JsonGrammar Coq_json
 (*let parse_xml  = XMLParser.PG.ParserAndProofs.PEF.PS.P.parse XMLParser.xMLGrammar Document
 let parse_dot  = DOTParser.PG.ParserAndProofs.PEF.PS.P.parse DOTParser.dOTGrammar Graph
 let parse_erlang = ErlangParser.PG.ParserAndProofs.PEF.PS.P.parse ErlangParser.erlangGrammar Coq_forms*)
@@ -115,4 +116,23 @@ let () =
   | _      -> failwith "unrecognized format argument"
 *)
 
-let () = print_string "hello world"
+let main () =
+  let lang     = Sys.argv.(1) in
+  let data_dir = Sys.argv.(2) in
+  let files    = Sys.readdir data_dir in
+  for i = 0 to Array.length files - 1 do
+    match lang with
+    | "json" ->
+       let ts = read_json_tokens (data_dir ^ "/" ^ files.(i)) in
+       let (tm, res) = benchmark parse_json ts in
+       print_float tm; print_endline "";
+       (match res with
+        | Accept _ -> print_endline "accept"
+        | Ambig  _ -> print_endline "ambig"
+        | Reject _ -> print_endline "reject"
+        | Error _  -> print_endline "error")
+                   
+    | _ -> failwith "unrecognized lang argument"
+  done
+
+let () = main ()

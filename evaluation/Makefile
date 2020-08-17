@@ -1,4 +1,4 @@
-all: run_eval.exe tokenize
+all: run_eval.exe
 
 # CONVERT ANTLR GRAMMARS INTO OCAML DATA STRUCTURES
 
@@ -69,17 +69,33 @@ RAW       := raw
 TOKENIZED := tokenized
 
 JSON_CITIES := json_cities
-
-tokenize: $(DATA)/$(TOKENIZED)/$(JSON_CITIES)
+JSON_NOBEL  := json_nobel
 
 $(DATA)/TokenizeTestData.class: $(DATA)/TokenizeTestData.java
-	cd $(DATA) && javac -cp ../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar TokenizeTestData.java
+	cd $(DATA) \
+        && javac -cp ../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar TokenizeTestData.java
 
 $(DATA)/$(TOKENIZED)/$(JSON_CITIES): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(JSON_CITIES)
 	cd $(DATA) \
         && mkdir -p $(TOKENIZED)/$(JSON_CITIES) \
         && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
            TokenizeTestData ../$(GRAMMARS)/$(ANTLR_EBNF)/Json.g4 $(RAW)/$(JSON_CITIES) $(TOKENIZED)/$(JSON_CITIES)
+
+benchmark_json_cities: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_CITIES)
+	./run_eval.exe json $(DATA)/$(TOKENIZED)/$(JSON_CITIES)
+
+$(DATA)/$(TOKENIZED)/$(JSON_NOBEL): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(JSON_NOBEL)
+	cd $(DATA) \
+        && mkdir -p $(TOKENIZED)/$(JSON_NOBEL) \
+        && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
+           TokenizeTestData ../$(GRAMMARS)/$(ANTLR_EBNF)/Json.g4 $(RAW)/$(JSON_NOBEL) $(TOKENIZED)/$(JSON_NOBEL)
+
+benchmark_json_nobel: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
+	./run_eval.exe json $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
+
+# RUN BENCHMARKS
+
+
 
 clean:
 	rm -f  $(GRAMMARS)/GrammarConverter.class
@@ -93,4 +109,4 @@ clean:
 	rm -f  $(DATA)/TokenizeTestData.class
 	rm -rf $(DATA)/$(TOKENIZED)
 
-.PHONY: all clean tokenize
+.PHONY: all clean benchmark_json_cities benchmark_json_nobel
