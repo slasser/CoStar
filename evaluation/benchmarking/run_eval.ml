@@ -1,35 +1,58 @@
-(*open Core_bench
-open Core.Time*)
-
+(* Some utilities for reading JSON representations of tokenized input *)
+(**********************************************************************)
 module Yb = Yojson.Basic
 module Yu = Yojson.Basic.Util
 
 type coq_string = char list
-let coq_string_of (s : string) : coq_string = List.init (String.length s) (String.get s)
-let string_of_coq_str (cs : coq_string) : string = String.concat "" (List.map Char.escaped cs)
+let coqstr_of_str (s : string) : coq_string = List.init (String.length s) (String.get s)
+let str_of_coqstr (c : coq_string) : string = String.concat "" (List.map Char.escaped c)
                                                  
 let costar_token_of (f : char list -> 'a) (json_tok : Yb.t) : 'a * char list =
-  let terminal = json_tok |> Yu.member "terminal" |> Yu.to_string |> coq_string_of |> f in
-  let literal  = json_tok |> Yu.member "literal"  |> Yu.to_string |> coq_string_of      in
+  let terminal = json_tok |> Yu.member "terminal" |> Yu.to_string |> coqstr_of_str |> f in
+  let literal  = json_tok |> Yu.member "literal"  |> Yu.to_string |> coqstr_of_str      in
   (terminal, literal)
        
 let read_tokens_from_file (t_of_string : coq_string -> 'a) (fname : string) : ('a * coq_string) list =
   let json_tokens = Yb.from_file fname |> Yu.to_list in
   List.map (costar_token_of t_of_string) json_tokens
+(**********************************************************************)
+(* Utilities for writing JSON representations of benchmark results    *)
+type test_result =
+  { filename   : string
+  ; num_tokens : int
+  ; parse_time : float }
 
-(* Functions for reading JSON encodings of CoStar tokens from a file *)
+let mk_test_result (fn : string) (nt : int) (pt : float) : test_result =
+  {filename = fn; num_tokens = nt; parse_time = pt}
+
+(* Int.compare causes an "unbound value" error *)
+let cmp_test_results (tr : test_result) (tr' : test_result) : int =
+  let open Int in compare tr.num_tokens tr'.num_tokens
+
+let json_of_test_result (tr : test_result) : Yb.t =
+  match tr with
+  | {filename = fn; num_tokens = nt; parse_time = pt} ->
+     `Assoc [("filename", `String fn); ("num_tokens", `Int nt); ("parse_time", `Float pt)]
+
+let json_of_test_results (trs : test_result list) : Yb.t =
+  `List (List.map json_of_test_result (List.sort cmp_test_results trs))
+
+let write_test_results (trs : test_result list) (fname : string) : unit =
+  Yb.to_file fname (json_of_test_results trs)
+  
+(* Functions for reading JSON encodings of CoStar tokens from a file  *)
       
-let read_json_tokens : string -> (Json.D.SymTy.terminal * coq_string) list = read_tokens_from_file Json.D.SymTy.terminalOfString
+(*let read_json_tokens : string -> (Json.D.SymTy.terminal * coq_string) list = read_tokens_from_file Json.D.SymTy.terminalOfString*)
 (*let read_xml_tokens    = read_tokens_from_file XMLParser.D.SymTy.terminalOfString
 let read_dot_tokens    = read_tokens_from_file DOTParser.D.SymTy.terminalOfString
 let read_erlang_tokens = read_tokens_from_file ErlangParser.D.SymTy.terminalOfString*)
                                              
-
+(*
 let json_data_dir = "tokenized_data/json"
 let xml_data_dir  = "tokenized_data/xml"
 let dot_data_dir  = "tokenized_data/dot"
 let erlang_data_dir  = "tokenized_data/erlang"
-
+ *)
 (* Functions for parsing various formats.
    Each is partially applied to a grammar and start symbol. *)
 let parse_json = Json.PG.ParserAndProofs.PEF.PS.P.parse Json.coq_JsonGrammar Coq_json
@@ -69,6 +92,35 @@ let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
   let stop  = Unix.gettimeofday () in
   let time  = stop -. start
   in  (time, res)
+
+let benchmark_parser_on_dataset parse grammar start_sym t_of_str data_dir : test_result list =
+  let parse'  = parse grammar start_sym in
+  let files   = Sys.readdir data_dir    in
+  let results = ref []                  in
+  for i = 0 to Array.length files - 1 do
+    let fname       = files.(i)                                               in
+    let ()          = print_endline fname                                     in
+    let ts          = read_tokens_from_file t_of_str (data_dir ^ "/" ^ fname) in
+    let (time, res) = benchmark parse' ts                                     in
+    results := (mk_test_result fname (List.length ts) time) :: !results
+  done;
+  !results
+  
+(*    print_int (List.length ts); print_endline "";
+    print_float time; print_endline "\n";*)
+    (*match lang with
+    | "json" ->
+       let ts = read_json_tokens (data_dir ^ "/" ^ files.(i)) in
+       let (tm, res) = benchmark parse_json ts in
+       print_float tm; print_endline "";
+       (match res with
+        | Accept _ -> print_endline "accept"
+        | Ambig  _ -> print_endline "ambig"
+        | Reject _ -> print_endline "reject"
+        | Error _  -> print_endline "error")
+                   
+    | _ -> failwith "unrecognized lang argument"*)
+  
 
 (*let get_dot_tokens () =
   let data_files = Array.to_list (Sys.readdir dot_data_dir) in
@@ -119,20 +171,17 @@ let () =
 let main () =
   let lang     = Sys.argv.(1) in
   let data_dir = Sys.argv.(2) in
-  let files    = Sys.readdir data_dir in
-  for i = 0 to Array.length files - 1 do
-    match lang with
-    | "json" ->
-       let ts = read_json_tokens (data_dir ^ "/" ^ files.(i)) in
-       let (tm, res) = benchmark parse_json ts in
-       print_float tm; print_endline "";
-       (match res with
-        | Accept _ -> print_endline "accept"
-        | Ambig  _ -> print_endline "ambig"
-        | Reject _ -> print_endline "reject"
-        | Error _  -> print_endline "error")
-                   
-    | _ -> failwith "unrecognized lang argument"
-  done
+  let outfile  = Sys.argv.(3) in
+  let results  =
+    (match lang with
+     | "json" ->
+        benchmark_parser_on_dataset Json.PG.ParserAndProofs.PEF.PS.P.parse
+                                    Json.coq_JsonGrammar
+                                    Coq_json
+                                    Json.D.SymTy.terminalOfString
+                                    data_dir
+     | _ -> failwith "unrecognized lang argument")
+  in
+  write_test_results results outfile
 
 let () = main ()

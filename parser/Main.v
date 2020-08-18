@@ -28,7 +28,7 @@ Module Make (Export D : Defs.T).
                 -> v' = v).
   Proof.
     intros g x ts v hn hp.
-    unfold parse, parse' in hp.
+    unfold parse in hp.
     eapply multistep_sound_unambig with (w := ts) in hp; eauto.
     - destruct hp as [hg hu]; unfold bottomFrameSyms in *; sis.
       (* lemma *)
@@ -56,7 +56,7 @@ Module Make (Export D : Defs.T).
                 /\ t' <> t).
   Proof.
     intros g x ts v hn hp.
-    unfold parse, parse' in hp.
+    unfold parse in hp.
     eapply multistep_sound_ambig with (w := ts) in hp; eauto.
     - destruct hp as [hg [v' [hg' hneq]]]. unfold bottomFrameSyms in *; sis.
       (* lemma *)

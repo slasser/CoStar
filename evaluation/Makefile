@@ -71,6 +71,8 @@ TOKENIZED := tokenized
 JSON_CITIES := json_cities
 JSON_NOBEL  := json_nobel
 
+RESULTS := results
+
 $(DATA)/TokenizeTestData.class: $(DATA)/TokenizeTestData.java
 	cd $(DATA) \
         && javac -cp ../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar TokenizeTestData.java
@@ -81,8 +83,9 @@ $(DATA)/$(TOKENIZED)/$(JSON_CITIES): $(DATA)/TokenizeTestData.class $(DATA)/$(RA
         && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
            TokenizeTestData ../$(GRAMMARS)/$(ANTLR_EBNF)/Json.g4 $(RAW)/$(JSON_CITIES) $(TOKENIZED)/$(JSON_CITIES)
 
-benchmark_json_cities: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_CITIES)
-	./run_eval.exe json $(DATA)/$(TOKENIZED)/$(JSON_CITIES)
+benchmark_json_cities: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_CITIES) $(RESULTS)/plot.py
+	./run_eval.exe json $(DATA)/$(TOKENIZED)/$(JSON_CITIES) $(RESULTS)/$(JSON_CITIES).json
+	cd $(RESULTS) && python plot.py $(JSON_CITIES).json $(JSON_CITIES).eps
 
 $(DATA)/$(TOKENIZED)/$(JSON_NOBEL): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(JSON_NOBEL)
 	cd $(DATA) \
@@ -91,11 +94,8 @@ $(DATA)/$(TOKENIZED)/$(JSON_NOBEL): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW
            TokenizeTestData ../$(GRAMMARS)/$(ANTLR_EBNF)/Json.g4 $(RAW)/$(JSON_NOBEL) $(TOKENIZED)/$(JSON_NOBEL)
 
 benchmark_json_nobel: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
-	./run_eval.exe json $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
-
-# RUN BENCHMARKS
-
-
+	./run_eval.exe json $(DATA)/$(TOKENIZED)/$(JSON_NOBEL) $(RESULTS)/$(JSON_NOBEL).json
+	cd $(RESULTS) && python plot.py $(JSON_NOBEL).json $(JSON_NOBEL).eps
 
 clean:
 	rm -f  $(GRAMMARS)/GrammarConverter.class
@@ -108,5 +108,6 @@ clean:
 	rm -f  run_eval.exe
 	rm -f  $(DATA)/TokenizeTestData.class
 	rm -rf $(DATA)/$(TOKENIZED)
+	find   $(RESULTS) -type f -not -name "plot.py" -delete
 
 .PHONY: all clean benchmark_json_cities benchmark_json_nobel
