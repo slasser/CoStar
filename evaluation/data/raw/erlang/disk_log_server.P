@@ -1,0 +1,531 @@
+-file("test/lib/kernel/src/disk_log_server.erl", 1).
+
+-module(disk_log_server).
+
+-behaviour(gen_server).
+
+-export([start_link/0,
+         start/0,
+         open/1,
+         close/1,
+         get_log_pids/1,
+         accessible_logs/0]).
+
+-export([dist_open/1,get_local_pid/1]).
+
+-export([init/1,handle_call/3,handle_info/2,terminate/2]).
+
+-export([handle_cast/2,code_change/3]).
+
+-file("test/lib/kernel/src/disk_log.hrl", 1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/kernel-2.15.3/include/file.hrl",
+      1).
+
+-record(file_info,{size :: undefined | non_neg_integer(),
+                   type :: undefined
+                         | device
+                         | directory
+                         | other
+                         | regular
+                         | symlink,
+                   access :: undefined
+                           | read
+                           | write
+                           | read_write
+                           | none,
+                   atime :: undefined | file:date_time() | integer(),
+                   mtime :: undefined | file:date_time() | integer(),
+                   ctime :: undefined | file:date_time() | integer(),
+                   mode :: undefined | integer(),
+                   links :: undefined | non_neg_integer(),
+                   major_device :: undefined | integer(),
+                   minor_device :: undefined | integer(),
+                   inode :: undefined | integer(),
+                   uid :: undefined | integer(),
+                   gid :: undefined | integer()}).
+
+-record(file_descriptor,{module :: undefined | module(),
+                         data :: undefined | term()}).
+
+-file("test/lib/kernel/src/disk_log.hrl", 51).
+
+-file([], 51).
+
+-type dlog_byte() :: [dlog_byte()] | byte().
+
+-type dlog_format() :: external | internal.
+
+-type dlog_format_type() :: halt_ext | halt_int | wrap_ext | wrap_int.
+
+-type dlog_head() :: none | {ok, binary()} | mfa().
+
+-type dlog_head_opt() :: none | term() | binary() | [dlog_byte()].
+
+-type log() :: term().
+
+-type dlog_mode() :: read_only | read_write.
+
+-type dlog_name() :: atom() | string().
+
+-type dlog_optattr() :: name
+                      | file
+                      | linkto
+                      | repair
+                      | type
+                      | format
+                      | size
+                      | distributed
+                      | notify
+                      | head
+                      | head_func
+                      | mode.
+
+-type dlog_option() :: {name, Log :: log()}
+                     | {file, FileName :: file:filename()}
+                     | {linkto, LinkTo :: none | pid()}
+                     | {repair, Repair :: true | false | truncate}
+                     | {type, Type :: dlog_type}
+                     | {format, Format :: dlog_format()}
+                     | {size, Size :: dlog_size()}
+                     | {distributed, Nodes :: [node()]}
+                     | {notify, boolean()}
+                     | {head, Head :: dlog_head_opt()}
+                     | {head_func, MFA :: {atom(), atom(), list()}}
+                     | {mode, Mode :: dlog_mode()}.
+
+-type dlog_options() :: [dlog_option()].
+
+-type dlog_repair() :: truncate | boolean().
+
+-type dlog_size() :: infinity
+                   | pos_integer()
+                   | {MaxNoBytes :: pos_integer(),
+                      MaxNoFiles :: pos_integer()}.
+
+-type dlog_status() :: ok | {blocked, false | [_]}.
+
+-type dlog_type() :: halt | wrap.
+
+-record(arg,{name = 0,
+             version = undefined,
+             file = none :: none | file:filename(),
+             repair = true :: dlog_repair(),
+             size = infinity :: dlog_size(),
+             type = halt :: dlog_type(),
+             distributed = false :: false | {true, [node()]},
+             format = internal :: dlog_format(),
+             linkto = self() :: none | pid(),
+             head = none,
+             mode = read_write :: dlog_mode(),
+             notify = false :: boolean(),
+             options = [] :: dlog_options()}).
+
+-record(cache,{fd :: undefined | file:fd(),
+               sz = 0 :: non_neg_integer(),
+               c = [] :: iodata()}).
+
+-record(halt,{fdc :: undefined | #cache{},
+              curB :: undefined | non_neg_integer(),
+              size :: undefined | dlog_size()}).
+
+-record(handle,{filename :: undefined | file:filename(),
+                maxB :: undefined | pos_integer(),
+                maxF :: undefined
+                      | pos_integer()
+                      | {pos_integer(), pos_integer()},
+                curB :: undefined | non_neg_integer(),
+                curF :: undefined | integer(),
+                cur_fdc :: undefined | #cache{},
+                cur_name :: undefined | file:filename(),
+                cur_cnt :: undefined | non_neg_integer(),
+                acc_cnt :: undefined | non_neg_integer(),
+                firstPos :: undefined | non_neg_integer(),
+                noFull :: undefined | non_neg_integer(),
+                accFull :: undefined | non_neg_integer()}).
+
+-record(log,{status = ok :: dlog_status(),
+             name :: undefined | dlog_name(),
+             blocked_by = none :: none | pid(),
+             users = 0 :: non_neg_integer(),
+             filename :: undefined | file:filename(),
+             owners = [] :: [{pid(), boolean()}],
+             type = halt :: dlog_type(),
+             format = internal :: dlog_format(),
+             format_type :: undefined | dlog_format_type(),
+             head = none,
+             mode :: undefined | dlog_mode(),
+             size,
+             extra :: undefined | #halt{} | #handle{},
+             version :: undefined | integer()}).
+
+-record(continuation,{pid = self() :: pid(),
+                      pos :: undefined
+                           | non_neg_integer()
+                           | {integer(), non_neg_integer()},
+                      b :: undefined | binary() | [] | pos_integer()}).
+
+-type dlog_cont() :: start | #continuation{}.
+
+-file("test/lib/kernel/src/disk_log_server.erl", 33).
+
+-compile({inline,[{do_get_log_pids,1}]}).
+
+-record(pending,{log,pid,req,from,attach,clients}).
+
+-record(state,{pending = [] :: [#pending{}]}).
+
+start_link() ->
+    gen_server:start_link({local,disk_log_server},
+                          disk_log_server,
+                          [],
+                          []).
+
+start() ->
+    ensure_started().
+
+open({ok,A}) ->
+    ensure_started(),
+    gen_server:call(disk_log_server, {open,local,A}, infinity);
+open(Other) ->
+    Other.
+
+dist_open(A) ->
+    ensure_started(),
+    gen_server:call(disk_log_server, {open,distr,A}, infinity).
+
+close(Pid) ->
+    gen_server:call(disk_log_server, {close,Pid}, infinity).
+
+get_log_pids(LogName) ->
+    do_get_log_pids(LogName).
+
+accessible_logs() ->
+    ensure_started(),
+    do_accessible_logs().
+
+init([]) ->
+    process_flag(trap_exit, true),
+    ets:new(disk_log_names, [named_table,set]),
+    ets:new(disk_log_pids, [named_table,set]),
+    {ok,#state{}}.
+
+handle_call({open,W,A}, From, State) ->
+    open([{{open,W,A},From}], State);
+handle_call({close,Pid}, _From, State) ->
+    Reply = do_close(Pid),
+    {reply,Reply,State}.
+
+handle_info({pending_reply,Pid,Result0}, State) ->
+    {value,
+     #pending{log = Name,
+              pid = Pid,
+              from = From,
+              req = Request,
+              attach = Attach,
+              clients = Clients}} =
+        lists:keysearch(Pid, #pending.pid, State#state.pending),
+    NP = lists:keydelete(Pid, #pending.pid, State#state.pending),
+    State1 = State#state{pending = NP},
+    if
+        Attach and (Result0 =:= {error,no_such_log}) ->
+            open([{Request,From}|Clients], State1);
+        true ->
+            case Result0 of
+                _ when Attach ->
+                    ok;
+                {error,_} ->
+                    ok;
+                _ ->
+                    put(Pid, Name),
+                    link(Pid),
+                    {_,Locality,_} = Request,
+                    ets:insert(disk_log_pids, {Pid,Name}),
+                    ets:insert(disk_log_names, {Name,Pid,Locality}),
+                    if
+                        Locality =:= distr ->
+                            ok = pg2:join(Name, Pid);
+                        true ->
+                            ok
+                    end
+            end,
+            gen_server:reply(From, result(Request, Result0)),
+            open(Clients, State1)
+    end;
+handle_info({'EXIT',Pid,_Reason}, State) ->
+    case get(Pid) of
+        undefined ->
+            ok;
+        Name ->
+            erase_log(Name, Pid)
+    end,
+    {noreply,State};
+handle_info(_, State) ->
+    {noreply,State}.
+
+handle_cast(_, State) ->
+    {noreply,State}.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok,State}.
+
+terminate(_Reason, _) ->
+    ok.
+
+ensure_started() ->
+    case whereis(disk_log_server) of
+        undefined ->
+            LogSup =
+                {disk_log_sup,
+                 {disk_log_sup,start_link,[]},
+                 permanent,
+                 1000,
+                 supervisor,
+                 [disk_log_sup]},
+            supervisor:start_child(kernel_safe_sup, LogSup),
+            LogServer =
+                {disk_log_server,
+                 {disk_log_server,start_link,[]},
+                 permanent,
+                 2000,
+                 worker,
+                 [disk_log_server]},
+            supervisor:start_child(kernel_safe_sup, LogServer),
+            ok;
+        _ ->
+            ok
+    end.
+
+open([{Req,From}|L], State) ->
+    State2 =
+        case do_open(Req, From, State) of
+            {pending,State1} ->
+                State1;
+            {Reply,State1} ->
+                gen_server:reply(From, Reply),
+                State1
+        end,
+    open(L, State2);
+open([], State) ->
+    {noreply,State}.
+
+do_open({open,W,#arg{name = Name} = A} = Req, From, State) ->
+    case check_pending(Name, From, State, Req) of
+        {pending,NewState} ->
+            {pending,NewState};
+        false when W =:= local ->
+            case A#arg.distributed of
+                {true,Nodes} ->
+                    Fun =
+                        fun() ->
+                               open_distr_rpc(Nodes, A, From)
+                        end,
+                    _Pid = spawn(Fun),
+                    {pending,State};
+                false ->
+                    case get_local_pid(Name) of
+                        {local,Pid} ->
+                            do_internal_open(Name,
+                                             Pid,
+                                             From,
+                                             Req,
+                                             true,
+                                             State);
+                        {distributed,_Pid} ->
+                            {{error,{node_already_open,Name}},State};
+                        undefined ->
+                            start_log(Name, Req, From, State)
+                    end
+            end;
+        false when W =:= distr ->
+            ok = pg2:create(Name),
+            case get_local_pid(Name) of
+                undefined ->
+                    start_log(Name, Req, From, State);
+                {local,_Pid} ->
+                    {{node(),{error,{node_already_open,Name}}},State};
+                {distributed,Pid} ->
+                    do_internal_open(Name, Pid, From, Req, true, State)
+            end
+    end.
+
+-spec open_distr_rpc([node()], _, _) -> no_return().
+
+open_distr_rpc(Nodes, A, From) ->
+    {AllReplies,BadNodes} =
+        rpc:multicall(Nodes, disk_log_server, dist_open, [A]),
+    {Ok,Bad} = cr(AllReplies, [], []),
+    Old = find_old_nodes(Nodes, AllReplies, BadNodes),
+    NotOk =
+        [ 
+         {BadNode,{error,nodedown}} ||
+             BadNode <- BadNodes ++ Old
+        ],
+    Reply = {Ok,Bad ++ NotOk},
+    gen_server:reply(From, Reply),
+    exit(normal).
+
+cr([{badrpc,{'EXIT',_}}|T], Nodes, Bad) ->
+    cr(T, Nodes, Bad);
+cr([R = {_Node,{error,_}}|T], Nodes, Bad) ->
+    cr(T, Nodes, [R|Bad]);
+cr([Reply|T], Nodes, Bad) ->
+    cr(T, [Reply|Nodes], Bad);
+cr([], Nodes, Bad) ->
+    {Nodes,Bad}.
+
+find_old_nodes(Nodes, Replies, BadNodes) ->
+    R = [ 
+         X ||
+             {X,_} <- Replies
+        ],
+    ordsets:to_list(ordsets:subtract(ordsets:from_list(Nodes),
+                                     ordsets:from_list(R ++ BadNodes))).
+
+start_log(Name, Req, From, State) ->
+    Server = self(),
+    case supervisor:start_child(disk_log_sup, [Server]) of
+        {ok,Pid} ->
+            do_internal_open(Name, Pid, From, Req, false, State);
+        Error ->
+            {result(Req, Error),State}
+    end.
+
+do_internal_open(Name, Pid, From, {open,_W,A} = Req, Attach, State) ->
+    Server = self(),
+    F = fun() ->
+               Res = disk_log:internal_open(Pid, A),
+               Server ! {pending_reply,Pid,Res}
+        end,
+    _ = spawn(F),
+    PD =
+        #pending{log = Name,
+                 pid = Pid,
+                 req = Req,
+                 from = From,
+                 attach = Attach,
+                 clients = []},
+    P = [PD|State#state.pending],
+    {pending,State#state{pending = P}}.
+
+check_pending(Name, From, State, Req) ->
+    case lists:keysearch(Name, #pending.log, State#state.pending) of
+        {value,#pending{log = Name,clients = Clients} = P} ->
+            NP =
+                lists:keyreplace(Name,
+                                 #pending.log,
+                                 State#state.pending,
+                                 P#pending{clients =
+                                               Clients ++ [{Req,From}]}),
+            {pending,State#state{pending = NP}};
+        false ->
+            false
+    end.
+
+result({_,distr,_}, R) ->
+    {node(),R};
+result({_,local,_}, R) ->
+    R.
+
+do_close(Pid) ->
+    case get(Pid) of
+        undefined ->
+            ok;
+        Name ->
+            erase_log(Name, Pid),
+            unlink(Pid),
+            ok
+    end.
+
+erase_log(Name, Pid) ->
+    case get_local_pid(Name) of
+        undefined ->
+            ok;
+        {local,Pid} ->
+            true = ets:delete(disk_log_names, Name),
+            true = ets:delete(disk_log_pids, Pid);
+        {distributed,Pid} ->
+            true = ets:delete(disk_log_names, Name),
+            true = ets:delete(disk_log_pids, Pid),
+            ok = pg2:leave(Name, Pid)
+    end,
+    erase(Pid).
+
+do_accessible_logs() ->
+    LocalSpec = {'$1','_',local},
+    Local0 =
+        [ 
+         hd(L) ||
+             L <- ets:match(disk_log_names, LocalSpec)
+        ],
+    Local = lists:sort(Local0),
+    Groups0 = ordsets:from_list(pg2:which_groups()),
+    Groups = ordsets:to_list(ordsets:subtract(Groups0, Local)),
+    Dist =
+        [ 
+         L ||
+             L <- Groups,
+             dist_pids(L) =/= []
+        ],
+    {Local,Dist}.
+
+get_local_pid(LogName) ->
+    case ets:lookup(disk_log_names, LogName) of
+        [{LogName,Pid,local}] ->
+            {local,Pid};
+        [{LogName,Pid,distr}] ->
+            {distributed,Pid};
+        [] ->
+            undefined
+    end.
+
+do_get_log_pids(LogName) ->
+    case catch ets:lookup(disk_log_names, LogName) of
+        [{LogName,Pid,local}] ->
+            {local,Pid};
+        [{LogName,_Pid,distr}] ->
+            case pg2:get_members(LogName) of
+                [] ->
+                    undefined;
+                Members ->
+                    {distributed,Members}
+            end;
+        _EmptyOrError ->
+            case dist_pids(LogName) of
+                [] ->
+                    undefined;
+                Pids ->
+                    {distributed,Pids}
+            end
+    end.
+
+dist_pids(LogName) ->
+    GroupName = LogName,
+    case catch pg2:get_members(GroupName) of
+        [Pid|_] = Pids ->
+            case
+                rpc:call(node(Pid),
+                         disk_log_server,
+                         get_local_pid,
+                         [LogName])
+            of
+                undefined ->
+                    case
+                        catch
+                            lists:member(Pid,
+                                         pg2:get_members(GroupName))
+                    of
+                        true ->
+                            [];
+                        _ ->
+                            dist_pids(LogName)
+                    end;
+                _ ->
+                    Pids
+            end;
+        _ ->
+            []
+    end.
+
+
+

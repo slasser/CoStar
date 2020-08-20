@@ -1,0 +1,1405 @@
+-file("test/lib/orber/test/generated_SUITE.erl", 1).
+
+-module(generated_SUITE).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/orber/test/generated_SUITE.erl", 29).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/include/corba.hrl",
+      1).
+
+-record(orb_ImplDef,{node,module,typename,start = start,args = [[]],pid}).
+
+-record(any,{typecode,value}).
+
+-record(fixed,{digits,scale,value}).
+
+-record('IOP_ServiceContext',{context_id,context_data}).
+
+-record('InvalidName',{'OE_ID' = "IDL:omg.org/CORBA/ORB/InvalidName:1.0"}).
+
+-record('UNKNOWN',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_PARAM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_MEMORY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('IMP_LIMIT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('COMM_FAILURE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('INV_OBJREF',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_PERMISSION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('INTERNAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('MARSHAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INITIALIZE',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_IMPLEMENT',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_TYPECODE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_OPERATION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('NO_RESOURCES',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('NO_RESPONSE',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('PERSIST_STORE',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('BAD_INV_ORDER',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('TRANSIENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('FREE_MEM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_IDENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_FLAG',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INTF_REPOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_CONTEXT',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('OBJ_ADAPTER',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('DATA_CONVERSION',{'OE_ID' = "",
+                           minor = 1163001856,
+                           completion_status}).
+
+-record('OBJECT_NOT_EXIST',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('TRANSACTION_REQUIRED',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('TRANSACTION_ROLLEDBACK',{'OE_ID' = "",
+                                  minor = 1163001856,
+                                  completion_status}).
+
+-record('INVALID_TRANSACTION',{'OE_ID' = "",
+                               minor = 1163001856,
+                               completion_status}).
+
+-record('INV_POLICY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('CODESET_INCOMPATIBLE',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('REBIND',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TIMEOUT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TRANSACTION_UNAVAILABLE',{'OE_ID' = "",
+                                   minor = 1163001856,
+                                   completion_status}).
+
+-record('TRANSACTION_MODE',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('BAD_QOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-file("test/lib/orber/test/generated_SUITE.erl", 30).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2]).
+
+-export([]).
+
+-compile(export_all).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    ['OrberApp_IFR',
+     erlang_binary,
+     erlang_pid,
+     erlang_port,
+     erlang_ref,
+     'CosNaming_Binding',
+     'CosNaming_BindingList',
+     'CosNaming_Name',
+     'CosNaming_NameComponent',
+     'CosNaming_NamingContextExt_InvalidAddress',
+     'CosNaming_NamingContext_AlreadyBound',
+     'CosNaming_NamingContext_CannotProceed',
+     'CosNaming_NamingContext_InvalidName',
+     'CosNaming_NamingContext_NotEmpty',
+     'CosNaming_NamingContext_NotFound',
+     'CosNaming_BindingIterator',
+     'CosNaming_NamingContext',
+     'CosNaming_NamingContextExt'].
+
+groups() ->
+    [].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+init_per_testcase(_Case, Config) ->
+    Dog = test_server:timetrap(test_server:minutes(3)),
+    [{watchdog,Dog}|Config].
+
+end_per_testcase(_Case, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog),
+    ok.
+
+'OrberApp_IFR'(doc) ->
+    [""];
+'OrberApp_IFR'(suite) ->
+    [];
+'OrberApp_IFR'(_) ->
+    fun() ->
+           AcTuAlReS = (catch 'OrberApp_IFR':oe_tc(get_absolute_name)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'OrberApp_IFR':oe_tc(get_user_exception_type)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'OrberApp_IFR':oe_tc(undefined)),
+           case AcTuAlReS of
+               undefined ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'OrberApp_IFR':oe_get_interface()),
+           case AcTuAlReS of
+               [_|_] ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'OrberApp_IFR':typeID()),
+           case AcTuAlReS of
+               "IDL:OrberApp/IFR:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    check_tc('OrberApp_IFR':oe_get_interface()),
+    fun() ->
+           AcTuAlReS =
+               (catch 'OrberApp_IFR':oe_is_a('OrberApp_IFR':typeID())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'OrberApp_IFR':oe_is_a("wrong")),
+           case AcTuAlReS of
+               false ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+erlang_binary(doc) ->
+    [""];
+erlang_binary(suite) ->
+    [];
+erlang_binary(_) ->
+    fun() ->
+           AcTuAlReS = (catch orber_tc:check_tc(erlang_binary:tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_binary:id()),
+           case AcTuAlReS of
+               "IDL:erlang/binary:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_binary:name()),
+           case AcTuAlReS of
+               "erlang_binary" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+erlang_pid(doc) ->
+    [""];
+erlang_pid(suite) ->
+    [];
+erlang_pid(_) ->
+    fun() ->
+           AcTuAlReS = (catch orber_tc:check_tc(erlang_pid:tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_pid:id()),
+           case AcTuAlReS of
+               "IDL:erlang/pid:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_pid:name()),
+           case AcTuAlReS of
+               "erlang_pid" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+erlang_port(doc) ->
+    [""];
+erlang_port(suite) ->
+    [];
+erlang_port(_) ->
+    fun() ->
+           AcTuAlReS = (catch orber_tc:check_tc(erlang_port:tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_port:id()),
+           case AcTuAlReS of
+               "IDL:erlang/port:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_port:name()),
+           case AcTuAlReS of
+               "erlang_port" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+erlang_ref(doc) ->
+    [""];
+erlang_ref(suite) ->
+    [];
+erlang_ref(_) ->
+    fun() ->
+           AcTuAlReS = (catch orber_tc:check_tc(erlang_ref:tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_ref:id()),
+           case AcTuAlReS of
+               "IDL:erlang/ref:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch erlang_ref:name()),
+           case AcTuAlReS of
+               "erlang_ref" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_Binding'(doc) ->
+    [""];
+'CosNaming_Binding'(suite) ->
+    [];
+'CosNaming_Binding'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch orber_tc:check_tc('CosNaming_Binding':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_Binding':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/Binding:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_Binding':name()),
+           case AcTuAlReS of
+               "CosNaming_Binding" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_BindingList'(doc) ->
+    [""];
+'CosNaming_BindingList'(suite) ->
+    [];
+'CosNaming_BindingList'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch orber_tc:check_tc('CosNaming_BindingList':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_BindingList':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/BindingList:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_BindingList':name()),
+           case AcTuAlReS of
+               "CosNaming_BindingList" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_Name'(doc) ->
+    [""];
+'CosNaming_Name'(suite) ->
+    [];
+'CosNaming_Name'(_) ->
+    fun() ->
+           AcTuAlReS = (catch orber_tc:check_tc('CosNaming_Name':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_Name':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/Name:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_Name':name()),
+           case AcTuAlReS of
+               "CosNaming_Name" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NameComponent'(doc) ->
+    [""];
+'CosNaming_NameComponent'(suite) ->
+    [];
+'CosNaming_NameComponent'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch orber_tc:check_tc('CosNaming_NameComponent':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NameComponent':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NameComponent:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NameComponent':name()),
+           case AcTuAlReS of
+               "CosNaming_NameComponent" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContextExt_InvalidAddress'(doc) ->
+    [""];
+'CosNaming_NamingContextExt_InvalidAddress'(suite) ->
+    [];
+'CosNaming_NamingContextExt_InvalidAddress'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    orber_tc:check_tc('CosNaming_NamingContextExt_InvalidAddress':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt_InvalidAddress':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContextExt/InvalidAddress:1"
+               ".0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt_InvalidAddress':name()),
+           case AcTuAlReS of
+               "CosNaming_NamingContextExt_InvalidAddress" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContext_AlreadyBound'(doc) ->
+    [""];
+'CosNaming_NamingContext_AlreadyBound'(suite) ->
+    [];
+'CosNaming_NamingContext_AlreadyBound'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    orber_tc:check_tc('CosNaming_NamingContext_AlreadyBound':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext_AlreadyBound':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContext/AlreadyBound:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext_AlreadyBound':name()),
+           case AcTuAlReS of
+               "CosNaming_NamingContext_AlreadyBound" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContext_CannotProceed'(doc) ->
+    [""];
+'CosNaming_NamingContext_CannotProceed'(suite) ->
+    [];
+'CosNaming_NamingContext_CannotProceed'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    orber_tc:check_tc('CosNaming_NamingContext_CannotProceed':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext_CannotProceed':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContext/CannotProceed:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext_CannotProceed':name()),
+           case AcTuAlReS of
+               "CosNaming_NamingContext_CannotProceed" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContext_InvalidName'(doc) ->
+    [""];
+'CosNaming_NamingContext_InvalidName'(suite) ->
+    [];
+'CosNaming_NamingContext_InvalidName'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    orber_tc:check_tc('CosNaming_NamingContext_InvalidName':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext_InvalidName':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContext/InvalidName:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext_InvalidName':name()),
+           case AcTuAlReS of
+               "CosNaming_NamingContext_InvalidName" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContext_NotEmpty'(doc) ->
+    [""];
+'CosNaming_NamingContext_NotEmpty'(suite) ->
+    [];
+'CosNaming_NamingContext_NotEmpty'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    orber_tc:check_tc('CosNaming_NamingContext_NotEmpty':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext_NotEmpty':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContext/NotEmpty:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext_NotEmpty':name()),
+           case AcTuAlReS of
+               "CosNaming_NamingContext_NotEmpty" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContext_NotFound'(doc) ->
+    [""];
+'CosNaming_NamingContext_NotFound'(suite) ->
+    [];
+'CosNaming_NamingContext_NotFound'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    orber_tc:check_tc('CosNaming_NamingContext_NotFound':tc())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext_NotFound':id()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContext/NotFound:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext_NotFound':name()),
+           case AcTuAlReS of
+               "CosNaming_NamingContext_NotFound" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_BindingIterator'(doc) ->
+    [""];
+'CosNaming_BindingIterator'(suite) ->
+    [];
+'CosNaming_BindingIterator'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_BindingIterator':oe_tc(next_one)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_BindingIterator':oe_tc(next_n)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_BindingIterator':oe_tc(destroy)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_BindingIterator':oe_tc(undefined)),
+           case AcTuAlReS of
+               undefined ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_BindingIterator':oe_get_interface()),
+           case AcTuAlReS of
+               [_|_] ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_BindingIterator':typeID()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/BindingIterator:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    check_tc('CosNaming_BindingIterator':oe_get_interface()),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosNaming_BindingIterator':oe_is_a('CosNaming_BindingIterator':typeID())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_BindingIterator':oe_is_a("wrong")),
+           case AcTuAlReS of
+               false ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContext'(doc) ->
+    [""];
+'CosNaming_NamingContext'(suite) ->
+    [];
+'CosNaming_NamingContext'(_) ->
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext':oe_tc(bind)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext':oe_tc(rebind)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext':oe_tc(bind_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext':oe_tc(rebind_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext':oe_tc(resolve)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext':oe_tc(unbind)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext':oe_tc(new_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext':oe_tc(bind_new_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext':oe_tc(destroy)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext':oe_tc(list)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext':oe_tc(undefined)),
+           case AcTuAlReS of
+               undefined ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext':oe_get_interface()),
+           case AcTuAlReS of
+               [_|_] ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContext':typeID()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContext:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    check_tc('CosNaming_NamingContext':oe_get_interface()),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosNaming_NamingContext':oe_is_a('CosNaming_NamingContext':typeID())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContext':oe_is_a("wrong")),
+           case AcTuAlReS of
+               false ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+'CosNaming_NamingContextExt'(doc) ->
+    [""];
+'CosNaming_NamingContextExt'(suite) ->
+    [];
+'CosNaming_NamingContextExt'(_) ->
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(to_string)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(to_name)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(to_url)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(resolve_str)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContextExt':oe_tc(bind)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(rebind)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(bind_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(rebind_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(new_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosNaming_NamingContextExt':oe_tc(bind_new_context)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(destroy)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContextExt':oe_tc(list)),
+           case AcTuAlReS of
+               undefined ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS);
+               _ ->
+                   AcTuAlReS
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_tc(undefined)),
+           case AcTuAlReS of
+               undefined ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_get_interface()),
+           case AcTuAlReS of
+               [_|_] ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch 'CosNaming_NamingContextExt':typeID()),
+           case AcTuAlReS of
+               "IDL:omg.org/CosNaming/NamingContextExt:1.0" ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    check_tc('CosNaming_NamingContextExt':oe_get_interface()),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosNaming_NamingContextExt':oe_is_a('CosNaming_NamingContextExt':typeID())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosNaming_NamingContextExt':oe_is_a('CosNaming_NamingContext':typeID())),
+           case AcTuAlReS of
+               true ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch 'CosNaming_NamingContextExt':oe_is_a("wrong")),
+           case AcTuAlReS of
+               false ->
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+check_tc([]) ->
+    ok;
+check_tc([{Op,{RetType,InParameters,OutParameters}}|T]) ->
+    io:format("checked - ~s~n", [Op]),
+    lists:all(fun(TC) ->
+                     case orber_tc:check_tc(TC) of
+                         false ->
+                             io:format("###### ERROR ERROR ######~n~p -"
+                                       " ~p~n",
+                                       [Op,TC]),
+                             exit(TC);
+                         true ->
+                             true
+                     end
+              end,
+              [RetType|InParameters]),
+    lists:all(fun(TC) ->
+                     case orber_tc:check_tc(TC) of
+                         false ->
+                             io:format("###### ERROR ERROR ######~n~p -"
+                                       " ~p~n",
+                                       [Op,TC]),
+                             exit(TC);
+                         true ->
+                             true
+                     end
+              end,
+              OutParameters),
+    check_tc(T).
+
+
+

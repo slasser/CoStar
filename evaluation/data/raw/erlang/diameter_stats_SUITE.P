@@ -1,0 +1,101 @@
+-file("test/lib/diameter/test/diameter_stats_SUITE.erl", 1).
+
+-module(diameter_stats_SUITE).
+
+-export([suite/0,all/0,groups/0,init_per_suite/1,end_per_suite/1]).
+
+-export([reg/1,incr/1,read/1,sum/1,flush/1]).
+
+suite() ->
+    [{timetrap,{seconds,60}}].
+
+all() ->
+    [{group,all},{group,all,[parallel]}].
+
+groups() ->
+    [{all,[],tc()}].
+
+tc() ->
+    [reg,incr,read,sum,flush].
+
+init_per_suite(Config) ->
+    ok = diameter:start(),
+    Config.
+
+end_per_suite(_Config) ->
+    ok = diameter:stop().
+
+reg(_) ->
+    Ref = '$1',
+    true = diameter_stats:reg(Ref),
+    false = diameter_stats:reg(Ref).
+
+incr(_) ->
+    Ref = '_',
+    Ctr = x,
+    false = diameter_stats:incr(Ctr),
+    1 = diameter_stats:incr(Ctr, Ref, 1),
+    true = diameter_stats:reg(Ref),
+    spawn(fun() ->
+                 true = diameter_stats:reg(Ref),
+                 2 = diameter_stats:incr(Ctr, self(), 2)
+          end),
+    ok = fold(Ctr, Ref, 3),
+    diameter_stats:flush([self(),Ref]).
+
+read(_) ->
+    Ref = make_ref(),
+    C1 = {a,b},
+    C2 = {b,a},
+    true = diameter_stats:reg(Ref),
+    1 = diameter_stats:incr(C1),
+    1 = diameter_stats:incr(C2),
+    2 = diameter_stats:incr(C1),
+    7 = diameter_stats:incr(C1, Ref, 7),
+    Self = self(),
+    [{Ref,[{C1,7}]},{Self,[{C1,2},{C2,1}]}] =
+        lists:sort(diameter_stats:read([self(),Ref,make_ref()])),
+    [] = diameter_stats:read([]),
+    [] = diameter_stats:read([make_ref()]),
+    diameter_stats:flush([self(),Ref,make_ref()]).
+
+sum(_) ->
+    Ref = make_ref(),
+    C1 = {a,b},
+    C2 = {b,a},
+    true = diameter_stats:reg(Ref),
+    1 = diameter_stats:incr(C1),
+    1 = diameter_stats:incr(C2),
+    2 = diameter_stats:incr(C2),
+    7 = diameter_stats:incr(C1, Ref, 7),
+    [{Ref,[{C1,8},{C2,2}]}] = diameter_stats:sum([Ref,make_ref()]),
+    Self = self(),
+    [{Self,[{C1,1},{C2,2}]}] = diameter_stats:sum([self()]),
+    [{Ref,[{C1,7}]},{Self,[{C1,1},{C2,2}]}] =
+        lists:sort(diameter_stats:flush([self(),Ref])).
+
+flush(_) ->
+    Ref = make_ref(),
+    Ctr = '_',
+    true = diameter_stats:reg(Ref),
+    1 = diameter_stats:incr(Ctr),
+    3 = diameter_stats:incr(Ctr, self(), 2),
+    2 = diameter_stats:incr(Ctr, Ref, 2),
+    Self = self(),
+    [{Self,[{Ctr,3}]}] = diameter_stats:flush([self()]),
+    1 = diameter_stats:incr(Ctr),
+    [{Ref,[{Ctr,2}]}] = diameter_stats:flush([Ref]),
+    [{Self,[{Ctr,1}]}] = diameter_stats:flush([self()]),
+    [] = diameter_stats:flush([self(),Ref]).
+
+fold(Ctr, Ref, N) ->
+    case diameter_stats:incr(Ctr, Ref, 0) of
+        N ->
+            ok;
+        M when M < N ->
+            erlang:yield(),
+            fold(Ctr, Ref, N)
+    end.
+
+
+

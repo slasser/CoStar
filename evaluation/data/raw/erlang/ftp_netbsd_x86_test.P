@@ -1,0 +1,208 @@
+-file("test/lib/inets/test/ftp_netbsd_x86_test.erl", 1).
+
+-module(ftp_netbsd_x86_test).
+
+-compile(export_all).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      21).
+
+-file([], 21).
+
+-file("test/lib/inets/test/ftp_netbsd_x86_test.erl", 26).
+
+init_per_suite(Config) ->
+    {File,NewFile} = ftp_suite_lib:test_filenames(),
+    NewConfig = [{file,File},{new_file,NewFile}|Config],
+    ftp_suite_lib:ftpd_init(netbsd_x86, NewConfig).
+
+end_per_suite(Config) ->
+    ftp_suite_lib:ftpd_fin(Config).
+
+init_per_testcase(Case, Config) ->
+    ftp_suite_lib:init_per_testcase(Case, Config).
+
+end_per_testcase(Case, Config) ->
+    ftp_suite_lib:end_per_testcase(Case, Config).
+
+all() ->
+    [open,
+     open_port,
+     {group,passive},
+     {group,active},
+     api_missuse,
+     not_owner,
+     {group,progress_report}].
+
+groups() ->
+    [{passive,[],ftp_suite_lib:passive(suite)},
+     {active,[],ftp_suite_lib:active(suite)},
+     {progress_report,[],ftp_suite_lib:progress_report(suite)}].
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+open(X) ->
+    ftp_suite_lib:wrapper("Netbsd x86 ", X, fun ftp_suite_lib:open/1).
+
+open_port(X) ->
+    ftp_suite_lib:wrapper("Netbsd x86 ",
+                          X,
+                          fun ftp_suite_lib:open_port/1).
+
+api_missuse(X) ->
+    ftp_suite_lib:wrapper("Netbsd x86 ",
+                          X,
+                          fun ftp_suite_lib:api_missuse/1).
+
+not_owner(X) ->
+    ftp_suite_lib:wrapper("Netbsd x86 ",
+                          X,
+                          fun ftp_suite_lib:not_owner/1).
+
+passive_user(X) ->
+    ftp_suite_lib:passive_user(X).
+
+passive_pwd(X) ->
+    ftp_suite_lib:passive_pwd(X).
+
+passive_cd(X) ->
+    ftp_suite_lib:passive_cd(X).
+
+passive_lcd(X) ->
+    ftp_suite_lib:passive_lcd(X).
+
+passive_ls(X) ->
+    ftp_suite_lib:passive_ls(X).
+
+passive_nlist(X) ->
+    ftp_suite_lib:passive_nlist(X).
+
+passive_rename(X) ->
+    ftp_suite_lib:passive_rename(X).
+
+passive_delete(X) ->
+    ftp_suite_lib:passive_delete(X).
+
+passive_mkdir(X) ->
+    ftp_suite_lib:passive_mkdir(X).
+
+passive_send(X) ->
+    ftp_suite_lib:passive_send(X).
+
+passive_send_bin(X) ->
+    ftp_suite_lib:passive_send_bin(X).
+
+passive_send_chunk(X) ->
+    ftp_suite_lib:passive_send_chunk(X).
+
+passive_append(X) ->
+    ftp_suite_lib:passive_append(X).
+
+passive_append_bin(X) ->
+    ftp_suite_lib:passive_append_bin(X).
+
+passive_append_chunk(X) ->
+    ftp_suite_lib:passive_append_chunk(X).
+
+passive_recv(X) ->
+    ftp_suite_lib:passive_recv(X).
+
+passive_recv_bin(X) ->
+    ftp_suite_lib:passive_recv_bin(X).
+
+passive_recv_chunk(X) ->
+    ftp_suite_lib:passive_recv_chunk(X).
+
+passive_type(X) ->
+    ftp_suite_lib:passive_type(X).
+
+passive_quote(X) ->
+    ftp_suite_lib:passive_quote(X).
+
+passive_ip_v6_disabled(X) ->
+    ftp_suite_lib:passive_ip_v6_disabled(X).
+
+active_user(X) ->
+    ftp_suite_lib:active_user(X).
+
+active_pwd(X) ->
+    ftp_suite_lib:active_pwd(X).
+
+active_cd(X) ->
+    ftp_suite_lib:active_cd(X).
+
+active_lcd(X) ->
+    ftp_suite_lib:active_lcd(X).
+
+active_ls(X) ->
+    ftp_suite_lib:active_ls(X).
+
+active_nlist(X) ->
+    ftp_suite_lib:active_nlist(X).
+
+active_rename(X) ->
+    ftp_suite_lib:active_rename(X).
+
+active_delete(X) ->
+    ftp_suite_lib:active_delete(X).
+
+active_mkdir(X) ->
+    ftp_suite_lib:active_mkdir(X).
+
+active_send(X) ->
+    ftp_suite_lib:active_send(X).
+
+active_send_bin(X) ->
+    ftp_suite_lib:active_send_bin(X).
+
+active_send_chunk(X) ->
+    ftp_suite_lib:active_send_chunk(X).
+
+active_append(X) ->
+    ftp_suite_lib:active_append(X).
+
+active_append_bin(X) ->
+    ftp_suite_lib:active_append_bin(X).
+
+active_append_chunk(X) ->
+    ftp_suite_lib:active_append_chunk(X).
+
+active_recv(X) ->
+    ftp_suite_lib:active_recv(X).
+
+active_recv_bin(X) ->
+    ftp_suite_lib:active_recv_bin(X).
+
+active_recv_chunk(X) ->
+    ftp_suite_lib:active_recv_chunk(X).
+
+active_type(X) ->
+    ftp_suite_lib:active_type(X).
+
+active_quote(X) ->
+    ftp_suite_lib:active_quote(X).
+
+active_ip_v6_disabled(X) ->
+    ftp_suite_lib:active_ip_v6_disabled(X).
+
+progress_report_send(X) ->
+    ftp_suite_lib:progress_report_send(X).
+
+progress_report_recv(X) ->
+    ftp_suite_lib:progress_report_recv(X).
+
+fin(Config) ->
+    ftp_suite_lib:ftpd_fin(Config).
+
+
+

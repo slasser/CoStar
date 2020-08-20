@@ -1,0 +1,31 @@
+-file("test/lib/stdlib/test/expand_test1.erl", 1).
+
+-module(expand_test1).
+
+-export([a_fun_name/1,
+         a_less_fun_name/1,
+         b_comes_after_a/1,
+         'Quoted_fun_name'/0,
+         'Quoted_fun_too'/0,
+         '#weird-fun-name'/0]).
+
+a_fun_name(X) ->
+    X.
+
+a_less_fun_name(X) ->
+    X.
+
+b_comes_after_a(X) ->
+    X.
+
+'Quoted_fun_name'() ->
+    whoopee.
+
+'Quoted_fun_too'() ->
+    too.
+
+'#weird-fun-name'() ->
+    weird.
+
+
+

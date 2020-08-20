@@ -1,0 +1,312 @@
+-file("test/lib/diameter/test/diameter_gen_sctp_SUITE.erl", 1).
+
+-module(diameter_gen_sctp_SUITE).
+
+-export([suite/0,all/0,init_per_suite/1,end_per_suite/1]).
+
+-export([send_not_from_controlling_process/1,
+         send_from_multiple_clients/1,
+         receive_what_was_sent/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/kernel-2.15.3/include/inet_sctp.hrl",
+      1).
+
+-record(sctp_initmsg,{num_ostreams,
+                      max_instreams,
+                      max_attempts,
+                      max_init_timeo}).
+
+-record(sctp_sndrcvinfo,{stream,
+                         ssn,
+                         flags,
+                         ppid,
+                         context,
+                         timetolive,
+                         tsn,
+                         cumtsn,
+                         assoc_id}).
+
+-record(sctp_assoc_change,{state = cant_assoc,
+                           error = 0,
+                           outbound_streams = 0,
+                           inbound_streams = 0,
+                           assoc_id = 0}).
+
+-record(sctp_paddr_change,{addr = [0,0,0,0],
+                           state = addr_available,
+                           error = 0,
+                           assoc_id = 0}).
+
+-record(sctp_remote_error,{error = 0,assoc_id = 0,data = []}).
+
+-record(sctp_send_failed,{flags = false,
+                          error = 0,
+                          info = #sctp_sndrcvinfo{},
+                          assoc_id = 0,
+                          data = <<>>}).
+
+-record(sctp_shutdown_event,{assoc_id = 0}).
+
+-record(sctp_adaptation_event,{adaptation_ind = 0,assoc_id = 0}).
+
+-record(sctp_pdapi_event,{indication = partial_delivery_aborted,
+                          assoc_id = 0}).
+
+-record(sctp_rtoinfo,{assoc_id,initial,max,min}).
+
+-record(sctp_assocparams,{assoc_id,
+                          asocmaxrxt,
+                          number_peer_destinations,
+                          peer_rwnd,
+                          local_rwnd,
+                          cookie_life}).
+
+-record(sctp_prim,{assoc_id,addr}).
+
+-record(sctp_setpeerprim,{assoc_id,addr}).
+
+-record(sctp_setadaptation,{adaptation_ind}).
+
+-record(sctp_paddrparams,{assoc_id,
+                          address,
+                          hbinterval,
+                          pathmaxrxt,
+                          pathmtu,
+                          sackdelay,
+                          flags}).
+
+-record(sctp_event_subscribe,{data_io_event,
+                              association_event,
+                              address_event,
+                              send_failure_event,
+                              peer_error_event,
+                              shutdown_event,
+                              partial_delivery_event,
+                              adaptation_layer_event,
+                              authentication_event}).
+
+-record(sctp_assoc_value,{assoc_id,assoc_value}).
+
+-record(sctp_paddrinfo,{assoc_id,address,state,cwnd,srtt,rto,mtu}).
+
+-record(sctp_status,{assoc_id,
+                     state,
+                     rwnd,
+                     unackdata,
+                     penddata,
+                     instrms,
+                     outstrms,
+                     fragmentation_point,
+                     primary}).
+
+-file("test/lib/diameter/test/diameter_gen_sctp_SUITE.erl", 40).
+
+suite() ->
+    [{timetrap,{minutes,2}}].
+
+all() ->
+    [send_not_from_controlling_process,
+     send_from_multiple_clients,
+     receive_what_was_sent].
+
+init_per_suite(Config) ->
+    case gen_sctp:open() of
+        {ok,Sock} ->
+            gen_sctp:close(Sock),
+            Config;
+        {error,E} when E == eprotonosupport; E == esocktnosupport ->
+            {skip,no_sctp}
+    end.
+
+end_per_suite(_Config) ->
+    ok.
+
+send_not_from_controlling_process(_) ->
+    Pids = send_not_from_controlling_process(),
+    receive after 2000 -> ok end,
+    try
+        [] =
+            [ 
+             {P,I} ||
+                 P <- Pids,
+                 I <- [process_info(P)],
+                 I /= undefined
+            ]
+    after
+        lists:foreach(fun(P) ->
+                             exit(P, kill)
+                      end,
+                      Pids)
+    end.
+
+send_not_from_controlling_process() ->
+    FPid = self(),
+    {L,MRef} =
+        spawn_monitor(fun() ->
+                             listen(FPid)
+                      end),
+    receive
+        {diameter_gen_sctp_SUITE,C,S} ->
+            demonitor(MRef, [flush]),
+            [L,C,S];
+        {'DOWN',MRef,process,_,_} = T ->
+            error(T)
+    end.
+
+listen(FPid) ->
+    {ok,Sock} = open(),
+    ok = gen_sctp:listen(Sock, true),
+    {ok,PortNr} = inet:port(Sock),
+    LPid = self(),
+    spawn(fun() ->
+                 connect1(PortNr, FPid, LPid)
+          end),
+    Id = assoc(Sock),
+    {sctp,Sock,_,_,{[#sctp_sndrcvinfo{assoc_id = Id}],_Bin}} = recv().
+
+recv() ->
+    receive
+        T ->
+            T
+    end.
+
+connect1(PortNr, FPid, LPid) ->
+    {ok,Sock} = open(),
+    ok = gen_sctp:connect_init(Sock, {127,0,0,1}, PortNr, []),
+    Id = assoc(Sock),
+    FPid
+    !
+    {diameter_gen_sctp_SUITE,
+     self(),
+     spawn(fun() ->
+                  send(Sock, Id)
+           end)},
+    MRef = monitor(process, LPid),
+    down(MRef).
+
+down(MRef) ->
+    receive
+        {'DOWN',MRef,process,_,Reason} ->
+            Reason
+    end.
+
+send(Sock, Id) ->
+    ok = gen_sctp:send(Sock, Id, 0, <<0:32>>).
+
+send_from_multiple_clients(_) ->
+    {S,Rs} = T = send_from_multiple_clients(8, 1024),
+    Max = 2000 * 1000,
+    {false,[],_} =
+        {Max < S,
+         Rs
+         --
+         [ 
+          OI ||
+              {O,_} = OI <- Rs,
+              is_integer(O)
+         ],
+         T}.
+
+send_from_multiple_clients(N, Sz)
+    when is_integer(N), 0 < N, is_integer(Sz), 0 < Sz ->
+    timer:tc(fun listen/2, [N,<<42,0:Sz/unit:8>>]).
+
+listen(N, Bin) ->
+    {ok,Sock} = open(),
+    ok = gen_sctp:listen(Sock, true),
+    {ok,PortNr} = inet:port(Sock),
+    Self = self(),
+    Fun =
+        fun() ->
+               exit(connect2(Self, PortNr, Bin))
+        end,
+    {_,MRef} =
+        spawn_monitor(fun() ->
+                             exit(fold(N, Fun))
+                      end),
+    loop(Sock, MRef, Bin).
+
+fold(N, Fun) ->
+    start(N, Fun),
+    acc(N, []).
+
+start(0, _) ->
+    ok;
+start(N, Fun) ->
+    spawn_monitor(Fun),
+    start(N - 1, Fun).
+
+acc(0, Acc) ->
+    Acc;
+acc(N, Acc) ->
+    receive
+        {'DOWN',_MRef,process,_,RC} ->
+            acc(N - 1, [RC|Acc])
+    end.
+
+loop(Sock, MRef, Bin) ->
+    receive
+        {sctp,Sock,_,_,{[#sctp_sndrcvinfo{assoc_id = Id}],B}} ->
+            Sz = size(Bin),
+            {Sz,Bin} = {size(B),B},
+            ok = send(Sock, Id, mark(Bin)),
+            loop(Sock, MRef, Bin);
+        {sctp,Sock,_,_,_} ->
+            loop(Sock, MRef, Bin);
+        {'DOWN',MRef,process,_,Reason} ->
+            Reason
+    end.
+
+connect2(Pid, PortNr, Bin) ->
+    monitor(process, Pid),
+    {ok,Sock} = open(),
+    ok = gen_sctp:connect_init(Sock, {127,0,0,1}, PortNr, []),
+    Id = assoc(Sock),
+    T1 = now(),
+    ok = send(Sock, Id, Bin),
+    T2 = unmark(recv(Sock, Id)),
+    T3 = now(),
+    {timer:now_diff(T2, T1),timer:now_diff(T3, T2)}.
+
+recv(Sock, Id) ->
+    receive
+        {sctp,Sock,_,_,{[#sctp_sndrcvinfo{assoc_id = Id}],Bin}} ->
+            Bin;
+        T ->
+            exit(T)
+    end.
+
+send(Sock, Id, Bin) ->
+    gen_sctp:send(Sock, Id, 0, Bin).
+
+mark(Bin) ->
+    Info = term_to_binary(now()),
+    <<Info/binary,Bin/binary>>.
+
+unmark(Bin) ->
+    {_,_,_} = binary_to_term(Bin).
+
+receive_what_was_sent(_Config) ->
+    send_from_multiple_clients(1, 1024 * 32).
+
+open() ->
+    open([]).
+
+open(Opts) ->
+    gen_sctp:open([{ip,{127,0,0,1}},
+                   {port,0},
+                   {active,true},
+                   binary,
+                   {recbuf,1 bsl 16},
+                   {sndbuf,1 bsl 16}|
+                   Opts]).
+
+assoc(Sock) ->
+    receive
+        {sctp,Sock,_,_,{[],#sctp_assoc_change{state = S,assoc_id = Id}}} ->
+            comm_up = S,
+            Id
+    end.
+
+
+

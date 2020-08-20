@@ -1,0 +1,66 @@
+-file("test/lib/common_test/test/ct_pre_post_test_io_SUITE_data/dummy_SUITE.erl",
+      1).
+
+-module(dummy_SUITE).
+
+-compile(export_all).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      21).
+
+-file([], 21).
+
+-file("test/lib/common_test/test/ct_pre_post_test_io_SUITE_data/dummy_SUITE.erl",
+      24).
+
+suite() ->
+    [{timetrap,{seconds,30}}].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, _Config) ->
+    ok.
+
+init_per_testcase(_TestCase, Config) ->
+    ct:sleep(500),
+    Config.
+
+end_per_testcase(_TestCase, _Config) ->
+    ok.
+
+groups() ->
+    [{g1,[parallel],[tc1,tc2,tc3]},{g2,[],[tc4,tc5]}].
+
+all() ->
+    [{group,g1},tc1,tc2,{group,g2}].
+
+tc1(_C) ->
+    ok.
+
+tc2(_C) ->
+    ok.
+
+tc3(_C) ->
+    ok.
+
+tc4(_C) ->
+    ok.
+
+tc5(_C) ->
+    ok.
+
+
+

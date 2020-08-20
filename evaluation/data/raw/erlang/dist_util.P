@@ -1,0 +1,729 @@
+-file("test/lib/kernel/src/dist_util.erl", 1).
+
+-module(dist_util).
+
+-export([handshake_we_started/1,
+         handshake_other_started/1,
+         start_timer/1,
+         setup_timer/2,
+         reset_timer/1,
+         cancel_timer/1,
+         shutdown/3,
+         shutdown/4]).
+
+-import(error_logger, [error_msg/2]).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/kernel/src/../include/dist_util.hrl",
+      1).
+
+-record(hs_data,{kernel_pid,
+                 other_node,
+                 this_node,
+                 socket,
+                 timer,
+                 this_flags,
+                 allowed,
+                 other_version,
+                 other_flags,
+                 other_started,
+                 f_send,
+                 f_recv,
+                 f_setopts_pre_nodeup,
+                 f_setopts_post_nodeup,
+                 f_getll,
+                 f_address,
+                 mf_tick,
+                 mf_getstat,
+                 request_type = normal}).
+
+-file("test/lib/kernel/src/dist_util.erl", 36).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/kernel/src/../include/dist.hrl",
+      1).
+
+-file("test/lib/kernel/src/dist_util.erl", 37).
+
+-record(tick,{read = 0,write = 0,tick = 0,ticked = 0}).
+
+remove_flag(Flag, Flags) ->
+    case Flags band Flag of
+        0 ->
+            Flags;
+        _ ->
+            Flags - Flag
+    end.
+
+adjust_flags(ThisFlags, OtherFlags) ->
+    case 1 band ThisFlags band OtherFlags of
+        0 ->
+            {remove_flag(1, ThisFlags),remove_flag(1, OtherFlags)};
+        _ ->
+            {ThisFlags,OtherFlags}
+    end.
+
+publish_flag(hidden, _) ->
+    0;
+publish_flag(_, OtherNode) ->
+    case net_kernel:publish_on_node(OtherNode) of
+        true ->
+            1;
+        _ ->
+            0
+    end.
+
+make_this_flags(RequestType, OtherNode) ->
+    publish_flag(RequestType, OtherNode)
+    bor
+    (512 bor 256 bor 4 bor 8 bor 16 bor 32 bor 64 bor 128 bor 1024
+     bor
+     2048
+     bor
+     4096
+     bor
+     8192
+     bor
+     16384
+     bor
+     65536).
+
+handshake_other_started(#hs_data{request_type = ReqType} = HSData0) ->
+    {PreOtherFlags,Node,Version} = recv_name(HSData0),
+    PreThisFlags = make_this_flags(ReqType, Node),
+    {ThisFlags,OtherFlags} = adjust_flags(PreThisFlags, PreOtherFlags),
+    HSData =
+        HSData0#hs_data{this_flags = ThisFlags,
+                        other_flags = OtherFlags,
+                        other_version = Version,
+                        other_node = Node,
+                        other_started = true},
+    check_dflag_xnc(HSData),
+    is_allowed(HSData),
+    ok,
+    mark_pending(HSData),
+    {MyCookie,HisCookie} = get_cookies(Node),
+    ChallengeA = gen_challenge(),
+    send_challenge(HSData, ChallengeA),
+    reset_timer(HSData#hs_data.timer),
+    ChallengeB = recv_challenge_reply(HSData, ChallengeA, MyCookie),
+    send_challenge_ack(HSData, gen_digest(ChallengeB, HisCookie)),
+    ok,
+    connection(HSData).
+
+is_allowed(#hs_data{other_node = Node,allowed = Allowed} = HSData) ->
+    case lists:member(Node, Allowed) of
+        false when Allowed =/= [] ->
+            send_status(HSData, not_allowed),
+            error_msg("** Connection attempt from disallowed node ~w **"
+                      " ~n",
+                      [Node]),
+            dist_util:shutdown(dist_util, 156, Node);
+        _ ->
+            true
+    end.
+
+check_dflag_xnc(#hs_data{other_node = Node,
+                         other_flags = OtherFlags,
+                         other_started = OtherStarted} =
+                    HSData) ->
+    XRFlg = 4,
+    XPPFlg =
+        case erlang:system_info(compat_rel) of
+            R when R >= 10 ->
+                256;
+            _ ->
+                0
+        end,
+    ReqXncFlags = XRFlg bor XPPFlg,
+    case OtherFlags band ReqXncFlags =:= ReqXncFlags of
+        true ->
+            ok;
+        false ->
+            What =
+                case
+                    {OtherFlags band XRFlg =:= XRFlg,
+                     OtherFlags band XPPFlg =:= XPPFlg}
+                of
+                    {false,false} ->
+                        "references, pids and ports";
+                    {true,false} ->
+                        "pids and ports";
+                    {false,true} ->
+                        "references"
+                end,
+            case OtherStarted of
+                true ->
+                    send_status(HSData, not_allowed),
+                    Dir = "from",
+                    How = "rejected";
+                _ ->
+                    Dir = "to",
+                    How = "aborted"
+            end,
+            error_msg("** ~w: Connection attempt ~s node ~w ~s since it"
+                      " cannot handle extended ~s. **~n",
+                      [node(),Dir,Node,How,What]),
+            dist_util:shutdown(dist_util, 197, Node)
+    end.
+
+mark_pending(#hs_data{kernel_pid = Kernel,
+                      other_node = Node,
+                      this_node = MyNode} =
+                 HSData) ->
+    case
+        do_mark_pending(Kernel,
+                        MyNode,
+                        Node,
+                        (HSData#hs_data.f_address)(HSData#hs_data.socket,
+                                                   Node),
+                        HSData#hs_data.other_flags)
+    of
+        ok ->
+            send_status(HSData, ok),
+            reset_timer(HSData#hs_data.timer);
+        ok_pending ->
+            send_status(HSData, ok_simultaneous),
+            reset_timer(HSData#hs_data.timer);
+        nok_pending ->
+            send_status(HSData, nok),
+            dist_util:shutdown(dist_util, 221, Node);
+        up_pending ->
+            do_alive(HSData),
+            wait_pending(Kernel),
+            reset_timer(HSData#hs_data.timer);
+        already_pending ->
+            ok,
+            dist_util:shutdown(dist_util, 238, Node)
+    end.
+
+wait_pending(Kernel) ->
+    receive
+        {Kernel,pending} ->
+            ok,
+            ok
+    end.
+
+do_alive(#hs_data{other_node = Node} = HSData) ->
+    send_status(HSData, alive),
+    case recv_status(HSData) of
+        true ->
+            true;
+        false ->
+            dist_util:shutdown(dist_util, 259, Node)
+    end.
+
+do_mark_pending(Kernel, MyNode, Node, Address, Flags) ->
+    Kernel
+    !
+    {self(),{accept_pending,MyNode,Node,Address,publish_type(Flags)}},
+    receive
+        {Kernel,{accept_pending,Ret}} ->
+            ok,
+            Ret
+    end.
+
+is_pending(Kernel, Node) ->
+    Kernel ! {self(),{is_pending,Node}},
+    receive
+        {Kernel,{is_pending,Reply}} ->
+            Reply
+    end.
+
+-spec shutdown(atom(), non_neg_integer(), term()) -> no_return().
+
+shutdown(Module, Line, Data) ->
+    shutdown(Module, Line, Data, shutdown).
+
+-spec shutdown(atom(), non_neg_integer(), term(), term()) -> no_return().
+
+shutdown(_Module, _Line, _Data, Reason) ->
+    noop,
+    flush_down(),
+    exit(Reason).
+
+flush_down() ->
+    receive
+        {From,get_status} ->
+            From ! {self(),get_status,error},
+            flush_down()
+    after
+        0 -> ok
+    end.
+
+handshake_we_started(#hs_data{request_type = ReqType,other_node = Node} =
+                         PreHSData) ->
+    PreThisFlags = make_this_flags(ReqType, Node),
+    HSData = PreHSData#hs_data{this_flags = PreThisFlags},
+    send_name(HSData),
+    recv_status(HSData),
+    {PreOtherFlags,ChallengeA} = recv_challenge(HSData),
+    {ThisFlags,OtherFlags} = adjust_flags(PreThisFlags, PreOtherFlags),
+    NewHSData =
+        HSData#hs_data{this_flags = ThisFlags,
+                       other_flags = OtherFlags,
+                       other_started = false},
+    check_dflag_xnc(NewHSData),
+    MyChallenge = gen_challenge(),
+    {MyCookie,HisCookie} = get_cookies(Node),
+    send_challenge_reply(NewHSData,
+                         MyChallenge,
+                         gen_digest(ChallengeA, HisCookie)),
+    reset_timer(NewHSData#hs_data.timer),
+    recv_challenge_ack(NewHSData, MyChallenge, MyCookie),
+    connection(NewHSData).
+
+connection(#hs_data{other_node = Node,
+                    socket = Socket,
+                    f_address = FAddress,
+                    f_setopts_pre_nodeup = FPreNodeup,
+                    f_setopts_post_nodeup = FPostNodeup} =
+               HSData) ->
+    cancel_timer(HSData#hs_data.timer),
+    PType = publish_type(HSData#hs_data.other_flags),
+    case FPreNodeup(Socket) of
+        ok ->
+            do_setnode(HSData),
+            Address = FAddress(Socket, Node),
+            mark_nodeup(HSData, Address),
+            case FPostNodeup(Socket) of
+                ok ->
+                    con_loop(HSData#hs_data.kernel_pid,
+                             Node,
+                             Socket,
+                             Address,
+                             HSData#hs_data.this_node,
+                             PType,
+                             #tick{},
+                             HSData#hs_data.mf_tick,
+                             HSData#hs_data.mf_getstat);
+                _ ->
+                    dist_util:shutdown(dist_util,
+                                       360,
+                                       Node,
+                                       connection_setup_failed)
+            end;
+        _ ->
+            dist_util:shutdown(dist_util, 363, Node)
+    end.
+
+gen_digest(Challenge, Cookie)
+    when is_integer(Challenge), is_atom(Cookie) ->
+    erlang:md5([atom_to_list(Cookie)|integer_to_list(Challenge)]).
+
+gen_challenge() ->
+    {A,B,C} = now(),
+    {D,_} = statistics(reductions),
+    {E,_} = statistics(runtime),
+    {F,_} = statistics(wall_clock),
+    {G,H,_} = statistics(garbage_collection),
+    (A bsl 24 + (E bsl 16) + (G bsl 8) + F bxor (B + (C bsl 16))
+     bxor
+     (D + (H bsl 16)))
+    band
+    4294967295.
+
+get_cookies(Node) ->
+    case auth:get_cookie(Node) of
+        X when is_atom(X) ->
+            {X,X}
+    end.
+
+do_setnode(#hs_data{other_node = Node,
+                    socket = Socket,
+                    other_flags = Flags,
+                    other_version = Version,
+                    f_getll = GetLL}) ->
+    case GetLL(Socket) of
+        {ok,Port} ->
+            ok,
+            case
+                catch erlang:setnode(Node, Port, {Flags,Version,'',''})
+            of
+                {'EXIT',{system_limit,_}} ->
+                    error_msg("** Distribution system limit reached, no"
+                              " table space left for node ~w ** ~n",
+                              [Node]),
+                    dist_util:shutdown(dist_util, 416, Node);
+                {'EXIT',Other} ->
+                    exit(Other);
+                _Else ->
+                    ok
+            end;
+        _ ->
+            error_msg("** Distribution connection error, could not get "
+                      "low level port for node ~w ** ~n",
+                      [Node]),
+            dist_util:shutdown(dist_util, 426, Node)
+    end.
+
+mark_nodeup(#hs_data{kernel_pid = Kernel,
+                     other_node = Node,
+                     other_flags = Flags,
+                     other_started = OtherStarted},
+            Address) ->
+    Kernel ! {self(),{nodeup,Node,Address,publish_type(Flags),true}},
+    receive
+        {Kernel,inserted} ->
+            ok;
+        {Kernel,bad_request} ->
+            TypeT =
+                case OtherStarted of
+                    true ->
+                        "accepting connection";
+                    _ ->
+                        "initiating connection"
+                end,
+            error_msg("Fatal: ~p was not allowed to send {nodeup, ~p} t"
+                      "o kernel when ~s~n",
+                      [self(),Node,TypeT]),
+            dist_util:shutdown(dist_util, 449, Node)
+    end.
+
+con_loop(Kernel,
+         Node,
+         Socket,
+         TcpAddress,
+         MyNode,
+         Type,
+         Tick,
+         MFTick,
+         MFGetstat) ->
+    receive
+        {tcp_closed,Socket} ->
+            dist_util:shutdown(dist_util, 456, Node, connection_closed);
+        {Kernel,disconnect} ->
+            dist_util:shutdown(dist_util, 458, Node, disconnected);
+        {Kernel,aux_tick} ->
+            case MFGetstat(Socket) of
+                {ok,_,_,PendWrite} ->
+                    send_tick(Socket, PendWrite, MFTick);
+                _ ->
+                    ignore_it
+            end,
+            con_loop(Kernel,
+                     Node,
+                     Socket,
+                     TcpAddress,
+                     MyNode,
+                     Type,
+                     Tick,
+                     MFTick,
+                     MFGetstat);
+        {Kernel,tick} ->
+            case send_tick(Socket, Tick, Type, MFTick, MFGetstat) of
+                {ok,NewTick} ->
+                    con_loop(Kernel,
+                             Node,
+                             Socket,
+                             TcpAddress,
+                             MyNode,
+                             Type,
+                             NewTick,
+                             MFTick,
+                             MFGetstat);
+                {error,not_responding} ->
+                    error_msg("** Node ~p not responding **~n** Removin"
+                              "g (timedout) connection **~n",
+                              [Node]),
+                    dist_util:shutdown(dist_util,
+                                       479,
+                                       Node,
+                                       net_tick_timeout);
+                _Other ->
+                    dist_util:shutdown(dist_util,
+                                       481,
+                                       Node,
+                                       send_net_tick_failed)
+            end;
+        {From,get_status} ->
+            case MFGetstat(Socket) of
+                {ok,Read,Write,_} ->
+                    From ! {self(),get_status,{ok,Read,Write}},
+                    con_loop(Kernel,
+                             Node,
+                             Socket,
+                             TcpAddress,
+                             MyNode,
+                             Type,
+                             Tick,
+                             MFTick,
+                             MFGetstat);
+                _ ->
+                    dist_util:shutdown(dist_util,
+                                       492,
+                                       Node,
+                                       get_status_failed)
+            end
+    end.
+
+send_name(#hs_data{socket = Socket,
+                   this_node = Node,
+                   f_send = FSend,
+                   this_flags = Flags,
+                   other_version = Version}) ->
+    ok,
+    case
+        FSend(Socket,
+              [$n,
+               [(Version bsr 8) band 255,Version band 255],
+               [(Flags bsr 24) band 255,
+                (Flags bsr 16) band 255,
+                (Flags bsr 8) band 255,
+                Flags band 255],
+               atom_to_list(Node)])
+    of
+        {error,closed} ->
+            self() ! {tcp_closed,Socket},
+            {error,closed};
+        R ->
+            R
+    end.
+
+send_challenge(#hs_data{socket = Socket,
+                        this_node = Node,
+                        other_version = Version,
+                        this_flags = Flags,
+                        f_send = FSend},
+               Challenge) ->
+    ok,
+    case
+        FSend(Socket,
+              [$n,
+               [(Version bsr 8) band 255,Version band 255],
+               [(Flags bsr 24) band 255,
+                (Flags bsr 16) band 255,
+                (Flags bsr 8) band 255,
+                Flags band 255],
+               [(Challenge bsr 24) band 255,
+                (Challenge bsr 16) band 255,
+                (Challenge bsr 8) band 255,
+                Challenge band 255],
+               atom_to_list(Node)])
+    of
+        {error,closed} ->
+            self() ! {tcp_closed,Socket},
+            {error,closed};
+        R ->
+            R
+    end.
+
+send_challenge_reply(#hs_data{socket = Socket,f_send = FSend},
+                     Challenge,
+                     Digest) ->
+    ok,
+    case
+        FSend(Socket,
+              [$r,
+               [(Challenge bsr 24) band 255,
+                (Challenge bsr 16) band 255,
+                (Challenge bsr 8) band 255,
+                Challenge band 255],
+               Digest])
+    of
+        {error,closed} ->
+            self() ! {tcp_closed,Socket},
+            {error,closed};
+        R ->
+            R
+    end.
+
+send_challenge_ack(#hs_data{socket = Socket,f_send = FSend}, Digest) ->
+    ok,
+    case FSend(Socket, [$a,Digest]) of
+        {error,closed} ->
+            self() ! {tcp_closed,Socket},
+            {error,closed};
+        R ->
+            R
+    end.
+
+recv_name(#hs_data{socket = Socket,f_recv = Recv}) ->
+    case Recv(Socket, 0, infinity) of
+        {ok,Data} ->
+            get_name(Data);
+        _ ->
+            dist_util:shutdown(dist_util, 545, no_node)
+    end.
+
+get_name([$n,VersionA,VersionB,Flag1,Flag2,Flag3,Flag4|OtherNode]) ->
+    {Flag1 bsl 24 bor (Flag2 bsl 16) bor (Flag3 bsl 8) bor Flag4,
+     list_to_atom(OtherNode),
+     VersionA bsl 8 bor VersionB};
+get_name(Data) ->
+    dist_util:shutdown(dist_util, 552, Data).
+
+publish_type(Flags) ->
+    case Flags band 1 of
+        0 ->
+            hidden;
+        _ ->
+            normal
+    end.
+
+recv_challenge(#hs_data{socket = Socket,
+                        other_node = Node,
+                        other_version = Version,
+                        f_recv = Recv}) ->
+    case Recv(Socket, 0, infinity) of
+        {ok,[$n,V1,V0,Fl1,Fl2,Fl3,Fl4,CA3,CA2,CA1,CA0|Ns]} ->
+            Flags = Fl1 bsl 24 bor (Fl2 bsl 16) bor (Fl3 bsl 8) bor Fl4,
+            try {list_to_existing_atom(Ns),V1 bsl 8 bor V0} of
+                {Node,Version} ->
+                    Challenge =
+                        CA3 bsl 24 bor (CA2 bsl 16) bor (CA1 bsl 8)
+                        bor
+                        CA0,
+                    ok,
+                    {Flags,Challenge};
+                _ ->
+                    dist_util:shutdown(dist_util, 575, no_node)
+            catch
+                error:badarg ->
+                    dist_util:shutdown(dist_util, 578, no_node)
+            end;
+        _ ->
+            dist_util:shutdown(dist_util, 581, no_node)
+    end.
+
+recv_challenge_reply(#hs_data{socket = Socket,
+                              other_node = NodeB,
+                              f_recv = FRecv},
+                     ChallengeA,
+                     Cookie) ->
+    case FRecv(Socket, 0, infinity) of
+        {ok,[$r,CB3,CB2,CB1,CB0|SumB]} when length(SumB) =:= 16 ->
+            SumA = gen_digest(ChallengeA, Cookie),
+            ChallengeB =
+                CB3 bsl 24 bor (CB2 bsl 16) bor (CB1 bsl 8) bor CB0,
+            ok,
+            ok,
+            case list_to_binary(SumB) of
+                SumA ->
+                    ChallengeB;
+                _ ->
+                    error_msg("** Connection attempt from disallowed no"
+                              "de ~w ** ~n",
+                              [NodeB]),
+                    dist_util:shutdown(dist_util, 605, NodeB)
+            end;
+        _ ->
+            dist_util:shutdown(dist_util, 608, no_node)
+    end.
+
+recv_challenge_ack(#hs_data{socket = Socket,
+                            f_recv = FRecv,
+                            other_node = NodeB},
+                   ChallengeB,
+                   CookieA) ->
+    case FRecv(Socket, 0, infinity) of
+        {ok,[$a|SumB]} when length(SumB) =:= 16 ->
+            SumA = gen_digest(ChallengeB, CookieA),
+            ok,
+            ok,
+            case list_to_binary(SumB) of
+                SumA ->
+                    ok;
+                _ ->
+                    error_msg("** Connection attempt to disallowed node"
+                              " ~w ** ~n",
+                              [NodeB]),
+                    dist_util:shutdown(dist_util, 625, NodeB)
+            end;
+        _ ->
+            dist_util:shutdown(dist_util, 628, NodeB)
+    end.
+
+recv_status(#hs_data{kernel_pid = Kernel,
+                     socket = Socket,
+                     other_node = Node,
+                     f_recv = Recv} =
+                HSData) ->
+    case Recv(Socket, 0, infinity) of
+        {ok,[$s|StrStat]} ->
+            Stat = list_to_atom(StrStat),
+            ok,
+            case Stat of
+                not_allowed ->
+                    dist_util:shutdown(dist_util, 638, Node);
+                nok ->
+                    receive after infinity -> ok end;
+                alive ->
+                    Reply = is_pending(Kernel, Node),
+                    ok,
+                    send_status(HSData, Reply),
+                    if
+                        not Reply ->
+                            dist_util:shutdown(dist_util, 649, Node);
+                        Reply ->
+                            Stat
+                    end;
+                _ ->
+                    Stat
+            end;
+        _Error ->
+            ok,
+            dist_util:shutdown(dist_util, 658, Node)
+    end.
+
+send_status(#hs_data{socket = Socket,other_node = Node,f_send = FSend},
+            Stat) ->
+    ok,
+    case FSend(Socket, [$s|atom_to_list(Stat)]) of
+        {error,_} ->
+            dist_util:shutdown(dist_util, 667, Node);
+        _ ->
+            true
+    end.
+
+send_tick(Socket, Tick, Type, MFTick, MFGetstat) ->
+    #tick{tick = T0,read = Read,write = Write,ticked = Ticked} = Tick,
+    T = T0 + 1,
+    T1 = T rem 4,
+    case MFGetstat(Socket) of
+        {ok,Read,_,_} when Ticked =:= T ->
+            {error,not_responding};
+        {ok,Read,W,Pend} when Type =:= hidden ->
+            send_tick(Socket, Pend, MFTick),
+            {ok,Tick#tick{write = W + 1,tick = T1}};
+        {ok,Read,Write,Pend} ->
+            send_tick(Socket, Pend, MFTick),
+            {ok,Tick#tick{write = Write + 1,tick = T1}};
+        {ok,R,Write,Pend} ->
+            send_tick(Socket, Pend, MFTick),
+            {ok,
+             Tick#tick{write = Write + 1,read = R,tick = T1,ticked = T}};
+        {ok,Read,W,_} ->
+            {ok,Tick#tick{write = W,tick = T1}};
+        {ok,R,W,_} ->
+            {ok,Tick#tick{write = W,read = R,tick = T1,ticked = T}};
+        Error ->
+            Error
+    end.
+
+send_tick(Socket, 0, MFTick) ->
+    MFTick(Socket);
+send_tick(_, _Pend, _) ->
+    ok.
+
+start_timer(Timeout) ->
+    spawn_link(dist_util, setup_timer, [self(),Timeout * 1]).
+
+setup_timer(Pid, Timeout) ->
+    receive
+        {Pid,reset} ->
+            setup_timer(Pid, Timeout)
+    after
+        Timeout ->
+            ok,
+            dist_util:shutdown(dist_util, 757, timer)
+    end.
+
+reset_timer(Timer) ->
+    Timer ! {self(),reset},
+    ok.
+
+cancel_timer(Timer) ->
+    unlink(Timer),
+    exit(Timer, shutdown).
+
+
+

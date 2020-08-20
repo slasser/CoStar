@@ -1,0 +1,1466 @@
+-file("test/lib/kernel/src/dist_ac.erl", 1).
+
+-module(dist_ac).
+
+-behaviour(gen_server).
+
+-export([start_link/0,
+         load_application/2,
+         takeover_application/2,
+         permit_application/2,
+         permit_only_loaded_application/2]).
+
+-export([get_known_nodes/0]).
+
+-export([init/1,
+         handle_cast/2,
+         handle_call/3,
+         handle_info/2,
+         terminate/2,
+         code_change/3,
+         send_timeout/3]).
+
+-export([info/0]).
+
+-import(lists,
+        [zf/2,
+         filter/2,
+         map/2,
+         foreach/2,
+         foldl/3,
+         mapfoldl/3,
+         keysearch/3,
+         keydelete/3,
+         keyreplace/4,
+         member/2]).
+
+-record(state,{appls = [],
+               tmp_locals = [],
+               remote_started = [],
+               known = [],
+               started = [],
+               tmp_weights = [],
+               dist_loaded = [],
+               t_reqs = [],
+               s_reqs = [],
+               p_reqs = []}).
+
+-record(appl,{name,id,restart_time = 0,nodes = [],run = []}).
+
+start_link() ->
+    case gen_server:start_link({local,dist_ac}, dist_ac, [], []) of
+        {ok,Pid} ->
+            gen_server:cast(dist_ac, init_sync),
+            {ok,Pid};
+        Else ->
+            Else
+    end.
+
+load_application(AppName, DistNodes) ->
+    gen_server:call(dist_ac,
+                    {load_application,AppName,DistNodes},
+                    infinity).
+
+takeover_application(AppName, RestartType) ->
+    case validRestartType(RestartType) of
+        true ->
+            wait_for_sync_dacs(),
+            Nodes = get_nodes(AppName),
+            global:trans({dist_ac,self()},
+                         fun() ->
+                                gen_server:call(dist_ac,
+                                                {takeover_application,
+                                                 AppName,
+                                                 RestartType},
+                                                infinity)
+                         end,
+                         Nodes);
+        false ->
+            {error,{invalid_restart_type,RestartType}}
+    end.
+
+permit_application(AppName, Bool) ->
+    wait_for_sync_dacs(),
+    LockId = {dist_ac,self()},
+    global:trans(LockId,
+                 fun() ->
+                        gen_server:call(dist_ac,
+                                        {permit_application,
+                                         AppName,
+                                         Bool,
+                                         LockId,
+                                         started},
+                                        infinity)
+                 end).
+
+permit_only_loaded_application(AppName, Bool) ->
+    wait_for_sync_dacs(),
+    LockId = {dist_ac,self()},
+    global:trans(LockId,
+                 fun() ->
+                        gen_server:call(dist_ac,
+                                        {permit_application,
+                                         AppName,
+                                         Bool,
+                                         LockId,
+                                         only_loaded},
+                                        infinity)
+                 end).
+
+get_nodes(AppName) ->
+    gen_server:call(dist_ac, {get_nodes,AppName}, infinity).
+
+get_known_nodes() ->
+    gen_server:call(dist_ac, get_known_nodes).
+
+init([]) ->
+    process_flag(trap_exit, true),
+    {ok,#state{}}.
+
+sync_dacs(Appls) ->
+    Res =
+        global:trans({dist_ac,sync_dacs},
+                     fun() ->
+                            Nodes = introduce_me(nodes(), Appls),
+                            wait_dacs(Nodes, [node()], Appls, [])
+                     end),
+    ets:insert(ac_tab, {sync_dacs,ok}),
+    Res.
+
+introduce_me(Nodes, Appls) ->
+    Msg = {dist_ac_new_node,1,node(),Appls,[]},
+    filter(fun(Node) ->
+                  case rpc:call(Node, erlang, whereis, [dist_ac]) of
+                      Pid when is_pid(Pid) ->
+                          Pid ! Msg,
+                          true;
+                      _ ->
+                          false
+                  end
+           end,
+           Nodes).
+
+wait_dacs([Node|Nodes], KnownNodes, Appls, RStarted) ->
+    monitor_node(Node, true),
+    receive
+        {dist_ac_new_node,_Vsn,Node,HisAppls,HisStarted} ->
+            monitor_node(Node, false),
+            NRStarted = RStarted ++ HisStarted,
+            NAppls = dist_merge(Appls, HisAppls, Node),
+            wait_dacs(Nodes, [Node|KnownNodes], NAppls, NRStarted);
+        {nodedown,Node} ->
+            monitor_node(Node, false),
+            wait_dacs(Nodes, KnownNodes, Appls, RStarted)
+    end;
+wait_dacs([], KnownNodes, Appls, RStarted) ->
+    {KnownNodes,Appls,RStarted}.
+
+info() ->
+    gen_server:call(dist_ac, info).
+
+wait_for_sync_dacs() ->
+    case catch ets:lookup(ac_tab, sync_dacs) of
+        [{sync_dacs,ok}] ->
+            ok;
+        _ ->
+            receive after 100 -> ok end,
+            wait_for_sync_dacs()
+    end.
+
+handle_cast(init_sync, _S) ->
+    receive
+        {go,KernelConfig} ->
+            Appls =
+                case application:get_env(kernel, distributed) of
+                    {ok,D} ->
+                        dist_check(D);
+                    undefined ->
+                        []
+                end,
+            dist_take_control(Appls),
+            KernelConfig ! dist_ac_took_control,
+            net_kernel:monitor_nodes(true),
+            {Known,NAppls,RStarted} = sync_dacs(Appls),
+            {noreply,
+             #state{appls = NAppls,
+                    known = Known,
+                    remote_started = RStarted}}
+    end.
+
+handle_call(info, _From, S) ->
+    {reply,S,S};
+handle_call({load_application,AppName,DistNodes}, _From, S) ->
+    Appls = S#state.appls,
+    case catch dist_replace(DistNodes, AppName, Appls) of
+        {error,Error} ->
+            {reply,{error,Error},S};
+        {'EXIT',R} ->
+            {stop,R,{error,R},S};
+        NAppls ->
+            NewS =
+                case dist_find_nodes(NAppls, AppName) of
+                    [] ->
+                        S;
+                    _Nodes ->
+                        ensure_take_control(AppName, Appls),
+                        {ok,S2} = load(AppName, S#state{appls = NAppls}),
+                        S2
+                end,
+            {reply,ok,NewS}
+    end;
+handle_call({takeover_application,AppName,RestartType}, From, S) ->
+    Appls = S#state.appls,
+    case keysearch(AppName, #appl.name, Appls) of
+        {value,Appl} when element(1, Appl#appl.id) =:= distributed ->
+            {distributed,Node} = Appl#appl.id,
+            ac_takeover(req, AppName, Node, RestartType),
+            NAppl = Appl#appl{id = takeover},
+            NAppls = keyreplace(AppName, #appl.name, Appls, NAppl),
+            TR = S#state.t_reqs,
+            {noreply,
+             S#state{appls = NAppls,t_reqs = [{AppName,From}|TR]}};
+        {value,#appl{id = local}} ->
+            {reply,{error,{already_running_locally,AppName}},S};
+        _ ->
+            {reply,{error,{not_running_distributed,AppName}},S}
+    end;
+handle_call({permit_application,AppName,Bool,LockId,StartInfo}, From, S) ->
+    case lists:keymember(AppName, #appl.name, S#state.appls) of
+        false ->
+            case application_controller:get_loaded(AppName) of
+                {true,_} when not Bool ->
+                    ac_stop_it(AppName),
+                    {reply,ok,S};
+                {true,_} when Bool ->
+                    ac_start_it(req, AppName),
+                    {reply,ok,S};
+                false ->
+                    {reply,{error,{not_loaded,AppName}},S}
+            end;
+        true ->
+            NAppls =
+                dist_update_run(S#state.appls, AppName, node(), Bool),
+            NewS = S#state{appls = NAppls},
+            IsRunning = keysearch(AppName, #appl.name, NAppls),
+            IsMyApp =
+                case IsRunning of
+                    {value,#appl{id = local}} ->
+                        true;
+                    _ ->
+                        false
+                end,
+            Nodes = dist_flat_nodes(NAppls, AppName),
+            Msg = {dist_ac_new_permission,node(),AppName,Bool,IsMyApp},
+            send_msg(Msg, Nodes),
+            case StartInfo of
+                only_loaded ->
+                    {reply,ok,NewS};
+                started ->
+                    permit(Bool, IsRunning, AppName, From, NewS, LockId)
+            end
+    end;
+handle_call({distribution_changed,NewDistribution}, _From, S) ->
+    Appls = S#state.appls,
+    NewAppls = dist_change_update(Appls, NewDistribution),
+    NewS = S#state{appls = NewAppls},
+    {reply,ok,NewS};
+handle_call({get_nodes,AppName}, _From, S) ->
+    Alive =
+        intersection(dist_flat_nodes(S#state.appls, AppName),
+                     S#state.known),
+    {reply,Alive,S};
+handle_call(get_known_nodes, _From, S) ->
+    {reply,S#state.known,S}.
+
+handle_info({ac_load_application_req,AppName}, S) ->
+    {ok,NewS} = load(AppName, S),
+    application_controller ! {ac_load_application_reply,AppName,ok},
+    {noreply,NewS};
+handle_info({ac_application_unloaded,AppName}, S) ->
+    {ok,NewS} = unload(AppName, S),
+    {noreply,NewS};
+handle_info({ac_start_application_req,AppName}, S) ->
+    Lock = {dist_ac,self()},
+    case global:set_lock(Lock, [node()], 0) of
+        true ->
+            S2 =
+                case catch start_appl(AppName, S, reply) of
+                    {ok,NewS,_} ->
+                        NewS;
+                    {error,R} ->
+                        application_controller
+                        !
+                        {ac_start_application_reply,AppName,{error,R}},
+                        S
+                end,
+            global:del_lock(Lock),
+            {noreply,S2};
+        false ->
+            send_after(100, {ac_start_application_req,AppName}),
+            {noreply,S}
+    end;
+handle_info({ac_application_run,AppName,Res}, S) ->
+    Appls = S#state.appls,
+    Nodes = S#state.known,
+    send_msg({dist_ac_app_started,node(),AppName,Res}, Nodes),
+    NId =
+        case Res of
+            ok ->
+                local;
+            {error,_R} ->
+                undefined
+        end,
+    {value,Appl} = keysearch(AppName, #appl.name, Appls),
+    NTReqs = del_t_reqs(AppName, S#state.t_reqs, Res),
+    NAppl = Appl#appl{id = NId},
+    NAppls = keyreplace(AppName, #appl.name, Appls, NAppl),
+    {noreply,S#state{appls = NAppls,t_reqs = NTReqs}};
+handle_info({ac_application_not_run,AppName}, S) ->
+    {value,Appl} = keysearch(AppName, #appl.name, Appls = S#state.appls),
+    NTReqs = del_t_reqs(AppName, S#state.t_reqs, {error,stopped}),
+    SReqs =
+        filter(fun({Name,From2}) when Name =:= AppName ->
+                      gen_server:reply(From2, ok),
+                      false;
+                  (_) ->
+                      true
+               end,
+               S#state.s_reqs),
+    RS =
+        case Appl#appl.id of
+            local ->
+                send_msg({dist_ac_app_stopped,AppName}, S#state.known),
+                S#state.remote_started;
+            {distributed,Node} ->
+                [{Node,AppName}|S#state.remote_started];
+            _ ->
+                S#state.remote_started
+        end,
+    NAppl = Appl#appl{id = undefined},
+    NAppls = keyreplace(AppName, #appl.name, Appls, NAppl),
+    {noreply,
+     S#state{appls = NAppls,
+             t_reqs = NTReqs,
+             s_reqs = SReqs,
+             remote_started = RS}};
+handle_info({ac_application_stopped,AppName}, S) ->
+    {value,Appl} = keysearch(AppName, #appl.name, Appls = S#state.appls),
+    NTReqs = del_t_reqs(AppName, S#state.t_reqs, {error,stopped}),
+    SReqs =
+        filter(fun({Name,From2}) when Name =:= AppName ->
+                      gen_server:reply(From2, ok),
+                      false;
+                  (_) ->
+                      true
+               end,
+               S#state.s_reqs),
+    RS =
+        case Appl#appl.id of
+            local ->
+                send_msg({dist_ac_app_stopped,AppName}, S#state.known),
+                S#state.remote_started;
+            {distributed,Node} ->
+                [{Node,AppName}|S#state.remote_started];
+            _ ->
+                S#state.remote_started
+        end,
+    NAppl = Appl#appl{id = undefined},
+    NAppls = keyreplace(AppName, #appl.name, Appls, NAppl),
+    Started = lists:delete(AppName, S#state.started),
+    {noreply,
+     S#state{appls = NAppls,
+             started = Started,
+             t_reqs = NTReqs,
+             s_reqs = SReqs,
+             remote_started = RS}};
+handle_info({dist_ac_new_node,_Vsn,Node,HisAppls,[]}, S) ->
+    Appls = S#state.appls,
+    MyStarted =
+        zf(fun(Appl) when Appl#appl.id =:= local ->
+                  {true,{node(),Appl#appl.name}};
+              (_) ->
+                  false
+           end,
+           Appls),
+    {dist_ac,Node} ! {dist_ac_new_node,1,node(),Appls,MyStarted},
+    NAppls = dist_merge(Appls, HisAppls, Node),
+    {noreply,S#state{appls = NAppls,known = [Node|S#state.known]}};
+handle_info({dist_ac_app_started,Node,Name,Res}, S) ->
+    case
+        {keysearch(Name, #appl.name, S#state.appls),
+         lists:member(Name, S#state.started)}
+    of
+        {{value,Appl},true} ->
+            Appls = S#state.appls,
+            NId =
+                case Appl#appl.id of
+                    _ when element(1, Res) =:= error ->
+                        undefined;
+                    {distributed,_} ->
+                        {distributed,Node};
+                    local ->
+                        {distributed,Node};
+                    _ ->
+                        {distributed,Node}
+                end,
+            ac_started(req, Name, Node),
+            NAppl = Appl#appl{id = NId},
+            NAppls = keyreplace(Name, #appl.name, Appls, NAppl),
+            TmpWeights = keydelete_all(Name, 1, S#state.tmp_weights),
+            NewS = S#state{appls = NAppls,tmp_weights = TmpWeights},
+            NPermitReq = req_del_permit_false(NewS#state.p_reqs, Name),
+            case
+                catch
+                    req_start_app(NewS#state{p_reqs = NPermitReq}, Name)
+            of
+                {error,R} ->
+                    {stop,R};
+                {ok,NewS2} ->
+                    {noreply,NewS2}
+            end;
+        {_,_} ->
+            NRStarted = [{Node,Name}|S#state.remote_started],
+            {noreply,S#state{remote_started = NRStarted}}
+    end;
+handle_info({dist_ac_app_stopped,AppName}, S) ->
+    Appls = S#state.appls,
+    case keysearch(AppName, #appl.name, Appls) of
+        false ->
+            RStarted = keydelete(AppName, 2, S#state.remote_started),
+            {noreply,S#state{remote_started = RStarted}};
+        {value,Appl} ->
+            NAppl = Appl#appl{id = undefined},
+            NAppls = keyreplace(AppName, #appl.name, Appls, NAppl),
+            RStarted = keydelete(AppName, 2, S#state.remote_started),
+            {noreply,S#state{appls = NAppls,remote_started = RStarted}}
+    end;
+handle_info({dist_ac_weight,Name,Weight,Node}, S) ->
+    case keysearch(Name, #appl.name, S#state.appls) of
+        {value,Appl} ->
+            Id = Appl#appl.id,
+            case Id of
+                run_waiting ->
+                    {dist_ac,Node} ! {dist_ac_weight,Name,0,node()},
+                    {noreply,S};
+                undefined ->
+                    {noreply,
+                     S#state{tmp_locals =
+                                 [{Name,Weight,Node}|S#state.tmp_locals]}};
+                {takeover,_} ->
+                    {noreply,
+                     S#state{tmp_locals =
+                                 [{Name,Weight,Node}|S#state.tmp_locals]}};
+                {failover,_} ->
+                    {noreply,
+                     S#state{tmp_locals =
+                                 [{Name,Weight,Node}|S#state.tmp_locals]}};
+                _ ->
+                    MyWeight = get_cached_weight(Name, S),
+                    {dist_ac,Node}
+                    !
+                    {dist_ac_weight,Name,MyWeight,node()},
+                    NTWs =
+                        keyreplaceadd(Name,
+                                      1,
+                                      S#state.tmp_weights,
+                                      {Name,MyWeight}),
+                    {noreply,S#state{tmp_weights = NTWs}}
+            end;
+        _ ->
+            {noreply,
+             S#state{tmp_locals =
+                         [{Name,Weight,Node}|S#state.tmp_locals]}}
+    end;
+handle_info({nodedown,Node}, S) ->
+    AppNames = dist_get_runnable(S#state.appls),
+    HisAppls =
+        filter(fun(#appl{name = Name,id = {distributed,N}})
+                      when Node =:= N ->
+                      lists:member(Name, AppNames);
+                  (_) ->
+                      false
+               end,
+               S#state.appls),
+    Appls2 =
+        zf(fun(Appl) when Appl#appl.id =:= {distributed,Node} ->
+                  case lists:member(Appl#appl.name, AppNames) of
+                      true ->
+                          {true,Appl#appl{id = {failover,Node}}};
+                      false ->
+                          ac_not_running(Appl#appl.name),
+                          {true,Appl#appl{id = undefined}}
+                  end;
+              (_) ->
+                  true
+           end,
+           S#state.appls),
+    RStarted =
+        filter(fun({Node2,_Name}) when Node2 =:= Node ->
+                      false;
+                  (_) ->
+                      true
+               end,
+               S#state.remote_started),
+    Appls3 = dist_del_node(Appls2, Node),
+    {NPermitReq,Appls4,SReqs} = req_del_node(S, Node, Appls3),
+    NKnown = lists:delete(Node, S#state.known),
+    NewS =
+        S#state{appls = Appls4,
+                p_reqs = NPermitReq,
+                known = NKnown,
+                s_reqs = SReqs,
+                remote_started = RStarted},
+    restart_appls(HisAppls),
+    {noreply,NewS};
+handle_info({dist_ac_app_loaded,Node,Name,HisNodes,Permission,HeKnowsMe},
+            S) ->
+    Nodes = dist_find_nodes(Appls = S#state.appls, Name),
+    case is_loaded(Name, S) of
+        true ->
+            case equal_nodes(Nodes, HisNodes) of
+                true ->
+                    NAppls =
+                        dist_update_run(Appls, Name, Node, Permission),
+                    if
+                        not HeKnowsMe ->
+                            Msg =
+                                {dist_ac_app_loaded,
+                                 node(),
+                                 Name,
+                                 Nodes,
+                                 dist_is_runnable(Appls, Name),
+                                 true},
+                            {dist_ac,Node} ! Msg;
+                        true ->
+                            ok
+                    end,
+                    {noreply,S#state{appls = NAppls}};
+                false ->
+                    dist_mismatch(Name, Node)
+            end;
+        false ->
+            Load =
+                [{{Name,Node},HisNodes,Permission}|S#state.dist_loaded],
+            {noreply,S#state{dist_loaded = Load}}
+    end;
+handle_info({dist_ac_app_unloaded,Node,Name}, S) ->
+    Appls = dist_update_run(S#state.appls, Name, Node, undefined),
+    Load = keydelete({Name,Node}, 1, S#state.dist_loaded),
+    {noreply,S#state{appls = Appls,dist_loaded = Load}};
+handle_info({dist_ac_new_permission,Node,AppName,false,IsHisApp}, S) ->
+    Appls = dist_update_run(S#state.appls, AppName, Node, false),
+    NewS = S#state{appls = Appls},
+    case dist_is_runnable(Appls, AppName) of
+        true when IsHisApp ->
+            case catch start_appl(AppName, NewS, req) of
+                {ok,NewS2,_} ->
+                    {noreply,NewS2};
+                {error,_R} ->
+                    {noreply,NewS}
+            end;
+        _ ->
+            {noreply,NewS}
+    end;
+handle_info({dist_ac_new_permission,Node,AppName,true,_IsHisApp}, S) ->
+    Appls = dist_update_run(S#state.appls, AppName, Node, true),
+    {noreply,S#state{appls = Appls}};
+handle_info({internal_restart_appl,Name}, S) ->
+    case restart_appl(Name, S) of
+        {error,R} ->
+            {stop,{error,R},S};
+        NewS ->
+            {noreply,NewS}
+    end;
+handle_info(_, S) ->
+    {noreply,S}.
+
+terminate(_Reason, _S) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok,State}.
+
+load(AppName, S) ->
+    Appls0 = S#state.appls,
+    DistLoaded = get_dist_loaded(AppName, Load1 = S#state.dist_loaded),
+    Nodes = dist_find_nodes(Appls0, AppName),
+    FNodes = flat_nodes(Nodes),
+    Permission = get_default_permission(AppName),
+    Appls1 = dist_update_run(Appls0, AppName, node(), Permission),
+    {LoadedNodes,Appls2} =
+        mapfoldl(fun({Node,HisNodes,HisPermission}, Appls) ->
+                        case equal_nodes(Nodes, HisNodes) of
+                            true ->
+                                {Node,
+                                 dist_update_run(Appls,
+                                                 AppName,
+                                                 Node,
+                                                 HisPermission)};
+                            _ ->
+                                dist_mismatch(AppName, Node)
+                        end
+                 end,
+                 Appls1,
+                 DistLoaded),
+    Load2 = del_dist_loaded(AppName, Load1),
+    foreach(fun(Node) when Node =/= node() ->
+                   Msg =
+                       {dist_ac_app_loaded,
+                        node(),
+                        AppName,
+                        Nodes,
+                        Permission,
+                        member(Node, LoadedNodes)},
+                   {dist_ac,Node} ! Msg;
+               (_) ->
+                   ok
+            end,
+            FNodes),
+    {ok,S#state{appls = Appls2,dist_loaded = Load2}}.
+
+ensure_take_control(AppName, Appls) ->
+    case lists:keymember(AppName, #appl.name, Appls) of
+        true ->
+            ok;
+        false ->
+            application_controller:control_application(AppName)
+    end.
+
+unload(AppName, S) ->
+    Appls = S#state.appls,
+    Nodes = dist_flat_nodes(Appls, AppName),
+    Msg = {dist_ac_app_unloaded,node(),AppName},
+    send_msg(Msg, Nodes),
+    {value,Appl} = keysearch(AppName, #appl.name, Appls),
+    NAppl = Appl#appl{id = undefined,run = []},
+    {ok,S#state{appls = keyreplace(AppName, #appl.name, Appls, NAppl)}}.
+
+start_appl(AppName, S, Type) ->
+    Appl =
+        case keysearch(AppName, #appl.name, Appls = S#state.appls) of
+            {value,A} ->
+                A;
+            _ ->
+                throw({error,{unknown_application,AppName}})
+        end,
+    case Appl#appl.id of
+        local ->
+            {ok,S,false};
+        _ ->
+            {Id,IsWaiting} =
+                case dist_get_all_nodes(Appl) of
+                    {ok,DistNodes,PermittedNodes} ->
+                        start_distributed(Appl,
+                                          AppName,
+                                          DistNodes,
+                                          PermittedNodes,
+                                          S,
+                                          Type);
+                    Error ->
+                        throw(Error)
+                end,
+            NAppl = Appl#appl{id = Id},
+            NAppls = keyreplaceadd(AppName, #appl.name, Appls, NAppl),
+            {ok,NewS} = req_start_app(S#state{appls = NAppls}, AppName),
+            TmpLocals = keydelete_all(AppName, 1, NewS#state.tmp_locals),
+            TmpWeights =
+                keydelete_all(AppName, 1, NewS#state.tmp_weights),
+            RStarted = keydelete(AppName, 2, S#state.remote_started),
+            Started = replaceadd(AppName, NewS#state.started),
+            {ok,
+             NewS#state{started = Started,
+                        tmp_locals = TmpLocals,
+                        tmp_weights = TmpWeights,
+                        remote_started = RStarted},
+             IsWaiting}
+    end.
+
+start_distributed(Appl, Name, Nodes, PermittedNodes, S, Type) ->
+    case find_start_node(Nodes, PermittedNodes, Name, S) of
+        {ok,Node} when Node =:= node() ->
+            case Appl#appl.id of
+                {failover,FoNode} when Type =:= req ->
+                    ac_failover(Name, FoNode, undefined);
+                {distributed,Node2} when Type =:= req ->
+                    ac_takeover(req, Name, Node2, undefined);
+                _ when Type =:= reply ->
+                    case
+                        lists:keysearch(Name, 2, S#state.remote_started)
+                    of
+                        {value,{Node3,_}} ->
+                            ac_takeover(reply, Name, Node3, undefined);
+                        _ ->
+                            ac_start_it(Type, Name)
+                    end;
+                _ ->
+                    ac_start_it(Type, Name)
+            end,
+            {run_waiting,true};
+        {already_started,Node} ->
+            ac_started(Type, Name, Node),
+            {{distributed,Node},false};
+        {ok,Node} ->
+            case keysearch(Name, #appl.name, S#state.appls) of
+                {value,#appl{id = {distributed,Node}}} ->
+                    ac_started(Type, Name, Node),
+                    {{distributed,Node},false};
+                _ ->
+                    wait_dist_start(Node,
+                                    Appl,
+                                    Name,
+                                    Nodes,
+                                    PermittedNodes,
+                                    S,
+                                    Type)
+            end;
+        not_started ->
+            wait_dist_start2(Appl, Name, Nodes, PermittedNodes, S, Type);
+        no_permission ->
+            ac_not_started(Type, Name),
+            {undefined,false}
+    end.
+
+wait_dist_start(Node, Appl, Name, Nodes, PermittedNodes, S, Type) ->
+    monitor_node(Node, true),
+    receive
+        {dist_ac_app_started,Node,Name,ok} ->
+            ac_started(Type, Name, Node),
+            monitor_node(Node, false),
+            {{distributed,Node},false};
+        {dist_ac_app_started,Node,Name,{error,R}} ->
+            ac_error(Type, Name, {Node,R}),
+            monitor_node(Node, false),
+            {Appl#appl.id,false};
+        {dist_ac_weight,Name,_Weigth,Node} ->
+            monitor_node(Node, false),
+            {dist_ac,Node}
+            !
+            {dist_ac_weight,Name,get_cached_weight(Name, S),node()},
+            wait_dist_start(Node,
+                            Appl,
+                            Name,
+                            Nodes,
+                            PermittedNodes,
+                            S,
+                            Type);
+        {nodedown,Node} ->
+            monitor_node(Node, false),
+            TmpLocals =
+                filter(fun({Name2,_Weight,Node2})
+                              when Node2 =:= Node, Name2 =:= Name ->
+                              false;
+                          (_) ->
+                              true
+                       end,
+                       S#state.tmp_locals),
+            NewS = S#state{tmp_locals = TmpLocals},
+            start_distributed(Appl,
+                              Name,
+                              Nodes,
+                              lists:delete(Node, PermittedNodes),
+                              NewS,
+                              Type)
+    end.
+
+wait_dist_start2(Appl, Name, Nodes, PermittedNodes, S, Type) ->
+    receive
+        {dist_ac_app_started,Node,Name,ok} ->
+            ac_started(Type, Name, Node),
+            {{distributed,Node},false};
+        {dist_ac_app_started,Node,Name,{error,R}} ->
+            ac_error(Type, Name, {Node,R}),
+            {Appl#appl.id,false};
+        {nodedown,Node} ->
+            TmpLocals =
+                filter(fun({Name2,_Weight,Node2})
+                              when Node2 =:= Node, Name2 =:= Name ->
+                              false;
+                          (_) ->
+                              true
+                       end,
+                       S#state.tmp_locals),
+            NewS = S#state{tmp_locals = TmpLocals},
+            start_distributed(Appl,
+                              Name,
+                              Nodes,
+                              lists:delete(Node, PermittedNodes),
+                              NewS,
+                              Type)
+    end.
+
+ac_start_it(reply, Name) ->
+    application_controller ! {ac_start_application_reply,Name,start_it};
+ac_start_it(req, Name) ->
+    application_controller ! {ac_change_application_req,Name,start_it}.
+
+ac_started(reply, Name, Node) ->
+    application_controller
+    !
+    {ac_start_application_reply,Name,{started,Node}};
+ac_started(req, Name, Node) ->
+    application_controller
+    !
+    {ac_change_application_req,Name,{started,Node}}.
+
+ac_error(reply, Name, Error) ->
+    application_controller
+    !
+    {ac_start_application_reply,Name,{error,Error}};
+ac_error(req, _Name, _Error) ->
+    ok.
+
+ac_not_started(reply, Name) ->
+    application_controller
+    !
+    {ac_start_application_reply,Name,not_started};
+ac_not_started(req, Name) ->
+    application_controller ! {ac_change_application_req,Name,stop_it}.
+
+ac_stop_it(Name) ->
+    application_controller ! {ac_change_application_req,Name,stop_it}.
+
+ac_takeover(reply, Name, Node, _RestartType) ->
+    application_controller
+    !
+    {ac_start_application_reply,Name,{takeover,Node}};
+ac_takeover(req, Name, Node, RestartType) ->
+    application_controller
+    !
+    {ac_change_application_req,Name,{takeover,Node,RestartType}}.
+
+ac_failover(Name, Node, RestartType) ->
+    application_controller
+    !
+    {ac_change_application_req,Name,{failover,Node,RestartType}}.
+
+ac_not_running(Name) ->
+    application_controller
+    !
+    {ac_change_application_req,Name,not_running}.
+
+restart_appls(Appls) ->
+    foreach(fun(Appl) ->
+                   AppName = Appl#appl.name,
+                   send_after(Appl#appl.restart_time,
+                              {internal_restart_appl,AppName})
+            end,
+            lists:reverse(Appls)).
+
+restart_appl(AppName, S) ->
+    case keysearch(AppName, #appl.name, S#state.appls) of
+        {value,Appl} when element(1, Appl#appl.id) =:= failover ->
+            case catch start_appl(AppName, S, req) of
+                {ok,NewS,_} ->
+                    NewS;
+                {error,R} ->
+                    error_msg("Error when restarting application ~p: ~p"
+                              "~n",
+                              [AppName,R]),
+                    S
+            end;
+        _ ->
+            S
+    end.
+
+permit(false,
+       {value,#appl{id = undefined}},
+       _AppName,
+       _From,
+       S,
+       _LockId) ->
+    {reply,ok,S};
+permit(false, {value,#appl{id = Id}}, _AppName, _From, S, _LockId)
+    when element(1, Id) =:= distributed ->
+    {reply,ok,S};
+permit(false, {value,_}, AppName, From, S, _LockId) ->
+    case dist_get_runnable_nodes(S#state.appls, AppName) of
+        [] ->
+            ac_stop_it(AppName),
+            SReqs = [{AppName,From}|S#state.s_reqs],
+            {noreply,S#state{s_reqs = SReqs}};
+        Nodes ->
+            PR = req_del_permit_true(S#state.p_reqs, AppName),
+            NPReqs = [{From,AppName,false,Nodes}|PR],
+            {noreply,S#state{p_reqs = NPReqs}}
+    end;
+permit(true, {value,#appl{id = local}}, _AppName, _From, S, _LockId) ->
+    {reply,ok,S};
+permit(true, _, AppName, From, S, LockId) ->
+    case catch start_appl(AppName, S, req) of
+        {_ErrorTag,{not_running,App}} ->
+            PR = req_del_permit_false(S#state.p_reqs, AppName),
+            NPReqs = [{false,AppName,true,App}|PR],
+            {reply,ok,S#state{p_reqs = NPReqs}};
+        {ok,NewS,true} ->
+            TR = NewS#state.t_reqs,
+            global:del_lock(LockId),
+            {noreply,NewS#state{t_reqs = [{AppName,From}|TR]}};
+        {ok,_S,false} ->
+            {reply,ok,S};
+        {_ErrorTag,R} ->
+            {stop,R,{error,R},S}
+    end.
+
+do_start_appls(StartApps, S) ->
+    SortedStartApps = StartApps,
+    Appls = S#state.appls,
+    {ok,
+     foldl(fun(AppName, NewS) ->
+                  case catch start_appl(AppName, NewS, req) of
+                      {error,R} ->
+                          throw({{error,NewS},R});
+                      {ok,NewS2,_} ->
+                          NewS2
+                  end
+           end,
+           S#state{appls = Appls},
+           lists:reverse(SortedStartApps))}.
+
+find_start_node(Nodes, PermittedNodes, Name, S) ->
+    AllNodes = intersection(flat_nodes(Nodes), PermittedNodes),
+    case lists:member(node(), AllNodes) of
+        true ->
+            Weight = get_cached_weight(Name, S),
+            find_start_node(Nodes, Name, S, Weight, AllNodes);
+        false ->
+            case keysearch(Name, 2, S#state.remote_started) of
+                {value,{Node,_Name}} ->
+                    {already_started,Node};
+                _ when AllNodes =/= [] ->
+                    not_started;
+                _ ->
+                    no_permission
+            end
+    end.
+
+find_start_node([AnyNodes|Nodes], Name, S, Weight, AllNodes)
+    when is_tuple(AnyNodes) ->
+    case
+        find_any_node(tuple_to_list(AnyNodes),
+                      Name,
+                      S,
+                      Weight,
+                      AllNodes)
+    of
+        false ->
+            find_start_node(Nodes, Name, S, Weight, AllNodes);
+        Res ->
+            Res
+    end;
+find_start_node([Node|Nodes], Name, S, Weight, AllNodes) ->
+    case lists:member(Node, AllNodes) of
+        true ->
+            case keysearch(Name, #appl.name, S#state.appls) of
+                {value,#appl{id = {distributed,Node}}} ->
+                    {already_started,Node};
+                _ ->
+                    case keysearch(Name, 2, S#state.remote_started) of
+                        {value,{Node,_Name}} ->
+                            {already_started,Node};
+                        _ ->
+                            {ok,Node}
+                    end
+            end;
+        false ->
+            find_start_node(Nodes, Name, S, Weight, AllNodes)
+    end;
+find_start_node([], _Name, _S, _Weight, _AllNodes) ->
+    not_started.
+
+find_any_node(AnyNodes, Name, S, Weight, AllNodes) ->
+    case check_running(Name, S, intersection(AnyNodes, AllNodes)) of
+        {already_started,Node} ->
+            {already_started,Node};
+        false ->
+            send_nodes(AllNodes, {dist_ac_weight,Name,Weight,node()}),
+            Answers =
+                [{Weight,node()}|collect_answers(AllNodes, Name, S, [])],
+            find_alive_node(lists:sort(Answers),
+                            intersection(AnyNodes, S#state.known))
+    end.
+
+check_running(Name,
+              #state{remote_started = RStarted,appls = Appls},
+              AnyNodes) ->
+    case keysearch(Name, 2, RStarted) of
+        {value,{Node,_Name}} ->
+            case lists:member(Node, AnyNodes) of
+                true ->
+                    {already_started,Node};
+                false ->
+                    false
+            end;
+        false ->
+            case keysearch(Name, #appl.name, Appls) of
+                {value,#appl{id = {distributed,Node}}} ->
+                    case lists:member(Node, AnyNodes) of
+                        true ->
+                            {already_started,Node};
+                        false ->
+                            false
+                    end;
+                _ ->
+                    false
+            end
+    end.
+
+find_alive_node([{_,Node}|Nodes], AliveNodes) ->
+    case lists:member(Node, AliveNodes) of
+        true ->
+            {ok,Node};
+        false ->
+            find_alive_node(Nodes, AliveNodes)
+    end;
+find_alive_node([], _AliveNodes) ->
+    false.
+
+collect_answers([Node|Nodes], Name, S, Res) when Node =/= node() ->
+    case keysearch(Node, 3, S#state.tmp_locals) of
+        {value,{Name,Weight,Node}} ->
+            collect_answers(Nodes, Name, S, [{Weight,Node}|Res]);
+        _ ->
+            monitor_node(Node, true),
+            receive
+                {dist_ac_weight,Name,Weight,Node} ->
+                    monitor_node(Node, false),
+                    collect_answers(Nodes, Name, S, [{Weight,Node}|Res]);
+                {nodedown,Node} ->
+                    monitor_node(Node, false),
+                    collect_answers(Nodes, Name, S, Res)
+            end
+    end;
+collect_answers([_ThisNode|Nodes], Name, S, Res) ->
+    collect_answers(Nodes, Name, S, Res);
+collect_answers([], _Name, _S, Res) ->
+    Res.
+
+send_nodes(Nodes, Msg) ->
+    FlatNodes = flat_nodes(Nodes),
+    foreach(fun(Node) when Node =/= node() ->
+                   {dist_ac,Node} ! Msg;
+               (_ThisNode) ->
+                   ok
+            end,
+            FlatNodes).
+
+send_after(Time, Msg) when is_integer(Time), Time >= 0 ->
+    spawn_link(dist_ac, send_timeout, [self(),Time,Msg]);
+send_after(_, _) ->
+    ok.
+
+send_timeout(To, Time, Msg) ->
+    receive after Time -> To ! Msg end.
+
+send_msg(Msg, Nodes) ->
+    foreach(fun(Node) when Node =/= node() ->
+                   {dist_ac,Node} ! Msg;
+               (_) ->
+                   ok
+            end,
+            Nodes).
+
+replaceadd(Item, List) ->
+    case member(Item, List) of
+        true ->
+            List;
+        false ->
+            [Item|List]
+    end.
+
+keyreplaceadd(Key, Pos, List, New) ->
+    case lists:keymember(Key, Pos, List) of
+        true ->
+            lists:keyreplace(Key, Pos, List, New);
+        false ->
+            [New|List]
+    end.
+
+keydelete_all(Key, N, [H|T]) when element(N, H) =:= Key ->
+    keydelete_all(Key, N, T);
+keydelete_all(Key, N, [H|T]) ->
+    [H|keydelete_all(Key, N, T)];
+keydelete_all(_Key, _N, []) ->
+    [].
+
+equal_nodes([H|T1], [H|T2]) when is_atom(H) ->
+    equal_nodes(T1, T2);
+equal_nodes([H1|T1], [H2|T2]) when is_tuple(H1), is_tuple(H2) ->
+    case equal(tuple_to_list(H1), tuple_to_list(H2)) of
+        true ->
+            equal_nodes(T1, T2);
+        false ->
+            false
+    end;
+equal_nodes([], []) ->
+    true;
+equal_nodes(_, _) ->
+    false.
+
+equal([H|T], S) ->
+    case lists:member(H, S) of
+        true ->
+            equal(T, lists:delete(H, S));
+        false ->
+            false
+    end;
+equal([], []) ->
+    true;
+equal(_, _) ->
+    false.
+
+flat_nodes(Nodes) when is_list(Nodes) ->
+    foldl(fun(Node, Res) when is_atom(Node) ->
+                 [Node|Res];
+             (Tuple, Res) when is_tuple(Tuple) ->
+                 tuple_to_list(Tuple) ++ Res
+          end,
+          [],
+          Nodes);
+flat_nodes(Nodes) ->
+    throw({error,{badarg,Nodes}}).
+
+get_cached_weight(Name, S) ->
+    case lists:keysearch(Name, 1, S#state.tmp_weights) of
+        {value,{_,W}} ->
+            W;
+        _ ->
+            get_weight()
+    end.
+
+get_weight() ->
+    length(application:which_applications()).
+
+get_dist_loaded(Name, [{{Name,Node},HisNodes,Permission}|T]) ->
+    [{Node,HisNodes,Permission}|get_dist_loaded(Name, T)];
+get_dist_loaded(Name, [_H|T]) ->
+    get_dist_loaded(Name, T);
+get_dist_loaded(_Name, []) ->
+    [].
+
+del_dist_loaded(Name, [{{Name,_Node},_HisNodes,_Permission}|T]) ->
+    del_dist_loaded(Name, T);
+del_dist_loaded(Name, [H|T]) ->
+    [H|del_dist_loaded(Name, T)];
+del_dist_loaded(_Name, []) ->
+    [].
+
+req_start_app(State, Name) ->
+    {ok,
+     foldl(fun({false,AppName,true,Name2}, S) when Name =:= Name2 ->
+                  PR = keydelete(AppName, 2, S#state.p_reqs),
+                  NS = S#state{p_reqs = PR},
+                  case catch do_start_appls([AppName], NS) of
+                      {_ErrorTag,{not_running,App}} ->
+                          NRequests = [{false,AppName,true,App}|PR],
+                          S#state{p_reqs = NRequests};
+                      {ok,NewS} ->
+                          NewS;
+                      {_ErrorTag,R} ->
+                          throw({error,R})
+                  end;
+              (_, S) ->
+                  S
+           end,
+           State,
+           State#state.p_reqs)}.
+
+req_del_permit_true(Reqs, Name) ->
+    filter(fun({From,Name2,true,_}) when Name2 =:= Name ->
+                  gen_server:reply(From, ok),
+                  false;
+              (_) ->
+                  true
+           end,
+           Reqs).
+
+req_del_permit_false(Reqs, Name) ->
+    filter(fun({From,Name2,false,_Nodes}) when Name2 =:= Name ->
+                  gen_server:reply(From, ok),
+                  false;
+              (_) ->
+                  true
+           end,
+           Reqs).
+
+req_del_node(S, Node, Appls) ->
+    check_waiting(S#state.p_reqs, S, Node, Appls, [], S#state.s_reqs).
+
+del_t_reqs(AppName, TReqs, Res) ->
+    lists:filter(fun({AN,From}) when AppName =:= AN ->
+                        gen_server:reply(From, Res),
+                        false;
+                    (_) ->
+                        true
+                 end,
+                 TReqs).
+
+check_waiting([{From,AppName,false,Nodes}|Reqs],
+              S,
+              Node,
+              Appls,
+              Res,
+              SReqs) ->
+    case lists:delete(Node, Nodes) of
+        [] ->
+            ac_stop_it(AppName),
+            NSReqs = [{AppName,From}|SReqs],
+            check_waiting(Reqs, Node, S, Appls, Res, NSReqs);
+        NNodes ->
+            check_waiting(Reqs,
+                          Node,
+                          S,
+                          Appls,
+                          [{From,AppName,false,NNodes}|Res],
+                          SReqs)
+    end;
+check_waiting([H|Reqs], S, Node, Appls, Res, SReqs) ->
+    check_waiting(Reqs, Node, S, Appls, [H|Res], SReqs);
+check_waiting([], _Node, _S, Appls, Res, SReqs) ->
+    {Res,Appls,SReqs}.
+
+intersection([], _) ->
+    [];
+intersection(_, []) ->
+    [];
+intersection(L1, L2) ->
+    L1 -- L1 -- L2.
+
+get_default_permission(AppName) ->
+    case application:get_env(kernel, permissions) of
+        {ok,Permissions} ->
+            case keysearch(AppName, 1, Permissions) of
+                {value,{_,true}} ->
+                    true;
+                {value,{_,false}} ->
+                    false;
+                {value,{_,X}} ->
+                    exit({bad_permission,{AppName,X}});
+                false ->
+                    true
+            end;
+        undefined ->
+            true
+    end.
+
+dist_check([{AppName,Nodes}|T]) ->
+    P = get_default_permission(AppName),
+    [#appl{name = AppName,nodes = Nodes,run = [{node(),P}]}|
+     dist_check(T)];
+dist_check([{AppName,Time,Nodes}|T]) when is_integer(Time), Time >= 0 ->
+    P = get_default_permission(AppName),
+    [#appl{name = AppName,
+           restart_time = Time,
+           nodes = Nodes,
+           run = [{node(),P}]}|
+     dist_check(T)];
+dist_check([{AppName,infinity,Nodes}|T]) ->
+    P = get_default_permission(AppName),
+    [#appl{name = AppName,
+           restart_time = infinity,
+           nodes = Nodes,
+           run = [{node(),P}]}|
+     dist_check(T)];
+dist_check([_|T]) ->
+    dist_check(T);
+dist_check([]) ->
+    [].
+
+dist_take_control(Appls) ->
+    foreach(fun(#appl{name = AppName}) ->
+                   application_controller:control_application(AppName)
+            end,
+            Appls).
+
+dist_replace(default, _Name, Appls) ->
+    Appls;
+dist_replace({AppName,Nodes}, AppName, Appls) ->
+    Run =
+        [ 
+         {Node,undefined} ||
+             Node <- flat_nodes(Nodes)
+        ],
+    keyreplaceadd(AppName,
+                  #appl.name,
+                  Appls,
+                  #appl{name = AppName,
+                        restart_time = 0,
+                        nodes = Nodes,
+                        run = Run});
+dist_replace({AppName,Time,Nodes}, AppName, Appls)
+    when is_integer(Time), Time >= 0 ->
+    Run =
+        [ 
+         {Node,undefined} ||
+             Node <- flat_nodes(Nodes)
+        ],
+    keyreplaceadd(AppName,
+                  #appl.name,
+                  Appls,
+                  #appl{name = AppName,
+                        restart_time = Time,
+                        nodes = Nodes,
+                        run = Run});
+dist_replace(Bad, _Name, _Appls) ->
+    throw({error,{bad_distribution_spec,Bad}}).
+
+dist_update_run(Appls, AppName, Node, Permission) ->
+    map(fun(Appl) when Appl#appl.name =:= AppName ->
+               Run = Appl#appl.run,
+               NRun = keyreplaceadd(Node, 1, Run, {Node,Permission}),
+               Appl#appl{run = NRun};
+           (Appl) ->
+               Appl
+        end,
+        Appls).
+
+dist_change_update(Appls, []) ->
+    Appls;
+dist_change_update(Appls, [{AppName,NewNodes}|NewDist]) ->
+    NewAppls = do_dist_change_update(Appls, AppName, 0, NewNodes),
+    dist_change_update(NewAppls, NewDist);
+dist_change_update(Appls, [{AppName,NewTime,NewNodes}|NewDist]) ->
+    NewAppls = do_dist_change_update(Appls, AppName, NewTime, NewNodes),
+    dist_change_update(NewAppls, NewDist).
+
+do_dist_change_update(Appls, AppName, NewTime, NewNodes) ->
+    map(fun(Appl) when Appl#appl.name =:= AppName ->
+               Appl#appl{restart_time = NewTime,nodes = NewNodes};
+           (Appl) ->
+               Appl
+        end,
+        Appls).
+
+dist_merge(MyAppls, HisAppls, HisNode) ->
+    zf(fun(Appl) ->
+              #appl{name = AppName,run = Run} = Appl,
+              HeIsMember = true,
+              case keysearch(AppName, #appl.name, HisAppls) of
+                  {value,#appl{run = HisRun}} when HeIsMember ->
+                      case keysearch(HisNode, 1, HisRun) of
+                          {value,Val} ->
+                              NRun = keyreplaceadd(HisNode, 1, Run, Val),
+                              {true,Appl#appl{run = NRun}};
+                          false ->
+                              Val = {HisNode,undefined},
+                              {true,Appl#appl{run = [Val|Run]}}
+                      end;
+                  _ ->
+                      true
+              end
+       end,
+       MyAppls).
+
+dist_get_runnable_nodes(Appls, AppName) ->
+    case keysearch(AppName, #appl.name, Appls) of
+        {value,#appl{run = Run}} ->
+            zf(fun({Node,true}) ->
+                      {true,Node};
+                  (_) ->
+                      false
+               end,
+               Run);
+        false ->
+            []
+    end.
+
+dist_is_runnable(Appls, AppName) ->
+    case keysearch(AppName, #appl.name, Appls) of
+        {value,#appl{run = Run}} ->
+            case keysearch(node(), 1, Run) of
+                {value,{_,true}} ->
+                    true;
+                _ ->
+                    false
+            end;
+        false ->
+            false
+    end.
+
+is_loaded(AppName, #state{appls = Appls}) ->
+    case keysearch(AppName, #appl.name, Appls) of
+        {value,#appl{run = Run}} ->
+            case keysearch(node(), 1, Run) of
+                {value,{_Node,undefined}} ->
+                    false;
+                {value,_} ->
+                    true;
+                false ->
+                    false
+            end;
+        false ->
+            false
+    end.
+
+dist_get_runnable(Appls) ->
+    zf(fun(#appl{name = AppName,run = Run}) ->
+              case keysearch(node(), 1, Run) of
+                  {value,{_,true}} ->
+                      {true,AppName};
+                  _ ->
+                      false
+              end
+       end,
+       Appls).
+
+dist_get_all_nodes(#appl{name = AppName,nodes = Nodes,run = Run}) ->
+    {Res,BadNodes} = check_nodes(Run, [], []),
+    case intersection(BadNodes, nodes(connected)) of
+        [] ->
+            {ok,Nodes,Res};
+        _ ->
+            {error,{app_not_loaded,AppName,BadNodes}}
+    end.
+
+check_nodes([{Node,undefined}|T], Res, BadNodes) ->
+    check_nodes(T, Res, [Node|BadNodes]);
+check_nodes([{Node,true}|T], Res, BadNodes) ->
+    check_nodes(T, [Node|Res], BadNodes);
+check_nodes([{_Node,false}|T], Res, BadNodes) ->
+    check_nodes(T, Res, BadNodes);
+check_nodes([], Res, BadNodes) ->
+    {Res,BadNodes}.
+
+dist_find_nodes([#appl{name = Name,nodes = Nodes}|_], Name) ->
+    Nodes;
+dist_find_nodes([_|T], Name) ->
+    dist_find_nodes(T, Name);
+dist_find_nodes([], _Name) ->
+    [].
+
+dist_flat_nodes(Appls, Name) ->
+    flat_nodes(dist_find_nodes(Appls, Name)).
+
+dist_del_node(Appls, Node) ->
+    map(fun(Appl) ->
+               NRun =
+                   filter(fun({N,_Runnable}) when N =:= Node ->
+                                 false;
+                             (_) ->
+                                 true
+                          end,
+                          Appl#appl.run),
+               Appl#appl{run = NRun}
+        end,
+        Appls).
+
+validRestartType(permanent) ->
+    true;
+validRestartType(temporary) ->
+    true;
+validRestartType(transient) ->
+    true;
+validRestartType(_RestartType) ->
+    false.
+
+dist_mismatch(AppName, Node) ->
+    error_msg("Distribution mismatch for application \"~p\" on nodes ~p"
+              " and ~p~n",
+              [AppName,node(),Node]),
+    exit({distribution_mismatch,AppName,Node}).
+
+error_msg(Format, ArgList) when is_list(Format), is_list(ArgList) ->
+    error_logger:error_msg("dist_ac on node ~p:~n" ++ Format,
+                           [node()|ArgList]).
+
+
+

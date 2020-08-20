@@ -1,0 +1,65 @@
+/* 
+  Huffman Tree DOT graph.
+
+  DOT Reference :  http://www.graphviz.org/doc/info/lang.html
+                   http://en.wikipedia.org/wiki/DOT_language
+  Timestamp     :  1381273696 
+  Phrase        :  'SOME USERS LIKE TO USE COMMANDLINE TOOLS INSTEAD OF GRAPHICAL ONES, BECAUSE COMMANDLINE TOOLS CAN BE USED WITH A SCRIPTING LANGUAGE. THIS MEANS YOU CAN CREATE SCRIPTS THAT CREATE DYNAMIC GRAPHS. SOME POSSIBLE USES OF DYNAMIC GRAPHS INCLUDEA TRACEROUTE REPRESENTATION OF PACKAGES GOING TO MANY DEST'
+
+  Generated on http://huffman.ooz.ie/
+*/
+
+digraph G {
+    edge [label=0];
+    graph [ranksep=0];
+    node [shape=record];
+    H [label="{{H|6}|00000}"];
+    B [label="{{B|3}|000010}"];
+    W [label="{{W|1}|00001100}"];
+    COMA [label="{{COMA|1}|00001101}"];
+    DOT [label="{{DOT|2}|0000111}"];
+    C [label="{{C|15}|0001}"];
+    E [label="{{E|29}|001}"];
+    D [label="{{D|8}|01000}"];
+    P [label="{{P|8}|01001}"];
+    I [label="{{I|16}|0101}"];
+    N [label="{{N|18}|0110}"];
+    T [label="{{T|18}|0111}"];
+    L [label="{{L|9}|10000}"];
+    U [label="{{U|9}|10001}"];
+    Y [label="{{Y|4}|100100}"];
+    K [label="{{K|2}|1001010}"];
+    F [label="{{F|3}|1001011}"];
+    G [label="{{G|9}|10011}"];
+    YKFG [label=18];
+    LUYKFG [label=36];
+    O [label="{{O|19}|1010}"];
+    M [label="{{M|10}|10110}"];
+    R [label="{{R|12}|10111}"];
+    SPACE [label="{{SPACE|45}|110}"];
+    A [label="{{A|25}|1110}"];
+    S [label="{{S|25}|1111}"];
+    297 -> 125 -> 57 -> 28 -> 13 -> H;
+    7 -> B;
+    4 -> 2 -> W;
+    68 -> 32 -> 16 -> D;
+    36 -> N;
+    172 -> 77 -> LUYKFG -> 18 -> L;
+    YKFG -> 9 -> Y;
+    5 -> K;
+    41 -> O;
+    22 -> M;
+    95 -> SPACE;
+    50 -> A;2 -> COMA [label=1];
+    13 -> 7 -> 4 -> DOT [label=1];
+    28 -> C [label=1];
+    57 -> E [label=1];
+    16 -> P [label=1];
+    32 -> I [label=1];
+    125 -> 68 -> 36 -> T [label=1];
+    18 -> U [label=1];
+    9 -> 5 -> F [label=1];
+    LUYKFG -> YKFG -> G [label=1];
+    77 -> 41 -> 22 -> R [label=1];
+    297 -> 172 -> 95 -> 50 -> S [label=1];
+}

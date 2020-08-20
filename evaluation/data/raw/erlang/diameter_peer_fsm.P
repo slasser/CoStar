@@ -1,0 +1,903 @@
+-file("test/lib/diameter/src/base/diameter_peer_fsm.erl", 1).
+
+-module(diameter_peer_fsm).
+
+-behaviour(gen_server).
+
+-export([start/3,result_code/2]).
+
+-export([init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         terminate/2,
+         code_change/3]).
+
+-export([start_link/1]).
+
+-export([match/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/diameter-1.3/include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options = [{answer_errors,report}]}).
+
+-file("test/lib/diameter/src/base/diameter_peer_fsm.erl", 49).
+
+-file("test/lib/diameter/src/base/diameter_internal.hrl", 1).
+
+-record(diameter_peer,{host_id,
+                       statusT,
+                       is_dynamic,
+                       expiration,
+                       tls_enabled}).
+
+-record(diameter_realm,{name,
+                        app_id,
+                        local_action,
+                        server_id,
+                        is_dynamic,
+                        expiration}).
+
+-file("test/lib/diameter/src/base/diameter_peer_fsm.erl", 50).
+
+-type uint32() :: diameter:'Unsigned32'().
+
+-record(state,{state :: undefined
+                      | {'Wait-Conn-Ack', uint32()}
+                      | recv_CER
+                      | {'Wait-CEA', uint32(), uint32()}
+                      | 'Open',
+               mode :: undefined
+                     | accept
+                     | connect
+                     | {connect, reference()},
+               parent :: undefined | pid(),
+               transport :: undefined | pid(),
+               dictionary :: undefined | module(),
+               service :: undefined | #diameter_service{},
+               dpr = false :: false | {uint32(), uint32()},
+               length_errors :: undefined | exit | handle | discard}).
+
+-spec start(T,
+            [Opt],
+            {diameter:sequence(),
+             [node()],
+             module(),
+             #diameter_service{}}) ->
+               {reference(), pid()}
+               when
+                   is_subtype(T,
+                              {connect | accept,
+                               diameter:transport_ref()}),
+                   is_subtype(Opt, diameter:transport_opt()).
+
+start({_,_} = Type, Opts, S) ->
+    Ack = make_ref(),
+    T = {Ack,self(),Type,Opts,S},
+    {ok,Pid} = diameter_peer_fsm_sup:start_child(T),
+    try {monitor(process, Pid),Pid} after Pid ! Ack end.
+
+start_link(T) ->
+    {ok,_} =
+        proc_lib:start_link(diameter_peer_fsm,
+                            init,
+                            [T],
+                            infinity,
+                            diameter_lib:spawn_opts(server, [])).
+
+init(T) ->
+    proc_lib:init_ack({ok,self()}),
+    gen_server:enter_loop(diameter_peer_fsm, [], i(T)).
+
+i({Ack,WPid,{M,Ref} = T,Opts,{Mask,Nodes,Dict0,Svc}}) ->
+    monitor(process, WPid),
+    wait(Ack, WPid),
+    diameter_stats:reg(Ref),
+    {[Cs,Ds],Rest} =
+        proplists:split(Opts, [capabilities_cb,disconnect_cb]),
+    putr(cb,
+         {Ref,
+          [ 
+           F ||
+               {_,F} <- Cs
+          ]}),
+    putr(dpr,
+         [ 
+          F ||
+              {_,F} <- Ds
+         ]),
+    putr(ref, Ref),
+    putr(mask, Mask),
+    putr(restrict, Nodes),
+    Tmo = proplists:get_value(capx_timeout, Opts, 10000),
+    is_integer(Tmo)
+    andalso
+    0 =< Tmo
+    andalso
+    0 == Tmo bsr 32
+    orelse
+    error({{invalid,{capx_timeout,Tmo}},diameter_peer_fsm,192}),
+    OnLengthErr = proplists:get_value(length_errors, Opts, exit),
+    lists:member(OnLengthErr, [exit,handle,discard])
+    orelse
+    error({{invalid,{length_errors,OnLengthErr}},diameter_peer_fsm,195}),
+    {TPid,Addrs} = start_transport(T, Rest, Svc),
+    #state{state = {'Wait-Conn-Ack',Tmo},
+           parent = WPid,
+           transport = TPid,
+           dictionary = Dict0,
+           mode = M,
+           service = svc(Svc, Addrs),
+           length_errors = OnLengthErr}.
+
+wait(Ref, Pid) ->
+    receive
+        Ref ->
+            ok;
+        {'DOWN',_,process,Pid,_} = D ->
+            exit({shutdown,D})
+    end.
+
+start_transport(T, Opts, #diameter_service{capabilities = LCaps} = Svc) ->
+    Addrs0 = LCaps#diameter_caps.host_ip_address,
+    start_transport(Addrs0, {T,Opts,Svc}).
+
+start_transport(Addrs0, T) ->
+    case diameter_peer:start(T) of
+        {TPid,Addrs,Tmo,Data} ->
+            monitor(process, TPid),
+            q_next(TPid, Addrs0, Tmo, Data),
+            {TPid,Addrs};
+        No ->
+            exit({shutdown,No})
+    end.
+
+svc(#diameter_service{capabilities = LCaps0} = Svc, Addrs) ->
+    #diameter_caps{host_ip_address = Addrs0} = LCaps0,
+    case Addrs0 of
+        [] ->
+            LCaps = LCaps0#diameter_caps{host_ip_address = Addrs},
+            Svc#diameter_service{capabilities = LCaps};
+        [_|_] ->
+            Svc
+    end.
+
+readdr(#diameter_service{capabilities = LCaps0} = Svc, Addrs) ->
+    LCaps = LCaps0#diameter_caps{host_ip_address = Addrs},
+    Svc#diameter_service{capabilities = LCaps}.
+
+q_next(TPid, Addrs0, Tmo, {_,_,_,_} = Data) ->
+    send_after(Tmo, {connection_timeout,TPid}),
+    putr(q, {Addrs0,Tmo,Data}).
+
+keep_transport(TPid) ->
+    {_,_,{{_,_,_} = T,_,_,_}} = eraser(q),
+    putr(start, {TPid,T}).
+
+send_after(infinity, _) ->
+    ok;
+send_after(Tmo, T) ->
+    erlang:send_after(Tmo, self(), T).
+
+handle_call(_, _, State) ->
+    {reply,nok,State}.
+
+handle_cast(_, State) ->
+    {noreply,State}.
+
+handle_info(T, #state{} = State) ->
+    try transition(T, State) of
+        ok ->
+            {noreply,State};
+        #state{state = X} = S ->
+            X =/= State#state.state
+            andalso
+            diameter_lib:log(transition, diameter_peer_fsm, 290, X),
+            {noreply,S};
+        {stop,Reason} ->
+            diameter_lib:log(stop, diameter_peer_fsm, 293, Reason),
+            {stop,{shutdown,Reason},State};
+        stop ->
+            diameter_lib:log(stop, diameter_peer_fsm, 296, T),
+            {stop,{shutdown,T},State}
+    catch
+        exit:{diameter_codec,encode,_} = Reason ->
+            diameter_lib:log(stop, diameter_peer_fsm, 300, Reason),
+            diameter_lib:info_report(probable_configuration_error,
+                                     insufficient_capabilities),
+            {stop,{shutdown,Reason},State};
+        {diameter_peer_fsm,Tag,Reason} ->
+            diameter_lib:log(Tag, diameter_peer_fsm, 307, {Reason,T}),
+            {stop,{shutdown,Reason},State}
+    end.
+
+terminate(_, _) ->
+    ok.
+
+code_change(_, State, _) ->
+    {ok,State}.
+
+putr(Key, Val) ->
+    put({diameter_peer_fsm,Key}, Val).
+
+getr(Key) ->
+    get({diameter_peer_fsm,Key}).
+
+eraser(Key) ->
+    erase({diameter_peer_fsm,Key}).
+
+transition({diameter,{TPid,connected,Remote}},
+           #state{transport = TPid,state = PS,mode = M} = S) ->
+    {'Wait-Conn-Ack',_} = PS,
+    connect = M,
+    keep_transport(TPid),
+    send_CER(S#state{mode = {M,Remote}});
+transition({diameter,{TPid,connected,Remote,LAddrs}},
+           #state{transport = TPid,service = Svc} = S) ->
+    transition({diameter,{TPid,connected,Remote}},
+               S#state{service = svc(Svc, LAddrs)});
+transition({diameter,{TPid,connected}},
+           #state{transport = TPid,state = PS,mode = M,parent = Pid} = S) ->
+    {'Wait-Conn-Ack',Tmo} = PS,
+    accept = M,
+    keep_transport(TPid),
+    Pid ! {accepted,self()},
+    start_timer(Tmo, S#state{state = recv_CER});
+transition({diameter,{_,connected}}, _) ->
+    {stop,connection_timeout};
+transition({diameter,{_,connected,_}}, _) ->
+    {stop,connection_timeout};
+transition({diameter,{_,connected,_,_}}, _) ->
+    {stop,connection_timeout};
+transition({connection_timeout = T,TPid},
+           #state{transport = TPid,state = {'Wait-Conn-Ack',_}} = S) ->
+    exit(TPid, {shutdown,T}),
+    start_next(S);
+transition({connection_timeout,_}, _) ->
+    ok;
+transition({diameter,{recv,Pkt}}, S) ->
+    recv(Pkt, S);
+transition({timeout = T,PS}, #state{state = PS}) ->
+    {stop,{capx(PS),T}};
+transition({timeout,_}, _) ->
+    ok;
+transition({send,Msg}, #state{transport = TPid}) ->
+    send(TPid, Msg),
+    ok;
+transition({shutdown,Pid,Reason}, #state{parent = Pid,dpr = false} = S) ->
+    dpr(Reason, S);
+transition({shutdown,Pid,_}, #state{parent = Pid}) ->
+    ok;
+transition(dpa_timeout, _) ->
+    stop;
+transition({resolve_port,_Pid} = T, #state{transport = TPid}) ->
+    TPid ! T,
+    ok;
+transition({'DOWN',_,process,WPid,_}, #state{parent = WPid}) ->
+    stop;
+transition({'DOWN',_,process,TPid,_}, #state{transport = TPid} = S) ->
+    start_next(S);
+transition({'DOWN',_,process,_,_}, _) ->
+    ok;
+transition({state,Pid}, #state{state = S,transport = TPid}) ->
+    Pid ! {self(),[S,TPid]},
+    ok.
+
+capx(recv_CER) ->
+    'CER';
+capx({'Wait-CEA',_,_}) ->
+    'CEA'.
+
+start_next(#state{service = Svc0} = S) ->
+    case getr(q) of
+        {Addrs0,Tmo,Data} ->
+            Svc = readdr(Svc0, Addrs0),
+            {TPid,Addrs} = start_transport(Addrs0, {Svc,Tmo,Data}),
+            S#state{transport = TPid,service = svc(Svc, Addrs)};
+        undefined ->
+            stop
+    end.
+
+send_CER(#state{state = {'Wait-Conn-Ack',Tmo},
+                mode = {connect,Remote},
+                service = #diameter_service{capabilities = LCaps},
+                transport = TPid,
+                dictionary = Dict} =
+             S) ->
+    OH = LCaps#diameter_caps.origin_host,
+    req_send_CER(OH, Remote)
+    orelse
+    close({already_connected,Remote,LCaps}),
+    CER = build_CER(S),
+    diameter_lib:log(send, diameter_peer_fsm, 483, 'CER'),
+    #diameter_packet{header =
+                         #diameter_header{end_to_end_id = Eid,
+                                          hop_by_hop_id = Hid}} =
+        Pkt = encode(CER, Dict),
+    send(TPid, Pkt),
+    start_timer(Tmo, S#state{state = {'Wait-CEA',Hid,Eid}}).
+
+req_send_CER(OriginHost, Remote) ->
+    register_everywhere({diameter_peer_fsm,
+                         connection,
+                         OriginHost,
+                         {remote,Remote}}).
+
+start_timer(Tmo, #state{state = PS} = S) ->
+    erlang:send_after(Tmo, self(), {timeout,PS}),
+    S.
+
+build_CER(#state{service = #diameter_service{capabilities = LCaps},
+                 dictionary = Dict}) ->
+    {ok,CER} = diameter_capx:build_CER(LCaps, Dict),
+    CER.
+
+encode(Rec, Dict) ->
+    Seq = diameter_session:sequence({_,_} = getr(mask)),
+    Hdr =
+        #diameter_header{version = 1,
+                         end_to_end_id = Seq,
+                         hop_by_hop_id = Seq},
+    diameter_codec:encode(Dict,
+                          #diameter_packet{header = Hdr,msg = Rec}).
+
+recv(#diameter_packet{header = #diameter_header{} = Hdr} = Pkt,
+     #state{parent = Pid,dictionary = Dict0} = S) ->
+    Name = diameter_codec:msg_name(Dict0, Hdr),
+    Pid ! {recv,self(),Name,Pkt},
+    diameter_stats:incr({msg_id(Name, Hdr),recv}),
+    rcv(Name, Pkt, S);
+recv(#diameter_packet{header = undefined,bin = Bin} = Pkt, S) ->
+    recv(diameter_codec:decode_header(Bin), Pkt, S);
+recv(Bin, S) ->
+    recv(#diameter_packet{bin = Bin}, S).
+
+recv(#diameter_header{length = Len} = H,
+     #diameter_packet{bin = Bin} = Pkt,
+     #state{length_errors = E} = S)
+    when E == handle; 0 == Len rem 4, bit_size(Bin) == 8 * Len ->
+    recv(Pkt#diameter_packet{header = H}, S);
+recv(#diameter_header{} = H,
+     #diameter_packet{bin = Bin},
+     #state{length_errors = E} = S) ->
+    invalid(E,
+            invalid_message_length,
+            recv,
+            [size(Bin),bit_size(Bin) rem 8,H,S]);
+recv(false, Pkt, #state{length_errors = E} = S) ->
+    invalid(E, truncated_header, recv, [Pkt,S]).
+
+invalid(E, Reason, F, A) ->
+    diameter_stats:incr(Reason),
+    abort(E, Reason, F, A).
+
+abort(exit, Reason, F, A) ->
+    diameter_lib:warning_report(Reason, {diameter_peer_fsm,F,A}),
+    throw({diameter_peer_fsm,abort,Reason});
+abort(_, _, _, _) ->
+    ok.
+
+msg_id({_,_,_} = T, _) ->
+    T;
+msg_id(_, Hdr) ->
+    {_,_,_} = diameter_codec:msg_id(Hdr).
+
+rcv('CEA',
+    #diameter_packet{header =
+                         #diameter_header{end_to_end_id = Eid,
+                                          hop_by_hop_id = Hid}} =
+        Pkt,
+    #state{state = {'Wait-CEA',Hid,Eid}} = S) ->
+    handle_CEA(Pkt, S);
+rcv('CER' = N, Pkt, #state{state = recv_CER} = S) ->
+    handle_request(N, Pkt, S);
+rcv(Name, _, #state{state = PS})
+    when PS /= 'Open'; Name == 'CER'; Name == 'CEA' ->
+    {stop,{Name,PS}};
+rcv('DPR' = N, Pkt, S) ->
+    handle_request(N, Pkt, S);
+rcv('DPA' = N,
+    #diameter_packet{header =
+                         #diameter_header{end_to_end_id = Eid,
+                                          hop_by_hop_id = Hid}},
+    #state{transport = TPid,dpr = {Hid,Eid}}) ->
+    diameter_peer:close(TPid),
+    {stop,N};
+rcv(_, _, _) ->
+    ok.
+
+send(Pid, Msg) ->
+    diameter_stats:incr({diameter_codec:msg_id(Msg),send}),
+    diameter_peer:send(Pid, Msg).
+
+handle_request(Type,
+               #diameter_packet{} = Pkt,
+               #state{dictionary = D} = S) ->
+    diameter_lib:log(recv, diameter_peer_fsm, 638, Type),
+    send_answer(Type, diameter_codec:decode(D, Pkt), S).
+
+send_answer(Type,
+            ReqPkt,
+            #state{transport = TPid,dictionary = Dict} = S) ->
+    #diameter_packet{header = H,transport_data = TD} = ReqPkt,
+    {Msg,PostF} = build_answer(Type, ReqPkt, S),
+    Pkt =
+        #diameter_packet{header =
+                             H#diameter_header{version = 1,
+                                               is_request = false,
+                                               is_error = undefined,
+                                               is_retransmitted = false},
+                         msg = Msg,
+                         transport_data = TD},
+    send(TPid, diameter_codec:encode(Dict, Pkt)),
+    eval(PostF, S).
+
+eval([F|A], S) ->
+    apply(F, A ++ [S]);
+eval(ok, S) ->
+    S;
+eval(T, _) ->
+    close(T).
+
+build_answer('CER',
+             #diameter_packet{msg = CER,
+                              header =
+                                  #diameter_header{version = 1,
+                                                   is_error = false},
+                              errors = []} =
+                 Pkt,
+             #state{dictionary = Dict0} = S) ->
+    {SupportedApps,RCaps,CEA} = recv_CER(CER, S),
+    [RC,IS] = Dict0:'#get-'(['Result-Code','Inband-Security-Id'], CEA),
+    #diameter_caps{origin_host = {OH,DH}} = Caps = capz(caps(S), RCaps),
+    try
+        2001 == RC
+        orelse
+        throw({{diameter_peer_fsm},{RC}}),
+        register_everywhere({diameter_peer_fsm,connection,OH,DH})
+        orelse
+        throw({{diameter_peer_fsm},{4003}}),
+        caps_cb(Caps)
+    of
+        N ->
+            {cea(CEA, N, Dict0),
+             [fun open/5,
+              Pkt,
+              SupportedApps,
+              Caps,
+              {accept,inband_security(IS)}]}
+    catch
+        {{diameter_peer_fsm},{Reason}} ->
+            rejected(Reason, {'CER',Reason,Caps,Pkt}, S)
+    end;
+build_answer(Type, #diameter_packet{header = H,errors = Es} = Pkt, S) ->
+    {RC,FailedAVP} = result_code(H, Es),
+    {answer(Type, RC, FailedAVP, S),post(Type, RC, Pkt, S)}.
+
+inband_security([]) ->
+    0;
+inband_security([IS]) ->
+    IS.
+
+cea(CEA, ok, _) ->
+    CEA;
+cea(CEA, 2001, _) ->
+    CEA;
+cea(CEA, RC, Dict0) ->
+    Dict0:'#set-'({'Result-Code',RC}, CEA).
+
+post('CER' = T, RC, Pkt, S) ->
+    {T,caps(S),{RC,Pkt}};
+post('DPR', _, _, _) ->
+    ok.
+
+rejected({capabilities_cb,_F,Reason}, T, S) ->
+    rejected(Reason, T, S);
+rejected(discard, T, _) ->
+    close(T);
+rejected({N,Es}, T, S) ->
+    {answer('CER', N, failed_avp(N, Es), S),T};
+rejected(N, T, S) ->
+    rejected({N,[]}, T, S).
+
+failed_avp(RC, [{RC,Avp}|_]) ->
+    [{'Failed-AVP',[[{'AVP',[Avp]}]]}];
+failed_avp(RC, [_|Es]) ->
+    failed_avp(RC, Es);
+failed_avp(_, [] = No) ->
+    No.
+
+answer(Type, RC, FailedAVP, S) ->
+    set(answer(Type, RC, S), FailedAVP).
+
+answer(Type, RC, S) ->
+    answer_message(answer(Type, S), RC).
+
+answer_message([_|Avps], RC) when 3000 =< RC, RC < 4000 ->
+    ['answer-message',
+     {'Result-Code',RC}|
+     lists:filter(fun is_origin/1, Avps)];
+answer_message(Msg, RC) ->
+    Msg ++ [{'Result-Code',RC}].
+
+is_origin({N,_}) ->
+    N == 'Origin-Host'
+    orelse
+    N == 'Origin-Realm'
+    orelse
+    N == 'Origin-State-Id'.
+
+set(Ans, []) ->
+    Ans;
+set(['answer-message'|_] = Ans, FailedAvp) ->
+    Ans ++ [{'AVP',[FailedAvp]}];
+set([_|_] = Ans, FailedAvp) ->
+    Ans ++ FailedAvp.
+
+result_code(#diameter_header{is_error = true}, _) ->
+    {3008,[]};
+result_code(_, [Bs|_]) when is_bitstring(Bs) ->
+    {3009,[]};
+result_code(#diameter_header{version = 1}, Es) ->
+    rc(Es);
+result_code(_, _) ->
+    {5011,[]}.
+
+rc([]) ->
+    {2001,[]};
+rc([{RC,_}|_] = Es) ->
+    {RC,failed_avp(RC, Es)};
+rc([RC|_]) ->
+    {RC,[]}.
+
+answer(Name, #state{service = #diameter_service{capabilities = Caps}}) ->
+    a(Name, Caps).
+
+a('CER',
+  #diameter_caps{vendor_id = Vid,
+                 origin_host = Host,
+                 origin_realm = Realm,
+                 host_ip_address = Addrs,
+                 product_name = Name,
+                 origin_state_id = OSI}) ->
+    ['CEA',
+     {'Origin-Host',Host},
+     {'Origin-Realm',Realm},
+     {'Host-IP-Address',Addrs},
+     {'Vendor-Id',Vid},
+     {'Product-Name',Name},
+     {'Origin-State-Id',OSI}];
+a('DPR',
+  #diameter_caps{origin_host = {Host,_},origin_realm = {Realm,_}}) ->
+    ['DPA',{'Origin-Host',Host},{'Origin-Realm',Realm}].
+
+recv_CER(CER, #state{service = Svc,dictionary = Dict}) ->
+    case diameter_capx:recv_CER(CER, Svc, Dict) of
+        {ok,T} ->
+            T;
+        {error,Reason} ->
+            close({'CER',CER,Svc,Dict,Reason})
+    end.
+
+handle_CEA(#diameter_packet{bin = Bin} = Pkt,
+           #state{dictionary = Dict0,
+                  service = #diameter_service{capabilities = LCaps}} =
+               S)
+    when is_binary(Bin) ->
+    diameter_lib:log(recv, diameter_peer_fsm, 867, 'CEA'),
+    #diameter_packet{msg = CEA} =
+        DPkt = diameter_codec:decode(Dict0, Pkt),
+    {SApps,IS,RCaps} = recv_CEA(DPkt, S),
+    #diameter_caps{origin_host = {OH,DH}} = Caps = capz(LCaps, RCaps),
+    RC = Dict0:'#get-'('Result-Code', CEA),
+    try
+        2 == RC div 1000
+        orelse
+        throw({{diameter_peer_fsm},{RC}}),
+        [] == SApps
+        andalso
+        throw({{diameter_peer_fsm},{no_common_application}}),
+        [] == IS
+        andalso
+        throw({{diameter_peer_fsm},{no_common_security}}),
+        register_everywhere({diameter_peer_fsm,connection,OH,DH})
+        orelse
+        throw({{diameter_peer_fsm},{election_lost}}),
+        caps_cb(Caps)
+    of
+        _ ->
+            open(DPkt, SApps, Caps, {connect,hd([_] = IS)}, S)
+    catch
+        {{diameter_peer_fsm},{Reason}} ->
+            close({'CEA',Reason,Caps,DPkt})
+    end.
+
+recv_CEA(#diameter_packet{header =
+                              #diameter_header{version = 1,
+                                               is_error = false},
+                          msg = CEA,
+                          errors = []},
+         #state{service = Svc,dictionary = Dict}) ->
+    case diameter_capx:recv_CEA(CEA, Svc, Dict) of
+        {ok,T} ->
+            T;
+        {error,Reason} ->
+            close({'CEA',CEA,Svc,Dict,Reason})
+    end;
+recv_CEA(Pkt, S) ->
+    close({'CEA',caps(S),Pkt}).
+
+caps(#diameter_service{capabilities = Caps}) ->
+    Caps;
+caps(#state{service = Svc}) ->
+    caps(Svc).
+
+caps_cb(Caps) ->
+    {Ref,Ts} = eraser(cb),
+    caps_cb(Ts, [Ref,Caps]).
+
+caps_cb([], _) ->
+    ok;
+caps_cb([F|Rest], T) ->
+    case diameter_lib:eval([F|T]) of
+        ok ->
+            caps_cb(Rest, T);
+        N when 2 == N div 1000 ->
+            N;
+        Res ->
+            throw({{diameter_peer_fsm},
+                   {{capabilities_cb,F,rejected(Res)}}})
+    end.
+
+rejected(discard = T) ->
+    T;
+rejected(unknown) ->
+    3010;
+rejected(N) when is_integer(N) ->
+    N.
+
+open(Pkt,
+     SupportedApps,
+     Caps,
+     {Type,IS},
+     #state{parent = Pid,service = Svc} = S) ->
+    #diameter_caps{origin_host = {_,_} = H,inband_security_id = {LS,_}} =
+        Caps,
+    tls_ack(lists:member(1, LS), Caps, Type, IS, S),
+    Pid ! {open,self(),H,{Caps,SupportedApps,Pkt}},
+    S#state{state = 'Open',
+            service = Svc#diameter_service{capabilities = Caps}}.
+
+tls_ack(true, Caps, Type, IS, #state{transport = TPid}) ->
+    Ref = make_ref(),
+    TPid ! {diameter,{tls,Ref,Type,IS == 1}},
+    receive
+        {diameter,{tls,Ref}} ->
+            ok;
+        {'DOWN',_,process,TPid,Reason} ->
+            close({tls_ack,Reason,Caps})
+    end;
+tls_ack(false, _, _, _, _) ->
+    ok.
+
+capz(#diameter_caps{} = L, #diameter_caps{} = R) ->
+    #diameter_caps{} =
+        list_to_tuple([diameter_caps|
+                       lists:zip(tl(tuple_to_list(L)),
+                                 tl(tuple_to_list(R)))]).
+
+close(Reason) ->
+    report(Reason),
+    throw({diameter_peer_fsm,close,Reason}).
+
+report({M,_,_,_,_} = T) when M == 'CER'; M == 'CEA' ->
+    diameter_lib:error_report(failure, T);
+report(_) ->
+    ok.
+
+dpr(Reason,
+    #state{state = 'Open',
+           dpr = false,
+           service = #diameter_service{capabilities = Caps}} =
+        S) ->
+    CBs = getr(dpr),
+    Ref = getr(ref),
+    Peer = {self(),Caps},
+    dpr(CBs, [Reason,Ref,Peer], S);
+dpr(_, #state{state = 'Open'}) ->
+    ok;
+dpr(_Reason, _S) ->
+    stop.
+
+dpr([CB|Rest], [Reason|_] = Args, S) ->
+    try diameter_lib:eval([CB|Args]) of
+        {dpr,Opts} when is_list(Opts) ->
+            send_dpr(Reason, Opts, S);
+        dpr ->
+            send_dpr(Reason, [], S);
+        close = T ->
+            {stop,{disconnect_cb,T}};
+        ignore ->
+            dpr(Rest, Args, S);
+        T ->
+            No = {disconnect_cb,T},
+            diameter_lib:error_report(invalid, No),
+            {stop,No}
+    catch
+        E:R ->
+            No = {disconnect_cb,E,R,erlang:get_stacktrace()},
+            diameter_lib:error_report(failure, No),
+            {stop,No}
+    end;
+dpr([], [Reason|_], S) ->
+    send_dpr(Reason, [], S).
+
+-record(opts,{cause,timeout = 1000}).
+
+send_dpr(Reason,
+         Opts,
+         #state{transport = TPid,
+                dictionary = Dict,
+                service = #diameter_service{capabilities = Caps}} =
+             S) ->
+    #opts{cause = Cause,timeout = Tmo} =
+        lists:foldl(fun opt/2,
+                    #opts{cause =
+                              case Reason of
+                                  transport ->
+                                      2;
+                                  _ ->
+                                      0
+                              end,
+                          timeout = 1000},
+                    Opts),
+    #diameter_caps{origin_host = {OH,_},origin_realm = {OR,_}} = Caps,
+    #diameter_packet{header =
+                         #diameter_header{end_to_end_id = Eid,
+                                          hop_by_hop_id = Hid}} =
+        Pkt =
+            encode(['DPR',
+                    {'Origin-Host',OH},
+                    {'Origin-Realm',OR},
+                    {'Disconnect-Cause',Cause}],
+                   Dict),
+    send(TPid, Pkt),
+    dpa_timer(Tmo),
+    diameter_lib:log(send, diameter_peer_fsm, 1095, 'DPR'),
+    S#state{dpr = {Hid,Eid}}.
+
+opt({timeout,Tmo}, Rec)
+    when
+        is_integer(Tmo)
+        andalso
+        0 =< Tmo
+        andalso
+        0 == Tmo bsr 32 ->
+    Rec#opts{timeout = Tmo};
+opt({cause,Cause}, Rec)
+    when
+        Cause == 0;
+        Cause == rebooting;
+        Cause == 2;
+        Cause == goaway;
+        Cause == 1;
+        Cause == busy ->
+    Rec#opts{cause = cause(Cause)};
+opt(T, _) ->
+    error({{invalid_option,T},diameter_peer_fsm,1105}).
+
+cause(rebooting) ->
+    0;
+cause(goaway) ->
+    2;
+cause(busy) ->
+    1;
+cause(N)
+    when N == 0; N == rebooting; N == 2; N == goaway; N == 1; N == busy ->
+    N;
+cause(N) ->
+    error({{invalid_cause,N},diameter_peer_fsm,1114}).
+
+dpa_timer(Tmo) ->
+    erlang:send_after(Tmo, self(), dpa_timeout).
+
+register_everywhere(T) ->
+    reg(getr(restrict), T).
+
+reg(Nodes, T) ->
+    add(lists:member(node(), Nodes), T)
+    andalso
+    unregistered(Nodes, T).
+
+add(true, T) ->
+    diameter_reg:add_new(T);
+add(false, T) ->
+    diameter_reg:add(T).
+
+unregistered(Nodes, T) ->
+    {ResL,_} =
+        rpc:multicall(Nodes, diameter_peer_fsm, match, [{node(),T}]),
+    lists:all(fun nomatch/1, ResL).
+
+nomatch({badrpc,{'EXIT',{undef,_}}}) ->
+    true;
+nomatch(L) ->
+    [] == L.
+
+match({Node,_}) when Node == node() ->
+    [];
+match({_,T}) ->
+    try
+        diameter_reg:match(T)
+    catch
+        _:_ ->
+            []
+    end.
+
+
+

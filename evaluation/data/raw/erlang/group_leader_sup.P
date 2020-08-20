@@ -1,0 +1,27 @@
+-file("test/lib/kernel/test/application_SUITE_data/group_leader_sup.erl",
+      1).
+
+-module(group_leader_sup).
+
+-behaviour(supervisor).
+
+-export([start/2]).
+
+-export([init/1]).
+
+start(_, _) ->
+    supervisor:start_link(group_leader_sup, []).
+
+init([]) ->
+    SupFlags = {one_for_one,4,3600},
+    Config =
+        {group_leader,
+         {group_leader,start_link,[]},
+         temporary,
+         4000,
+         worker,
+         [group_leader]},
+    {ok,{SupFlags,[Config]}}.
+
+
+

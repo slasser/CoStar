@@ -1,0 +1,31 @@
+-file("test/lib/diameter/src/transport/diameter_transport_sup.erl", 1).
+
+-module(diameter_transport_sup).
+
+-behaviour(supervisor).
+
+-export([start_link/0,start_child/2]).
+
+-export([init/1]).
+
+start_link() ->
+    SupName = {local,diameter_transport_sup},
+    supervisor:start_link(SupName, diameter_transport_sup, []).
+
+start_child(Name, Module) ->
+    Spec =
+        {Name,
+         {Module,start_link,[Name]},
+         permanent,
+         1000,
+         supervisor,
+         [Module]},
+    supervisor:start_child(diameter_transport_sup, Spec).
+
+init([]) ->
+    Flags = {one_for_one,0,1},
+    Workers = [],
+    {ok,{Flags,Workers}}.
+
+
+

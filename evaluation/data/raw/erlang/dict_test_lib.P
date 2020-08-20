@@ -1,0 +1,53 @@
+-file("test/lib/stdlib/test/dict_test_lib.erl", 1).
+
+-module(dict_test_lib).
+
+-export([new/2]).
+
+new(Mod, Eq) ->
+    fun(enter, {K,V,D}) ->
+           enter(Mod, K, V, D);
+       (empty, []) ->
+           empty(Mod);
+       (equal, {D1,D2}) ->
+           Eq(D1, D2);
+       (from_list, L) ->
+           from_list(Mod, L);
+       (module, []) ->
+           Mod;
+       (size, D) ->
+           Mod:size(D);
+       (to_list, D) ->
+           to_list(Mod, D)
+    end.
+
+empty(Mod) ->
+    case erlang:function_exported(Mod, new, 0) of
+        false ->
+            Mod:empty();
+        true ->
+            Mod:new()
+    end.
+
+to_list(Mod, D) ->
+    Mod:to_list(D).
+
+from_list(Mod, L) ->
+    case erlang:function_exported(Mod, from_orddict, 1) of
+        false ->
+            Mod:from_list(L);
+        true ->
+            Orddict = orddict:from_list(L),
+            Mod:from_orddict(Orddict)
+    end.
+
+enter(Mod, Key, Val, Dict) ->
+    case erlang:function_exported(Mod, store, 3) of
+        false ->
+            Mod:enter(Key, Val, Dict);
+        true ->
+            Mod:store(Key, Val, Dict)
+    end.
+
+
+

@@ -1,0 +1,372 @@
+-file("test/lib/dialyzer/test/small_SUITE_data/src/failing_funs.erl", 1).
+
+-module(failing_funs).
+
+-compile(export_all).
+
+foo1() ->
+    halt().
+
+-spec foo2() -> no_return().
+
+foo2() ->
+    halt().
+
+foo3() ->
+    case a of
+        b ->
+            ok
+    end.
+
+-spec foo4() -> no_return().
+
+foo4() ->
+    case a of
+        b ->
+            ok
+    end.
+
+foo5() ->
+    fun() ->
+           halt()
+    end.
+
+-spec foo6() -> fun(() -> no_return()).
+
+foo6() ->
+    fun() ->
+           halt()
+    end.
+
+foo7() ->
+    fun foo1/0.
+
+-spec foo8() -> fun(() -> no_return()).
+
+foo8() ->
+    fun foo1/0.
+
+foo9() ->
+    fun foo2/0.
+
+-spec foo10() -> fun(() -> no_return()).
+
+foo10() ->
+    fun foo2/0.
+
+foo11() ->
+    fun foo3/0.
+
+-spec foo12() -> fun(() -> no_return()).
+
+foo12() ->
+    fun foo3/0.
+
+foo13() ->
+    fun foo4/0.
+
+-spec foo14() -> fun(() -> no_return()).
+
+foo14() ->
+    fun foo4/0.
+
+foo15() ->
+    fun() ->
+           foo1()
+    end.
+
+-spec foo16() -> fun(() -> no_return()).
+
+foo16() ->
+    fun() ->
+           foo1()
+    end.
+
+foo17() ->
+    fun() ->
+           foo2()
+    end.
+
+-spec foo18() -> fun(() -> no_return()).
+
+foo18() ->
+    fun() ->
+           foo2()
+    end.
+
+foo19() ->
+    fun() ->
+           foo3()
+    end.
+
+-spec foo20() -> fun(() -> no_return()).
+
+foo20() ->
+    fun() ->
+           foo3()
+    end.
+
+foo21() ->
+    fun() ->
+           foo4()
+    end.
+
+-spec foo22() -> fun(() -> no_return()).
+
+foo22() ->
+    fun() ->
+           foo4()
+    end.
+
+foo23() ->
+    Bomb =
+        fun() ->
+               halt()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   halt()
+            end
+    end.
+
+-spec foo24() -> fun(() -> no_return()).
+
+foo24() ->
+    Bomb =
+        fun() ->
+               halt()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   halt()
+            end
+    end.
+
+foo25() ->
+    Bomb =
+        fun() ->
+               foo1()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo1()
+            end
+    end.
+
+-spec foo26() -> fun(() -> no_return()).
+
+foo26() ->
+    Bomb = fun foo1/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo1/0
+    end.
+
+foo27() ->
+    Bomb = fun foo1/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo1/0
+    end.
+
+-spec foo28() -> fun(() -> no_return()).
+
+foo28() ->
+    Bomb =
+        fun() ->
+               foo1()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo1()
+            end
+    end.
+
+foo29() ->
+    Bomb =
+        fun() ->
+               foo2()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo2()
+            end
+    end.
+
+-spec foo30() -> fun(() -> no_return()).
+
+foo30() ->
+    Bomb = fun foo2/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo2/0
+    end.
+
+foo31() ->
+    Bomb = fun foo2/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo2/0
+    end.
+
+-spec foo32() -> fun(() -> no_return()).
+
+foo32() ->
+    Bomb =
+        fun() ->
+               foo2()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo2()
+            end
+    end.
+
+foo33() ->
+    Bomb =
+        fun() ->
+               foo3()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo3()
+            end
+    end.
+
+-spec foo34() -> fun(() -> no_return()).
+
+foo34() ->
+    Bomb = fun foo3/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo3/0
+    end.
+
+foo35() ->
+    Bomb = fun foo3/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo3/0
+    end.
+
+-spec foo36() -> fun(() -> no_return()).
+
+foo36() ->
+    Bomb =
+        fun() ->
+               foo3()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo3()
+            end
+    end.
+
+foo37() ->
+    Bomb =
+        fun() ->
+               foo4()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo4()
+            end
+    end.
+
+-spec foo38() -> fun(() -> no_return()).
+
+foo38() ->
+    Bomb = fun foo4/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo4/0
+    end.
+
+foo39() ->
+    Bomb = fun foo4/0,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun foo4/0
+    end.
+
+-spec foo40() -> fun(() -> no_return()).
+
+foo40() ->
+    Bomb =
+        fun() ->
+               foo4()
+        end,
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            fun() ->
+                   foo4()
+            end
+    end.
+
+foo41() ->
+    Bomb = foo5(),
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            foo5()
+    end.
+
+-spec foo42() -> fun(() -> no_return()).
+
+foo42() ->
+    Bomb = foo5(),
+    case get(42) of
+        a ->
+            Bomb();
+        b ->
+            foo5()
+    end.
+
+
+

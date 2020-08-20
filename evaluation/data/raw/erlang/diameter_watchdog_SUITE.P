@@ -1,0 +1,982 @@
+-file("test/lib/diameter/test/diameter_watchdog_SUITE.erl", 1).
+
+-module(diameter_watchdog_SUITE).
+
+-export([suite/0,all/0,init_per_suite/1,end_per_suite/1]).
+
+-export([reopen/0,
+         reopen/1,
+         reopen/4,
+         reopen/6,
+         suspect/1,
+         suspect/4,
+         okay/1,
+         okay/4]).
+
+-export([id/1,run1/1,abuse/1,abuse/2]).
+
+-export([peer_up/3,peer_down/3]).
+
+-export([listen/2,accept/1,connect/3,send/2,setopts/2]).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/diameter/test/../include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options =
+                          [{answer_errors,report},
+                           {request_errors,answer_3xxx}]}).
+
+-file("test/lib/diameter/test/diameter_watchdog_SUITE.erl", 54).
+
+-file("test/lib/diameter/test/diameter_ct.hrl", 1).
+
+-file("test/lib/diameter/test/diameter_watchdog_SUITE.erl", 55).
+
+suite() ->
+    [{timetrap,{seconds,90}}].
+
+all() ->
+    [reopen,suspect,okay].
+
+init_per_suite(Config) ->
+    ok = diameter:start(),
+    Config.
+
+end_per_suite(_Config) ->
+    ok = diameter:stop().
+
+reopen() ->
+    [{timetrap,{minutes,5}}].
+
+reopen(_) ->
+    [] =
+        run([ 
+             [reopen,T,W,N,M] ||
+                 T <- [listen,connect],
+                 W <- [10000,{diameter_watchdog_SUITE,id,[10000]}],
+                 N <- [0,1,2],
+                 M <- ['DWR','DWA','RAA']
+            ]).
+
+reopen(Test, Wd, N, M) ->
+    Ref = make_ref(),
+    [] =
+        run([ 
+             [reopen,T,Test,Ref,Wd,N,M] ||
+                 T <- [listen,connect]
+            ]).
+
+reopen(Type, Test, Ref, Wd, N, M) ->
+    {SvcName,TRef} = start(Type, Ref, cfg(Type, Test, Wd)),
+    reopen(Type, Test, SvcName, TRef, Wd, N, M).
+
+cfg(Type, Type, Wd) ->
+    {Wd,[],[]};
+cfg(_Type, _Test, _Wd) ->
+    {{diameter_watchdog_SUITE,id,[10000]},
+     [{okay,0}],
+     [{module,diameter_watchdog_SUITE}]}.
+
+reopen(Type, Type, SvcName, Ref, Wd, N, M) ->
+    ct:pal("~p: " ++ "node ~p", [self(),[Type,SvcName,Ref,Wd,N,M]]),
+    {initial,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info =
+                                         {up,Ref,_,_,#diameter_packet{}} =
+                                             T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    [0,0,0,0] = wd_counts(SvcName),
+    {okay,suspect} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info = {down,Ref,_,_} = T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    [_,_,_,N] = wd_counts(SvcName),
+    {suspect,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info = {up,Ref,_,_} = T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    R1 = N + 1,
+    A1 = choose(M == 'DWA', R1, N),
+    [R1,_,_,A1] = wd_counts(SvcName),
+    {okay,suspect} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info = {down,Ref,_,_} = T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    {suspect,down} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    R2 = R1 + choose(M == 'DWA', 1, 0),
+    A2 = A1,
+    [R2,_,_,A2] = wd_counts(SvcName),
+    recv_reopen(Type, Ref),
+    {reopen,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info =
+                                         {up,Ref,_,_,#diameter_packet{}} =
+                                             T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    R3 = R2 + 3,
+    A3 = A2 + 3,
+    [R3,_,_,A3] = wd_counts(SvcName),
+    {okay,suspect} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info = {down,Ref,_,_} = T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    {suspect,down} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    R4 = R3 + 1,
+    A4 = A3,
+    [R4,_,_,A4] = wd_counts(SvcName),
+    recv_reopen(Type, Ref),
+    {reopen,down} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             [])));
+reopen(Type, _, SvcName, Ref, Wd, N, M) ->
+    ct:pal("~p: " ++ "peer ~p", [self(),[Type,SvcName,Ref,Wd,N,M]]),
+    {initial,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info =
+                                         {up,Ref,_,_,#diameter_packet{}} =
+                                             T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    reg(Ref, SvcName, {SvcName,{Wd,N,M}}),
+    {okay,down} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info =
+                                         {watchdog,Ref,_,{_,okay},_} =
+                                             T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    reg(Ref, SvcName, 3),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info =
+                                         {watchdog,Ref,_,{_,down},_} =
+                                             T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info =
+                                         {watchdog,Ref,_,{_,okay},_} =
+                                             T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    reg(Ref, SvcName, 0),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info =
+                                         {watchdog,Ref,_,{_,down},_} =
+                                             T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []),
+    ok.
+
+log_wd({From,To} = T) ->
+    ct:pal("~p: " ++ "~p -> ~p", [self(),From,To]),
+    T.
+
+log_event(E) ->
+    T = element(1, E),
+    T == watchdog
+    orelse
+    ct:pal("~p: " ++ "~p", [self(),T]),
+    E.
+
+recv_reopen(connect, Ref) ->
+    {down,reopen} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    apply(fun() ->
+                 receive
+                     #diameter_event{info = {reconnect,Ref,_} = T_} ->
+                         log_event(T_)
+                 end
+          end,
+          []);
+recv_reopen(listen, Ref) ->
+    {_,reopen} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             Ref,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))).
+
+reg(TRef, SvcName, T) ->
+    TPid = tpid(TRef, diameter:service_info(SvcName, transport)),
+    true = diameter_reg:add_new({diameter_watchdog_SUITE,TPid,T}).
+
+tpid(Ref,
+     [[{ref,Ref},
+       {type,connect},
+       {options,_},
+       {watchdog,_},
+       {peer,_},
+       {apps,_},
+       {caps,_},
+       {port,[{owner,TPid}|_]}|
+       _]]) ->
+    TPid;
+tpid(Ref, [[{ref,Ref},{type,listen},{options,_},{accept,As}|_]]) ->
+    [[{watchdog,_},{peer,_},{apps,_},{caps,_},{port,[{owner,TPid}|_]}|_]] =
+        lists:filter(fun([{watchdog,{_,_,S}}|_]) ->
+                            S == okay
+                            orelse
+                            S == reopen
+                     end,
+                     As),
+    TPid.
+
+suspect(_) ->
+    [] =
+        run([ 
+             [abuse,[suspect,N]] ||
+                 N <- [0,1,3]
+            ]).
+
+suspect(Type, Fake, Ref, N) when is_reference(Ref) ->
+    {SvcName,TRef} =
+        start(Type,
+              Ref,
+              {{diameter_watchdog_SUITE,id,[10000]},
+               [{suspect,N}],
+               mod(Fake)}),
+    {initial,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    suspect(TRef, Fake, SvcName, N);
+suspect(TRef, true, SvcName, _) ->
+    reg(TRef, SvcName, 0),
+    {okay,_} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             [])));
+suspect(TRef, false, SvcName, 0) ->
+    false =
+        apply(fun() ->
+                     receive
+                         #diameter_event{info = {watchdog,TRef,_,T_,_}} ->
+                             log_wd(T_)
+                     after
+                         28000 -> false
+                     end
+              end,
+              []),
+    [1,0,0,0] = wd_counts(SvcName);
+suspect(TRef, false, SvcName, N) ->
+    false =
+        apply(fun() ->
+                     receive
+                         #diameter_event{info = {watchdog,TRef,_,T_,_}} ->
+                             log_wd(T_)
+                     after
+                         N * 10000 + 8000 -> false
+                     end
+              end,
+              []),
+    [1,0,0,0] = wd_counts(SvcName),
+    {okay,suspect} =
+        apply(fun() ->
+                     receive
+                         #diameter_event{info = {watchdog,TRef,_,T_,_}} ->
+                             log_wd(T_)
+                     after
+                         10000 -> false
+                     end
+              end,
+              []),
+    [1,0,0,0] = wd_counts(SvcName),
+    {suspect,down} =
+        apply(fun() ->
+                     receive
+                         #diameter_event{info = {watchdog,TRef,_,T_,_}} ->
+                             log_wd(T_)
+                     after
+                         18000 -> false
+                     end
+              end,
+              []),
+    [1,0,0,0] = wd_counts(SvcName).
+
+abuse(F) ->
+    [] =
+        run([ 
+             [abuse,F,T] ||
+                 T <- [listen,connect]
+            ]).
+
+abuse(F, [_,_,_|_] = Args) ->
+    ct:pal("~p: " ++ "~p", [self(),Args]),
+    apply(diameter_watchdog_SUITE, F, Args);
+abuse([F|A], Test) ->
+    Ref = make_ref(),
+    [] =
+        run([ 
+             [abuse,F,[T,T == Test,Ref] ++ A] ||
+                 T <- [listen,connect]
+            ]);
+abuse(F, Test) ->
+    abuse([F], Test).
+
+mod(true) ->
+    [{module,diameter_watchdog_SUITE}];
+mod(false) ->
+    [].
+
+okay(_) ->
+    [] =
+        run([ 
+             [abuse,[okay,N]] ||
+                 N <- [0,2,3]
+            ]).
+
+okay(Type, Fake, Ref, N) when is_reference(Ref) ->
+    {SvcName,TRef} =
+        start(Type,
+              Ref,
+              {{diameter_watchdog_SUITE,id,[10000]},
+               [{okay,choose(Fake, 0, N)}],
+               mod(Fake)}),
+    {initial,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    okay(TRef, Fake, SvcName, choose(Type == listen, initial, down), N).
+
+okay(TRef, true, SvcName, Down, _) ->
+    reg(TRef, SvcName, 0),
+    {okay,down} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    {Down,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    reg(TRef, SvcName, - 1),
+    {okay,down} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             [])));
+okay(TRef, false, SvcName, Down, N) ->
+    {okay,suspect} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    [1,0,0,0] = wd_counts(SvcName),
+    {suspect,down} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    ok(TRef, SvcName, Down, N).
+
+ok(TRef, SvcName, Down, 0) ->
+    {Down,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    [1,0,0,0] = wd_counts(SvcName),
+    false =
+        apply(fun() ->
+                     receive
+                         #diameter_event{info = {watchdog,TRef,_,T_,_}} ->
+                             log_wd(T_)
+                     after
+                         28000 -> false
+                     end
+              end,
+              []),
+    [3,0,0,2] = wd_counts(SvcName);
+ok(TRef, SvcName, Down, N) ->
+    {Down,reopen} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    {reopen,okay} =
+        log_wd(element(4,
+                       apply(fun() ->
+                                    receive
+                                        #diameter_event{info =
+                                                            {watchdog,
+                                                             TRef,
+                                                             _,
+                                                             _,
+                                                             _} =
+                                                                T_} ->
+                                            log_event(T_)
+                                    end
+                             end,
+                             []))),
+    N1 = N + 1,
+    [N1,0,0,N] = wd_counts(SvcName).
+
+wd_counts(SvcName) ->
+    [Info] = diameter:service_info(SvcName, transport),
+    {_,Counters} = lists:keyfind(statistics, 1, Info),
+    [ 
+     proplists:get_value({{0,280,R},D}, Counters, 0) ||
+         D <- [send,recv],
+         R <- [1,0]
+    ].
+
+start(Type, Ref, T) ->
+    Name = hostname(),
+    true = diameter:subscribe(Name),
+    ok =
+        diameter:start_service(Name,
+                               [{monitor,self()},
+                                {'Origin-Host',
+                                 Name ++ "." ++ "erlang.org"},
+                                {'Origin-Realm',"erlang.org"},
+                                {'Host-IP-Address',[{127,0,0,1}]},
+                                {'Vendor-Id',42},
+                                {'Product-Name',"OTP/diameter"},
+                                {'Auth-Application-Id',
+                                 [0 = diameter_gen_base_rfc3588:id()]},
+                                {application,
+                                 [{alias,Name},
+                                  {dictionary,diameter_gen_base_rfc3588},
+                                  {module,diameter_watchdog_SUITE}]}]),
+    {ok,TRef} = diameter:add_transport(Name, {Type,opts(Type, Ref, T)}),
+    true = diameter_reg:add_new({Type,Ref,Name}),
+    {Name,TRef}.
+
+opts(Type, Ref, {Timer,Config,Mod}) ->
+    [{transport_module,diameter_tcp},
+     {transport_config,
+      Mod ++ [{ip,{127,0,0,1}},{port,0}] ++ cfg(Type, Ref)},
+     {watchdog_timer,Timer},
+     {watchdog_config,Config}].
+
+cfg(listen, _) ->
+    [];
+cfg(connect, Ref) ->
+    [{{_,_,SvcName},_Pid}] = diameter_reg:wait({listen,Ref,'_'}),
+    [[{ref,LRef}|_]] = diameter:service_info(SvcName, transport),
+    [LP] = diameter_util:lport(tcp, LRef),
+    [{raddr,{127,0,0,1}},{rport,LP}].
+
+listen(PortNr, Opts) ->
+    gen_tcp:listen(PortNr, Opts).
+
+accept(LSock) ->
+    gen_tcp:accept(LSock).
+
+connect(Addr, Port, Opts) ->
+    gen_tcp:connect(Addr, Port, Opts).
+
+setopts(Sock, Opts) ->
+    inet:setopts(Sock, Opts).
+
+send(Sock, Bin) ->
+    send(getr(config), Sock, Bin).
+
+send(undefined, Sock, Bin) ->
+    <<_:32,_:8,257:24,_/binary>> = Bin,
+    putr(config, init),
+    gen_tcp:send(Sock, Bin);
+send(_, Sock, <<_:32,1:1,_:7,280:24,_:32,EId:32,HId:32,_/binary>>) ->
+    Pkt =
+        #diameter_packet{header =
+                             #diameter_header{version = 1,
+                                              end_to_end_id = EId,
+                                              hop_by_hop_id = HId},
+                         msg =
+                             ['DWA',
+                              {'Result-Code',2001},
+                              {'Origin-Host',"XXX"},
+                              {'Origin-Realm',"erlang.org"}]},
+    #diameter_packet{bin = Bin} =
+        diameter_codec:encode(diameter_gen_base_rfc3588, Pkt),
+    self() ! {tcp,Sock,Bin},
+    ok;
+send(init, Sock, Bin) ->
+    [{{diameter_watchdog_SUITE,_,T},_}] =
+        diameter_reg:wait({diameter_watchdog_SUITE,self(),'_'}),
+    putr(config, T),
+    send(Sock, Bin);
+send({SvcName,{_,_,_} = T}, Sock, Bin) ->
+    [{'Origin-Host',_} = OH,{'Origin-Realm',_} = OR|_] =
+        [{'Origin-Host',SvcName ++ "." ++ "erlang.org"},
+         {'Origin-Realm',"erlang.org"},
+         {'Host-IP-Address',[{127,0,0,1}]},
+         {'Vendor-Id',42},
+         {'Product-Name',"OTP/diameter"},
+         {'Auth-Application-Id',[0 = diameter_gen_base_rfc3588:id()]},
+         {application,
+          [{alias,SvcName},
+           {dictionary,diameter_gen_base_rfc3588},
+           {module,diameter_watchdog_SUITE}]}],
+    putr(origin, [OH,OR]),
+    putr(config, T),
+    send(Sock, Bin);
+send({Wd,0 = No,Msg}, Sock, Bin) ->
+    Origin = getr(origin),
+    spawn(fun() ->
+                 failback(jitter(Wd, 2000) + 1000,
+                          Msg,
+                          Sock,
+                          Bin,
+                          Origin)
+          end),
+    putr(config, No),
+    ok;
+send({Wd,N,Msg}, Sock, Bin) ->
+    putr(config, {Wd,N - 1,Msg}),
+    gen_tcp:send(Sock, Bin);
+send(0, _Sock, _Bin) ->
+    ok;
+send(N, Sock, <<_:32,0:1,_:7,280:24,_/binary>> = Bin) ->
+    putr(config, N - 1),
+    gen_tcp:send(Sock, Bin).
+
+failback(Tmo, Msg, Sock, Bin, Origin) ->
+    timer:sleep(Tmo),
+    ok = gen_tcp:send(Sock, msg(Msg, Bin, Origin)).
+
+msg('DWA', Bin, _Origin) ->
+    Bin;
+msg(Msg, _Bin, Origin) ->
+    #diameter_packet{bin = Bin} =
+        diameter_codec:encode(diameter_gen_base_rfc3588,
+                              msg(Msg, Origin)),
+    Bin.
+
+msg('DWR' = M, T) ->
+    [M|T];
+msg('RAA', T) ->
+    ['RAA',
+     {'Session-Id',diameter:session_id("abc")},
+     {'Result-Code',2001}|
+     T].
+
+peer_up(_SvcName, _Peer, S) ->
+    S.
+
+peer_down(_SvcName, _Peer, S) ->
+    S.
+
+choose(true, X, _) ->
+    X;
+choose(false, _, X) ->
+    X.
+
+id(T) ->
+    T.
+
+run(Fs) ->
+    diameter_util:run([ 
+                       {diameter_watchdog_SUITE,[run1,F]} ||
+                           F <- Fs
+                      ]).
+
+run1([F|A]) ->
+    ok =
+        try
+            apply(diameter_watchdog_SUITE, F, A),
+            ok
+        catch
+            E:R ->
+                S = erlang:get_stacktrace(),
+                ct:pal(error, "~p: " ++ "~p", [self(),{A,E,R,S}]),
+                S
+        end.
+
+jitter({diameter_watchdog_SUITE,id,[T]}, _) ->
+    T;
+jitter(T, D) ->
+    T + D.
+
+hostname() ->
+    lists:flatten(io_lib:format("~p-~p-~p", tuple_to_list(now()))).
+
+putr(Key, Val) ->
+    put({diameter_watchdog_SUITE,Key}, Val).
+
+getr(Key) ->
+    get({diameter_watchdog_SUITE,Key}).
+
+
+

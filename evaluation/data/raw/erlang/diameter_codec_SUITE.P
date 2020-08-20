@@ -1,0 +1,69 @@
+-file("test/lib/diameter/test/diameter_codec_SUITE.erl", 1).
+
+-module(diameter_codec_SUITE).
+
+-export([suite/0,all/0,init_per_testcase/2,end_per_testcase/2]).
+
+-export([base/1,gen/1,lib/1,unknown/1]).
+
+-file("test/lib/diameter/test/diameter_ct.hrl", 1).
+
+-file("test/lib/diameter/test/diameter_codec_SUITE.erl", 42).
+
+suite() ->
+    [{timetrap,{seconds,10}}].
+
+all() ->
+    [base,gen,lib,unknown].
+
+init_per_testcase(gen, Config) ->
+    [{application,diameter,App}] = diameter_util:consult(diameter, app),
+    {modules,Ms} = lists:keyfind(modules, 1, App),
+    [_|_] =
+        Gs =
+            lists:filter(fun(M) ->
+                                lists:prefix("diameter_gen_",
+                                             atom_to_list(M))
+                         end,
+                         Ms),
+    [{dicts,Gs}|Config];
+init_per_testcase(_Name, Config) ->
+    Config.
+
+end_per_testcase(_, _) ->
+    ok.
+
+base(_Config) ->
+    diameter_codec_test:base().
+
+gen([{dicts,Ms}|_]) ->
+    lists:foreach(fun diameter_codec_test:gen/1, Ms).
+
+lib(_Config) ->
+    diameter_codec_test:lib().
+
+unknown(Config) ->
+    Priv = proplists:get_value(priv_dir, Config),
+    Data = proplists:get_value(data_dir, Config),
+    ok = make(Data, "recv.dia"),
+    ok = make(Data, "avps.dia"),
+    {ok,_,_} = compile("diameter_test_avps.erl"),
+    ok = make(Data, "send.dia"),
+    {ok,_,_} = compile("diameter_test_send.erl"),
+    {ok,_,_} = compile("diameter_test_recv.erl"),
+    {ok,_,_} =
+        compile(filename:join([Data,"diameter_test_unknown.erl"]),
+                [{i,Priv}]),
+    diameter_test_unknown:run().
+
+make(Dir, File) ->
+    diameter_make:codec(filename:join([Dir,File])).
+
+compile(File) ->
+    compile(File, []).
+
+compile(File, Opts) ->
+    compile:file(File, [return|Opts]).
+
+
+

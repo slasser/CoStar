@@ -1,0 +1,96 @@
+-file("test/lib/gs/src/gstk_polygon.erl", 1).
+
+-module(gstk_polygon).
+
+-export([create/3,
+         config/3,
+         read/3,
+         delete/2,
+         destroy/3,
+         event/5,
+         option/5,
+         read_option/5]).
+
+-file("test/lib/gs/src/gstk.hrl", 1).
+
+-record(gstkid,{id = undefined,widget,widget_data,owner,parent,objtype}).
+
+-record(so,{main,object,hscroll,vscroll,misc}).
+
+-file("test/lib/gs/src/gstk_polygon.erl", 68).
+
+create(DB, Gstkid, Opts) ->
+    case pickout_coords(Opts, []) of
+        {error,Error} ->
+            {bad_result,Error};
+        {Coords,NewOpts} ->
+            Ngstkid = gstk_canvas:upd_gstkid(DB, Gstkid, Opts),
+            #gstkid{widget = CanvasTkW} = Ngstkid,
+            MCmd = [CanvasTkW," create po ",Coords],
+            gstk_canvas:mk_cmd_and_call(NewOpts,
+                                        Ngstkid,
+                                        CanvasTkW,
+                                        MCmd,
+                                        DB)
+    end.
+
+config(DB, Gstkid, Opts) ->
+    gstk_canvas:item_config(DB, Gstkid, Opts).
+
+read(DB, Gstkid, Opt) ->
+    Item = Gstkid#gstkid.widget_data,
+    gstk_generic:read_option(DB, Gstkid, Opt, [gstk:to_ascii(Item)]).
+
+delete(DB, Gstkid) ->
+    gstk_canvas:item_delete_impl(DB, Gstkid).
+
+destroy(_DB, Canvas, Item) ->
+    gstk:exec([Canvas," delete ",gstk:to_ascii(Item)]).
+
+event(DB, Gstkid, Etype, Edata, Args) ->
+    gstk_generic:event(DB, Gstkid, Etype, Edata, Args).
+
+option(Option, _Gstkid, _Canvas, _DB, _AItem) ->
+    case Option of
+        {fg,Color} ->
+            {s,[" -outline ",gstk:to_color(Color)]};
+        {bw,Int} ->
+            {s,[" -w ",gstk:to_ascii(Int)]};
+        {smooth,Bool} ->
+            {s,[" -sm ",gstk:to_ascii(Bool)]};
+        {splinesteps,Int} ->
+            {s,[" -sp ",gstk:to_ascii(Int)]};
+        _ ->
+            invalid_option
+    end.
+
+read_option(Option, Gstkid, Canvas, _DB, AItem) ->
+    case Option of
+        bw ->
+            tcl2erl:ret_int([Canvas," itemcg ",AItem," -w"]);
+        fg ->
+            tcl2erl:ret_color([Canvas," itemcg ",AItem," -outline"]);
+        smooth ->
+            tcl2erl:ret_bool([Canvas," itemcg ",AItem," -sm"]);
+        splinesteps ->
+            tcl2erl:ret_int([Canvas," itemcg ",AItem," -sp"]);
+        stipple ->
+            tcl2erl:ret_stipple([Canvas," itemcg ",AItem," -stipple"]);
+        _ ->
+            {bad_result,{Gstkid#gstkid.objtype,invalid_option,Option}}
+    end.
+
+pickout_coords([{coords,Coords}|Rest], Opts) when length(Coords) >= 2 ->
+    case gstk_canvas:coords(Coords) of
+        invalid ->
+            {error,"A polygon must have at least four coordinates"};
+        RealCoords ->
+            {RealCoords,lists:append(Rest, Opts)}
+    end;
+pickout_coords([Opt|Rest], Opts) ->
+    pickout_coords(Rest, [Opt|Opts]);
+pickout_coords([], _Opts) ->
+    {error,"A polygon must have at least four coordinates"}.
+
+
+

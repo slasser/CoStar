@@ -1,0 +1,36 @@
+-file("test/lib/stdlib/test/erl_lint_SUITE_data/format.erl", 1).
+
+-module(format).
+
+-export([f/1]).
+
+f(F) ->
+    io:format("~", F),
+    io:format("~", [F]),
+    io:format(a, b),
+    io:format(a, "abc"),
+    io:format(a, [a|"abc"]),
+    io:format(4, 5, 6, 7),
+    io:format("la cucaracha~n"),
+    io:format(""),
+    io:format("~p ~p~n", [F]),
+    io:format("~p~n", [F]),
+    io:format("~m"),
+    io:format(F, "~p", []),
+    io:format("~x~n", [F]),
+    io:format("~p~n", F),
+    io:format(F, [3]),
+    io:format("~p", a),
+    io:format("~p~", [F]),
+    io:format("~p ~p", [F,4|7]),
+    io:format("~14p", [F]),
+    io:format("~*p", [a,F]),
+    io:format("~*p", [14,F]),
+    io:fwrite("~p", []),
+    io_lib:format("~p", []),
+    foo:format("~p", []),
+    io:format(),
+    ok.
+
+
+

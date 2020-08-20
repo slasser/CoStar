@@ -1,0 +1,1604 @@
+-file("test/lib/hipe/arm/hipe_arm_encode.erl", 1).
+
+-module(hipe_arm_encode).
+
+-export([insn_encode/2]).
+
+bf(LeftBit, RightBit, Value) ->
+    if
+        32 > LeftBit ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,99,"32 > LeftBit"})
+    end,
+    if
+        LeftBit >= RightBit ->
+            [];
+        true ->
+            exit({assertion_failed,
+                  hipe_arm_encode,
+                  100,
+                  "LeftBit >= RightBit"})
+    end,
+    if
+        RightBit >= 0 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,101,"RightBit >= 0"})
+    end,
+    if
+        Value >= 0 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,102,"Value >= 0"})
+    end,
+    if
+        Value < 1 bsl (LeftBit - RightBit + 1) ->
+            [];
+        true ->
+            exit({assertion_failed,
+                  hipe_arm_encode,
+                  103,
+                  "Value < ( 1 bsl ( ( LeftBit - RightBit ) + 1 ) )"})
+    end,
+    Value bsl RightBit.
+
+am1_shifter_operand(Rn, Rd, ShifterOperand) ->
+    case ShifterOperand of
+        {{imm8,Imm8},{imm4,RotImm4}} ->
+            bf(25, 25, 1) bor bf(11, 8, RotImm4) bor bf(7, 0, Imm8);
+        {r,Rm} ->
+            bf(3, 0, Rm);
+        {{r,Rm},ShiftOp} ->
+            am1_shift_op(Rn, Rd, Rm, ShiftOp) bor bf(3, 0, Rm)
+    end.
+
+am1_shift_op(_Rn, _Rd, _Rm, {ShiftOp,{imm5,ShiftImm5}}) ->
+    case ShiftOp of
+        ror ->
+            if
+                ShiftImm5 =/= 0 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          127,
+                          "ShiftImm5 =/= 0"})
+            end;
+        _ ->
+            []
+    end,
+    bf(11, 7, ShiftImm5) bor shift_op_bits65(ShiftOp);
+am1_shift_op(Rn, Rd, Rm, {ShiftOp,{r,Rs}}) ->
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,132,"Rn =/= 15"})
+    end,
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,133,"Rd =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,134,"Rm =/= 15"})
+    end,
+    if
+        Rs =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,135,"Rs =/= 15"})
+    end,
+    bf(11, 8, Rs) bor shift_op_bits65(ShiftOp) bor bf(4, 4, 1);
+am1_shift_op(_Rn, _Rd, _Rm, rrx) ->
+    bf(6, 5, 3).
+
+shift_op_bits65(ShiftOp) ->
+    case ShiftOp of
+        lsl ->
+            bf(6, 5, 0);
+        lsr ->
+            bf(6, 5, 1);
+        asr ->
+            bf(6, 5, 2);
+        ror ->
+            bf(6, 5, 3)
+    end.
+
+sign('+') ->
+    bf(23, 23, 1);
+sign('-') ->
+    0.
+
+am2_lswub(Rd, AddressingMode) ->
+    case AddressingMode of
+        {immediate_offset,{r,Rn},Sign,{imm12,Imm12}} ->
+            bf(24, 24, 1) bor sign(Sign) bor bf(19, 16, Rn)
+            bor
+            bf(11, 0, Imm12);
+        {register_offset,{r,Rn},Sign,{r,Rm}} ->
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          157,
+                          "Rm =/= 15"})
+            end,
+            bf(25, 25, 1) bor bf(24, 24, 1) bor sign(Sign)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(3, 0, Rm);
+        {scaled_register_offset,{r,Rn},Sign,{r,Rm},ShiftOp} ->
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          160,
+                          "Rm =/= 15"})
+            end,
+            bf(25, 25, 1) bor bf(24, 24, 1) bor sign(Sign)
+            bor
+            bf(19, 16, Rn)
+            bor
+            am2_shift_op(ShiftOp)
+            bor
+            bf(3, 0, Rm);
+        {immediate_pre_indexed,{r,Rn},Sign,{imm12,Imm12}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          163,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          164,
+                          "Rn =/= 15"})
+            end,
+            bf(24, 24, 1) bor sign(Sign) bor bf(21, 21, 1)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(11, 0, Imm12);
+        {register_pre_indexed,{r,Rn},Sign,{r,Rm}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          168,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          169,
+                          "Rn =/= 15"})
+            end,
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          170,
+                          "Rm =/= 15"})
+            end,
+            if
+                Rn =/= Rm ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          171,
+                          "Rn =/= Rm"})
+            end,
+            bf(25, 25, 1) bor bf(24, 24, 1) bor sign(Sign)
+            bor
+            bf(21, 21, 1)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(3, 0, Rm);
+        {scaled_register_pre_indexed,{r,Rn},Sign,{r,Rm},ShiftOp} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          174,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          175,
+                          "Rn =/= 15"})
+            end,
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          176,
+                          "Rm =/= 15"})
+            end,
+            if
+                Rn =/= Rm ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          177,
+                          "Rn =/= Rm"})
+            end,
+            bf(25, 25, 1) bor bf(24, 24, 1) bor sign(Sign)
+            bor
+            bf(21, 21, 1)
+            bor
+            bf(19, 16, Rn)
+            bor
+            am2_shift_op(ShiftOp)
+            bor
+            bf(3, 0, Rm);
+        {immediate_post_indexed,{r,Rn},Sign,{imm12,Imm12}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          180,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          181,
+                          "Rn =/= 15"})
+            end,
+            sign(Sign) bor bf(19, 16, Rn) bor bf(11, 0, Imm12);
+        {register_post_indexed,{r,Rn},Sign,{r,Rm}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          185,
+                          "Rd =/= Rn"})
+            end,
+            bf(25, 25, 1) bor sign(Sign) bor bf(19, 6, Rn)
+            bor
+            bf(3, 0, Rm);
+        {scaled_register_post_indexed,{r,Rn},Sign,{r,Rm},ShiftOp} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          188,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          189,
+                          "Rn =/= 15"})
+            end,
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          190,
+                          "Rm =/= 15"})
+            end,
+            if
+                Rn =/= Rm ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          191,
+                          "Rn =/= Rm"})
+            end,
+            bf(25, 25, 1) bor sign(Sign) bor bf(19, 16, Rn)
+            bor
+            am2_shift_op(ShiftOp)
+            bor
+            bf(3, 0, Rm)
+    end.
+
+am2_shift_op({ShiftOp,{imm5,ShiftImm5}}) ->
+    case ShiftOp of
+        ror ->
+            if
+                ShiftImm5 =/= 0 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          197,
+                          "ShiftImm5 =/= 0"})
+            end;
+        _ ->
+            []
+    end,
+    bf(11, 7, ShiftImm5) bor shift_op_bits65(ShiftOp);
+am2_shift_op(rrx) ->
+    bf(6, 5, 3).
+
+am3_miscls(Rd, AddressingMode) ->
+    case AddressingMode of
+        {immediate_offset,{r,Rn},Sign,{imm8,Imm8}} ->
+            bf(24, 24, 1) bor sign(Sign) bor bf(22, 21, 2)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(11, 8, Imm8 bsr 4)
+            bor
+            bf(3, 0, Imm8 band 15);
+        {register_offset,{r,Rn},Sign,{r,Rm}} ->
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          209,
+                          "Rm =/= 15"})
+            end,
+            bf(24, 24, 1) bor sign(Sign) bor bf(22, 21, 0)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(3, 0, Rm);
+        {immediate_pre_indexed,{r,Rn},Sign,{imm8,Imm8}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          212,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          213,
+                          "Rn =/= 15"})
+            end,
+            bf(24, 24, 1) bor sign(Sign) bor bf(22, 21, 3)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(11, 8, Imm8 bsr 4)
+            bor
+            bf(3, 0, Imm8 band 15);
+        {register_pre_indexed,{r,Rn},Sign,{r,Rm}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          216,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          217,
+                          "Rm =/= 15"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          218,
+                          "Rn =/= 15"})
+            end,
+            if
+                Rm =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          219,
+                          "Rm =/= Rn"})
+            end,
+            bf(24, 24, 1) bor sign(Sign) bor bf(22, 21, 1)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(3, 0, Rm);
+        {immediate_post_indexed,{r,Rn},Sign,{imm8,Imm8}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          222,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          223,
+                          "Rn =/= 15"})
+            end,
+            bf(24, 24, 0) bor sign(Sign) bor bf(22, 21, 2)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(11, 8, Imm8 bsr 4)
+            bor
+            bf(3, 0, Imm8 band 15);
+        {register_post_indexed,{r,Rn},Sign,{r,Rm}} ->
+            if
+                Rd =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          226,
+                          "Rd =/= Rn"})
+            end,
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          227,
+                          "Rm =/= 15"})
+            end,
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          228,
+                          "Rn =/= 15"})
+            end,
+            if
+                Rm =/= Rn ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          229,
+                          "Rm =/= Rn"})
+            end,
+            bf(24, 24, 0) bor sign(Sign) bor bf(22, 21, 0)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(3, 0, Rm)
+    end.
+
+am4_ls_multiple(L, AddressingMode) ->
+    case AddressingMode of
+        ia ->
+            bf(24, 23, 1);
+        ib ->
+            bf(24, 23, 3);
+        da ->
+            bf(24, 23, 0);
+        db ->
+            bf(24, 23, 2);
+        _ ->
+            case {L,AddressingMode} of
+                {1,fa} ->
+                    bf(24, 23, 0);
+                {1,fd} ->
+                    bf(24, 23, 1);
+                {1,ea} ->
+                    bf(24, 23, 2);
+                {1,ed} ->
+                    bf(24, 23, 3);
+                {0,ed} ->
+                    bf(24, 23, 0);
+                {0,ea} ->
+                    bf(24, 23, 1);
+                {0,fd} ->
+                    bf(24, 23, 2);
+                {0,fa} ->
+                    bf(24, 23, 3)
+            end
+    end.
+
+am5_ls_coprocessor(AddressingMode) ->
+    case AddressingMode of
+        {offset,{r,Rn},Sign,{imm8,Imm8}} ->
+            bf(24, 24, 1) bor sign(Sign) bor bf(19, 16, Rn)
+            bor
+            bf(7, 0, Imm8);
+        {pre_indexed,{r,Rn},Sign,{imm8,Imm8}} ->
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          258,
+                          "Rn =/= 15"})
+            end,
+            bf(24, 24, 1) bor sign(Sign) bor bf(21, 21, 1)
+            bor
+            bf(19, 16, Rn)
+            bor
+            bf(7, 0, Imm8);
+        {post_indexed,{r,Rn},Sign,{imm8,Imm8}} ->
+            if
+                Rn =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          261,
+                          "Rn =/= 15"})
+            end,
+            sign(Sign) bor bf(21, 21, 1) bor bf(19, 16, Rn)
+            bor
+            bf(7, 0, Imm8);
+        {unindexed,{r,Rn},{imm8,Imm8}} ->
+            bf(23, 23, 1) bor bf(19, 16, Rn) bor bf(7, 0, Imm8)
+    end.
+
+'cond'(Cond) ->
+    case Cond of
+        eq ->
+            bf(31, 28, 0);
+        ne ->
+            bf(31, 28, 1);
+        cs ->
+            bf(31, 28, 2);
+        hs ->
+            bf(31, 28, 2);
+        cc ->
+            bf(31, 28, 3);
+        lo ->
+            bf(31, 28, 3);
+        mi ->
+            bf(31, 28, 4);
+        pl ->
+            bf(31, 28, 5);
+        vs ->
+            bf(31, 28, 6);
+        vc ->
+            bf(31, 28, 7);
+        hi ->
+            bf(31, 28, 8);
+        ls ->
+            bf(31, 28, 9);
+        ge ->
+            bf(31, 28, 10);
+        lt ->
+            bf(31, 28, 11);
+        gt ->
+            bf(31, 28, 12);
+        le ->
+            bf(31, 28, 13);
+        al ->
+            bf(31, 28, 14)
+    end.
+
+data_processing_form(Cond, OpCode, S, Rn, Rd, ShifterOperand) ->
+    case S of
+        1 ->
+            if
+                Rd =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          296,
+                          "Rd =/= 15"})
+            end;
+        _ ->
+            []
+    end,
+    'cond'(Cond) bor bf(24, 21, OpCode) bor bf(20, 20, S)
+    bor
+    bf(19, 16, Rn)
+    bor
+    bf(15, 12, Rd)
+    bor
+    am1_shifter_operand(Rn, Rd, ShifterOperand).
+
+data_processing_form(OpCode,
+                     {{'cond',Cond},{s,S},{r,Rd},{r,Rn},ShifterOperand}) ->
+    data_processing_form(Cond, OpCode, S, Rn, Rd, ShifterOperand).
+
+adc(Opnds) ->
+    data_processing_form(5, Opnds).
+
+add(Opnds) ->
+    data_processing_form(4, Opnds).
+
+'and'(Opnds) ->
+    data_processing_form(0, Opnds).
+
+bic(Opnds) ->
+    data_processing_form(14, Opnds).
+
+eor(Opnds) ->
+    data_processing_form(1, Opnds).
+
+orr(Opnds) ->
+    data_processing_form(12, Opnds).
+
+rsb(Opnds) ->
+    data_processing_form(3, Opnds).
+
+rsc(Opnds) ->
+    data_processing_form(7, Opnds).
+
+sbc(Opnds) ->
+    data_processing_form(6, Opnds).
+
+sub(Opnds) ->
+    data_processing_form(2, Opnds).
+
+cmp_form(OpCode, {{'cond',Cond},{r,Rn},ShifterOperand}) ->
+    data_processing_form(Cond, OpCode, 1, Rn, 0, ShifterOperand).
+
+cmn(Opnds) ->
+    cmp_form(11, Opnds).
+
+cmp(Opnds) ->
+    cmp_form(10, Opnds).
+
+teq(Opnds) ->
+    cmp_form(9, Opnds).
+
+tst(Opnds) ->
+    cmp_form(8, Opnds).
+
+mov_form(OpCode, {{'cond',Cond},{s,S},{r,Rd},ShifterOperand}) ->
+    data_processing_form(Cond, OpCode, S, 0, Rd, ShifterOperand).
+
+mov(Opnds) ->
+    mov_form(13, Opnds).
+
+mvn(Opnds) ->
+    mov_form(15, Opnds).
+
+b_form(L, {{'cond',Cond},{imm24,Imm24}}) ->
+    'cond'(Cond) bor bf(27, 25, 5) bor bf(24, 24, L)
+    bor
+    bf(23, 0, Imm24).
+
+b(Opnds) ->
+    b_form(0, Opnds).
+
+bl(Opnds) ->
+    b_form(1, Opnds).
+
+bkpt({{imm16,Imm16}}) ->
+    bf(31, 28, 14) bor bf(27, 20, 18) bor bf(19, 8, Imm16 bsr 4)
+    bor
+    bf(7, 4, 7)
+    bor
+    bf(3, 0, Imm16 band 15).
+
+bx_form(SubOpcode, {{'cond',Cond},{r,Rm}}, IsBlx) ->
+    case IsBlx of
+        true ->
+            if
+                Rm =/= 15 ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          342,
+                          "Rm =/= 15"})
+            end;
+        _ ->
+            []
+    end,
+    'cond'(Cond) bor bf(27, 20, 18) bor bf(19, 16, 15)
+    bor
+    bf(15, 12, 15)
+    bor
+    bf(11, 8, 15)
+    bor
+    bf(7, 4, SubOpcode)
+    bor
+    bf(3, 0, Rm).
+
+blx(Opnds) ->
+    case Opnds of
+        {{imm25,Imm25}} ->
+            bf(31, 28, 15) bor bf(27, 25, 5)
+            bor
+            bf(24, 24, Imm25 band 1)
+            bor
+            bf(23, 0, Imm25 bsr 1);
+        _ ->
+            bx_form(3, Opnds, true)
+    end.
+
+bx(Opnds) ->
+    bx_form(1, Opnds, false).
+
+cdp_form(Cond, CpOp4, CRn, CRd, CpNum, CpOp3, CRm) ->
+    Cond bor bf(27, 24, 14) bor bf(23, 20, CpOp4) bor bf(19, 16, CRn)
+    bor
+    bf(15, 12, CRd)
+    bor
+    bf(11, 8, CpNum)
+    bor
+    bf(7, 5, CpOp3)
+    bor
+    bf(3, 0, CRm).
+
+cdp({{'cond',Cond},
+     {cpnum,CpNum},
+     {cpop4,CpOp4},
+     {cr,CRd},
+     {cr,CRn},
+     {cr,CRm},
+     {cpop3,CpOp3}}) ->
+    cdp_form('cond'(Cond), CpOp4, CRn, CRd, CpNum, CpOp3, CRm).
+
+cdp2({{cpnum,CpNum},
+      {cpop4,CpOp4},
+      {cr,CRd},
+      {cr,CRn},
+      {cr,CRm},
+      {cpop3,CpOp3}}) ->
+    cdp_form(bf(31, 28, 15), CpOp4, CRn, CRd, CpNum, CpOp3, CRm).
+
+clz({{'cond',Cond},{r,Rd},{r,Rm}}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,367,"Rd =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,368,"Rm =/= 15"})
+    end,
+    'cond'(Cond) bor bf(27, 20, 22) bor bf(19, 16, 15)
+    bor
+    bf(15, 12, Rd)
+    bor
+    bf(11, 8, 15)
+    bor
+    bf(7, 4, 1)
+    bor
+    bf(3, 0, Rm).
+
+ldstc_form(Cond, L, B20, CRd, CpNum, AddressingMode) ->
+    Cond bor bf(27, 25, 6) bor bf(22, 22, L) bor bf(20, 20, B20)
+    bor
+    bf(15, 12, CRd)
+    bor
+    bf(11, 8, CpNum)
+    bor
+    am5_ls_coprocessor(AddressingMode).
+
+ldstc(B20, {{'cond',Cond},{l,L},{cpnum,CpNum},{cr,CRd},AddressingMode}) ->
+    ldstc_form('cond'(Cond), L, B20, CRd, CpNum, AddressingMode).
+
+ldc(Opnds) ->
+    ldstc(1, Opnds).
+
+stc(Opnds) ->
+    ldstc(0, Opnds).
+
+ldstc2(B20, {{l,L},{cpnum,CpNum},{cr,CRd},AddressingMode}) ->
+    ldstc_form(bf(31, 28, 15), L, B20, CRd, CpNum, AddressingMode).
+
+ldc2(Opnds) ->
+    ldstc2(1, Opnds).
+
+stc2(Opnds) ->
+    ldstc2(0, Opnds).
+
+ldstm_form(Cond, AddressingMode, W, L, Rn, Registers) ->
+    RegisterList = register_list(Registers),
+    if
+        RegisterList =/= 0 ->
+            [];
+        true ->
+            exit({assertion_failed,
+                  hipe_arm_encode,
+                  388,
+                  "RegisterList =/= 0"})
+    end,
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,389,"Rn =/= 15"})
+    end,
+    case W of
+        1 ->
+            BitRn = 1 bsl Rn,
+            case L of
+                1 ->
+                    if
+                        RegisterList band BitRn =:= 0 ->
+                            [];
+                        true ->
+                            exit({assertion_failed,
+                                  hipe_arm_encode,
+                                  396,
+                                  "( RegisterList band BitRn ) =:= 0"})
+                    end;
+                0 ->
+                    case RegisterList band BitRn of
+                        0 ->
+                            [];
+                        _ ->
+                            if
+                                RegisterList band - RegisterList
+                                =:=
+                                BitRn ->
+                                    [];
+                                true ->
+                                    exit({assertion_failed,
+                                          hipe_arm_encode,
+                                          402,
+                                          "( RegisterList band ( - Regi"
+                                          "sterList ) ) =:= BitRn"})
+                            end
+                    end
+            end;
+        _ ->
+            []
+    end,
+    'cond'(Cond) bor bf(27, 25, 4)
+    bor
+    am4_ls_multiple(L, AddressingMode)
+    bor
+    bf(21, 21, W)
+    bor
+    bf(20, 20, L)
+    bor
+    bf(19, 16, Rn)
+    bor
+    bf(15, 0, RegisterList).
+
+register_list(Registers) ->
+    register_list(Registers, 0).
+
+register_list([{r,R}|Rs], Mask) ->
+    register_list(Rs, Mask bor (1 bsl R));
+register_list([], Mask) ->
+    Mask.
+
+ldstm(L, Opnds) ->
+    case Opnds of
+        {{'cond',Cond},AddressingMode,{r,Rn},'!',Registers} ->
+            ldstm_form(Cond, AddressingMode, 1, L, Rn, Registers);
+        {{'cond',Cond},AddressingMode,{r,Rn},Registers} ->
+            ldstm_form(Cond, AddressingMode, 0, L, Rn, Registers)
+    end.
+
+ldm(Opnds) ->
+    ldstm(1, Opnds).
+
+stm(Opnds) ->
+    ldstm(0, Opnds).
+
+ldstr_form2(B, L, {{'cond',Cond},{r,Rd},AddressingMode}) ->
+    'cond'(Cond) bor bf(27, 26, 1) bor am2_lswub(Rd, AddressingMode)
+    bor
+    bf(22, 22, B)
+    bor
+    bf(20, 20, L)
+    bor
+    bf(15, 12, Rd).
+
+ldr(Opnds) ->
+    ldstr_form2(0, 1, Opnds).
+
+ldrb(Opnds) ->
+    ldstr_form2(1, 1, Opnds).
+
+str(Opnds) ->
+    ldstr_form2(0, 0, Opnds).
+
+strb(Opnds) ->
+    ldstr_form2(1, 0, Opnds).
+
+ldstr_form3(L, SubOpcode, {{'cond',Cond},{r,Rd},AddressingMode}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,436,"Rd =/= 15"})
+    end,
+    'cond'(Cond) bor am3_miscls(Rd, AddressingMode) bor bf(20, 20, L)
+    bor
+    bf(15, 12, Rd)
+    bor
+    bf(7, 4, SubOpcode).
+
+ldrh(Opnds) ->
+    ldstr_form3(1, 11, Opnds).
+
+ldrsb(Opnds) ->
+    ldstr_form3(1, 13, Opnds).
+
+ldrsh(Opnds) ->
+    ldstr_form3(1, 15, Opnds).
+
+strh(Opnds) ->
+    ldstr_form3(0, 11, Opnds).
+
+mcr_form(Cond, OP1, CRn, Rd, CpNum, OP2, CRm) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,445,"Rd =/= 15"})
+    end,
+    Cond bor bf(27, 24, 14) bor bf(23, 21, OP1) bor bf(19, 16, CRn)
+    bor
+    bf(15, 12, Rd)
+    bor
+    bf(11, 8, CpNum)
+    bor
+    bf(7, 5, OP2)
+    bor
+    bf(4, 4, 1)
+    bor
+    bf(3, 0, CRm).
+
+mcr({{'cond',Cond},
+     {cpnum,CpNum},
+     {cpop3,OP1},
+     {r,Rd},
+     {cr,CRn},
+     {cr,CRm},
+     {cpop3,OP2}}) ->
+    mcr_form('cond'(Cond), OP1, CRn, Rd, CpNum, OP2, CRm).
+
+mcr2({{cpnum,CpNum},{cpop3,OP1},{r,Rd},{cr,CRn},{cr,CRm},{cpop3,OP2}}) ->
+    mcr_form(bf(31, 28, 15), OP1, CRn, Rd, CpNum, OP2, CRm).
+
+mla({{'cond',Cond},{s,S},{r,Rd},{r,Rm},{r,Rs},{r,Rn}}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,455,"Rd =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,456,"Rm =/= 15"})
+    end,
+    if
+        Rs =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,457,"Rs =/= 15"})
+    end,
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,458,"Rn =/= 15"})
+    end,
+    if
+        Rd =/= Rm ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,459,"Rd =/= Rm"})
+    end,
+    'cond'(Cond) bor bf(21, 21, 1) bor bf(20, 20, S) bor bf(19, 16, Rd)
+    bor
+    bf(15, 12, Rn)
+    bor
+    bf(11, 8, Rs)
+    bor
+    bf(7, 4, 9)
+    bor
+    bf(3, 0, Rm).
+
+mrc_form(Cond, OP1, CRn, Rd, CpNum, OP2, CRm) ->
+    Cond bor bf(27, 24, 14) bor bf(23, 21, OP1) bor bf(20, 20, 1)
+    bor
+    bf(19, 16, CRn)
+    bor
+    bf(15, 12, Rd)
+    bor
+    bf(11, 8, CpNum)
+    bor
+    bf(7, 5, OP2)
+    bor
+    bf(4, 4, 1)
+    bor
+    bf(3, 0, CRm).
+
+mrc({{'cond',Cond},
+     {cpnum,CpNum},
+     {cpop3,OP1},
+     {r,Rd},
+     {cr,CRn},
+     {cr,CRm},
+     {cpop3,OP2}}) ->
+    mrc_form('cond'(Cond), OP1, CRn, Rd, CpNum, OP2, CRm).
+
+mrc2({{cpnum,CpNum},{cpop3,OP1},{r,Rd},{cr,CRn},{cr,CRm},{cpop3,OP2}}) ->
+    mrc_form(bf(31, 28, 15), OP1, CRn, Rd, CpNum, OP2, CRm).
+
+mrs({{'cond',Cond},{r,Rd},cpsr}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,473,"Rd =/= 15"})
+    end,
+    'cond'(Cond) bor bf(24, 24, 1) bor bf(19, 16, 15) bor bf(15, 12, Rd).
+
+msr_form(Cond, FieldMask4, Operand) ->
+    'cond'(Cond) bor bf(24, 24, 1) bor bf(21, 21, 1)
+    bor
+    bf(19, 16, FieldMask4)
+    bor
+    bf(15, 12, 15)
+    bor
+    Operand.
+
+msr(Opnds) ->
+    case Opnds of
+        {{'cond',Cond},
+         cpsr,
+         {field_mask,FieldMask4},
+         {imm8,Imm8},
+         {imm4,RotImm4}} ->
+            msr_form(Cond,
+                     FieldMask4,
+                     bf(25, 25, 1) bor bf(11, 8, RotImm4)
+                     bor
+                     bf(7, 0, Imm8));
+        {{'cond',Cond},cpsr,{field_mask,FieldMask4},{r,Rm}} ->
+            msr_form(Cond, FieldMask4, bf(3, 0, Rm))
+    end.
+
+mul({{'cond',Cond},{s,S},{r,Rd},{r,Rm},{r,Rs}}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,489,"Rd =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,490,"Rm =/= 15"})
+    end,
+    if
+        Rs =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,491,"Rs =/= 15"})
+    end,
+    if
+        Rd =/= Rm ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,492,"Rd =/= Rm"})
+    end,
+    'cond'(Cond) bor bf(20, 20, S) bor bf(19, 16, Rd) bor bf(11, 8, Rs)
+    bor
+    bf(7, 4, 9)
+    bor
+    bf(3, 0, Rm).
+
+ml_form2(OpCode, Cond, S, RdLo, RdHi, Rm, Rs) ->
+    if
+        RdHi =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,496,"RdHi =/= 15"})
+    end,
+    if
+        RdLo =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,497,"RdLo =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,498,"Rm =/= 15"})
+    end,
+    if
+        Rs =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,499,"Rs =/= 15"})
+    end,
+    if
+        RdHi =/= RdLo ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,500,"RdHi =/= RdLo"})
+    end,
+    if
+        RdHi =/= Rm ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,501,"RdHi =/= Rm"})
+    end,
+    if
+        RdLo =/= Rm ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,502,"RdLo =/= Rm"})
+    end,
+    'cond'(Cond) bor bf(27, 21, OpCode) bor bf(20, 20, S)
+    bor
+    bf(19, 16, RdHi)
+    bor
+    bf(15, 12, RdLo)
+    bor
+    bf(11, 8, Rs)
+    bor
+    bf(7, 4, 9)
+    bor
+    bf(3, 0, Rm).
+
+ml_form(OpCode, {{'cond',Cond},{s,S},{r,RdLo},{r,RdHi},{r,Rm},{r,Rs}}) ->
+    ml_form2(OpCode, Cond, S, RdLo, RdHi, Rm, Rs).
+
+smull(Opnds) ->
+    ml_form(6, Opnds).
+
+umlal(Opnds) ->
+    ml_form(5, Opnds).
+
+umull(Opnds) ->
+    ml_form(4, Opnds).
+
+swi({{'cond',Cond},{imm24,Imm24}}) ->
+    'cond'(Cond) bor bf(27, 24, 15) bor bf(23, 0, Imm24).
+
+swp_form(B22, {{'cond',Cond},{r,Rd},{r,Rm},{r,Rn}}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,517,"Rd =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,518,"Rm =/= 15"})
+    end,
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,519,"Rn =/= 15"})
+    end,
+    if
+        Rn =/= Rm ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,520,"Rn =/= Rm"})
+    end,
+    if
+        Rn =/= Rd ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,521,"Rn =/= Rd"})
+    end,
+    'cond'(Cond) bor bf(24, 24, 1) bor bf(22, 22, B22)
+    bor
+    bf(19, 16, Rn)
+    bor
+    bf(15, 12, Rd)
+    bor
+    bf(7, 4, 9)
+    bor
+    bf(3, 0, Rm).
+
+swp(Opnds) ->
+    swp_form(0, Opnds).
+
+swpb(Opnds) ->
+    swp_form(1, Opnds).
+
+ldstrd_form(OpCode, {{'cond',Cond},{r,Rd},AddressingMode}) ->
+    if
+        Rd =/= 14 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,532,"Rd =/= 14"})
+    end,
+    if
+        Rd band 1 =:= 0 ->
+            [];
+        true ->
+            exit({assertion_failed,
+                  hipe_arm_encode,
+                  533,
+                  "( Rd band 1 ) =:= 0"})
+    end,
+    'cond'(Cond) bor am3_miscls(Rd, AddressingMode) bor bf(15, 12, Rd)
+    bor
+    bf(7, 4, OpCode).
+
+ldrd(Opnds) ->
+    ldstrd_form(13, Opnds).
+
+strd(Opnds) ->
+    ldstrd_form(15, Opnds).
+
+mcrr({{'cond',Cond},{cpnum,CpNum},{cpop4,OP},{r,Rd},{r,Rn},{cr,CRm}}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,542,"Rd =/= 15"})
+    end,
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,543,"Rn =/= 15"})
+    end,
+    'cond'(Cond) bor bf(27, 20, 196) bor bf(19, 16, Rn)
+    bor
+    bf(15, 12, Rd)
+    bor
+    bf(11, 8, CpNum)
+    bor
+    bf(7, 4, OP)
+    bor
+    bf(3, 0, CRm).
+
+mrrc({{'cond',Cond},{cpnum,CpNum},{cpop4,OP},{r,Rd},{r,Rn},{cr,CRm}}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,547,"Rd =/= 15"})
+    end,
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,548,"Rn =/= 15"})
+    end,
+    if
+        Rd =/= Rn ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,549,"Rd =/= Rn"})
+    end,
+    'cond'(Cond) bor bf(27, 20, 197) bor bf(19, 16, Rn)
+    bor
+    bf(15, 12, Rd)
+    bor
+    bf(11, 8, CpNum)
+    bor
+    bf(7, 4, OP)
+    bor
+    bf(3, 0, CRm).
+
+pld({AddressingMode}) ->
+    AM = am2_lswub(42, AddressingMode),
+    if
+        (AM bsr 21) band 9 =:= 8 ->
+            [];
+        true ->
+            exit({assertion_failed,
+                  hipe_arm_encode,
+                  556,
+                  "( ( AM bsr 21 ) band 9 ) =:= 8"})
+    end,
+    4115722240 bor AM.
+
+q_form(OpCode, {{'cond',Cond},{r,Rd},{r,Rm},{r,Rn}}) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,560,"Rd =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,561,"Rm =/= 15"})
+    end,
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,562,"Rn =/= 15"})
+    end,
+    'cond'(Cond) bor bf(27, 20, OpCode) bor bf(19, 16, Rn)
+    bor
+    bf(15, 11, Rd)
+    bor
+    bf(7, 4, 5)
+    bor
+    bf(3, 0, Rm).
+
+qadd(Opnds) ->
+    q_form(16, Opnds).
+
+qdadd(Opnds) ->
+    q_form(20, Opnds).
+
+qdsub(Opnds) ->
+    q_form(22, Opnds).
+
+qsub(Opnds) ->
+    q_form(18, Opnds).
+
+smlaxy_form(Cond, OpCode, Rd, Rn, Rs, Y, X, Rm) ->
+    if
+        Rd =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,571,"Rd =/= 15"})
+    end,
+    if
+        Rm =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,572,"Rm =/= 15"})
+    end,
+    if
+        Rs =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,573,"Rs =/= 15"})
+    end,
+    if
+        Rn =/= 15 ->
+            [];
+        true ->
+            exit({assertion_failed,hipe_arm_encode,574,"Rn =/= 15"})
+    end,
+    'cond'(Cond) bor bf(27, 20, OpCode) bor bf(19, 16, Rd)
+    bor
+    bf(15, 12, Rn)
+    bor
+    bf(11, 8, Rs)
+    bor
+    bf(7, 7, 1)
+    bor
+    bf(6, 6, Y)
+    bor
+    bf(5, 5, X)
+    bor
+    bf(3, 0, Rm).
+
+smla({{bt,X},{bt,Y},{'cond',Cond},{r,Rd},{r,Rm},{r,Rs},{r,Rn}}) ->
+    smlaxy_form(Cond, 16, Rd, Rn, Rs, Y, X, Rm).
+
+smlal(Opnds) ->
+    case Opnds of
+        {{'cond',Cond},{s,S},{r,RdLo},{r,RdHi},{r,Rm},{r,Rs}} ->
+            ml_form2(7, Cond, S, RdLo, RdHi, Rm, Rs);
+        {{bt,X},{bt,Y},{'cond',Cond},{r,RdLo},{r,RdHi},{r,Rm},{r,Rs}} ->
+            if
+                RdLo =/= RdHi ->
+                    [];
+                true ->
+                    exit({assertion_failed,
+                          hipe_arm_encode,
+                          585,
+                          "RdLo =/= RdHi"})
+            end,
+            smlaxy_form(Cond, 20, RdHi, RdLo, Rs, Y, X, Rm)
+    end.
+
+smlaw({{bt,Y},{'cond',Cond},{r,Rd},{r,Rm},{r,Rs},{r,Rn}}) ->
+    smlaxy_form(Cond, 18, Rd, Rn, Rs, Y, 0, Rm).
+
+smul({{bt,X},{bt,Y},{'cond',Cond},{r,Rd},{r,Rm},{r,Rs}}) ->
+    smlaxy_form(Cond, 22, Rd, 0, Rs, Y, X, Rm).
+
+smulw({{bt,Y},{'cond',Cond},{r,Rd},{r,Rm},{r,Rs}}) ->
+    smlaxy_form(Cond, 18, Rd, 0, Rs, Y, 1, Rm).
+
+insn_encode(Op, Opnds) ->
+    case Op of
+        adc ->
+            adc(Opnds);
+        add ->
+            add(Opnds);
+        'and' ->
+            'and'(Opnds);
+        b ->
+            b(Opnds);
+        bic ->
+            bic(Opnds);
+        bkpt ->
+            bkpt(Opnds);
+        bl ->
+            bl(Opnds);
+        blx ->
+            blx(Opnds);
+        bx ->
+            bx(Opnds);
+        cdp ->
+            cdp(Opnds);
+        cdp2 ->
+            cdp2(Opnds);
+        clz ->
+            clz(Opnds);
+        cmn ->
+            cmn(Opnds);
+        cmp ->
+            cmp(Opnds);
+        eor ->
+            eor(Opnds);
+        ldc ->
+            ldc(Opnds);
+        ldc2 ->
+            ldc2(Opnds);
+        ldm ->
+            ldm(Opnds);
+        ldr ->
+            ldr(Opnds);
+        ldrb ->
+            ldrb(Opnds);
+        ldrd ->
+            ldrd(Opnds);
+        ldrh ->
+            ldrh(Opnds);
+        ldrsb ->
+            ldrsb(Opnds);
+        ldrsh ->
+            ldrsh(Opnds);
+        mcr ->
+            mcr(Opnds);
+        mcr2 ->
+            mcr2(Opnds);
+        mcrr ->
+            mcrr(Opnds);
+        mla ->
+            mla(Opnds);
+        mov ->
+            mov(Opnds);
+        mrc ->
+            mrc(Opnds);
+        mrc2 ->
+            mrc2(Opnds);
+        mrrc ->
+            mrrc(Opnds);
+        mrs ->
+            mrs(Opnds);
+        msr ->
+            msr(Opnds);
+        mul ->
+            mul(Opnds);
+        mvn ->
+            mvn(Opnds);
+        orr ->
+            orr(Opnds);
+        pld ->
+            pld(Opnds);
+        qadd ->
+            qadd(Opnds);
+        qdadd ->
+            qdadd(Opnds);
+        qdsub ->
+            qdsub(Opnds);
+        qsub ->
+            qsub(Opnds);
+        rsb ->
+            rsb(Opnds);
+        rsc ->
+            rsc(Opnds);
+        sbc ->
+            sbc(Opnds);
+        smla ->
+            smla(Opnds);
+        smlal ->
+            smlal(Opnds);
+        smlaw ->
+            smlaw(Opnds);
+        smull ->
+            smull(Opnds);
+        smul ->
+            smul(Opnds);
+        smulw ->
+            smulw(Opnds);
+        stc ->
+            stc(Opnds);
+        stc2 ->
+            stc2(Opnds);
+        stm ->
+            stm(Opnds);
+        str ->
+            str(Opnds);
+        strb ->
+            strb(Opnds);
+        strd ->
+            strd(Opnds);
+        strh ->
+            strh(Opnds);
+        sub ->
+            sub(Opnds);
+        swi ->
+            swi(Opnds);
+        swp ->
+            swp(Opnds);
+        swpb ->
+            swpb(Opnds);
+        teq ->
+            teq(Opnds);
+        tst ->
+            tst(Opnds);
+        umlal ->
+            umlal(Opnds);
+        umull ->
+            umull(Opnds);
+        _ ->
+            exit({hipe_arm_encode,insn_encode,Op})
+    end.
+
+
+

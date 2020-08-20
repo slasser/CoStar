@@ -1,0 +1,890 @@
+-file("test/lib/stdlib/test/escript_SUITE.erl", 1).
+
+-module(escript_SUITE).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2,
+         init_per_testcase/2,
+         end_per_testcase/2,
+         basic/1,
+         errors/1,
+         strange_name/1,
+         emulator_flags/1,
+         emulator_flags_no_shebang/1,
+         module_script/1,
+         beam_script/1,
+         archive_script/1,
+         archive_script_file_access/1,
+         epp/1,
+         create_and_extract/1,
+         foldl/1,
+         overflow/1,
+         verify_sections/3,
+         unicode/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/stdlib/test/escript_SUITE.erl", 43).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/kernel-2.15.3/include/file.hrl",
+      1).
+
+-record(file_info,{size :: undefined | non_neg_integer(),
+                   type :: undefined
+                         | device
+                         | directory
+                         | other
+                         | regular
+                         | symlink,
+                   access :: undefined
+                           | read
+                           | write
+                           | read_write
+                           | none,
+                   atime :: undefined | file:date_time() | integer(),
+                   mtime :: undefined | file:date_time() | integer(),
+                   ctime :: undefined | file:date_time() | integer(),
+                   mode :: undefined | integer(),
+                   links :: undefined | non_neg_integer(),
+                   major_device :: undefined | integer(),
+                   minor_device :: undefined | integer(),
+                   inode :: undefined | integer(),
+                   uid :: undefined | integer(),
+                   gid :: undefined | integer()}).
+
+-record(file_descriptor,{module :: undefined | module(),
+                         data :: undefined | term()}).
+
+-file("test/lib/stdlib/test/escript_SUITE.erl", 44).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    [basic,
+     errors,
+     strange_name,
+     emulator_flags,
+     emulator_flags_no_shebang,
+     module_script,
+     beam_script,
+     archive_script,
+     epp,
+     create_and_extract,
+     foldl,
+     overflow,
+     archive_script_file_access,
+     unicode].
+
+groups() ->
+    [].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+init_per_testcase(_Case, Config) ->
+    Dog = test_server:timetrap(test_server:minutes(5)),
+    [{watchdog,Dog}|Config].
+
+end_per_testcase(_Case, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog),
+    ok.
+
+basic(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run(Dir, "factorial 5", <<"factorial 5 = 120\nExitCode:0">>),
+    run(Dir,
+        "factorial_compile 10",
+        <<"factorial 10 = 3628800\nExitCode:0">>),
+    run(Dir,
+        "factorial_compile_main 7",
+        <<"factorial 7 = 5040\nExitCode:0">>),
+    run(Dir,
+        "factorial_warning 20",
+        [data_dir,
+         <<"factorial_warning:12: Warning: function bar/0 is unused\nfa"
+           "ctorial 20 = 2432902008176640000\nExitCode:0">>]),
+    run_with_opts(Dir,
+                  "-s",
+                  "factorial_warning",
+                  [data_dir,
+                   <<"factorial_warning:12: Warning: function bar/0 is "
+                     "unused\nExitCode:0">>]),
+    run_with_opts(Dir,
+                  "-s -i",
+                  "factorial_warning",
+                  [data_dir,
+                   <<"factorial_warning:12: Warning: function bar/0 is "
+                     "unused\nExitCode:0">>]),
+    run_with_opts(Dir,
+                  "-c -s",
+                  "factorial_warning",
+                  [data_dir,
+                   <<"factorial_warning:12: Warning: function bar/0 is "
+                     "unused\nExitCode:0">>]),
+    run(Dir,
+        "filesize "
+        ++
+        filename:join(test_server:lookup_config(data_dir, Config),
+                      "filesize"),
+        [data_dir,
+         <<"filesize:11: Warning: function id/1 is unused\n324\nExitCod"
+           "e:0">>]),
+    run(Dir,
+        "test_script_name",
+        [data_dir,<<"test_script_name\nExitCode:0">>]),
+    run(Dir, "tail_rec 1000", [<<"ok\nExitCode:0">>]),
+    run(Dir, "trap_exit", <<"false\nExitCode:0">>),
+    ok.
+
+errors(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run(Dir,
+        "compile_error",
+        [data_dir,
+         <<"compile_error:5: syntax error before: '*'\n">>,
+         data_dir,
+         <<"compile_error:8: syntax error before: blarf\n">>,
+         <<"escript: There were compilation errors.\nExitCode:127">>]),
+    run(Dir,
+        "lint_error",
+        [data_dir,
+         <<"lint_error:6: function main/1 already defined\n">>,
+         data_dir,
+         "lint_error:8: variable 'ExitCode' is unbound\n",
+         <<"escript: There were compilation errors.\nExitCode:127">>]),
+    run_with_opts(Dir,
+                  "-s",
+                  "lint_error",
+                  [data_dir,
+                   <<"lint_error:6: function main/1 already defined\n">>,
+                   data_dir,
+                   "lint_error:8: variable 'ExitCode' is unbound\n",
+                   <<"escript: There were compilation errors.\nExitCode"
+                     ":127">>]),
+    ok.
+
+strange_name(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run(Dir,
+        "strange.name -arg1 arg2 arg3",
+        [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nExitCode:0">>]),
+    ok.
+
+emulator_flags(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run(Dir,
+        "emulator_flags -arg1 arg2 arg3",
+        [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[{nostick,[]}]"
+           "\nmnesia:[{mnesia,[\"dir\",\"a/directory\"]},{mnesia,[\"deb"
+           "ug\",\"verbose\"]}]\nERL_FLAGS=false\nunknown:[]\nExitCode:"
+           "0">>]),
+    ok.
+
+emulator_flags_no_shebang(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run_with_opts(Dir,
+                  "",
+                  "emulator_flags_no_shebang -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[{nos"
+                     "tick,[]}]\nmnesia:[{mnesia,[\"dir\",\"a/directory"
+                     "\"]},{mnesia,[\"debug\",\"verbose\"]}]\nERL_FLAGS"
+                     "=false\nunknown:[]\nExitCode:0">>]),
+    ok.
+
+module_script(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    OrigFile = filename:join([Data,"emulator_flags"]),
+    {ok,OrigBin} = file:read_file(OrigFile),
+    [Shebang,Mode,Flags|Source] =
+        string:tokens(binary_to_list(OrigBin), "\n"),
+    {ok,OrigFI} = file:read_file_info(OrigFile),
+    Priv = test_server:lookup_config(priv_dir, Config),
+    Dir = filename:absname(Priv),
+    Base = "module_script",
+    ErlFile = filename:join([Priv,Base ++ ".erl"]),
+    ErlCode =
+        ["\n-module(",
+         Base,
+         ").\n",
+         "-export([main/1]).\n\n",
+         string:join(Source, "\n"),
+         "\n"],
+    ok = file:write_file(ErlFile, ErlCode),
+    NoArgsBase = Base ++ "_no_args_with_shebang",
+    NoArgsFile = filename:join([Priv,NoArgsBase]),
+    ok = file:write_file(NoArgsFile, [Shebang,"\n",ErlCode]),
+    ok = file:write_file_info(NoArgsFile, OrigFI),
+    run(Dir,
+        NoArgsBase ++ " -arg1 arg2 arg3",
+        [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nmnesia:[]\n"
+           "ERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    run_with_opts(Dir,
+                  "",
+                  NoArgsBase ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nm"
+                     "nesia:[]\nERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    NoArgsBase2 = Base ++ "_no_args_without_shebang",
+    NoArgsFile2 = filename:join([Priv,NoArgsBase2]),
+    ok =
+        file:write_file(NoArgsFile2,
+                        ["Something else than shebang!!!","\n",ErlCode]),
+    ok = file:write_file_info(NoArgsFile2, OrigFI),
+    run_with_opts(Dir,
+                  "",
+                  NoArgsBase2 ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nm"
+                     "nesia:[]\nERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    NoArgsBase3 = Base ++ "_no_args_without_header",
+    NoArgsFile3 = filename:join([Priv,NoArgsBase3]),
+    ok = file:write_file(NoArgsFile3, [ErlCode]),
+    ok = file:write_file_info(NoArgsFile3, OrigFI),
+    run_with_opts(Dir,
+                  "",
+                  NoArgsBase3 ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nm"
+                     "nesia:[]\nERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    ArgsBase = Base ++ "_args_with_shebang",
+    ArgsFile = filename:join([Priv,ArgsBase]),
+    ok =
+        file:write_file(ArgsFile,
+                        [Shebang,"\n",Mode,"\n",Flags,"\n",ErlCode]),
+    ok = file:write_file_info(ArgsFile, OrigFI),
+    run(Dir,
+        ArgsBase ++ " -arg1 arg2 arg3",
+        [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[{nostick,[]}]"
+           "\nmnesia:[{mnesia,[\"dir\",\"a/directory\"]},{mnesia,[\"deb"
+           "ug\",\"verbose\"]}]\nERL_FLAGS=false\nunknown:[]\nExitCode:"
+           "0">>]),
+    ok.
+
+beam_script(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    OrigFile = filename:join([Data,"emulator_flags"]),
+    {ok,OrigBin} = file:read_file(OrigFile),
+    [Shebang,Mode,Flags|Source] =
+        string:tokens(binary_to_list(OrigBin), "\n"),
+    {ok,OrigFI} = file:read_file_info(OrigFile),
+    Priv = test_server:lookup_config(priv_dir, Config),
+    Dir = filename:absname(Priv),
+    Base = "beam_script",
+    ErlFile = filename:join([Priv,Base ++ ".erl"]),
+    ok =
+        file:write_file(ErlFile,
+                        ["\n-module(",
+                         Base,
+                         ").\n",
+                         "-export([main/1]).\n\n",
+                         string:join(Source, "\n"),
+                         "\n"]),
+    {ok,_Mod,BeamCode} = compile:file(ErlFile, [binary]),
+    NoArgsBase = Base ++ "_no_args_with_shebang",
+    NoArgsFile = filename:join([Priv,NoArgsBase]),
+    ok = file:write_file(NoArgsFile, [Shebang,"\n",BeamCode]),
+    ok = file:write_file_info(NoArgsFile, OrigFI),
+    run(Dir,
+        NoArgsBase ++ " -arg1 arg2 arg3",
+        [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nmnesia:[]\n"
+           "ERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    run_with_opts(Dir,
+                  "",
+                  NoArgsBase ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nm"
+                     "nesia:[]\nERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    NoArgsBase2 = Base ++ "_no_args_without_shebang",
+    NoArgsFile2 = filename:join([Priv,NoArgsBase2]),
+    ok =
+        file:write_file(NoArgsFile2,
+                        ["Something else than shebang!!!","\n",BeamCode]),
+    ok = file:write_file_info(NoArgsFile2, OrigFI),
+    run_with_opts(Dir,
+                  "",
+                  NoArgsBase2 ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nm"
+                     "nesia:[]\nERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    NoArgsBase3 = Base ++ "_no_args_without_header",
+    NoArgsFile3 = filename:join([Priv,NoArgsBase3]),
+    ok = file:write_file(NoArgsFile3, [BeamCode]),
+    ok = file:write_file_info(NoArgsFile3, OrigFI),
+    run_with_opts(Dir,
+                  "",
+                  NoArgsBase3 ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[]\nm"
+                     "nesia:[]\nERL_FLAGS=false\nunknown:[]\nExitCode:0">>]),
+    ArgsBase = Base ++ "_args",
+    ArgsFile = filename:join([Priv,ArgsBase]),
+    ok =
+        file:write_file(ArgsFile,
+                        [Shebang,"\n",Mode,"\n",Flags,"\n",BeamCode]),
+    ok = file:write_file_info(ArgsFile, OrigFI),
+    run(Dir,
+        ArgsBase ++ " -arg1 arg2 arg3",
+        [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\nnostick:[{nostick,[]}]"
+           "\nmnesia:[{mnesia,[\"dir\",\"a/directory\"]},{mnesia,[\"deb"
+           "ug\",\"verbose\"]}]\nERL_FLAGS=false\nunknown:[]\nExitCode:"
+           "0">>]),
+    ok.
+
+archive_script(Config) when is_list(Config) ->
+    DataDir = test_server:lookup_config(data_dir, Config),
+    PrivDir = test_server:lookup_config(priv_dir, Config),
+    Archive = filename:join([PrivDir,"archive_script.zip"]),
+    {ok,_} =
+        zip:create(Archive,
+                   ["archive_script"],
+                   [{compress,[]},{cwd,DataDir}]),
+    {ok,_} = zip:extract(Archive, [{cwd,PrivDir}]),
+    TopDir = filename:join([PrivDir,"archive_script"]),
+    ok = compile_app(TopDir, "archive_script_dict"),
+    ok = compile_app(TopDir, "archive_script_dummy"),
+    {ok,MainFiles} = file:list_dir(TopDir),
+    ok = compile_files(MainFiles, TopDir, TopDir),
+    {ok,TopFiles} = file:list_dir(TopDir),
+    {ok,{_,ArchiveBin}} =
+        zip:create(Archive,
+                   TopFiles,
+                   [memory,{compress,[]},{cwd,TopDir}]),
+    OrigFile = filename:join([DataDir,"emulator_flags"]),
+    {ok,OrigBin} = file:read_file(OrigFile),
+    [Shebang,Mode,_Flags|_Source] =
+        string:tokens(binary_to_list(OrigBin), "\n"),
+    Flags =
+        "%%! -archive_script_dict foo bar -archive_script_dict foo -arc"
+        "hive_script_dummy bar",
+    {ok,OrigFI} = file:read_file_info(OrigFile),
+    MainBase = "archive_script_main",
+    MainScript = filename:join([PrivDir,MainBase]),
+    ok =
+        file:write_file(MainScript,
+                        [Shebang,"\n",Flags,"\n",ArchiveBin]),
+    ok = file:write_file_info(MainScript, OrigFI),
+    run(PrivDir,
+        MainBase ++ " -arg1 arg2 arg3",
+        [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\ndict:[{archive_script_d"
+           "ict,[\"foo\",\"bar\"]},{archive_script_dict,[\"foo\"]}]\ndu"
+           "mmy:[{archive_script_dummy,[\"bar\"]}]\npriv:{ok,<<\"Some p"
+           "rivate data...\\n\">>}\nExitCode:0">>]),
+    run_with_opts(PrivDir,
+                  "",
+                  MainBase ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\ndict:[{archiv"
+                     "e_script_dict,[\"foo\",\"bar\"]},{archive_script_"
+                     "dict,[\"foo\"]}]\ndummy:[{archive_script_dummy,["
+                     "\"bar\"]}]\npriv:{ok,<<\"Some private data...\\n"
+                     "\">>}\nExitCode:0">>]),
+    ok = file:rename(MainScript, MainScript ++ "_with_shebang"),
+    ok =
+        file:write_file(MainScript,
+                        ["Something else than shebang!!!",
+                         "\n",
+                         ArchiveBin]),
+    ok = file:write_file_info(MainScript, OrigFI),
+    run_with_opts(PrivDir,
+                  "",
+                  MainBase ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\ndict:[]\ndumm"
+                     "y:[]\npriv:{ok,<<\"Some private data...\\n\">>}\n"
+                     "ExitCode:0">>]),
+    ok = file:rename(MainScript, MainScript ++ "_without_shebang"),
+    ok = file:write_file(MainScript, [ArchiveBin]),
+    ok = file:write_file_info(MainScript, OrigFI),
+    run_with_opts(PrivDir,
+                  "",
+                  MainBase ++ " -arg1 arg2 arg3",
+                  [<<"main:[\"-arg1\",\"arg2\",\"arg3\"]\ndict:[]\ndumm"
+                     "y:[]\npriv:{ok,<<\"Some private data...\\n\">>}\n"
+                     "ExitCode:0">>]),
+    ok = file:rename(MainScript, MainScript ++ "_without_header"),
+    AltBase = "archive_script_alternate_main",
+    AltScript = filename:join([PrivDir,AltBase]),
+    ok =
+        file:write_file(AltScript,
+                        [Shebang,
+                         "\n",
+                         Mode,
+                         "\n",
+                         Flags,
+                         " -escript main archive_script_main2\n",
+                         ArchiveBin]),
+    ok = file:write_file_info(AltScript, OrigFI),
+    run(PrivDir,
+        AltBase ++ " -arg1 arg2 arg3",
+        [<<"main2:[\"-arg1\",\"arg2\",\"arg3\"]\ndict:[{archive_script_"
+           "dict,[\"foo\",\"bar\"]},{archive_script_dict,[\"foo\"]}]\nd"
+           "ummy:[{archive_script_dummy,[\"bar\"]}]\npriv:{ok,<<\"Some "
+           "private data...\\n\">>}\nExitCode:0">>]),
+    ok.
+
+archive_script_file_access(Config) when is_list(Config) ->
+    DataDir = test_server:lookup_config(data_dir, Config),
+    PrivDir = test_server:lookup_config(priv_dir, Config),
+    MainMod = "archive_script_file_access",
+    MainSrc = MainMod ++ ".erl",
+    MainBeam = MainMod ++ ".beam",
+    Archive = filename:join([PrivDir,"archive_script_file_access.zip"]),
+    {ok,_} =
+        zip:create(Archive,
+                   ["archive_script_file_access"],
+                   [{compress,[]},{cwd,DataDir}]),
+    {ok,_} = zip:extract(Archive, [{cwd,PrivDir}]),
+    TopDir = filename:join([PrivDir,"archive_script_file_access"]),
+    ok = compile_files([MainSrc], TopDir, TopDir),
+    {ok,OldDir} = file:get_cwd(),
+    ok = file:set_cwd(TopDir),
+    DummyDir = "dir1",
+    DummySubDir = filename:join(DummyDir, "subdir1"),
+    RelDummyFile = filename:join(DummySubDir, "file1"),
+    DummyFile = filename:join(TopDir, RelDummyFile),
+    ok = filelib:ensure_dir(DummyFile),
+    ok = file:write_file(DummyFile, ["foo\nbar\nbaz"]),
+    Files1 =
+        lists:map(fun(Filename) ->
+                         {ok,Bin} = file:read_file(Filename),
+                         {Filename,Bin}
+                  end,
+                  [RelDummyFile,MainBeam]),
+    {ok,{"mem",Bin1}} = zip:create("mem", Files1, [memory]),
+    ScriptName1 = "archive_script_file_access1",
+    Script1 = filename:join([PrivDir,ScriptName1]),
+    Flags = "-escript main " ++ MainMod,
+    ok =
+        escript:create(Script1,
+                       [shebang,{emu_args,Flags},{archive,Bin1}]),
+    ok = file:change_mode(Script1, 484),
+    SymlinkName1 = "symlink_to_" ++ ScriptName1,
+    Symlink1 = filename:join([PrivDir,SymlinkName1]),
+    file:make_symlink(ScriptName1, Symlink1),
+    ok =
+        file:write_file(Script1 ++ ".extension",
+                        <<"same name as script, but with extension">>),
+    ok = file:set_cwd(PrivDir),
+    run(PrivDir,
+        "./" ++ ScriptName1 ++ " " ++ ScriptName1,
+        [<<"ExitCode:0">>]),
+    ok = file:set_cwd(TopDir),
+    Files2 = [DummyDir,MainBeam],
+    {ok,{"mem",Bin2}} = zip:create("mem", Files2, [memory]),
+    ScriptName2 = "archive_script_file_access2",
+    Script2 = filename:join([PrivDir,ScriptName2]),
+    ok =
+        escript:create(Script2,
+                       [shebang,{emu_args,Flags},{archive,Bin2}]),
+    ok = file:change_mode(Script2, 484),
+    ok =
+        file:write_file(Script2 ++ ".extension",
+                        <<"same name as script, but with extension">>),
+    SymlinkName2 = "symlink_to_" ++ ScriptName2,
+    Symlink2 = filename:join([PrivDir,SymlinkName2]),
+    file:make_symlink(ScriptName2, Symlink2),
+    ok = file:set_cwd(PrivDir),
+    run(PrivDir,
+        "./" ++ ScriptName2 ++ " " ++ ScriptName2,
+        [<<"ExitCode:0">>]),
+    case
+        element(1, os:type()) =:= win32
+        orelse
+        file:read_link(Symlink2)
+    of
+        {ok,_} ->
+            run(PrivDir,
+                "./" ++ SymlinkName2 ++ " " ++ ScriptName2,
+                [<<"ExitCode:0">>]);
+        _ ->
+            ok
+    end,
+    ok = file:set_cwd(OldDir).
+
+compile_app(TopDir, AppName) ->
+    AppDir = filename:join([TopDir,AppName]),
+    SrcDir = filename:join([AppDir,"src"]),
+    OutDir = filename:join([AppDir,"ebin"]),
+    {ok,Files} = file:list_dir(SrcDir),
+    compile_files(Files, SrcDir, OutDir).
+
+compile_files([File|Files], SrcDir, OutDir) ->
+    case filename:extension(File) of
+        ".erl" ->
+            AbsFile = filename:join([SrcDir,File]),
+            case
+                compile:file(AbsFile, [{outdir,OutDir},report_errors])
+            of
+                {ok,_Mod} ->
+                    compile_files(Files, SrcDir, OutDir);
+                Error ->
+                    {compilation_error,AbsFile,OutDir,Error}
+            end;
+        _ ->
+            compile_files(Files, SrcDir, OutDir)
+    end;
+compile_files([], _, _) ->
+    ok.
+
+epp(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run(Dir, "factorial_epp 5", <<"factorial 5 = 120\nExitCode:0">>),
+    ok.
+
+create_and_extract(Config) when is_list(Config) ->
+    {NewFile,
+     FileInfo,
+     EmuArg,
+     Source,
+     _ErlBase,
+     ErlCode,
+     _BeamBase,
+     BeamCode,
+     ArchiveBin} =
+        prepare_creation("create_and_extract", Config),
+    Bodies =
+        [[{source,ErlCode}],[{beam,BeamCode}],[{archive,ArchiveBin}]],
+    [ 
+     verify_sections(NewFile, FileInfo, S ++ C ++ E ++ B) ||
+         S <-
+             [[{shebang,default}],
+              [{shebang,"/usr/bin/env     escript"}]],
+         C <-
+             [[],
+              [{comment,undefined}],
+              [{comment,default}],
+              [{comment,"This is a nonsense comment"}]],
+         E <- [[],[{emu_args,undefined}],[{emu_args,EmuArg}]],
+         B <- [[{source,Source}]|Bodies]
+    ],
+    [ 
+     verify_sections(NewFile, FileInfo, S ++ C ++ E ++ B) ||
+         S <- [[],[{shebang,undefined}]],
+         C <- [[],[{comment,undefined}]],
+         E <- [[],[{emu_args,undefined}]],
+         B <- Bodies
+    ],
+    file:delete(NewFile),
+    ok = escript:create(NewFile, [{source,Source}]),
+    {ok,[_,_,_,{source,Source}]} = escript:extract(NewFile, []),
+    {ok,[_,_,_,{source,BeamCode2}]} =
+        escript:extract(NewFile, [compile_source]),
+    verify_sections(NewFile,
+                    FileInfo,
+                    [{shebang,default},
+                     {comment,default},
+                     {beam,BeamCode2}]),
+    file:delete(NewFile),
+    ok.
+
+prepare_creation(Base, Config) ->
+    PrivDir = test_server:lookup_config(priv_dir, Config),
+    DataDir = test_server:lookup_config(data_dir, Config),
+    OrigFile = filename:join([DataDir,"emulator_flags"]),
+    {ok,FileInfo} = file:read_file_info(OrigFile),
+    NewFile = filename:join([PrivDir,Base]),
+    {ok,
+     [{shebang,default},{comment,_},{emu_args,EmuArg},{source,Source}]} =
+        escript:extract(OrigFile, []),
+    ErlFile = NewFile ++ ".erl",
+    ErlCode =
+        list_to_binary(["\n-module(",
+                        Base,
+                        ").\n",
+                        "-export([main/1]).\n\n",
+                        Source,
+                        "\n\n"]),
+    ok = file:write_file(ErlFile, ErlCode),
+    {ok,_Mod,BeamCode} = compile:file(ErlFile, [binary,debug_info]),
+    {ok,{_,ArchiveBin}} =
+        zip:create("dummy_archive_name",
+                   [{Base ++ ".erl",ErlCode},{Base ++ ".beam",BeamCode}],
+                   [{compress,[]},memory]),
+    {NewFile,
+     FileInfo,
+     EmuArg,
+     Source,
+     Base ++ ".erl",
+     ErlCode,
+     Base ++ ".beam",
+     BeamCode,
+     ArchiveBin}.
+
+verify_sections(File, FileInfo, Sections) ->
+    io:format("~p:verify_sections(\n\t~p,\n\t~p,\n\t~p).\n",
+              [escript_SUITE,File,FileInfo,Sections]),
+    file:delete(File),
+    ok = escript:create(File, Sections),
+    ok = file:write_file_info(File, FileInfo),
+    Dir = filename:absname(filename:dirname(File)),
+    Base = filename:basename(File),
+    HasArg =
+        fun(Tag) ->
+               case lists:keysearch(Tag, 1, Sections) of
+                   false ->
+                       false;
+                   {value,{_,undefined}} ->
+                       false;
+                   {value,_} ->
+                       true
+               end
+        end,
+    ExpectedMain = <<"main:[\"-arg1\",\"arg2\",\"arg3\"]\n">>,
+    ExpectedOutput =
+        case HasArg(emu_args) of
+            true ->
+                <<"nostick:[{nostick,[]}]\nmnesia:[{mnesia,[\"dir\",\"a"
+                  "/directory\"]},{mnesia,[\"debug\",\"verbose\"]}]\nER"
+                  "L_FLAGS=false\nunknown:[]\nExitCode:0">>;
+            false ->
+                <<"nostick:[]\nmnesia:[]\nERL_FLAGS=false\nunknown:[]\n"
+                  "ExitCode:0">>
+        end,
+    InputArgs = Base ++ " -arg1 arg2 arg3",
+    Expected = <<ExpectedMain/binary,ExpectedOutput/binary>>,
+    case HasArg(shebang) of
+        true ->
+            run(Dir, InputArgs, [Expected]);
+        false ->
+            run_with_opts(Dir, [], InputArgs, [Expected])
+    end,
+    {ok,Bin} = escript:create(binary, Sections),
+    {ok,Read} = file:read_file(File),
+    Bin = Read,
+    Normalized = normalize_sections(Sections),
+    {ok,Extracted} = escript:extract(File, []),
+    io:format("Normalized; ~p\n", [Normalized]),
+    io:format("Extracted ; ~p\n", [Extracted]),
+    Normalized = Extracted,
+    ok.
+
+normalize_sections(Sections) ->
+    AtomToTuple =
+        fun(Val) ->
+               if
+                   is_atom(Val) ->
+                       {Val,default};
+                   true ->
+                       Val
+               end
+        end,
+    case
+        lists:map(AtomToTuple,
+                  [ 
+                   {K,V} ||
+                       {K,V} <- Sections,
+                       V =/= undefined
+                  ])
+    of
+        [{shebang,Shebang}|Rest] ->
+            [{shebang,Shebang}|
+             case Rest of
+                 [{comment,Comment}|Rest2] ->
+                     [{comment,Comment}|
+                      case Rest2 of
+                          [{emu_args,EmuArgs},Body] ->
+                              [{emu_args,EmuArgs},Body];
+                          [Body] ->
+                              [{emu_args,undefined},Body]
+                      end];
+                 [{emu_args,EmuArgs},Body] ->
+                     [{comment,undefined},{emu_args,EmuArgs},Body];
+                 [Body] ->
+                     [{comment,undefined},{emu_args,undefined},Body]
+             end];
+        [Body] ->
+            [{shebang,undefined},
+             {comment,undefined},
+             {emu_args,undefined},
+             Body]
+    end.
+
+foldl(Config) when is_list(Config) ->
+    {NewFile,
+     _FileInfo,
+     _EmuArg,
+     _Source,
+     ErlBase,
+     ErlCode,
+     BeamBase,
+     _BeamCode,
+     ArchiveBin} =
+        prepare_creation("foldl", Config),
+    Collect =
+        fun(Name, GetInfo, GetBin, Acc) ->
+               [{Name,GetInfo(),GetBin()}|Acc]
+        end,
+    SourceFile = NewFile ++ ".erl",
+    <<_:1/binary,ErlCode2/binary>> = ErlCode,
+    ok = file:write_file(SourceFile, ErlCode2),
+    {ok,_Mod,BeamCode} = compile:file(SourceFile, [binary,debug_info]),
+    ok = escript:create(SourceFile, [{source,ErlCode}]),
+    {ok,[{".",_,BeamCode2}]} = escript_foldl(Collect, [], SourceFile),
+    {ok,Abstr} = beam_lib:chunks(BeamCode, [abstract_code]),
+    {ok,Abstr2} = beam_lib:chunks(BeamCode2, [abstract_code]),
+    Abstr = Abstr2,
+    ok = escript:create(NewFile, [{beam,BeamCode}]),
+    {ok,[{".",_,BeamCode}]} = escript_foldl(Collect, [], NewFile),
+    ok = escript:create(NewFile, [{archive,ArchiveBin}]),
+    {ok,[{BeamBase,#file_info{},_},{ErlBase,#file_info{},_}]} =
+        escript_foldl(Collect, [], NewFile),
+    ArchiveFiles = [{ErlBase,ErlCode},{BeamBase,BeamCode}],
+    ok = escript:create(NewFile, [{archive,ArchiveFiles,[]}]),
+    {ok,[{BeamBase,_,_},{ErlBase,_,_}]} =
+        escript_foldl(Collect, [], NewFile),
+    ok.
+
+escript_foldl(Fun, Acc, File) ->
+    code:ensure_loaded(zip),
+    case erlang:function_exported(zip, foldl, 3) of
+        true ->
+            emulate_escript_foldl(Fun, Acc, File);
+        false ->
+            escript:foldl(Fun, Acc, File)
+    end.
+
+emulate_escript_foldl(Fun, Acc, File) ->
+    case escript:extract(File, [compile_source]) of
+        {ok,[_Shebang,_Comment,_EmuArgs,Body]} ->
+            case Body of
+                {source,BeamCode} ->
+                    GetInfo =
+                        fun() ->
+                               file:read_file_info(File)
+                        end,
+                    GetBin =
+                        fun() ->
+                               BeamCode
+                        end,
+                    {ok,Fun(".", GetInfo, GetBin, Acc)};
+                {beam,BeamCode} ->
+                    GetInfo =
+                        fun() ->
+                               file:read_file_info(File)
+                        end,
+                    GetBin =
+                        fun() ->
+                               BeamCode
+                        end,
+                    {ok,Fun(".", GetInfo, GetBin, Acc)};
+                {archive,ArchiveBin} ->
+                    zip:foldl(Fun, Acc, {File,ArchiveBin})
+            end;
+        {error,Reason} ->
+            {error,Reason}
+    end.
+
+unicode(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run(Dir,
+        "unicode1",
+        [<<"escript: exception error: an error occurred when evaluating"
+           " an arithmetic expression\n  in operator  '/'/2\n     calle"
+           "d as <<224,170,170>> / <<224,170,170>>\nExitCode:127">>]),
+    run(Dir,
+        "unicode2",
+        [<<"escript: exception error: an error occurred when evaluating"
+           " an arithmetic expression\n  in operator  '/'/2\n     calle"
+           "d as <<\"ª\">> / <<\"ª\">>\nExitCode:127">>]),
+    run(Dir, "unicode3", [<<"ExitCode:0">>]),
+    run(Dir, "unicode4", [<<"ExitCode:0">>]),
+    run(Dir, "unicode5", [<<"ExitCode:0">>]),
+    run(Dir, "unicode6", [<<"ExitCode:0">>]),
+    ok.
+
+overflow(Config) when is_list(Config) ->
+    Data = test_server:lookup_config(data_dir, Config),
+    Dir = filename:absname(Data),
+    run(Dir, "arg_overflow", [<<"ExitCode:0">>]),
+    run(Dir, "linebuf_overflow", [<<"ExitCode:0">>]),
+    ok.
+
+run(Dir, Cmd0, Expected0) ->
+    Expected = iolist_to_binary(expected_output(Expected0, Dir)),
+    Cmd =
+        case os:type() of
+            {win32,_} ->
+                "escript " ++ filename:nativename(Dir) ++ "\\" ++ Cmd0;
+            _ ->
+                Cmd0
+        end,
+    do_run(Dir, Cmd, Expected).
+
+run_with_opts(Dir, Opts, Cmd0, Expected) ->
+    Cmd =
+        case os:type() of
+            {win32,_} ->
+                "escript "
+                ++
+                Opts ++ " " ++ filename:nativename(Dir) ++ "\\" ++ Cmd0;
+            _ ->
+                "escript " ++ Opts ++ " " ++ Dir ++ "/" ++ Cmd0
+        end,
+    do_run(Dir, Cmd, Expected).
+
+do_run(Dir, Cmd, Expected0) ->
+    io:format("Run: ~p\n", [Cmd]),
+    Expected = iolist_to_binary(expected_output(Expected0, Dir)),
+    Env = [{"PATH",Dir ++ ":" ++ os:getenv("PATH")}],
+    Port = open_port({spawn,Cmd}, [exit_status,eof,in,{env,Env}]),
+    Res = get_data(Port, []),
+    receive
+        {Port,{exit_status,ExitCode}} ->
+            case
+                iolist_to_binary([Res,
+                                  "ExitCode:"
+                                  ++
+                                  integer_to_list(ExitCode)])
+            of
+                Expected ->
+                    ok;
+                Actual ->
+                    io:format("Expected: ~p\n", [Expected]),
+                    io:format("Actual:   ~p\n", [Actual]),
+                    test_server:fail()
+            end
+    end.
+
+get_data(Port, SoFar) ->
+    receive
+        {Port,{data,Bytes}} ->
+            get_data(Port, [SoFar|Bytes]);
+        {Port,eof} ->
+            port_close(Port),
+            SoFar
+    end.
+
+expected_output([data_dir|T], Data) ->
+    Slash =
+        case os:type() of
+            {win32,_} ->
+                "\\";
+            _ ->
+                "/"
+        end,
+    [filename:nativename(Data) ++ Slash|expected_output(T, Data)];
+expected_output([H|T], Data) ->
+    [H|expected_output(T, Data)];
+expected_output([], _) ->
+    [];
+expected_output(Bin, _) when is_binary(Bin) ->
+    Bin.
+
+
+

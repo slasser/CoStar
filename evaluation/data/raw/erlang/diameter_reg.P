@@ -1,0 +1,236 @@
+-file("test/lib/diameter/src/base/diameter_reg.erl", 1).
+
+-module(diameter_reg).
+
+-compile({no_auto_import,[{monitor,2}]}).
+
+-behaviour(gen_server).
+
+-export([add/1,add_new/1,del/1,repl/2,match/1,wait/1]).
+
+-export([start_link/0]).
+
+-export([init/1,
+         terminate/2,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         code_change/3]).
+
+-export([pids/0,terms/0]).
+
+-export([state/0,uptime/0]).
+
+-file("test/lib/diameter/src/base/diameter_internal.hrl", 1).
+
+-record(diameter_peer,{host_id,
+                       statusT,
+                       is_dynamic,
+                       expiration,
+                       tls_enabled}).
+
+-record(diameter_realm,{name,
+                        app_id,
+                        local_action,
+                        server_id,
+                        is_dynamic,
+                        expiration}).
+
+-file("test/lib/diameter/src/base/diameter_reg.erl", 55).
+
+-record(state,{id = now(),q = []}).
+
+-spec add(any()) -> true.
+
+add(T) ->
+    call({add,fun ets:insert/2,T,self()}).
+
+-spec add_new(any()) -> boolean().
+
+add_new(T) ->
+    call({add,fun insert_new/2,T,self()}).
+
+-spec repl(any(), any()) -> boolean().
+
+repl(T, U) ->
+    call({repl,T,U,self()}).
+
+-spec del(any()) -> true.
+
+del(T) ->
+    call({del,T,self()}).
+
+-spec match(any()) -> [{term(), pid()}].
+
+match(Pat) ->
+    ets:match_object(diameter_reg, {Pat,'_'}).
+
+wait(Pat) ->
+    call({wait,Pat}).
+
+start_link() ->
+    ServerName = {local,diameter_reg},
+    Options = [{spawn_opt,diameter_lib:spawn_opts(server, [])}],
+    gen_server:start_link(ServerName, diameter_reg, [], Options).
+
+state() ->
+    call(state).
+
+uptime() ->
+    call(uptime).
+
+pids() ->
+    to_list(fun swap/1).
+
+to_list(Fun) ->
+    ets:foldl(fun(T, A) ->
+                     acc(Fun, T, A)
+              end,
+              orddict:new(),
+              diameter_reg).
+
+acc(Fun, {Term,Pid}, Dict) ->
+    append(Fun({Term,Pid}), Dict);
+acc(_, _, Dict) ->
+    Dict.
+
+append({K,V}, Dict) ->
+    orddict:append(K, V, Dict).
+
+id(T) ->
+    T.
+
+terms() ->
+    to_list(fun id/1).
+
+swap({X,Y}) ->
+    {Y,X}.
+
+init(_) ->
+    ets:new(diameter_reg, [bag,named_table]),
+    {ok,#state{}}.
+
+handle_call({add,Fun,Key,Pid}, _, S) ->
+    B = Fun(diameter_reg, {Key,Pid}),
+    monitor(B
+            andalso
+            no_monitor(Pid),
+            Pid),
+    {reply,B,pending(B, S)};
+handle_call({del,Key,Pid}, _, S) ->
+    {reply,ets:delete_object(diameter_reg, {Key,Pid}),S};
+handle_call({repl,T,U,Pid}, _, S) ->
+    MatchSpec = [{{'$1',Pid},[{'=:=','$1',{const,T}}],['$_']}],
+    {reply,repl(ets:select(diameter_reg, MatchSpec), U, Pid),S};
+handle_call({wait,Pat}, From, #state{q = Q} = S) ->
+    case find(Pat) of
+        {ok,L} ->
+            {reply,L,S};
+        false ->
+            {noreply,S#state{q = [{From,Pat}|Q]}}
+    end;
+handle_call(state, _, S) ->
+    {reply,S,S};
+handle_call(uptime, _, #state{id = Time} = S) ->
+    {reply,diameter_lib:now_diff(Time),S};
+handle_call(Req, From, S) ->
+    diameter_lib:warning_report(unexpected,
+                                {diameter_reg,
+                                 element(2,
+                                         element(2,
+                                                 process_info(self(),
+                                                              current_function))),
+                                 [Req,From]}),
+    {reply,nok,S}.
+
+handle_cast(Msg, S) ->
+    diameter_lib:warning_report(unexpected,
+                                {diameter_reg,
+                                 element(2,
+                                         element(2,
+                                                 process_info(self(),
+                                                              current_function))),
+                                 [Msg]}),
+    {noreply,S}.
+
+handle_info({'DOWN',MRef,process,Pid,_}, S) ->
+    ets:delete_object(diameter_reg, {Pid,monitor,MRef}),
+    ets:match_delete(diameter_reg, {'_',Pid}),
+    {noreply,S};
+handle_info(Info, S) ->
+    diameter_lib:warning_report(unexpected,
+                                {diameter_reg,
+                                 element(2,
+                                         element(2,
+                                                 process_info(self(),
+                                                              current_function))),
+                                 [Info]}),
+    {noreply,S}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok,State}.
+
+monitor(true, Pid) ->
+    ets:insert(diameter_reg, {Pid,monitor,monitor(process, Pid)});
+monitor(false, _) ->
+    ok.
+
+no_monitor(Pid) ->
+    [] == ets:match_object(diameter_reg, {Pid,monitor,'_'}).
+
+insert_new(diameter_reg, {Key,_} = T) ->
+    flush(ets:lookup(diameter_reg, Key)),
+    ets:insert_new(diameter_reg, T).
+
+flush(List) ->
+    lists:foreach(fun({_,P} = T) ->
+                         del(is_process_alive(P), T)
+                  end,
+                  List).
+
+del(Alive, T) ->
+    Alive
+    orelse
+    ets:delete_object(diameter_reg, T).
+
+repl([{_,Pid} = M], Key, Pid) ->
+    ets:delete_object(diameter_reg, M),
+    true = ets:insert(diameter_reg, {Key,Pid});
+repl([], _, _) ->
+    false.
+
+pending(true, #state{q = [_|_] = Q} = S) ->
+    S#state{q = q(lists:reverse(Q), [])};
+pending(_, S) ->
+    S.
+
+q([], Q) ->
+    Q;
+q([{From,Pat} = T|Rest], Q) ->
+    case find(Pat) of
+        {ok,L} ->
+            gen_server:reply(From, L),
+            q(Rest, Q);
+        false ->
+            q(Rest, [T|Q])
+    end.
+
+find(Pat) ->
+    try match(Pat) of
+        [] ->
+            false;
+        L ->
+            {ok,L}
+    catch
+        _:_ ->
+            {ok,[]}
+    end.
+
+call(Request) ->
+    gen_server:call(diameter_reg, Request, infinity).
+
+
+

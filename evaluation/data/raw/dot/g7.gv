@@ -1,0 +1,18 @@
+graph G
+{
+        edge [len=2];
+
+        V1 -- V2 [label="20"];
+        V2 -- V3 [label="15"];
+        V3 -- V4 [label="3"];
+        V4 -- V5 [label="17"];
+        V5 -- V6 [label="28"];
+        V6 -- V1 [label="23"];
+
+        V7 -- V1 [label="1"];
+        V7 -- V2 [label="4"];
+        V7 -- V3 [label="9"];
+        V7 -- V4 [label="16"];
+        V7 -- V5 [label="25"];
+        V7 -- V6 [label="36"];
+}

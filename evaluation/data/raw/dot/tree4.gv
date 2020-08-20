@@ -1,0 +1,67 @@
+/* 
+  Huffman Tree DOT graph.
+
+  DOT Reference :  http://www.graphviz.org/doc/info/lang.html
+                   http://en.wikipedia.org/wiki/DOT_language
+  Timestamp     :  1381273715 
+  Phrase        :  'A HASH TABLE IS AN ARRAY THAT HOLDS POINTERS TO ENTRIES INDEXED BY HASH VALUE. SUCH AN ENTRY CAN BE A MEMORY ADDRESS, A DATABASE RECORD HOLDING THE WANTED INFORMATION, A CERTAIN POSITION IN A FILE THAT IS THE START OF THE WANTED RECORD AND SO ON. HASH TABLES ARE USED FOR SEARCHING THAT IS EASY FINDI'
+
+  Generated on http://huffman.ooz.ie/
+*/
+
+digraph G {
+    edge [label=0];
+    graph [ranksep=0];
+    node [shape=record];
+    SPACE [label="{{SPACE|56}|00}"];
+    A [label="{{A|32}|010}"];
+    H [label="{{H|16}|0110}"];
+    I [label="{{I|17}|0111}"];
+    R [label="{{R|17}|1000}"];
+    V [label="{{V|1}|10010000}"];
+    X [label="{{X|1}|10010001}"];
+    DOT [label="{{DOT|2}|1001001}"];
+    Y [label="{{Y|5}|100101}"];
+    F [label="{{F|5}|100110}"];
+    B [label="{{B|5}|100111}"];
+    N [label="{{N|19}|1010}"];
+    S [label="{{S|20}|1011}"];
+    T [label="{{T|23}|1100}"];
+    M [label="{{M|3}|1101000}"];
+    U [label="{{U|3}|1101001}"];
+    C [label="{{C|6}|110101}"];
+    L [label="{{L|6}|110110}"];
+    W [label="{{W|2}|11011100}"];
+    COMA [label="{{COMA|2}|11011101}"];
+    WCOMA [label=4];
+    G [label="{{G|2}|11011110}"];
+    P [label="{{P|2}|11011111}"];
+    GP [label=4];
+    E [label="{{E|26}|1110}"];
+    D [label="{{D|14}|11110}"];
+    O [label="{{O|15}|11111}"];
+    300 -> 121 -> SPACE;
+    65 -> A;
+    33 -> H;
+    179 -> 75 -> 36 -> R;
+    19 -> 9 -> 4 -> 2 -> V;
+    10 -> F;
+    39 -> N;
+    104 -> 49 -> T;
+    26 -> 12 -> 6 -> M;
+    14 -> L;
+    8 -> WCOMA -> W;
+    GP -> G;
+    55 -> E;
+    29 -> D;121 -> 65 -> 33 -> I [label=1];
+    2 -> X [label=1];
+    4 -> DOT [label=1];
+    9 -> Y [label=1];
+    36 -> 19 -> 10 -> B [label=1];
+    75 -> 39 -> S [label=1];
+    6 -> U [label=1];
+    12 -> C [label=1];
+    WCOMA -> COMA [label=1];
+    49 -> 26 -> 14 -> 8 -> GP -> P [label=1];
+    300 -> 179 -> 104 -> 55 -> 29 -> O [label=1];
+}

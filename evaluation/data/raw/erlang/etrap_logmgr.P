@@ -1,0 +1,393 @@
+-file("test/lib/cosTransactions/src/etrap_logmgr.erl", 1).
+
+-module(etrap_logmgr).
+
+-file("test/lib/cosTransactions/src/ETraP_Common.hrl", 1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/include/corba.hrl",
+      1).
+
+-record(orb_ImplDef,{node,module,typename,start = start,args = [[]],pid}).
+
+-record(any,{typecode,value}).
+
+-record(fixed,{digits,scale,value}).
+
+-record('IOP_ServiceContext',{context_id,context_data}).
+
+-record('InvalidName',{'OE_ID' = "IDL:omg.org/CORBA/ORB/InvalidName:1.0"}).
+
+-record('UNKNOWN',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_PARAM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_MEMORY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('IMP_LIMIT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('COMM_FAILURE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('INV_OBJREF',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_PERMISSION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('INTERNAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('MARSHAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INITIALIZE',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_IMPLEMENT',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_TYPECODE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_OPERATION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('NO_RESOURCES',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('NO_RESPONSE',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('PERSIST_STORE',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('BAD_INV_ORDER',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('TRANSIENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('FREE_MEM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_IDENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_FLAG',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INTF_REPOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_CONTEXT',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('OBJ_ADAPTER',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('DATA_CONVERSION',{'OE_ID' = "",
+                           minor = 1163001856,
+                           completion_status}).
+
+-record('OBJECT_NOT_EXIST',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('TRANSACTION_REQUIRED',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('TRANSACTION_ROLLEDBACK',{'OE_ID' = "",
+                                  minor = 1163001856,
+                                  completion_status}).
+
+-record('INVALID_TRANSACTION',{'OE_ID' = "",
+                               minor = 1163001856,
+                               completion_status}).
+
+-record('INV_POLICY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('CODESET_INCOMPATIBLE',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('REBIND',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TIMEOUT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TRANSACTION_UNAVAILABLE',{'OE_ID' = "",
+                                   minor = 1163001856,
+                                   completion_status}).
+
+-record('TRANSACTION_MODE',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('BAD_QOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-file("test/lib/cosTransactions/src/ETraP_Common.hrl", 31).
+
+-file([], 31).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/cosTransactions-1.2.12/include/CosTransactions.hrl",
+      1).
+
+-record('CosTransactions_otid_t',{formatID,bqual_length,tid}).
+
+-record('CosTransactions_TransIdentity',{coord,term,otid}).
+
+-record('CosTransactions_PropagationContext',{timeout,
+                                              current,
+                                              parents,
+                                              implementation_specific_data}).
+
+-record('CosTransactions_HeuristicRollback',{'OE_ID' =
+                                                 "IDL:omg.org/CosTransa"
+                                                 "ctions/HeuristicRollb"
+                                                 "ack:1.0"}).
+
+-record('CosTransactions_HeuristicCommit',{'OE_ID' =
+                                               "IDL:omg.org/CosTransact"
+                                               "ions/HeuristicCommit:1."
+                                               "0"}).
+
+-record('CosTransactions_HeuristicMixed',{'OE_ID' =
+                                              "IDL:omg.org/CosTransacti"
+                                              "ons/HeuristicMixed:1.0"}).
+
+-record('CosTransactions_HeuristicHazard',{'OE_ID' =
+                                               "IDL:omg.org/CosTransact"
+                                               "ions/HeuristicHazard:1."
+                                               "0"}).
+
+-record('CosTransactions_WrongTransaction',{'OE_ID' =
+                                                "IDL:omg.org/CosTransac"
+                                                "tions/WrongTransaction"
+                                                ":1.0"}).
+
+-record('CosTransactions_SubtransactionsUnavailable',{'OE_ID' =
+                                                          "IDL:omg.org/"
+                                                          "CosTransacti"
+                                                          "ons/Subtrans"
+                                                          "actionsUnava"
+                                                          "ilable:1.0"}).
+
+-record('CosTransactions_NotSubtransaction',{'OE_ID' =
+                                                 "IDL:omg.org/CosTransa"
+                                                 "ctions/NotSubtransact"
+                                                 "ion:1.0"}).
+
+-record('CosTransactions_Inactive',{'OE_ID' =
+                                        "IDL:omg.org/CosTransactions/In"
+                                        "active:1.0"}).
+
+-record('CosTransactions_NotPrepared',{'OE_ID' =
+                                           "IDL:omg.org/CosTransactions"
+                                           "/NotPrepared:1.0"}).
+
+-record('CosTransactions_NoTransaction',{'OE_ID' =
+                                             "IDL:omg.org/CosTransactio"
+                                             "ns/NoTransaction:1.0"}).
+
+-record('CosTransactions_InvalidControl',{'OE_ID' =
+                                              "IDL:omg.org/CosTransacti"
+                                              "ons/InvalidControl:1.0"}).
+
+-record('CosTransactions_Unavailable',{'OE_ID' =
+                                           "IDL:omg.org/CosTransactions"
+                                           "/Unavailable:1.0"}).
+
+-record('CosTransactions_SynchronizationUnavailable',{'OE_ID' =
+                                                          "IDL:omg.org/"
+                                                          "CosTransacti"
+                                                          "ons/Synchron"
+                                                          "izationUnava"
+                                                          "ilable:1.0"}).
+
+-file("test/lib/cosTransactions/src/ETraP_Common.hrl", 32).
+
+-file([], 32).
+
+-record(context,{terminator,
+                 etrap,
+                 recCoord,
+                 alarm = infinity,
+                 timeout = infinity,
+                 parents = [],
+                 trid,
+                 typeCheck,
+                 sub_tr_allowed,
+                 hashMax,
+                 local,
+                 rollback = false,
+                 reportH,
+                 maxRetries,
+                 comFailWait}).
+
+-file("test/lib/cosTransactions/src/etrap_logmgr.erl", 31).
+
+-export([start/1,stop/1,log_safe/2,log_lazy/2,get_next/2]).
+
+start(LogName) ->
+    case
+        catch
+            disk_log:open([{name,LogName},
+                           {file,LogName},
+                           {type,halt},
+                           {size,infinity}])
+    of
+        {ok,LogName} ->
+            ok;
+        {error,Reason} ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInitiating internal log f"
+                                   "ailed: ~p=========================="
+                                   "=================~n",
+                                   [Reason]),
+            exit({error,Reason});
+        {repaired,LogName,{recovered,_Rec},{badbytes,_Bad}} ->
+            ok;
+        Other ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInitiating internal log f"
+                                   "ailed: ~p=========================="
+                                   "=================~n",
+                                   [Other]),
+            exit({error,Other})
+    end.
+
+stop(LogName) ->
+    case catch disk_log:close(LogName) of
+        ok ->
+            ok;
+        {error,Reason} ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nStopping internal log fai"
+                                   "led: ~p============================"
+                                   "===============~n",
+                                   [Reason]),
+            {error,Reason};
+        Other ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nStopping internal log fai"
+                                   "led: ~p============================"
+                                   "===============~n",
+                                   [Other]),
+            {error,Other}
+    end.
+
+log_safe(dummy, _) ->
+    ok;
+log_safe(LogName, LogRecord) ->
+    case write_safe(LogName, LogRecord) of
+        ok ->
+            ok;
+        _ ->
+            case catch start(LogName) of
+                ok ->
+                    write_safe(LogName, LogRecord);
+                {'EXIT',Reason} ->
+                    {error,Reason}
+            end
+    end.
+
+write_safe(LogName, LogRecord) ->
+    case catch disk_log:log(LogName, LogRecord) of
+        ok ->
+            case catch disk_log:sync(LogName) of
+                ok ->
+                    ok;
+                {error,Reason} ->
+                    error_logger:error_msg("============ CosTransaction"
+                                           "s ==============~nInternal "
+                                           "log write failed: ~p   ~p=="
+                                           "==========================="
+                                           "==============~n",
+                                           [Reason,LogName]),
+                    {error,Reason};
+                Other ->
+                    error_logger:error_msg("============ CosTransaction"
+                                           "s ==============~nInternal "
+                                           "log write failed: ~p   ~p=="
+                                           "==========================="
+                                           "==============~n",
+                                           [Other,LogName]),
+                    {error,Other}
+            end;
+        {error,Reason} ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInternal log write failed"
+                                   ": ~p   ~p=========================="
+                                   "=================~n",
+                                   [Reason,LogName]),
+            {error,Reason};
+        Other ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInternal log write failed"
+                                   ": ~p   ~p=========================="
+                                   "=================~n",
+                                   [Other,LogName]),
+            {error,Other}
+    end.
+
+log_lazy(dummy, _LogRecord) ->
+    ok;
+log_lazy(LogName, LogRecord) ->
+    case write_lazy(LogName, LogRecord) of
+        ok ->
+            ok;
+        _ ->
+            case catch start(LogName) of
+                ok ->
+                    write_lazy(LogName, LogRecord);
+                {'EXIT',Reason} ->
+                    {error,Reason}
+            end
+    end.
+
+write_lazy(LogName, LogRecord) ->
+    case catch disk_log:log(LogName, LogRecord) of
+        ok ->
+            ok;
+        {error,Reason} ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInternal log write failed"
+                                   ": ~p==============================="
+                                   "============~n",
+                                   [Reason]),
+            {error,Reason};
+        Other ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInternal log write failed"
+                                   ": ~p==============================="
+                                   "============~n",
+                                   [Other]),
+            {error,Other}
+    end.
+
+get_next(LogName, Cursor) ->
+    case catch disk_log:chunk(LogName, Cursor, 1) of
+        {NewCursor,[Data]} ->
+            {Data,NewCursor};
+        eof ->
+            eof;
+        {error,Reason} ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInternal log '~p' read fa"
+                                   "iled: ~p==========================="
+                                   "================~n",
+                                   [LogName,Reason]),
+            exit({error,Reason});
+        _Other ->
+            error_logger:error_msg("============ CosTransactions ======"
+                                   "========~nInternal log '~p' read fa"
+                                   "iled: 'log_corrupt'================"
+                                   "===========================~n",
+                                   [LogName]),
+            exit({error,"log_corrupt"})
+    end.
+
+
+

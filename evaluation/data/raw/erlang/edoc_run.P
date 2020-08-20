@@ -1,0 +1,138 @@
+-file("test/lib/edoc/src/edoc_run.erl", 1).
+
+-module(edoc_run).
+
+-export([file/1,application/1,packages/1,files/1,toc/1]).
+
+-compile({no_auto_import,[{error,1}]}).
+
+-import(edoc_report, [report/2,error/1]).
+
+application(Args) ->
+    F = fun() ->
+               case parse_args(Args) of
+                   [App] ->
+                       edoc:application(App);
+                   [App,Opts] ->
+                       edoc:application(App, Opts);
+                   [App,Dir,Opts] ->
+                       edoc:application(App, Dir, Opts);
+                   _ ->
+                       invalid_args("edoc_run:application/1", Args)
+               end
+        end,
+    run(F).
+
+files(Args) ->
+    F = fun() ->
+               case parse_args(Args) of
+                   [Files] ->
+                       edoc:files(Files);
+                   [Files,Opts] ->
+                       edoc:files(Files, Opts);
+                   _ ->
+                       invalid_args("edoc_run:files/1", Args)
+               end
+        end,
+    run(F).
+
+packages(Args) ->
+    F = fun() ->
+               case parse_args(Args) of
+                   [Packages] ->
+                       edoc:packages(Packages);
+                   [Packages,Opts] ->
+                       edoc:packages(Packages, Opts);
+                   _ ->
+                       invalid_args("edoc_run:packages/1", Args)
+               end
+        end,
+    run(F).
+
+toc(Args) ->
+    F = fun() ->
+               case parse_args(Args) of
+                   [Dir,Paths] ->
+                       edoc:toc(Dir, Paths);
+                   [Dir,Paths,Opts] ->
+                       edoc:toc(Dir, Paths, Opts);
+                   _ ->
+                       invalid_args("edoc_run:toc/1", Args)
+               end
+        end,
+    run(F).
+
+file(Args) ->
+    F = fun() ->
+               case parse_args(Args) of
+                   [File] ->
+                       edoc:file(File, []);
+                   [File,Opts] ->
+                       edoc:file(File, Opts);
+                   _ ->
+                       invalid_args("edoc_run:file/1", Args)
+               end
+        end,
+    run(F).
+
+-spec invalid_args(string(), list()) -> no_return().
+
+invalid_args(Where, Args) ->
+    report("invalid arguments to ~ts: ~w.", [Where,Args]),
+    shutdown_error().
+
+run(F) ->
+    wait_init(),
+    case catch {ok,F()} of
+        {ok,_} ->
+            shutdown_ok();
+        {'EXIT',E} ->
+            report("edoc terminated abnormally: ~P.", [E,10]),
+            shutdown_error();
+        Thrown ->
+            report("internal error: throw without catch in edoc: ~P.",
+                   [Thrown,15]),
+            shutdown_error()
+    end.
+
+wait_init() ->
+    case whereis(code_server) of
+        undefined ->
+            erlang:yield(),
+            wait_init();
+        _ ->
+            ok
+    end.
+
+shutdown_ok() ->
+    init:stop().
+
+shutdown_error() ->
+    receive after 1000 -> ok end,
+    halt(1).
+
+parse_args([A|As]) when is_atom(A) ->
+    [parse_arg(atom_to_list(A))|parse_args(As)];
+parse_args([A|As]) ->
+    [parse_arg(A)|parse_args(As)];
+parse_args([]) ->
+    [].
+
+parse_arg(A) ->
+    case catch {ok,edoc_lib:parse_expr(A, 1)} of
+        {ok,Expr} ->
+            case catch erl_parse:normalise(Expr) of
+                {'EXIT',_} ->
+                    report("bad argument: '~ts':", [A]),
+                    exit(error);
+                Term ->
+                    Term
+            end;
+        {error,_,D} ->
+            report("error parsing argument '~ts'", [A]),
+            error(D),
+            exit(error)
+    end.
+
+
+

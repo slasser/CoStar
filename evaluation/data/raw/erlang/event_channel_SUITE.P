@@ -1,0 +1,1623 @@
+-file("test/lib/cosEvent/test/event_channel_SUITE.erl", 1).
+
+-module(event_channel_SUITE).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/cosEvent/test/event_channel_SUITE.erl", 26).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/include/corba.hrl",
+      1).
+
+-record(orb_ImplDef,{node,module,typename,start = start,args = [[]],pid}).
+
+-record(any,{typecode,value}).
+
+-record(fixed,{digits,scale,value}).
+
+-record('IOP_ServiceContext',{context_id,context_data}).
+
+-record('InvalidName',{'OE_ID' = "IDL:omg.org/CORBA/ORB/InvalidName:1.0"}).
+
+-record('UNKNOWN',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_PARAM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_MEMORY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('IMP_LIMIT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('COMM_FAILURE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('INV_OBJREF',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_PERMISSION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('INTERNAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('MARSHAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INITIALIZE',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_IMPLEMENT',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_TYPECODE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_OPERATION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('NO_RESOURCES',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('NO_RESPONSE',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('PERSIST_STORE',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('BAD_INV_ORDER',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('TRANSIENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('FREE_MEM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_IDENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_FLAG',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INTF_REPOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_CONTEXT',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('OBJ_ADAPTER',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('DATA_CONVERSION',{'OE_ID' = "",
+                           minor = 1163001856,
+                           completion_status}).
+
+-record('OBJECT_NOT_EXIST',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('TRANSACTION_REQUIRED',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('TRANSACTION_ROLLEDBACK',{'OE_ID' = "",
+                                  minor = 1163001856,
+                                  completion_status}).
+
+-record('INVALID_TRANSACTION',{'OE_ID' = "",
+                               minor = 1163001856,
+                               completion_status}).
+
+-record('INV_POLICY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('CODESET_INCOMPATIBLE',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('REBIND',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TIMEOUT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TRANSACTION_UNAVAILABLE',{'OE_ID' = "",
+                                   minor = 1163001856,
+                                   completion_status}).
+
+-record('TRANSACTION_MODE',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('BAD_QOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-file("test/lib/cosEvent/test/event_channel_SUITE.erl", 27).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/COSS/CosNaming/CosNaming.hrl",
+      1).
+
+-record('CosNaming_NameComponent',{id,kind}).
+
+-record('CosNaming_Binding',{binding_name,binding_type}).
+
+-file("test/lib/cosEvent/test/event_channel_SUITE.erl", 28).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/src/orber_iiop.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/include/corba.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/src/orber_iiop.hrl",
+      29).
+
+-file([], 29).
+
+-record(giop_message,{magic,
+                      giop_version,
+                      byte_order,
+                      fragments = false,
+                      message_type,
+                      message_size,
+                      message}).
+
+-record(request_header,{service_context,
+                        request_id,
+                        response_expected,
+                        object_key,
+                        operation,
+                        requesting_principal}).
+
+-record(reply_header,{service_context,request_id,reply_status}).
+
+-record(cancel_request_header,{request_id}).
+
+-record(locate_request_header,{request_id,object_key}).
+
+-record(locate_reply_header,{request_id,locate_status}).
+
+-record(profile_body,{iiop_version,host,port,object_key}).
+
+-record(version,{major,minor}).
+
+-record(fragment_header,{request_id}).
+
+-record('IOP_IOR',{type_id,profiles}).
+
+-record('IOP_TaggedProfile',{tag,profile_data}).
+
+-record('IIOP_ProfileBody_1_0',{iiop_version,host,port,object_key}).
+
+-record('IIOP_ProfileBody_1_1',{iiop_version,
+                                host,
+                                port,
+                                object_key,
+                                components}).
+
+-record('GIOP_Version',{major,minor}).
+
+-record('IIOP_Version',{major,minor}).
+
+-record('SSLIOP_SSL',{target_supports,target_requires,port}).
+
+-record('IOP_TaggedComponent',{tag,component_data}).
+
+-record('GIOP_TargetAddress',{label,value}).
+
+-record('GIOP_IORAddressingInfo',{selected_profile_index,ior}).
+
+-record('ALTERNATE_IIOP_ADDRESS',{'HostID','Port'}).
+
+-record('CONV_FRAME_CodeSetComponent',{native_code_set,
+                                       conversion_code_sets}).
+
+-record('CONV_FRAME_CodeSetComponentInfo',{'ForCharData','ForWcharData'}).
+
+-record('GIOP_FragmentHeader_1_2',{request_id}).
+
+-record('FT_TagFTGroupTaggedComponent',{version =
+                                            #'GIOP_Version'{major = 1,
+                                                            minor = 0},
+                                        ft_domain_id,
+                                        object_group_id,
+                                        object_group_ref_version}).
+
+-record('FT_TagFTPrimaryTaggedComponent',{primary}).
+
+-record('FT_FTGroupVersionServiceContext',{object_group_ref_version}).
+
+-record('FT_FTRequestServiceContext',{client_id,
+                                      retention_id,
+                                      expiration_time}).
+
+-record('FT_TagFTHeartbeatEnabledTaggedComponent',{heartbeat_enabled}).
+
+-record('CSI_AuthorizationElement',{the_type = 1330446336 bor 1,
+                                    the_element = []}).
+
+-record('CSI_IdentityToken',{label,value}).
+
+-record('CSI_EstablishContext',{client_context_id,
+                                authorization_token,
+                                identity_token,
+                                client_authentication_token}).
+
+-record('CSI_CompleteEstablishContext',{client_context_id,
+                                        context_stateful,
+                                        final_context_token}).
+
+-record('CSI_ContextError',{client_context_id,
+                            major_status,
+                            minor_status,
+                            error_token}).
+
+-record('CSI_MessageInContext',{client_context_id,discard_context}).
+
+-record('CSI_SASContextBody',{label,value}).
+
+-record('GSSUP_InitialContextToken',{username,password,target_name}).
+
+-record('GSSUP_ErrorToken',{error_code}).
+
+-record('CSIIOP_ServiceConfiguration',{syntax,name}).
+
+-record('CSIIOP_AS_ContextSec',{target_supports = 0,
+                                target_requires = 0,
+                                client_authentication_mech,
+                                target_name}).
+
+-record('CSIIOP_SAS_ContextSec',{target_supports = 0,
+                                 target_requires = 0,
+                                 privilege_authorities,
+                                 supported_naming_mechanisms,
+                                 supported_identity_types}).
+
+-record('CSIIOP_CompoundSecMech',{target_requires = 0,
+                                  transport_mech,
+                                  as_context_mech,
+                                  sas_context_mech}).
+
+-record('CSIIOP_CompoundSecMechList',{stateful = false,mechanism_list}).
+
+-record('CSIIOP_TransportAddress',{host_name,port}).
+
+-record('CSIIOP_TLS_SEC_TRANS',{target_supports,
+                                target_requires,
+                                addresses}).
+
+-record('CSIIOP_SECIOP_SEC_TRANS',{target_supports = 0,
+                                   target_requires = 0,
+                                   mech_oid,
+                                   target_name,
+                                   addresses}).
+
+-record('CONV_FRAME_CodeSetContext',{char_data,wchar_data}).
+
+-record('IIOP_ListenPoint',{host,port}).
+
+-record('IIOP_BiDirIIOPServiceContext',{listen_points}).
+
+-record(host_data,{protocol = normal,
+                   ssl_data,
+                   version,
+                   csiv2_mech,
+                   csiv2_statefull = false,
+                   csiv2_addresses = [],
+                   charset = 65537,
+                   wcharset = 65801,
+                   ft_heartbeat = false,
+                   ft_primary = false,
+                   ft_domain,
+                   ft_group,
+                   ft_ref_version}).
+
+-record(giop_env,{interceptors,
+                  type,
+                  version,
+                  bytes,
+                  ctx = [],
+                  request_id,
+                  op,
+                  parameters = [],
+                  tc,
+                  response_expected,
+                  objkey,
+                  reply_status,
+                  result,
+                  flags,
+                  host,
+                  iiop_port,
+                  iiop_ssl_port,
+                  domain,
+                  partial_security}).
+
+-file("test/lib/cosEvent/test/event_channel_SUITE.erl", 29).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_group/2,
+         end_per_group/2,
+         event_objects_api/1,
+         events_api/1,
+         events_sync_api/1,
+         cases/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_testcase/2,
+         end_per_testcase/2,
+         app_test/1]).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    cases().
+
+groups() ->
+    [].
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+cases() ->
+    [events_api,events_sync_api,event_objects_api,app_test].
+
+init_per_testcase(_Case, Config) ->
+    Dog = test_server:timetrap(test_server:minutes(5)),
+    [{watchdog,Dog}|Config].
+
+end_per_testcase(_Case, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog),
+    ok.
+
+init_per_suite(Config) when is_list(Config) ->
+    Path = code:which(event_channel_SUITE),
+    code:add_pathz(filename:join(filename:dirname(Path), "idl_output")),
+    mnesia:delete_schema([node()]),
+    mnesia:create_schema([node()]),
+    orber:install([node()]),
+    application:start(mnesia),
+    application:start(orber),
+    cosEventApp:install(),
+    cosEventApp:start(),
+    oe_event_test_server:oe_register(),
+    Config.
+
+end_per_suite(Config) when is_list(Config) ->
+    oe_event_test_server:oe_unregister(),
+    cosEventApp:stop(),
+    cosEventApp:uninstall(),
+    application:stop(orber),
+    application:stop(mnesia),
+    mnesia:delete_schema([node()]),
+    Path = code:which(event_channel_SUITE),
+    code:del_path(filename:join(filename:dirname(Path), "idl_output")),
+    Config.
+
+app_test(doc) ->
+    [];
+app_test(suite) ->
+    [];
+app_test(_Config) ->
+    ok = test_server:app_test(cosEvent),
+    ok.
+
+event_objects_api(doc) ->
+    ["Testing the CosEvent API to setup a complete service",""];
+event_objects_api(suite) ->
+    [];
+event_objects_api(_Config) ->
+    Ch =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        cosEventApp:start_channel([{typecheck,true},
+                                                   {pull_interval,300}])),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    AC =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_EventChannel':for_consumers(Ch)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    AS =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_EventChannel':for_suppliers(Ch)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPushS =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_ConsumerAdmin':obtain_push_supplier(AC)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPullS =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_ConsumerAdmin':obtain_pull_supplier(AC)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPushC =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_SupplierAdmin':obtain_push_consumer(AS)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPullC =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_SupplierAdmin':obtain_pull_consumer(AS)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PushC =
+        fun() ->
+               AcTuAlReS = (catch event_test_PushC:oe_create([])),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PullC =
+        fun() ->
+               AcTuAlReS = (catch event_test_PullC:oe_create(PPullC)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PushS =
+        fun() ->
+               AcTuAlReS = (catch event_test_PushS:oe_create(PPushC)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PullS =
+        fun() ->
+               AcTuAlReS = (catch event_test_PullS:oe_create([])),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    NIL = corba:create_nil_objref(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushSupplier':connect_push_consumer(PPushS,
+                                                                                   NIL)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'BAD_PARAM',_,_,_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushSupplier':connect_push_consumer(PPushS,
+                                                                                   PullS)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'BAD_PARAM',_,_,_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushSupplier':connect_push_consumer(PPushS,
+                                                                                   PushC)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushSupplier':connect_push_consumer(PPushS,
+                                                                                   PushC)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'CosEventChannelAdmin_AlreadyConnected',_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullSupplier':connect_pull_consumer(PPullS,
+                                                                                   NIL)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullSupplier':connect_pull_consumer(PPullS,
+                                                                                   PullS)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'BAD_PARAM',_,_,_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullSupplier':connect_pull_consumer(PPullS,
+                                                                                   PullC)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullSupplier':connect_pull_consumer(PPullS,
+                                                                                   PullC)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'CosEventChannelAdmin_AlreadyConnected',_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushConsumer':connect_push_supplier(PPushC,
+                                                                                   NIL)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushConsumer':connect_push_supplier(PPushC,
+                                                                                   PullS)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'BAD_PARAM',_,_,_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushConsumer':connect_push_supplier(PPushC,
+                                                                                   PushS)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushConsumer':connect_push_supplier(PPushC,
+                                                                                   PushS)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'CosEventChannelAdmin_AlreadyConnected',_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullConsumer':connect_pull_supplier(PPullC,
+                                                                                   NIL)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'BAD_PARAM',_,_,_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullConsumer':connect_pull_supplier(PPullC,
+                                                                                   PushS)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'BAD_PARAM',_,_,_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullConsumer':connect_pull_supplier(PPullC,
+                                                                                   PullS)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullConsumer':connect_pull_supplier(PPullC,
+                                                                                   PullS)),
+           case AcTuAlReS of
+               {'EXCEPTION',{'CosEventChannelAdmin_AlreadyConnected',_}} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    catch corba:dispose(AC),
+    timer:sleep(2000),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(AC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PPushS)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PPullS)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(Ch)),
+           case AcTuAlReS of
+               false ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(AS)),
+           case AcTuAlReS of
+               false ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PPullC)),
+           case AcTuAlReS of
+               false ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PPushC)),
+           case AcTuAlReS of
+               false ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    catch corba:dispose(PPullC),
+    timer:sleep(2000),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(AS)),
+           case AcTuAlReS of
+               false ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PPullC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    catch corba:dispose(Ch),
+    timer:sleep(2000),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(Ch)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(AS)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PPullC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PPushC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    timer:sleep(2000),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PushC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PullC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PushS)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PullS)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+events_api(doc) ->
+    ["Testing the CosEvent API for sending events asynchronous",""];
+events_api(suite) ->
+    [];
+events_api(_Config) ->
+    Ch =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        cosEventApp:start_channel([{typecheck,true},
+                                                   {pull_interval,2},
+                                                   {blocking,false}])),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    event_sender(Ch).
+
+events_sync_api(doc) ->
+    ["Testing the CosEvent API for sending events synchronous",""];
+events_sync_api(suite) ->
+    [];
+events_sync_api(_Config) ->
+    Ch =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        cosEventApp:start_channel([{typecheck,true},
+                                                   {pull_interval,2},
+                                                   {blocking,true}])),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    event_sender(Ch).
+
+event_sender(Ch) ->
+    Event1 = #any{typecode = tk_long,value = 1},
+    Event2 = #any{typecode = tk_long,value = 2},
+    Event3 = #any{typecode = tk_long,value = 3},
+    Event4 = #any{typecode = tk_long,value = 4},
+    Event5 = #any{typecode = tk_long,value = 5},
+    Event6 = #any{typecode = tk_long,value = 6},
+    AC =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_EventChannel':for_consumers(Ch)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    AS =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_EventChannel':for_suppliers(Ch)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPushS =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_ConsumerAdmin':obtain_push_supplier(AC)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPullS =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_ConsumerAdmin':obtain_pull_supplier(AC)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPushC =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_SupplierAdmin':obtain_push_consumer(AS)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PPullC =
+        fun() ->
+               AcTuAlReS =
+                   (catch
+                        'CosEventChannelAdmin_SupplierAdmin':obtain_pull_consumer(AS)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PushC =
+        fun() ->
+               AcTuAlReS = (catch event_test_PushC:oe_create([])),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PullC =
+        fun() ->
+               AcTuAlReS = (catch event_test_PullC:oe_create(PPullS)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PushS =
+        fun() ->
+               AcTuAlReS = (catch event_test_PushS:oe_create(PPushC)),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    PullS =
+        fun() ->
+               AcTuAlReS = (catch event_test_PullS:oe_create([])),
+               case AcTuAlReS of
+                   {_,key,_,_,_,_} ->
+                       io:format("------ CORRECT RESULT ------~n~p~n",
+                                 [AcTuAlReS]),
+                       AcTuAlReS;
+                   _ ->
+                       io:format("###### ERROR ERROR ######~n~p~n",
+                                 [AcTuAlReS]),
+                       exit(AcTuAlReS)
+               end
+        end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushSupplier':connect_push_consumer(PPushS,
+                                                                                   PushC)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullSupplier':connect_pull_consumer(PPullS,
+                                                                                   PullC)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPushConsumer':connect_push_supplier(PPushC,
+                                                                                   PushS)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS =
+               (catch
+                    'CosEventChannelAdmin_ProxyPullConsumer':connect_pull_supplier(PPullC,
+                                                                                   PullS)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_try_pull(PullC)),
+           case AcTuAlReS of
+               {_,false} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PushC:get_data(PushC)),
+           case AcTuAlReS of
+               [] ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PushS:do_push(PushS, Event1)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PushS:do_push(PushS, Event2)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PushS:do_push(PushS, Event3)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    timer:sleep(2000),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_try_pull(PullC)),
+           case AcTuAlReS of
+               {Event1,true} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_try_pull(PullC)),
+           case AcTuAlReS of
+               {Event2,true} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_try_pull(PullC)),
+           case AcTuAlReS of
+               {Event3,true} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_try_pull(PullC)),
+           case AcTuAlReS of
+               {_,false} ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PushC:get_data(PushC)),
+           case AcTuAlReS of
+               [Event1,Event2,Event3] ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullS:add_event(PullS, Event4)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullS:add_event(PullS, Event5)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullS:add_event(PullS, Event6)),
+           case AcTuAlReS of
+               ok ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_pull(PullC)),
+           case AcTuAlReS of
+               Event4 ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_pull(PullC)),
+           case AcTuAlReS of
+               Event5 ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch event_test_PullC:do_pull(PullC)),
+           case AcTuAlReS of
+               Event6 ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    timer:sleep(2000),
+    fun() ->
+           AcTuAlReS = (catch event_test_PushC:get_data(PushC)),
+           case AcTuAlReS of
+               [Event4,Event5,Event6] ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    catch corba:dispose(Ch),
+    timer:sleep(2000),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PushC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PullC)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PushS)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    fun() ->
+           AcTuAlReS = (catch corba_object:non_existent(PullS)),
+           case AcTuAlReS of
+               true ->
+                   io:format("------ CORRECT RESULT ------~n~p~n",
+                             [AcTuAlReS]),
+                   AcTuAlReS;
+               _ ->
+                   io:format("###### ERROR ERROR ######~n~p~n",
+                             [AcTuAlReS]),
+                   exit(AcTuAlReS)
+           end
+    end(),
+    ok.
+
+
+

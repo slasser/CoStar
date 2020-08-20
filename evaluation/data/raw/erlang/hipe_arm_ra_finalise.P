@@ -1,0 +1,368 @@
+-file("test/lib/hipe/arm/hipe_arm_ra_finalise.erl", 1).
+
+-module(hipe_arm_ra_finalise).
+
+-export([finalise/3]).
+
+-file("test/lib/hipe/arm/hipe_arm.hrl", 1).
+
+-record(arm_mfa,{m :: undefined | atom(),
+                 f :: undefined | atom(),
+                 a :: undefined | arity()}).
+
+-record(arm_prim,{prim}).
+
+-record(arm_sdesc,{exnlab,fsize,arity :: undefined | arity(),live}).
+
+-record(arm_temp,{reg,type,allocatable}).
+
+-record(am2,{src,sign,offset}).
+
+-record(am3,{src,sign,offset}).
+
+-record(alu,{aluop,s,dst,src,am1}).
+
+-record(b_fun,{'fun',linkage}).
+
+-record(b_label,{'cond',label}).
+
+-record(bl,{'fun',sdesc,linkage}).
+
+-record(blx,{src,sdesc}).
+
+-record(cmp,{cmpop,src,am1}).
+
+-record(comment,{term}).
+
+-record(label,{label}).
+
+-record(load,{ldop,dst,am2}).
+
+-record(ldrsb,{dst,am3}).
+
+-record(move,{movop,s,dst,am1}).
+
+-record(pseudo_bc,{'cond',true_label,false_label,pred}).
+
+-record(pseudo_blr,{}).
+
+-record(pseudo_bx,{src}).
+
+-record(pseudo_call,{funv,sdesc,contlab,linkage}).
+
+-record(pseudo_call_prepare,{nrstkargs}).
+
+-record(pseudo_li,{dst,imm,label}).
+
+-record(pseudo_move,{dst,src}).
+
+-record(pseudo_switch,{jtab,index,labels}).
+
+-record(pseudo_tailcall,{funv,arity,stkargs,linkage}).
+
+-record(pseudo_tailcall_prepare,{}).
+
+-record(smull,{dstlo,dsthi,src1,src2}).
+
+-record(store,{stop,src,am2}).
+
+-file("test/lib/hipe/arm/../misc/hipe_consttab.hrl", 1).
+
+-type ct_alignment() :: 4 | 8.
+
+-type hipe_constlbl() :: non_neg_integer().
+
+-type hipe_consttab() :: {dict(), [hipe_constlbl()], hipe_constlbl()}.
+
+-file("test/lib/hipe/arm/hipe_arm.hrl", 119).
+
+-file([], 119).
+
+-record(defun,{mfa :: undefined | mfa(),
+               formals,
+               code,
+               data :: undefined | hipe_consttab(),
+               isclosure :: undefined | boolean(),
+               isleaf :: undefined | boolean(),
+               var_range,
+               label_range}).
+
+-file("test/lib/hipe/arm/hipe_arm_ra_finalise.erl", 24).
+
+finalise(Defun, TempMap, _FPMap0 = []) ->
+    Code = hipe_arm:defun_code(Defun),
+    {_,SpillLimit} = hipe_arm:defun_var_range(Defun),
+    Map = mk_ra_map(TempMap, SpillLimit),
+    NewCode = ra_code(Code, Map, []),
+    Defun#defun{code = NewCode}.
+
+ra_code([I|Insns], Map, Accum) ->
+    ra_code(Insns, Map, [ra_insn(I, Map)|Accum]);
+ra_code([], _Map, Accum) ->
+    lists:reverse(Accum).
+
+ra_insn(I, Map) ->
+    case I of
+        #alu{} ->
+            ra_alu(I, Map);
+        #cmp{} ->
+            ra_cmp(I, Map);
+        #load{} ->
+            ra_load(I, Map);
+        #ldrsb{} ->
+            ra_ldrsb(I, Map);
+        #move{} ->
+            ra_move(I, Map);
+        #pseudo_call{} ->
+            ra_pseudo_call(I, Map);
+        #pseudo_li{} ->
+            ra_pseudo_li(I, Map);
+        #pseudo_move{} ->
+            ra_pseudo_move(I, Map);
+        #pseudo_switch{} ->
+            ra_pseudo_switch(I, Map);
+        #pseudo_tailcall{} ->
+            ra_pseudo_tailcall(I, Map);
+        #smull{} ->
+            ra_smull(I, Map);
+        #store{} ->
+            ra_store(I, Map);
+        _ ->
+            I
+    end.
+
+ra_alu(I = #alu{dst = Dst,src = Src,am1 = Am1}, Map) ->
+    NewDst = ra_temp(Dst, Map),
+    NewSrc = ra_temp(Src, Map),
+    NewAm1 = ra_am1(Am1, Map),
+    I#alu{dst = NewDst,src = NewSrc,am1 = NewAm1}.
+
+ra_cmp(I = #cmp{src = Src,am1 = Am1}, Map) ->
+    NewSrc = ra_temp(Src, Map),
+    NewAm1 = ra_am1(Am1, Map),
+    I#cmp{src = NewSrc,am1 = NewAm1}.
+
+ra_load(I = #load{dst = Dst,am2 = Am2}, Map) ->
+    NewDst = ra_temp(Dst, Map),
+    NewAm2 = ra_am2(Am2, Map),
+    I#load{dst = NewDst,am2 = NewAm2}.
+
+ra_ldrsb(I = #ldrsb{dst = Dst,am3 = Am3}, Map) ->
+    NewDst = ra_temp(Dst, Map),
+    NewAm3 = ra_am3(Am3, Map),
+    I#ldrsb{dst = NewDst,am3 = NewAm3}.
+
+ra_move(I = #move{dst = Dst,am1 = Am1}, Map) ->
+    NewDst = ra_temp(Dst, Map),
+    NewAm1 = ra_am1(Am1, Map),
+    I#move{dst = NewDst,am1 = NewAm1}.
+
+ra_pseudo_call(I = #pseudo_call{funv = FunV}, Map) ->
+    NewFunV = ra_funv(FunV, Map),
+    I#pseudo_call{funv = NewFunV}.
+
+ra_pseudo_li(I = #pseudo_li{dst = Dst}, Map) ->
+    NewDst = ra_temp(Dst, Map),
+    I#pseudo_li{dst = NewDst}.
+
+ra_pseudo_move(I = #pseudo_move{dst = Dst,src = Src}, Map) ->
+    NewDst = ra_temp(Dst, Map),
+    NewSrc = ra_temp(Src, Map),
+    I#pseudo_move{dst = NewDst,src = NewSrc}.
+
+ra_pseudo_switch(I = #pseudo_switch{jtab = JTab,index = Index}, Map) ->
+    NewJTab = ra_temp(JTab, Map),
+    NewIndex = ra_temp(Index, Map),
+    I#pseudo_switch{jtab = NewJTab,index = NewIndex}.
+
+ra_pseudo_tailcall(I = #pseudo_tailcall{funv = FunV,stkargs = StkArgs},
+                   Map) ->
+    NewFunV = ra_funv(FunV, Map),
+    NewStkArgs = ra_args(StkArgs, Map),
+    I#pseudo_tailcall{funv = NewFunV,stkargs = NewStkArgs}.
+
+ra_smull(I = #smull{dstlo = DstLo,dsthi = DstHi,src1 = Src1,src2 = Src2},
+         Map) ->
+    NewDstLo = ra_temp(DstLo, Map),
+    NewDstHi = ra_temp(DstHi, Map),
+    NewSrc1 = ra_temp(Src1, Map),
+    NewSrc2 = ra_temp(Src2, Map),
+    I#smull{dstlo = NewDstLo,
+            dsthi = NewDstHi,
+            src1 = NewSrc1,
+            src2 = NewSrc2}.
+
+ra_store(I = #store{src = Src,am2 = Am2}, Map) ->
+    NewSrc = ra_temp(Src, Map),
+    NewAm2 = ra_am2(Am2, Map),
+    I#store{src = NewSrc,am2 = NewAm2}.
+
+ra_args([Arg|Args], Map) ->
+    [ra_temp_or_imm(Arg, Map)|ra_args(Args, Map)];
+ra_args([], _) ->
+    [].
+
+ra_temp_or_imm(Arg, Map) ->
+    case hipe_arm:is_temp(Arg) of
+        true ->
+            ra_temp(Arg, Map);
+        false ->
+            Arg
+    end.
+
+ra_funv(FunV, Map) ->
+    case FunV of
+        #arm_temp{} ->
+            ra_temp(FunV, Map);
+        _ ->
+            FunV
+    end.
+
+ra_am1(Am1, Map) ->
+    case Am1 of
+        #arm_temp{} ->
+            ra_temp(Am1, Map);
+        {Src2,rrx} ->
+            NewSrc2 = ra_temp(Src2, Map),
+            {NewSrc2,rrx};
+        {Src2,ShiftOp,ShiftArg} ->
+            NewSrc2 = ra_temp(Src2, Map),
+            NewArg =
+                case ShiftArg of
+                    #arm_temp{} ->
+                        ra_temp(ShiftArg, Map);
+                    _ ->
+                        ShiftArg
+                end,
+            {NewSrc2,ShiftOp,NewArg};
+        _ ->
+            Am1
+    end.
+
+ra_am2(Am2 = #am2{src = Src2,offset = Offset}, Map) ->
+    NewSrc2 = ra_temp(Src2, Map),
+    NewOffset = ra_am2offset(Offset, Map),
+    Am2#am2{src = NewSrc2,offset = NewOffset}.
+
+ra_am2offset(Offset, Map) ->
+    case Offset of
+        #arm_temp{} ->
+            ra_temp(Offset, Map);
+        {Src3,rrx} ->
+            NewSrc3 = ra_temp(Src3, Map),
+            {NewSrc3,rrx};
+        {Src3,ShiftOp,Imm5} ->
+            NewSrc3 = ra_temp(Src3, Map),
+            {NewSrc3,ShiftOp,Imm5};
+        _ ->
+            Offset
+    end.
+
+ra_am3(Am3 = #am3{src = Src2,offset = Offset}, Map) ->
+    NewSrc2 = ra_temp(Src2, Map),
+    NewOffset = ra_am3offset(Offset, Map),
+    Am3#am3{src = NewSrc2,offset = NewOffset}.
+
+ra_am3offset(Offset, Map) ->
+    case Offset of
+        #arm_temp{} ->
+            ra_temp(Offset, Map);
+        _ ->
+            Offset
+    end.
+
+ra_temp(Temp, Map) ->
+    Reg = hipe_arm:temp_reg(Temp),
+    case hipe_arm:temp_type(Temp) of
+        double ->
+            exit({hipe_arm_ra_finalise,ra_temp,Temp});
+        _ ->
+            case hipe_arm_registers:is_precoloured_gpr(Reg) of
+                true ->
+                    Temp;
+                _ ->
+                    ra_temp_common(Reg, Temp, Map)
+            end
+    end.
+
+ra_temp_common(Reg, Temp, Map) ->
+    case gb_trees:lookup(Reg, Map) of
+        {value,NewReg} ->
+            Temp#arm_temp{reg = NewReg};
+        _ ->
+            Temp
+    end.
+
+mk_ra_map(TempMap, SpillLimit) ->
+    lists:foldl(fun(MapLet, Map) ->
+                       {Key,Val} =
+                           conv_ra_maplet(MapLet,
+                                          SpillLimit,
+                                          is_precoloured_gpr),
+                       gb_trees:insert(Key, Val, Map)
+                end,
+                gb_trees:empty(),
+                TempMap).
+
+conv_ra_maplet(MapLet = {From,To}, SpillLimit, IsPrecoloured) ->
+    if
+        is_integer(From), From =< SpillLimit ->
+            case hipe_arm_registers:IsPrecoloured(From) of
+                false ->
+                    [];
+                _ ->
+                    case To of
+                        {reg,From} ->
+                            [];
+                        _ ->
+                            exit({hipe_arm_ra_finalise,
+                                  conv_ra_maplet,
+                                  MapLet})
+                    end
+            end;
+        true ->
+            exit({hipe_arm_ra_finalise,conv_ra_maplet,MapLet})
+    end,
+    case To of
+        {reg,NewReg} ->
+            if
+                is_integer(NewReg) ->
+                    case hipe_arm_registers:IsPrecoloured(NewReg) of
+                        true ->
+                            [];
+                        _ ->
+                            if
+                                From =:= NewReg ->
+                                    [];
+                                true ->
+                                    exit({hipe_arm_ra_finalise,
+                                          conv_ra_maplet,
+                                          MapLet})
+                            end
+                    end;
+                true ->
+                    exit({hipe_arm_ra_finalise,conv_ra_maplet,MapLet})
+            end,
+            {From,NewReg};
+        {spill,SpillIndex} ->
+            if
+                is_integer(SpillIndex), SpillIndex >= 0 ->
+                    [];
+                true ->
+                    exit({hipe_arm_ra_finalise,conv_ra_maplet,MapLet})
+            end,
+            ToTempNum = SpillLimit + SpillIndex + 1,
+            MaxTempNum = hipe_gensym:get_var(arm),
+            if
+                MaxTempNum >= ToTempNum ->
+                    ok;
+                true ->
+                    hipe_gensym:set_var(arm, ToTempNum)
+            end,
+            {From,ToTempNum};
+        _ ->
+            exit({hipe_arm_ra_finalise,conv_ra_maplet,MapLet})
+    end.
+
+
+

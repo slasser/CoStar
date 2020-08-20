@@ -1,0 +1,278 @@
+-file("test/lib/compiler/test/error_SUITE.erl", 1).
+
+-module(error_SUITE).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/compiler/test/error_SUITE.erl", 22).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2,
+         head_mismatch_line/1,
+         warnings_as_errors/1,
+         bif_clashes/1,
+         transforms/1]).
+
+-export([parse_transform/2]).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    test_lib:recompile(error_SUITE),
+    [{group,p}].
+
+groups() ->
+    [{p,
+      test_lib:parallel(),
+      [head_mismatch_line,warnings_as_errors,bif_clashes,transforms]}].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+bif_clashes(Config) when is_list(Config) ->
+    Ts =
+        [{bif_clashes1,
+          <<"\n              -export([t/0]).\n              t() ->\n   "
+            "              length([a,b,c]).\n\n              length(X) "
+            "->\n               erlang:length(X).\n             ">>,
+          [return_warnings],
+          {error,
+           [{4,erl_lint,{call_to_redefined_old_bif,{length,1}}}],
+           []}}],
+    [] = run(Config, Ts),
+    Ts1 =
+        [{bif_clashes2,
+          <<"\n              -export([t/0]).\n              -import(x,["
+            "length/1]).\n              t() ->\n                 length"
+            "([a,b,c]).\n             ">>,
+          [return_warnings],
+          {error,[{3,erl_lint,{redefine_old_bif_import,{length,1}}}],[]}}],
+    [] = run(Config, Ts1),
+    Ts00 =
+        [{bif_clashes3,
+          <<"\n              -export([t/0]).\n              -compile({n"
+            "o_auto_import,[length/1]}).\n              t() ->\n       "
+            "          length([a,b,c]).\n\n              length(X) ->\n"
+            "               erlang:length(X).\n             ">>,
+          [return_warnings],
+          []}],
+    [] = run(Config, Ts00),
+    Ts11 =
+        [{bif_clashes4,
+          <<"\n              -export([t/0]).\n              -compile({n"
+            "o_auto_import,[length/1]}).\n              -import(x,[leng"
+            "th/1]).\n              t() ->\n                 length([a,"
+            "b,c]).\n             ">>,
+          [return_warnings],
+          []}],
+    [] = run(Config, Ts11),
+    Ts000 =
+        [{bif_clashes5,
+          <<"\n              -export([t/0]).\n              t() ->\n   "
+            "              binary_part(<<1,2,3,4>>,1,2).\n\n           "
+            "   binary_part(X,Y,Z) ->\n               erlang:binary_par"
+            "t(X,Y,Z).\n             ">>,
+          [return_warnings],
+          {warning,
+           [{4,erl_lint,{call_to_redefined_bif,{binary_part,3}}}]}}],
+    [] = run(Config, Ts000),
+    Ts111 =
+        [{bif_clashes6,
+          <<"\n              -export([t/0]).\n              -import(x,["
+            "binary_part/3]).\n              t() ->\n                  "
+            "binary_part(<<1,2,3,4>>,1,2).\n             ">>,
+          [return_warnings],
+          {warning,[{3,erl_lint,{redefine_bif_import,{binary_part,3}}}]}}],
+    [] = run(Config, Ts111),
+    Ts2 =
+        [{bif_clashes7,
+          <<"\n              -export([t/0]).\n              -compile({n"
+            "o_auto_import,[length/1]}).\n              -import(x,[leng"
+            "th/1]).\n              t() ->\n                 length([a,"
+            "b,c]).\n              length(X) ->\n                 erlan"
+            "g:length(X).\n             ">>,
+          [],
+          {error,[{7,erl_lint,{define_import,{length,1}}}],[]}}],
+    [] = run2(Config, Ts2),
+    Ts3 =
+        [{bif_clashes8,
+          <<"\n              -export([t/1]).\n              -compile({n"
+            "o_auto_import,[length/1]}).\n              t(X) when lengt"
+            "h(X) > 3 ->\n                 length([a,b,c]).\n          "
+            "    length(X) ->\n                 erlang:length(X).\n    "
+            "         ">>,
+          [],
+          {error,
+           [{4,erl_lint,{illegal_guard_local_call,{length,1}}}],
+           []}}],
+    [] = run2(Config, Ts3),
+    Ts4 =
+        [{bif_clashes9,
+          <<"\n              -export([t/1]).\n              -compile({n"
+            "o_auto_import,[length/1]}).\n              -import(x,[leng"
+            "th/1]).\n              t(X) when length(X) > 3 ->\n       "
+            "          length([a,b,c]).\n             ">>,
+          [],
+          {error,
+           [{5,erl_lint,{illegal_guard_local_call,{length,1}}}],
+           []}}],
+    [] = run2(Config, Ts4),
+    ok.
+
+head_mismatch_line(Config) when is_list(Config) ->
+    [E|_] = get_compilation_errors(Config, "head_mismatch_line"),
+    {26,Mod,Reason} = E,
+    Mod:format_error(Reason),
+    ok.
+
+get_compilation_errors(Config, Filename) ->
+    DataDir = test_server:lookup_config(data_dir, Config),
+    File = filename:join(DataDir, Filename),
+    {error,[{_Name,E}|_],[]} = compile:file(File, [return_errors]),
+    E.
+
+warnings_as_errors(Config) when is_list(Config) ->
+    TestFile = test_filename(Config),
+    BeamFile = filename:rootname(TestFile, ".erl") ++ ".beam",
+    OutDir = test_server:lookup_config(priv_dir, Config),
+    Ts1 =
+        [{warnings_as_errors,
+          <<"\n               t() ->\n                 A = unused,\n   "
+            "              ok.\n             ">>,
+          [warnings_as_errors,export_all,{outdir,OutDir}],
+          {error,[],[{3,erl_lint,{unused_var,'A'}}]}}],
+    [] = run(Ts1, TestFile, write_beam),
+    false = filelib:is_regular(BeamFile),
+    Ts2 =
+        [{warning_unused_var,
+          <<"\n               t() ->\n                 A = unused,\n   "
+            "              ok.\n             ">>,
+          [return_warnings,export_all,{outdir,OutDir}],
+          {warning,[{3,erl_lint,{unused_var,'A'}}]}}],
+    [] = run(Ts2, TestFile, write_beam),
+    true = filelib:is_regular(BeamFile),
+    ok = file:delete(BeamFile),
+    ok.
+
+transforms(Config) ->
+    Ts1 =
+        [{undef_parse_transform,
+          <<"\n              -compile({parse_transform,non_existing})."
+            "\n             ">>,
+          [return],
+          {error,
+           [{none,compile,{undef_parse_transform,non_existing}}],
+           []}}],
+    [] = run(Config, Ts1),
+    Ts2 =
+        <<"\n              -compile({parse_transform,",
+          "error_SUITE",
+          "}).\n             ">>,
+    {error,
+     [{none,compile,{parse_transform,error_SUITE,{too_bad,_}}}],
+     []} =
+        run_test(Ts2, test_filename(Config), [], dont_write_beam),
+    ok.
+
+parse_transform(_, _) ->
+    error(too_bad).
+
+run(Config, Tests) ->
+    File = test_filename(Config),
+    run(Tests, File, dont_write_beam).
+
+run(Tests, File, WriteBeam) ->
+    F = fun({N,P,Ws,E}, BadL) ->
+               case catch run_test(P, File, Ws, WriteBeam) of
+                   E ->
+                       BadL;
+                   Bad ->
+                       test_server:format("~nTest ~p failed. Expected~n"
+                                          "  ~p~nbut got~n  ~p~n",
+                                          [N,E,Bad]),
+                       fail()
+               end
+        end,
+    lists:foldl(F, [], Tests).
+
+run2(Config, Tests) ->
+    File = test_filename(Config),
+    run2(Tests, File, dont_write_beam).
+
+run2(Tests, File, WriteBeam) ->
+    F = fun({N,P,Ws,E}, BadL) ->
+               case catch filter(run_test(P, File, Ws, WriteBeam)) of
+                   E ->
+                       BadL;
+                   Bad ->
+                       test_server:format("~nTest ~p failed. Expected~n"
+                                          "  ~p~nbut got~n  ~p~n",
+                                          [N,E,Bad]),
+                       fail()
+               end
+        end,
+    lists:foldl(F, [], Tests).
+
+filter({error,Es,_Ws}) ->
+    {error,Es,[]};
+filter(X) ->
+    X.
+
+test_filename(Conf) ->
+    Filename = ["errors_test_",test_lib:uniq(),".erl"],
+    DataDir = test_server:lookup_config(priv_dir, Conf),
+    filename:join(DataDir, Filename).
+
+run_test(Test0, File, Warnings, WriteBeam) ->
+    ModName = filename:rootname(filename:basename(File), ".erl"),
+    Mod = list_to_atom(ModName),
+    Test = ["-module(",ModName,"). ",Test0],
+    Opts =
+        case WriteBeam of
+            dont_write_beam ->
+                [binary,return_errors|Warnings];
+            write_beam ->
+                [return_errors|Warnings]
+        end,
+    ok = file:write_file(File, Test),
+    compile:file(File, [binary,report|Warnings]),
+    Res =
+        case compile:file(File, Opts) of
+            {ok,Mod,_,[{_File,Ws}]} ->
+                {warning,Ws};
+            {ok,Mod,_,[]} ->
+                [];
+            {ok,Mod,[{_File,Ws}]} ->
+                {warning,Ws};
+            {ok,Mod,[]} ->
+                [];
+            {error,[{XFile,Es}],Ws} = _ZZ when is_list(XFile) ->
+                {error,Es,Ws};
+            {error,Es,[{_File,Ws}]} = _ZZ ->
+                {error,Es,Ws}
+        end,
+    file:delete(File),
+    Res.
+
+fail() ->
+    io:format("failed~n"),
+    test_server:fail().
+
+
+

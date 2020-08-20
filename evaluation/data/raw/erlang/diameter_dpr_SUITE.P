@@ -1,0 +1,238 @@
+-file("test/lib/diameter/test/diameter_dpr_SUITE.erl", 1).
+
+-module(diameter_dpr_SUITE).
+
+-export([suite/0,all/0,groups/0,init_per_group/2,end_per_group/2]).
+
+-export([start/1,
+         connect/1,
+         remove_transport/1,
+         stop_service/1,
+         check/1,
+         stop/1]).
+
+-export([disconnect/5]).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/diameter/test/../include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options =
+                          [{answer_errors,report},
+                           {request_errors,answer_3xxx}]}).
+
+-file("test/lib/diameter/test/diameter_dpr_SUITE.erl", 44).
+
+suite() ->
+    [{timetrap,{seconds,60}}].
+
+all() ->
+    [ 
+     {group,R} ||
+         R <- [transport,service,application]
+    ].
+
+groups() ->
+    Ts = tc(),
+    [ 
+     {R,[],Ts} ||
+         R <- [transport,service,application]
+    ].
+
+init_per_group(Name, Config) ->
+    [{group,Name}|Config].
+
+end_per_group(_, _) ->
+    ok.
+
+tc() ->
+    [start,connect,remove_transport,stop_service,check,stop].
+
+start(_Config) ->
+    ok = diameter:start(),
+    ok =
+        diameter:start_service("SERVER",
+                               [{'Origin-Host',"SERVER"},
+                                {'Origin-Realm',"erlang.org"},
+                                {'Host-IP-Address',[{127,0,0,1}]},
+                                {'Vendor-Id',hd("SERVER")},
+                                {'Product-Name',"OTP/diameter"},
+                                {'Acct-Application-Id',
+                                 [diameter_gen_base_rfc3588:id()]},
+                                {restrict_connections,false},
+                                {application,
+                                 [{dictionary,diameter_gen_base_rfc3588},
+                                  {module,#diameter_callback{_ = false}}]}]),
+    ok =
+        diameter:start_service("CLIENT",
+                               [{'Origin-Host',"CLIENT"},
+                                {'Origin-Realm',"erlang.org"},
+                                {'Host-IP-Address',[{127,0,0,1}]},
+                                {'Vendor-Id',hd("CLIENT")},
+                                {'Product-Name',"OTP/diameter"},
+                                {'Acct-Application-Id',
+                                 [diameter_gen_base_rfc3588:id()]},
+                                {restrict_connections,false},
+                                {application,
+                                 [{dictionary,diameter_gen_base_rfc3588},
+                                  {module,#diameter_callback{_ = false}}]}]).
+
+connect(Config) ->
+    Pid = spawn(fun init/0),
+    Grp = group(Config),
+    LRef = diameter_util:listen("SERVER", tcp),
+    Refs =
+        [ 
+         diameter_util:connect("CLIENT",
+                               tcp,
+                               LRef,
+                               opts(RCs, {Grp,Pid})) ||
+             RCs <-
+                 [[close,{dpr,[{cause,invalid}]}],[ignore,close],[]]
+                 ++
+                 [ 
+                  [{dpr,[{timeout,5000},{cause,T}]}] ||
+                      T <- [0,rebooting,1,busy,2,goaway]
+                 ]
+        ],
+    diameter_util:write_priv(Config, config, [Pid|Refs]).
+
+remove_transport(Config) ->
+    transport == group(Config)
+    andalso
+    (ok = diameter:remove_transport("CLIENT", true)).
+
+stop_service(Config) ->
+    service == group(Config)
+    andalso
+    (ok = diameter:stop_service("CLIENT")).
+
+check(Config) ->
+    Grp = group(Config),
+    [Pid|Refs] = diameter_util:read_priv(Config, config),
+    Pid ! self(),
+    Dict =
+        receive
+            {Pid,D} ->
+                D
+        end,
+    check(Refs,
+          [[close,{dpr,[{cause,invalid}]}],[ignore,close],[]]
+          ++
+          [ 
+           [{dpr,[{timeout,5000},{cause,T}]}] ||
+               T <- [0,rebooting,1,busy,2,goaway]
+          ],
+          Grp,
+          Dict).
+
+stop(_Config) ->
+    ok = diameter:stop().
+
+check(_, _, application, Dict) ->
+    [] = dict:to_list(Dict);
+check([], [], _, _) ->
+    ok;
+check([Ref|Refs], CBs, Grp, Dict) ->
+    check1(Ref, hd(CBs), Grp, Dict),
+    check(Refs, tl(CBs), Grp, Dict).
+
+check1(Ref, [ignore|RCs], Reason, Dict) ->
+    check1(Ref, RCs, Reason, Dict);
+check1(Ref, [_|_], Reason, Dict) ->
+    {ok,Reason} = dict:find(Ref, Dict);
+check1(Ref, [], _, Dict) ->
+    error = dict:find(Ref, Dict).
+
+group(Config) ->
+    {group,Grp} = lists:keyfind(group, 1, Config),
+    Grp.
+
+opts(RCs, T) ->
+    [ 
+     {disconnect_cb,{diameter_dpr_SUITE,disconnect,[T,RC]}} ||
+         RC <- RCs
+    ].
+
+disconnect(Reason, Ref, Peer, {Reason,Pid}, RC) ->
+    io:format("disconnect: ~p ~p~n", [Ref,Reason]),
+    {_,#diameter_caps{vendor_id = {$C,$S}}} = Peer,
+    Pid ! {Reason,Ref},
+    RC.
+
+init() ->
+    exit(recv(dict:new())).
+
+recv(Dict) ->
+    receive
+        Pid when is_pid(Pid) ->
+            Pid ! {self(),Dict};
+        {Reason,Ref} ->
+            recv(dict:store(Ref, Reason, Dict))
+    end.
+
+
+

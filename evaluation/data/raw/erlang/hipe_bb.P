@@ -1,0 +1,56 @@
+-file("test/lib/hipe/flow/hipe_bb.erl", 1).
+
+-module(hipe_bb).
+
+-export([mk_bb/1,code/1,code_update/2,is_bb/1,last/1,butlast/1]).
+
+-file("test/lib/hipe/flow/hipe_bb.hrl", 1).
+
+-record(bb,{code = [] :: [_]}).
+
+-type bb() :: #bb{}.
+
+-file("test/lib/hipe/flow/hipe_bb.erl", 42).
+
+-spec mk_bb([_]) -> bb().
+
+mk_bb(Code) ->
+    #bb{code = Code}.
+
+-spec is_bb(_) -> boolean().
+
+is_bb(#bb{}) ->
+    true;
+is_bb(_) ->
+    false.
+
+-spec code_update(bb(), [_]) -> bb().
+
+code_update(BB, Code) ->
+    BB#bb{code = Code}.
+
+-spec code(bb()) -> [_].
+
+code(#bb{code = Code}) ->
+    Code.
+
+-spec last(bb()) -> _.
+
+last(#bb{code = Code}) ->
+    lists:last(Code).
+
+-spec butlast(bb()) -> [_].
+
+butlast(#bb{code = Code}) ->
+    butlast_1(Code).
+
+butlast_1([X|Xs]) ->
+    butlast_1(Xs, X).
+
+butlast_1([X|Xs], Y) ->
+    [Y|butlast_1(Xs, X)];
+butlast_1([], _) ->
+    [].
+
+
+

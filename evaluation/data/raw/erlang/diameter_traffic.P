@@ -1,0 +1,1183 @@
+-file("test/lib/diameter/src/base/diameter_traffic.erl", 1).
+
+-module(diameter_traffic).
+
+-export([send_request/4]).
+
+-export([receive_message/4]).
+
+-export([make_recvdata/1,peer_up/1,peer_down/1,failover/1,pending/1]).
+
+-export([send/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/diameter-1.3/include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options = [{answer_errors,report}]}).
+
+-file("test/lib/diameter/src/base/diameter_traffic.erl", 45).
+
+-file("test/lib/diameter/src/base/diameter_internal.hrl", 1).
+
+-record(diameter_peer,{host_id,
+                       statusT,
+                       is_dynamic,
+                       expiration,
+                       tls_enabled}).
+
+-record(diameter_realm,{name,
+                        app_id,
+                        local_action,
+                        server_id,
+                        is_dynamic,
+                        expiration}).
+
+-file("test/lib/diameter/src/base/diameter_traffic.erl", 46).
+
+-type match(T) :: T | '_' | '$1' | '$2' | '$3' | '$4'.
+
+-record(options,{filter = none :: diameter:peer_filter(),
+                 extra = [] :: list(),
+                 timeout = 5000 :: 0..4294967295,
+                 detach = false :: boolean()}).
+
+-record(recvdata,{peerT :: undefined | ets:tid(),
+                  service_name :: undefined | diameter:service_name(),
+                  apps :: undefined | [#diameter_app{}],
+                  sequence :: undefined | diameter:sequence()}).
+
+-record(request,{ref :: undefined | match(reference()),
+                 caller :: undefined | match(pid()),
+                 handler :: undefined | match(pid()),
+                 transport :: undefined | match(pid()),
+                 caps :: undefined | match(#diameter_caps{}),
+                 packet :: undefined | match(#diameter_packet{})}).
+
+make_recvdata([SvcName,PeerT,Apps,Mask|_]) ->
+    #recvdata{service_name = SvcName,
+              peerT = PeerT,
+              apps = Apps,
+              sequence = Mask}.
+
+peer_up(TPid) ->
+    ets:insert(diameter_request, {TPid}).
+
+peer_down(TPid) ->
+    ets:delete(diameter_request, TPid),
+    failover(TPid).
+
+pending(TPids) ->
+    MatchSpec =
+        [{{'$1',
+           #request{caller = '$2',
+                    handler = '$3',
+                    transport = '$4',
+                    _ = '_'},
+           '_'},
+          [list_to_tuple(['orelse',
+                          false|
+                          [ 
+                           {'==',T,'$4'} ||
+                               T <- TPids
+                          ]])],
+          [{{'$1',[{{caller,'$2'}},{{handler,'$3'}},{{transport,'$4'}}]}}]}],
+    try
+        ets:select(diameter_request, MatchSpec)
+    catch
+        error:badarg ->
+            []
+    end.
+
+receive_message(TPid, Pkt, Dict0, RecvData) when is_pid(TPid) ->
+    #diameter_packet{header = #diameter_header{is_request = R}} = Pkt,
+    recv(R,
+         not R
+         andalso
+         lookup_request(Pkt, TPid),
+         TPid,
+         Pkt,
+         Dict0,
+         RecvData).
+
+recv(true, false, TPid, Pkt, Dict0, T) ->
+    spawn_request(TPid, Pkt, Dict0, T);
+recv(false, #request{ref = Ref,handler = Pid} = Req, _, Pkt, Dict0, _) ->
+    Pid ! {answer,Ref,Req,Dict0,Pkt};
+recv(false, false, _, _, _, _) ->
+    ok.
+
+spawn_request(TPid, Pkt, Dict0, {Opts,RecvData}) ->
+    spawn_request(TPid, Pkt, Dict0, Opts, RecvData);
+spawn_request(TPid, Pkt, Dict0, RecvData) ->
+    spawn_request(TPid, Pkt, Dict0, [], RecvData).
+
+spawn_request(TPid, Pkt, Dict0, Opts, RecvData) ->
+    try
+        spawn_opt(fun() ->
+                         recv_request(TPid, Pkt, Dict0, RecvData)
+                  end,
+                  Opts)
+    catch
+        error:system_limit = E ->
+            diameter_lib:log({error,E}, diameter_traffic, 188, now())
+    end.
+
+recv_request(TPid,
+             #diameter_packet{header =
+                                  #diameter_header{application_id = Id}} =
+                 Pkt,
+             Dict0,
+             #recvdata{peerT = PeerT,apps = Apps} = RecvData) ->
+    send_A(recv_R(diameter_service:find_incoming_app(PeerT,
+                                                     TPid,
+                                                     Id,
+                                                     Apps),
+                  TPid,
+                  Pkt,
+                  Dict0,
+                  RecvData),
+           TPid,
+           Dict0,
+           RecvData).
+
+recv_R({#diameter_app{id = Id,dictionary = Dict} = App,Caps},
+       TPid,
+       Pkt0,
+       Dict0,
+       RecvData) ->
+    Pkt = errors(Id, diameter_codec:decode(Id, Dict, Pkt0)),
+    {Caps,Pkt,App,recv_R(App, TPid, Dict0, Caps, RecvData, Pkt)};
+recv_R(#diameter_caps{} = Caps,
+       _TPid,
+       #diameter_packet{errors = Es} = Pkt,
+       _Dict0,
+       _RecvData) ->
+    {Caps,
+     Pkt#diameter_packet{avps = collect_avps(Pkt),errors = [3007|Es]}};
+recv_R(false = No, _, _, _, _) ->
+    No.
+
+collect_avps(Pkt) ->
+    case diameter_codec:collect_avps(Pkt) of
+        {_Error,Avps} ->
+            Avps;
+        Avps ->
+            Avps
+    end.
+
+recv_R(#diameter_app{options = [_,{request_errors,E}|_]},
+       _TPid,
+       Dict0,
+       _Caps,
+       _RecvData,
+       #diameter_packet{errors = [RC|_]})
+    when
+        E == answer,
+        Dict0 /= diameter_gen_base_rfc3588
+        orelse
+        3 == RC div 1000;
+        E == answer_3xxx, 3 == RC div 1000 ->
+    {{answer_message,rc(RC)},[],[]};
+recv_R(App, TPid, _Dict0, Caps, #recvdata{service_name = SvcName}, Pkt) ->
+    request_cb(cb(App, handle_request, [Pkt,SvcName,{TPid,Caps}]),
+               App,
+               [],
+               []).
+
+rc({N,_}) ->
+    N;
+rc(N) ->
+    N.
+
+errors(_,
+       #diameter_packet{header = #diameter_header{length = Len},
+                        bin = Bin,
+                        errors = Es} =
+           Pkt)
+    when Len < 20; 0 /= Len rem 4; 8 * Len /= bit_size(Bin) ->
+    Pkt#diameter_packet{errors = [5015|Es]};
+errors(_,
+       #diameter_packet{header = #diameter_header{version = V},
+                        errors = Es} =
+           Pkt)
+    when V /= 1 ->
+    Pkt#diameter_packet{errors = [5011|Es]};
+errors(_, #diameter_packet{errors = [Bs|Es]} = Pkt)
+    when is_bitstring(Bs) ->
+    Pkt#diameter_packet{errors = [3009|Es]};
+errors(Id,
+       #diameter_packet{header = #diameter_header{is_proxiable = P},
+                        msg = M,
+                        errors = Es} =
+           Pkt)
+    when 4294967295 /= Id, undefined == M; 4294967295 == Id, not P ->
+    Pkt#diameter_packet{errors = [3001|Es]};
+errors(_,
+       #diameter_packet{header =
+                            #diameter_header{is_request = true,
+                                             is_error = true},
+                        errors = Es} =
+           Pkt) ->
+    Pkt#diameter_packet{errors = [3008|Es]};
+errors(_, Pkt) ->
+    Pkt.
+
+request_cb({reply,_Ans} = T, _App, EvalPktFs, EvalFs) ->
+    {T,EvalPktFs,EvalFs};
+request_cb({protocol_error,RC}, _App, EvalPktFs, EvalFs)
+    when 3 == RC div 1000 ->
+    {{answer_message,RC},EvalPktFs,EvalFs};
+request_cb({answer_message,RC} = T, _App, EvalPktFs, EvalFs)
+    when 3 == RC div 1000; 5 == RC div 1000 ->
+    {T,EvalPktFs,EvalFs};
+request_cb(noreply, _App, EvalPktFs, EvalFs) ->
+    {{answer_message,3001},EvalPktFs,EvalFs};
+request_cb({A,Opts}, #diameter_app{id = Id}, EvalPktFs, EvalFs)
+    when
+        A == relay, Id == 4294967295;
+        A == proxy, Id /= 4294967295;
+        A == resend ->
+    {{call,Opts},EvalPktFs,EvalFs};
+request_cb(discard = No, _, _, _) ->
+    No;
+request_cb({eval_packet,RC,F}, App, Fs, EvalFs) ->
+    request_cb(RC, App, [F|Fs], EvalFs);
+request_cb({eval,RC,F}, App, EvalPktFs, Fs) ->
+    request_cb(RC, App, EvalPktFs, [F|Fs]);
+request_cb(T, App, _, _) ->
+    error({{invalid_return,T,handle_request,App},diameter_traffic,403}).
+
+send_A({Caps,Pkt}, TPid, Dict0, _RecvData) ->
+    #diameter_packet{errors = [RC|_]} = Pkt,
+    send_A(answer_message(RC, Caps, Dict0, Pkt),
+           TPid,
+           Dict0,
+           Pkt,
+           [],
+           []);
+send_A({Caps,Pkt,App,{T,EvalPktFs,EvalFs}}, TPid, Dict0, RecvData) ->
+    send_A(answer(T, Caps, Pkt, App, Dict0, RecvData),
+           TPid,
+           Dict0,
+           Pkt,
+           EvalPktFs,
+           EvalFs);
+send_A(_, _, _, _) ->
+    ok.
+
+send_A(T, TPid, Dict0, ReqPkt, EvalPktFs, EvalFs) ->
+    reply(T, TPid, Dict0, EvalPktFs, ReqPkt),
+    lists:foreach(fun diameter_lib:eval/1, EvalFs).
+
+answer({reply,Ans}, _Caps, _Pkt, App, Dict0, _RecvData) ->
+    {dict(App#diameter_app.dictionary, Dict0, Ans),Ans};
+answer({call,Opts}, Caps, Pkt, App, Dict0, RecvData) ->
+    #diameter_caps{origin_host = {OH,_}} = Caps,
+    #diameter_packet{avps = Avps} = Pkt,
+    {Code,_Flags,Vid} = Dict0:avp_header('Route-Record'),
+    resend(is_loop(Code, Vid, OH, Dict0, Avps),
+           Opts,
+           Caps,
+           Pkt,
+           App,
+           Dict0,
+           RecvData);
+answer({answer_message,RC} = T, Caps, Pkt, App, Dict0, _RecvData) ->
+    Dict0 /= diameter_gen_base_rfc3588
+    orelse
+    3 == RC div 1000
+    orelse
+    error({{invalid_return,T,handle_request,App},diameter_traffic,456}),
+    answer_message(RC, Caps, Dict0, Pkt).
+
+dict(Dict,
+     Dict0,
+     #diameter_packet{header =
+                          #diameter_header{is_request = false,
+                                           is_error = E},
+                      msg = undefined}) ->
+    if
+        E ->
+            Dict0;
+        true ->
+            Dict
+    end;
+dict(Dict, Dict0, [Msg]) ->
+    dict(Dict, Dict0, Msg);
+dict(Dict, Dict0, #diameter_packet{msg = Msg}) ->
+    dict(Dict, Dict0, Msg);
+dict(Dict, Dict0, Msg) ->
+    choose(is_answer_message(Msg, Dict0), Dict0, Dict).
+
+is_answer_message([Name|_], _) ->
+    Name == 'answer-message';
+is_answer_message(Rec, Dict) ->
+    try
+        'answer-message' == Dict:rec2msg(element(1, Rec))
+    catch
+        error:_ ->
+            false
+    end.
+
+answer_message(RC,
+               #diameter_caps{origin_host = {OH,_},
+                              origin_realm = {OR,_}},
+               Dict0,
+               Pkt) ->
+    diameter_lib:log({error,RC}, diameter_traffic, 494, Pkt),
+    {Dict0,answer_message(OH, OR, RC, Dict0, Pkt)}.
+
+resend(true, _Opts, Caps, Pkt, _App, Dict0, _RecvData) ->
+    answer_message(3005, Caps, Dict0, Pkt);
+resend(false,
+       Opts,
+       #diameter_caps{origin_host = {_,OH}} = Caps,
+       #diameter_packet{header = Hdr0,avps = Avps} = Pkt,
+       App,
+       Dict0,
+       #recvdata{service_name = SvcName,sequence = Mask}) ->
+    Route = #diameter_avp{data = {Dict0,'Route-Record',OH}},
+    Seq = diameter_session:sequence(Mask),
+    Hdr = Hdr0#diameter_header{hop_by_hop_id = Seq},
+    Msg = [Hdr,Route|Avps],
+    resend(send_request(SvcName, App, Msg, Opts), Caps, Dict0, Pkt).
+
+resend(#diameter_packet{bin = B} = Pkt,
+       _Caps,
+       _Dict0,
+       #diameter_packet{header = #diameter_header{hop_by_hop_id = Id},
+                        transport_data = TD}) ->
+    Pkt#diameter_packet{bin = diameter_codec:hop_by_hop_id(Id, B),
+                        transport_data = TD};
+resend(_, Caps, Dict0, Pkt) ->
+    answer_message(3002, Caps, Dict0, Pkt).
+
+is_loop(Code,
+        Vid,
+        Bin,
+        _Dict0,
+        [#diameter_avp{code = Code,vendor_id = Vid,data = Bin}|_]) ->
+    true;
+is_loop(_, _, _, _, []) ->
+    false;
+is_loop(Code, Vid, OH, Dict0, [_|Avps]) when is_binary(OH) ->
+    is_loop(Code, Vid, OH, Dict0, Avps);
+is_loop(Code, Vid, OH, Dict0, Avps) ->
+    is_loop(Code,
+            Vid,
+            Dict0:avp(encode, OH, 'Route-Record'),
+            Dict0,
+            Avps).
+
+reply({Dict,Ans}, TPid, Dict0, Fs, ReqPkt) ->
+    reply(Ans, Dict, TPid, Dict0, Fs, ReqPkt);
+reply(#diameter_packet{} = Pkt, TPid, _Dict0, Fs, _ReqPkt) ->
+    eval_packet(Pkt, Fs),
+    send(TPid, Pkt).
+
+reply([Msg], Dict, TPid, Dict0, Fs, ReqPkt)
+    when is_list(Msg); is_tuple(Msg) ->
+    reply(Msg,
+          Dict,
+          TPid,
+          Dict0,
+          Fs,
+          ReqPkt#diameter_packet{errors = []});
+reply(Msg, Dict, TPid, Dict0, Fs, ReqPkt) ->
+    Pkt =
+        encode(Dict,
+               reset(make_answer_packet(Msg, ReqPkt), Dict, Dict0),
+               Fs),
+    incr(send, Pkt, Dict, TPid, Dict0),
+    send(TPid, Pkt).
+
+reset(#diameter_packet{msg = [#diameter_header{}|_]} = Pkt, _, _) ->
+    Pkt;
+reset(#diameter_packet{errors = Es} = Pkt, _, _)
+    when Es == []; Es == false ->
+    Pkt;
+reset(#diameter_packet{msg = Msg,errors = Es} = Pkt, Dict, Dict0) ->
+    {RC,Failed} = select_error(Msg, Es, Dict0),
+    Pkt#diameter_packet{msg = reset(Msg, Dict, RC, Failed)}.
+
+select_error(Msg, Es, Dict0) ->
+    {RC,Avps} =
+        lists:foldl(fun(T, A) ->
+                           select(T, A, Dict0)
+                    end,
+                    {is_answer_message(Msg, Dict0),[]},
+                    Es),
+    {RC,lists:reverse(Avps)}.
+
+select(#diameter_avp{} = A, {RC,As}, _) ->
+    {RC,[A|As]};
+select(_, {RC,_} = Acc, _) when is_integer(RC) ->
+    Acc;
+select({RC,#diameter_avp{} = A}, {IsAns,As} = Acc, Dict0)
+    when is_integer(RC) ->
+    case is_result(RC, IsAns, Dict0) of
+        true ->
+            {RC,[A|As]};
+        false ->
+            Acc
+    end;
+select(RC, {IsAns,As} = Acc, Dict0)
+    when is_boolean(IsAns), is_integer(RC) ->
+    case is_result(RC, IsAns, Dict0) of
+        true ->
+            {RC,As};
+        false ->
+            Acc
+    end.
+
+reset(Msg, Dict, RC, Avps) ->
+    FailedAVP = failed_avp(Msg, Avps, Dict),
+    ResultCode = rc(Msg, RC, Dict),
+    set(set(Msg, FailedAVP, Dict), ResultCode, Dict).
+
+eval_packet(Pkt, Fs) ->
+    lists:foreach(fun(F) ->
+                         diameter_lib:eval([F,Pkt])
+                  end,
+                  Fs).
+
+make_answer_packet(#diameter_packet{errors = []} = Pkt,
+                   #diameter_packet{errors = [_|_] = Es} = ReqPkt) ->
+    make_answer_packet(Pkt#diameter_packet{errors = Es}, ReqPkt);
+make_answer_packet(#diameter_packet{header = Hdr,
+                                    msg = Msg,
+                                    errors = Es,
+                                    transport_data = TD},
+                   #diameter_packet{header = ReqHdr}) ->
+    Hdr0 =
+        ReqHdr#diameter_header{version = 1,
+                               is_request = false,
+                               is_error = undefined,
+                               is_retransmitted = false},
+    #diameter_packet{header = fold_record(Hdr0, Hdr),
+                     msg = Msg,
+                     errors = Es,
+                     transport_data = TD};
+make_answer_packet(Bin, #diameter_packet{transport_data = TD})
+    when is_binary(Bin) ->
+    #diameter_packet{bin = Bin,transport_data = TD};
+make_answer_packet([#diameter_header{}|_] = Msg,
+                   #diameter_packet{transport_data = TD}) ->
+    #diameter_packet{msg = Msg,transport_data = TD};
+make_answer_packet(Msg, #diameter_packet{transport_data = TD} = Pkt) ->
+    make_answer_packet(#diameter_packet{msg = Msg,transport_data = TD},
+                       Pkt).
+
+set([_|_] = Ans, Avps, _) ->
+    Ans ++ Avps;
+set(Rec, Avps, Dict) ->
+    Dict:'#set-'(Avps, Rec).
+
+rc(_, B, _) when is_boolean(B) ->
+    [];
+rc([MsgName|_], RC, Dict) ->
+    K = 'Result-Code',
+    case Dict:avp_arity(MsgName, K) of
+        1 ->
+            [{K,RC}];
+        {0,1} ->
+            [{K,[RC]}];
+        _ ->
+            []
+    end;
+rc(Rec, RC, Dict) ->
+    rc([Dict:rec2msg(element(1, Rec))], RC, Dict).
+
+failed_avp(_, [] = No, _) ->
+    No;
+failed_avp(Rec, Avps, Dict) ->
+    [failed(Rec, [{'AVP',Avps}], Dict)].
+
+failed([MsgName|Values], FailedAvp, Dict) ->
+    RecName = Dict:msg2rec(MsgName),
+    try
+        Dict:'#info-'(RecName, {index,'Failed-AVP'}),
+        {'Failed-AVP',[FailedAvp]}
+    catch
+        error:_ ->
+            Avps = proplists:get_value('AVP', Values, []),
+            A = #diameter_avp{name = 'Failed-AVP',value = FailedAvp},
+            {'AVP',[A|Avps]}
+    end;
+failed(Rec, FailedAvp, Dict) ->
+    try
+        RecName = element(1, Rec),
+        Dict:'#info-'(RecName, {index,'Failed-AVP'}),
+        {'Failed-AVP',[FailedAvp]}
+    catch
+        error:_ ->
+            Avps = Dict:'get-'('AVP', Rec),
+            A = #diameter_avp{name = 'Failed-AVP',value = FailedAvp},
+            {'AVP',[A|Avps]}
+    end.
+
+answer_message(OH,
+               OR,
+               RC,
+               Dict0,
+               #diameter_packet{avps = Avps,errors = Es}) ->
+    {Code,_,Vid} = Dict0:avp_header('Session-Id'),
+    ['answer-message',
+     {'Origin-Host',OH},
+     {'Origin-Realm',OR},
+     {'Result-Code',RC}]
+    ++
+    session_id(Code, Vid, Dict0, Avps) ++ failed_avp(RC, Es).
+
+session_id(Code, Vid, Dict0, Avps) when is_list(Avps) ->
+    try
+        {value,#diameter_avp{data = D}} = find_avp(Code, Vid, Avps),
+        [{'Session-Id',[Dict0:avp(decode, D, 'Session-Id')]}]
+    catch
+        error:_ ->
+            []
+    end.
+
+failed_avp(RC, [{RC,Avp}|_]) ->
+    [{'Failed-AVP',[{'AVP',[Avp]}]}];
+failed_avp(RC, [_|Es]) ->
+    failed_avp(RC, Es);
+failed_avp(_, [] = No) ->
+    No.
+
+find_avp(Code, Vid, Avps)
+    when
+        is_integer(Code),
+        undefined == Vid
+        orelse
+        is_integer(Vid) ->
+    find(fun(A) ->
+                is_avp(Code, Vid, A)
+         end,
+         Avps).
+
+is_avp(Code, Vid, #diameter_avp{code = Code,vendor_id = Vid}) ->
+    true;
+is_avp(_, _, _) ->
+    false.
+
+find(_, []) ->
+    false;
+find(Pred, [H|T]) ->
+    case Pred(H) of
+        true ->
+            {value,H};
+        false ->
+            find(Pred, T)
+    end.
+
+incr(_, #diameter_packet{msg = undefined}, _, _, _) ->
+    ok;
+incr(recv = D, #diameter_packet{header = H,errors = [_|_]}, _, TPid, _) ->
+    incr(TPid, {diameter_codec:msg_id(H),D,error});
+incr(Dir, Pkt, Dict, TPid, Dict0) ->
+    #diameter_packet{header = #diameter_header{is_error = E} = Hdr,
+                     msg = Rec} =
+        Pkt,
+    RC = int(get_avp_value(Dict, 'Result-Code', Rec)),
+    is_result(RC, E, Dict0)
+    orelse
+    x({invalid_error_bit,RC}, answer, [Dir,Pkt]),
+    irc(TPid, Hdr, Dir, rc_counter(Dict, Rec, RC)).
+
+is_result(RC, false, _Dict0) ->
+    RC < 3000
+    orelse
+    4000 =< RC;
+is_result(RC, true, diameter_gen_base_rfc3588) ->
+    3000 =< RC
+    andalso
+    RC < 4000;
+is_result(RC, true, _) ->
+    3000 =< RC
+    andalso
+    RC < 4000
+    orelse
+    5000 =< RC
+    andalso
+    RC < 6000.
+
+irc(_, _, _, undefined) ->
+    false;
+irc(TPid, Hdr, Dir, Ctr) ->
+    incr(TPid, {diameter_codec:msg_id(Hdr),Dir,Ctr}).
+
+incr(TPid, Counter) ->
+    diameter_stats:incr(Counter, TPid, 1).
+
+rc_counter(Dict, Rec, undefined) ->
+    rcc(get_avp_value(Dict, 'Experimental-Result', Rec));
+rc_counter(_, _, RC) ->
+    {'Result-Code',RC}.
+
+rcc([{_,_,N} = T|_]) when is_integer(N) ->
+    T;
+rcc({_,_,N} = T) when is_integer(N) ->
+    T;
+rcc(_) ->
+    undefined.
+
+int([N|_]) when is_integer(N) ->
+    N;
+int(N) when is_integer(N) ->
+    N;
+int(_) ->
+    undefined.
+
+-spec x(any(), atom(), list()) -> no_return().
+
+x(Reason, F, A) ->
+    diameter_lib:warning_report(Reason, {diameter_traffic,F,A}),
+    x(Reason).
+
+x(T) ->
+    exit(T).
+
+send_request(SvcName, AppOrAlias, Msg, Options) when is_list(Options) ->
+    Rec = make_options(Options),
+    Ref = make_ref(),
+    Caller = {self(),Ref},
+    ReqF =
+        fun() ->
+               exit({Ref,send_R(SvcName, AppOrAlias, Msg, Rec, Caller)})
+        end,
+    try spawn_monitor(ReqF) of
+        {_,MRef} ->
+            recv_A(MRef, Ref, Rec#options.detach, false)
+    catch
+        error:system_limit = E ->
+            {error,E}
+    end.
+
+recv_A(MRef, _, true, true) ->
+    demonitor(MRef, [flush]),
+    ok;
+recv_A(MRef, Ref, Detach, Sent) ->
+    receive
+        Ref ->
+            recv_A(MRef, Ref, Detach, true);
+        {'DOWN',MRef,process,_,Reason} ->
+            answer_rc(Reason, Ref, Sent)
+    end.
+
+answer_rc({Ref,Ans}, Ref, _) ->
+    Ans;
+answer_rc(_, _, Sent) ->
+    {error,choose(Sent, failure, encode)}.
+
+send_R(SvcName, AppOrAlias, Msg, Opts, Caller) ->
+    case pick_peer(SvcName, AppOrAlias, Msg, Opts) of
+        {{_,_,_} = Transport,Mask} ->
+            send_request(Transport, Mask, Msg, Opts, Caller, SvcName);
+        false ->
+            {error,no_connection};
+        {error,_} = No ->
+            No
+    end.
+
+make_options(Options) ->
+    lists:foldl(fun mo/2, #options{}, Options).
+
+mo({timeout,T}, Rec) when is_integer(T), 0 =< T ->
+    Rec#options{timeout = T};
+mo({filter,F}, #options{filter = none} = Rec) ->
+    Rec#options{filter = F};
+mo({filter,F}, #options{filter = {all,Fs}} = Rec) ->
+    Rec#options{filter = {all,[F|Fs]}};
+mo({filter,F}, #options{filter = F0} = Rec) ->
+    Rec#options{filter = {all,[F0,F]}};
+mo({extra,L}, #options{extra = X} = Rec) when is_list(L) ->
+    Rec#options{extra = X ++ L};
+mo(detach, Rec) ->
+    Rec#options{detach = true};
+mo(T, _) ->
+    error({{invalid_option,T},diameter_traffic,1170}).
+
+send_request({TPid,Caps,App} = Transport,
+             Mask,
+             Msg,
+             Opts,
+             Caller,
+             SvcName) ->
+    Pkt = make_prepare_packet(Mask, Msg),
+    send_R(cb(App, prepare_request, [Pkt,SvcName,{TPid,Caps}]),
+           Pkt,
+           Transport,
+           Opts,
+           Caller,
+           SvcName,
+           []).
+
+send_R({send,Msg}, Pkt, Transport, Opts, Caller, SvcName, Fs) ->
+    send_R(make_request_packet(Msg, Pkt),
+           Transport,
+           Opts,
+           Caller,
+           SvcName,
+           Fs);
+send_R({discard,Reason}, _, _, _, _, _, _) ->
+    {error,Reason};
+send_R(discard, _, _, _, _, _, _) ->
+    {error,discarded};
+send_R({eval_packet,RC,F}, Pkt, T, Opts, Caller, SvcName, Fs) ->
+    send_R(RC, Pkt, T, Opts, Caller, SvcName, [F|Fs]);
+send_R(E, _, {_,_,App}, _, _, _, _) ->
+    error({{invalid_return,E,prepare_request,App},diameter_traffic,1221}).
+
+make_prepare_packet(_, Bin) when is_binary(Bin) ->
+    #diameter_packet{header = diameter_codec:decode_header(Bin),
+                     bin = Bin};
+make_prepare_packet(Mask,
+                    #diameter_packet{msg =
+                                         [#diameter_header{} = Hdr|Avps]} =
+                        Pkt) ->
+    Pkt#diameter_packet{msg = [make_prepare_header(Mask, Hdr)|Avps]};
+make_prepare_packet(Mask, #diameter_packet{header = Hdr} = Pkt) ->
+    Pkt#diameter_packet{header = make_prepare_header(Mask, Hdr)};
+make_prepare_packet(Mask, Msg) ->
+    make_prepare_packet(Mask, #diameter_packet{msg = Msg}).
+
+make_prepare_header(Mask, undefined) ->
+    Seq = diameter_session:sequence(Mask),
+    make_prepare_header(#diameter_header{end_to_end_id = Seq,
+                                         hop_by_hop_id = Seq});
+make_prepare_header(Mask,
+                    #diameter_header{end_to_end_id = undefined,
+                                     hop_by_hop_id = undefined} =
+                        H) ->
+    Seq = diameter_session:sequence(Mask),
+    make_prepare_header(H#diameter_header{end_to_end_id = Seq,
+                                          hop_by_hop_id = Seq});
+make_prepare_header(Mask,
+                    #diameter_header{end_to_end_id = undefined} = H) ->
+    Seq = diameter_session:sequence(Mask),
+    make_prepare_header(H#diameter_header{end_to_end_id = Seq});
+make_prepare_header(Mask,
+                    #diameter_header{hop_by_hop_id = undefined} = H) ->
+    Seq = diameter_session:sequence(Mask),
+    make_prepare_header(H#diameter_header{hop_by_hop_id = Seq});
+make_prepare_header(_, Hdr) ->
+    make_prepare_header(Hdr).
+
+make_prepare_header(#diameter_header{version = undefined} = Hdr) ->
+    make_prepare_header(Hdr#diameter_header{version = 1});
+make_prepare_header(#diameter_header{} = Hdr) ->
+    Hdr;
+make_prepare_header(T) ->
+    error({{invalid_header,T},diameter_traffic,1278}).
+
+make_request_packet(Bin, _) when is_binary(Bin) ->
+    make_prepare_packet(false, Bin);
+make_request_packet(#diameter_packet{msg = [#diameter_header{}|_]} = Pkt,
+                    _) ->
+    Pkt;
+make_request_packet(#diameter_packet{header = Hdr} = Pkt,
+                    #diameter_packet{header = Hdr0}) ->
+    Pkt#diameter_packet{header = fold_record(Hdr0, Hdr)};
+make_request_packet(Msg, Pkt) ->
+    Pkt#diameter_packet{msg = Msg}.
+
+fold_record(undefined, R) ->
+    R;
+fold_record(Rec, R) ->
+    diameter_lib:fold_tuple(2, Rec, R).
+
+send_R(Pkt0,
+       {TPid,Caps,#diameter_app{dictionary = Dict} = App},
+       Opts,
+       {Pid,Ref},
+       SvcName,
+       Fs) ->
+    Pkt = encode(Dict, Pkt0, Fs),
+    #options{timeout = Timeout} = Opts,
+    Req =
+        #request{ref = Ref,
+                 caller = Pid,
+                 handler = self(),
+                 transport = TPid,
+                 caps = Caps,
+                 packet = Pkt0},
+    try
+        TRef = send_request(TPid, Pkt, Req, SvcName, Timeout),
+        Pid ! Ref,
+        handle_answer(SvcName,
+                      App,
+                      recv_A(Timeout, SvcName, App, Opts, {TRef,Req}))
+    after
+        erase_requests(Pkt)
+    end.
+
+recv_A(Timeout, SvcName, App, Opts, {TRef,#request{ref = Ref} = Req}) ->
+    receive
+        {answer = A,Ref,Rq,Dict0,Pkt} ->
+            {A,Rq,Dict0,Pkt};
+        {timeout = Reason,TRef,_} ->
+            {error,Req,Reason};
+        {failover,TRef} ->
+            retransmit(pick_peer(SvcName, App, Req, Opts),
+                       Req,
+                       Opts,
+                       SvcName,
+                       Timeout)
+    end.
+
+handle_answer(SvcName, App, {error,Req,Reason}) ->
+    handle_error(App, Req, Reason, SvcName);
+handle_answer(SvcName,
+              #diameter_app{dictionary = Dict,id = Id} = App,
+              {answer,Req,Dict0,Pkt}) ->
+    Mod = dict(Dict, Dict0, Pkt),
+    handle_A(errors(Id, diameter_codec:decode(Mod, Pkt)),
+             SvcName,
+             Mod,
+             Dict0,
+             App,
+             Req).
+
+handle_A(Pkt,
+         SvcName,
+         Dict,
+         Dict0,
+         App,
+         #request{transport = TPid} = Req) ->
+    try incr(recv, Pkt, Dict, TPid, Dict0) of
+        _ ->
+            answer(Pkt, SvcName, App, Req)
+    catch
+        exit:{invalid_error_bit,RC} ->
+            #diameter_packet{errors = Es} = Pkt,
+            E = {5004,#diameter_avp{name = 'Result-Code',value = RC}},
+            answer(Pkt#diameter_packet{errors = [E|Es]},
+                   SvcName,
+                   App,
+                   Req)
+    end.
+
+answer(Pkt,
+       SvcName,
+       #diameter_app{module = ModX,options = [{answer_errors,AE}|_]},
+       Req) ->
+    a(Pkt, SvcName, ModX, AE, Req).
+
+a(#diameter_packet{errors = Es} = Pkt,
+  SvcName,
+  ModX,
+  AE,
+  #request{transport = TPid,caps = Caps,packet = P})
+    when [] == Es; callback == AE ->
+    cb(ModX, handle_answer, [Pkt,msg(P),SvcName,{TPid,Caps}]);
+a(Pkt, SvcName, _, report, Req) ->
+    x(errors, handle_answer, [SvcName,Req,Pkt]);
+a(Pkt, SvcName, _, discard, Req) ->
+    x({errors,handle_answer,[SvcName,Req,Pkt]}).
+
+retransmit({{_,_,App} = Transport,_Mask}, Req, Opts, SvcName, Timeout) ->
+    try retransmit(Transport, Req, SvcName, Timeout) of
+        T ->
+            recv_A(Timeout, SvcName, App, Opts, T)
+    catch
+        {{diameter_traffic},{Reason}} ->
+            {error,Req,Reason}
+    end;
+retransmit(_, Req, _, _, _) ->
+    {error,Req,failover}.
+
+pick_peer(SvcName,
+          App,
+          #request{packet = #diameter_packet{msg = Msg}},
+          Opts) ->
+    pick_peer(SvcName, App, Msg, Opts#options{extra = []});
+pick_peer(_, _, undefined, _) ->
+    false;
+pick_peer(SvcName,
+          AppOrAlias,
+          Msg,
+          #options{filter = Filter,extra = Xtra}) ->
+    diameter_service:pick_peer(SvcName,
+                               AppOrAlias,
+                               {fun(D) ->
+                                       get_destination(D, Msg)
+                                end,
+                                Filter,
+                                Xtra}).
+
+handle_error(App,
+             #request{packet = Pkt,transport = TPid,caps = Caps},
+             Reason,
+             SvcName) ->
+    cb(App, handle_error, [Reason,msg(Pkt),SvcName,{TPid,Caps}]).
+
+msg(#diameter_packet{msg = undefined,bin = Bin}) ->
+    Bin;
+msg(#diameter_packet{msg = Msg}) ->
+    Msg.
+
+encode(Dict, Pkt, Fs) ->
+    P = encode(Dict, Pkt),
+    eval_packet(P, Fs),
+    P.
+
+encode(Dict, #diameter_packet{bin = undefined} = Pkt) ->
+    diameter_codec:encode(Dict, Pkt);
+encode(_, #diameter_packet{} = Pkt) ->
+    Pkt.
+
+send_request(TPid,
+             #diameter_packet{bin = Bin} = Pkt,
+             Req,
+             _SvcName,
+             Timeout)
+    when node() == node(TPid) ->
+    TRef = store_request(TPid, Bin, Req, Timeout),
+    send(TPid, Pkt),
+    TRef;
+send_request(TPid, #diameter_packet{} = Pkt, Req, SvcName, Timeout) ->
+    TRef = erlang:start_timer(Timeout, self(), TPid),
+    T = {TPid,Pkt,Req,SvcName,Timeout,TRef},
+    spawn(node(TPid), diameter_traffic, send, [T]),
+    TRef.
+
+send({TPid,Pkt,#request{handler = Pid} = Req,SvcName,Timeout,TRef}) ->
+    Ref =
+        send_request(TPid,
+                     Pkt,
+                     Req#request{handler = self()},
+                     SvcName,
+                     Timeout),
+    receive
+        {answer,_,_,_,_} = A ->
+            Pid ! A;
+        {failover = T,Ref} ->
+            Pid ! {T,TRef};
+        T ->
+            exit({timeout,Ref,TPid} = T)
+    end.
+
+send(Pid, Pkt) ->
+    Pid ! {send,Pkt}.
+
+retransmit({TPid,Caps,App} = Transport,
+           #request{packet = Pkt0} = Req,
+           SvcName,
+           Timeout) ->
+    have_request(Pkt0, TPid)
+    andalso
+    throw({{diameter_traffic},{timeout}}),
+    #diameter_packet{header = Hdr0} = Pkt0,
+    Hdr = Hdr0#diameter_header{is_retransmitted = true},
+    Pkt = Pkt0#diameter_packet{header = Hdr},
+    retransmit(cb(App, prepare_retransmit, [Pkt,SvcName,{TPid,Caps}]),
+               Transport,
+               Req#request{packet = Pkt},
+               SvcName,
+               Timeout,
+               []).
+
+retransmit({send,Msg},
+           Transport,
+           #request{packet = Pkt} = Req,
+           SvcName,
+           Timeout,
+           Fs) ->
+    resend_request(make_request_packet(Msg, Pkt),
+                   Transport,
+                   Req,
+                   SvcName,
+                   Timeout,
+                   Fs);
+retransmit({discard,Reason}, _, _, _, _, _) ->
+    throw({{diameter_traffic},{Reason}});
+retransmit(discard, _, _, _, _, _) ->
+    throw({{diameter_traffic},{discarded}});
+retransmit({eval_packet,RC,F}, Transport, Req, SvcName, Timeout, Fs) ->
+    retransmit(RC, Transport, Req, SvcName, Timeout, [F|Fs]);
+retransmit(T, {_,_,App}, _, _, _, _) ->
+    error({{invalid_return,T,prepare_retransmit,App},
+           diameter_traffic,
+           1586}).
+
+resend_request(Pkt0,
+               {TPid,Caps,#diameter_app{dictionary = Dict}},
+               Req0,
+               SvcName,
+               Tmo,
+               Fs) ->
+    Pkt = encode(Dict, Pkt0, Fs),
+    Req = Req0#request{transport = TPid,packet = Pkt0,caps = Caps},
+    diameter_lib:log(retransmission, diameter_traffic, 1600, Req),
+    TRef = send_request(TPid, Pkt, Req, SvcName, Tmo),
+    {TRef,Req}.
+
+store_request(TPid, Bin, Req, Timeout) ->
+    Seqs = diameter_codec:sequence_numbers(Bin),
+    TRef = erlang:start_timer(Timeout, self(), TPid),
+    ets:insert(diameter_request, {Seqs,Req,TRef}),
+    ets:member(diameter_request, TPid)
+    orelse
+    (self() ! {failover,TRef}),
+    TRef.
+
+lookup_request(Msg, TPid) ->
+    Seqs = diameter_codec:sequence_numbers(Msg),
+    Spec = [{{Seqs,#request{transport = TPid,_ = '_'},'_'},[],['$_']}],
+    case ets:select(diameter_request, Spec) of
+        [{_,Req,_}] ->
+            Req;
+        [] ->
+            false
+    end.
+
+erase_requests(Pkt) ->
+    ets:delete(diameter_request, diameter_codec:sequence_numbers(Pkt)).
+
+match_requests(TPid) ->
+    Pat = {'_',#request{transport = TPid,_ = '_'},'_'},
+    ets:select(diameter_request, [{Pat,[],['$_']}]).
+
+have_request(Pkt, TPid) ->
+    Seqs = diameter_codec:sequence_numbers(Pkt),
+    Pat = {Seqs,#request{transport = TPid,_ = '_'},'_'},
+    '$end_of_table'
+    /=
+    ets:select(diameter_request, [{Pat,[],['$_']}], 1).
+
+failover(TPid) when is_pid(TPid) ->
+    lists:foreach(fun failover/1, match_requests(TPid));
+failover({_,Req,TRef}) ->
+    #request{handler = Pid,packet = #diameter_packet{msg = M}} = Req,
+    M /= undefined
+    andalso
+    (Pid ! {failover,TRef}).
+
+get_destination(Dict, Msg) ->
+    [ 
+     str(get_avp_value(Dict, D, Msg)) ||
+         D <- ['Destination-Realm','Destination-Host']
+    ].
+
+str([]) ->
+    undefined;
+str(T) ->
+    T.
+
+get_avp_value(diameter_gen_relay, Name, Msg) ->
+    get_avp_value(diameter_gen_base_rfc3588, Name, Msg);
+get_avp_value(Dict, Name, [#diameter_header{}|Avps]) ->
+    try
+        {Code,_,VId} = Dict:avp_header(Name),
+        [A|_] =
+            lists:dropwhile(fun(#diameter_avp{code = C,vendor_id = V}) ->
+                                   C /= Code
+                                   orelse
+                                   V /= VId
+                            end,
+                            Avps),
+        avp_decode(Dict, Name, A)
+    catch
+        error:_ ->
+            undefined
+    end;
+get_avp_value(_, Name, [_MsgName|Avps]) ->
+    case lists:keyfind(Name, 1, Avps) of
+        {_,V} ->
+            V;
+        _ ->
+            undefined
+    end;
+get_avp_value(Dict, Name, Rec) ->
+    try
+        Dict:'#get-'(Name, Rec)
+    catch
+        error:_ ->
+            undefined
+    end.
+
+avp_decode(Dict, Name, #diameter_avp{value = undefined,data = Bin}) ->
+    Dict:avp(decode, Bin, Name);
+avp_decode(_, _, #diameter_avp{value = V}) ->
+    V.
+
+cb(#diameter_app{module = [_|_] = M}, F, A) ->
+    eval(M, F, A);
+cb([_|_] = M, F, A) ->
+    eval(M, F, A).
+
+eval([M|X], F, A) ->
+    apply(M, F, A ++ X).
+
+choose(true, X, _) ->
+    X;
+choose(false, _, X) ->
+    X.
+
+
+

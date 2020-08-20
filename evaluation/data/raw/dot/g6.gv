@@ -1,0 +1,27 @@
+graph G
+{
+    rotate=90;
+
+    id[label="id"];
+    email[label="email"];
+    name[label="name"];
+
+    uname[label="Name"];
+    address[label="Address"];
+
+    node[shape=rectangle];
+    university[label="University Department"];
+    student[label="Student"];
+
+    StUnDe[shape=diamond];
+
+    university -- StUnDe [label="1", len=3];
+    StUnDe -- student [label="n", len=2];
+
+    student -- id;
+    student -- name;
+    student -- email;
+
+    university -- uname;
+    university -- address;
+}

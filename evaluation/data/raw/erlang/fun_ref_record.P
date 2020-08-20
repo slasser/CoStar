@@ -1,0 +1,17 @@
+-file("test/lib/dialyzer/test/small_SUITE_data/src/fun_ref_record.erl",
+      1).
+
+-module(fun_ref_record).
+
+-export([t1/0,t2/0]).
+
+-record(foo,{bar}).
+
+t1() ->
+    #foo{bar = fun t2/0}.
+
+t2() ->
+    ok.
+
+
+

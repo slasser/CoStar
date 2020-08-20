@@ -1,0 +1,186 @@
+-file("test/lib/dialyzer/test/small_SUITE_data/src/guards.erl", 1).
+
+-module(guards).
+
+-compile([export_all]).
+
+-record(r,{f}).
+
+t1(A)
+    when
+        A#r.f =:= a
+        orelse
+        A#r.f =:= b ->
+    ok;
+t1(A)
+    when
+        not (A#r.f =:= a
+             orelse
+             A#r.f =:= b) ->
+    ko.
+
+t1_s(A)
+    when
+        A#r.f =:= a
+        orelse
+        A#r.f =:= b ->
+    ok.
+
+t1_s_a() ->
+    t1_s(#r{f = c}).
+
+t2(A) when (A#r.f =:= a) or (A#r.f =:= b) ->
+    ok;
+t2(A) when not ((A#r.f =:= a) or (A#r.f =:= b)) ->
+    ko.
+
+t2_s(A) when (A#r.f =:= a) or (A#r.f =:= b) ->
+    ok.
+
+t2_s_a() ->
+    t2_s(#r{f = c}).
+
+t3(A)
+    when
+        A#r.f =:= a
+        orelse
+        is_atom(A) ->
+    ok;
+t3(A)
+    when
+        not (A#r.f =:= a
+             orelse
+             is_atom(A)) ->
+    ko.
+
+t4(A) when (A#r.f =:= a) or is_atom(A) ->
+    ok;
+t4(A) when not ((A#r.f =:= a) or is_atom(A)) ->
+    ko.
+
+t5(A) when is_atom(A) and is_integer(A) ->
+    never.
+
+t6(A)
+    when
+        is_atom(A)
+        andalso
+        is_integer(A) ->
+    never.
+
+t7(A) when is_atom(A) or is_integer(A) ->
+    ok.
+
+at7(42) ->
+    t7(42);
+at7(a) ->
+    t7(a);
+at7({42}) ->
+    t7({42}).
+
+t8(A)
+    when
+        is_atom(A)
+        orelse
+        is_integer(A) ->
+    ok.
+
+at8(42) ->
+    t8(42);
+at8(a) ->
+    t8(a);
+at8({42}) ->
+    t8({42}).
+
+t9(A)
+    when
+        is_atom(A)
+        orelse
+        is_integer(A) ->
+    ok;
+t9(A) when is_atom(A) ->
+    redundant.
+
+t10(A) when is_atom(A) or is_integer(A) ->
+    ok;
+t10(A) when is_atom(A) ->
+    redundant.
+
+t11(A, B) when is_atom(A) and is_atom(B) ->
+    case {is_atom(A),is_atom(B)} of
+        {true,true} ->
+            ok;
+        _ ->
+            redundant
+    end.
+
+t12(A, B)
+    when
+        is_atom(A)
+        andalso
+        is_atom(B) ->
+    case {is_atom(A),is_atom(B)} of
+        {true,true} ->
+            ok;
+        _ ->
+            redundant
+    end.
+
+t13(A, B) when is_atom(A) or is_atom(B) ->
+    case {is_atom(A),is_atom(B)} of
+        {true,true} ->
+            ok;
+        {true,false} ->
+            ok;
+        {false,true} ->
+            ok;
+        {false,false} ->
+            never;
+        {_,_} ->
+            even_more_never
+    end.
+
+t14(A, B)
+    when
+        is_atom(A)
+        orelse
+        is_atom(B) ->
+    case {is_atom(A),is_atom(B)} of
+        {true,true} ->
+            ok;
+        {true,false} ->
+            ok;
+        {false,true} ->
+            ok;
+        {false,false} ->
+            never;
+        {_,_} ->
+            even_more_never
+    end.
+
+t15(A) when ((A =:= a) or (A =:= b)) and ((A =:= b) or (A =:= c)) ->
+    ok.
+
+t15_a() ->
+    t15(a),
+    t15(b),
+    t15(c).
+
+t16(A)
+    when
+        (A =:= a
+         orelse
+         A =:= b)
+        andalso
+        (A =:= b
+         orelse
+         A =:= c) ->
+    ok.
+
+t16_a() ->
+    t16(a),
+    t16(b),
+    t16(c).
+
+
+

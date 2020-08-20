@@ -1,0 +1,21 @@
+-file("test/lib/cosEvent/test/event_test_PushS_impl.erl", 1).
+
+-module(event_test_PushS_impl).
+
+-export([init/1,terminate/2,disconnect_push_supplier/1,do_push/2]).
+
+init(Proxy) ->
+    {ok,Proxy}.
+
+terminate(_From, _Reason) ->
+    ok.
+
+disconnect_push_supplier(Proxy) ->
+    io:format("event_test_PullC terminates~n", []),
+    {stop,normal,ok,Proxy}.
+
+do_push(Proxy, Event) ->
+    {reply,'CosEventComm_PushConsumer':push(Proxy, Event),Proxy}.
+
+
+

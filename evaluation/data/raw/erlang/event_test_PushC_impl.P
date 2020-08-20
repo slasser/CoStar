@@ -1,0 +1,28 @@
+-file("test/lib/cosEvent/test/event_test_PushC_impl.erl", 1).
+
+-module(event_test_PushC_impl).
+
+-export([init/1,
+         terminate/2,
+         push/2,
+         disconnect_push_consumer/1,
+         get_data/1]).
+
+init(_) ->
+    {ok,[]}.
+
+terminate(_From, _Reason) ->
+    ok.
+
+push(Events, Event) ->
+    {reply,ok,[Event|Events]}.
+
+disconnect_push_consumer(Events) ->
+    io:format("event_test_PushC terminates: ~p~n", [Events]),
+    {stop,normal,ok,Events}.
+
+get_data(Events) ->
+    {reply,lists:reverse(Events),[]}.
+
+
+

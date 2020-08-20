@@ -1,0 +1,264 @@
+-file("test/lib/hipe/arm/hipe_arm_defuse.erl", 1).
+
+-module(hipe_arm_defuse).
+
+-export([insn_def_all/1,insn_use_all/1]).
+
+-export([insn_def_gpr/1,insn_use_gpr/1]).
+
+-file("test/lib/hipe/arm/hipe_arm.hrl", 1).
+
+-record(arm_mfa,{m :: undefined | atom(),
+                 f :: undefined | atom(),
+                 a :: undefined | arity()}).
+
+-record(arm_prim,{prim}).
+
+-record(arm_sdesc,{exnlab,fsize,arity :: undefined | arity(),live}).
+
+-record(arm_temp,{reg,type,allocatable}).
+
+-record(am2,{src,sign,offset}).
+
+-record(am3,{src,sign,offset}).
+
+-record(alu,{aluop,s,dst,src,am1}).
+
+-record(b_fun,{'fun',linkage}).
+
+-record(b_label,{'cond',label}).
+
+-record(bl,{'fun',sdesc,linkage}).
+
+-record(blx,{src,sdesc}).
+
+-record(cmp,{cmpop,src,am1}).
+
+-record(comment,{term}).
+
+-record(label,{label}).
+
+-record(load,{ldop,dst,am2}).
+
+-record(ldrsb,{dst,am3}).
+
+-record(move,{movop,s,dst,am1}).
+
+-record(pseudo_bc,{'cond',true_label,false_label,pred}).
+
+-record(pseudo_blr,{}).
+
+-record(pseudo_bx,{src}).
+
+-record(pseudo_call,{funv,sdesc,contlab,linkage}).
+
+-record(pseudo_call_prepare,{nrstkargs}).
+
+-record(pseudo_li,{dst,imm,label}).
+
+-record(pseudo_move,{dst,src}).
+
+-record(pseudo_switch,{jtab,index,labels}).
+
+-record(pseudo_tailcall,{funv,arity,stkargs,linkage}).
+
+-record(pseudo_tailcall_prepare,{}).
+
+-record(smull,{dstlo,dsthi,src1,src2}).
+
+-record(store,{stop,src,am2}).
+
+-file("test/lib/hipe/arm/../misc/hipe_consttab.hrl", 1).
+
+-type ct_alignment() :: 4 | 8.
+
+-type hipe_constlbl() :: non_neg_integer().
+
+-type hipe_consttab() :: {dict(), [hipe_constlbl()], hipe_constlbl()}.
+
+-file("test/lib/hipe/arm/hipe_arm.hrl", 119).
+
+-file([], 119).
+
+-record(defun,{mfa :: undefined | mfa(),
+               formals,
+               code,
+               data :: undefined | hipe_consttab(),
+               isclosure :: undefined | boolean(),
+               isleaf :: undefined | boolean(),
+               var_range,
+               label_range}).
+
+-file("test/lib/hipe/arm/hipe_arm_defuse.erl", 25).
+
+insn_def_all(I) ->
+    insn_def_gpr(I).
+
+insn_use_all(I) ->
+    insn_use_gpr(I).
+
+insn_def_gpr(I) ->
+    case I of
+        #alu{dst = Dst} ->
+            [Dst];
+        #load{dst = Dst} ->
+            [Dst];
+        #ldrsb{dst = Dst} ->
+            [Dst];
+        #move{dst = Dst} ->
+            [Dst];
+        #pseudo_call{} ->
+            call_clobbered_gpr();
+        #pseudo_li{dst = Dst} ->
+            [Dst];
+        #pseudo_move{dst = Dst} ->
+            [Dst];
+        #pseudo_tailcall_prepare{} ->
+            tailcall_clobbered_gpr();
+        #smull{dstlo = DstLo,dsthi = DstHi,src1 = Src1} ->
+            [DstLo,DstHi,Src1];
+        _ ->
+            []
+    end.
+
+call_clobbered_gpr() ->
+    [ 
+     hipe_arm:mk_temp(R, T) ||
+         {R,T} <-
+             hipe_arm_registers:call_clobbered() ++ all_fp_pseudos()
+    ].
+
+all_fp_pseudos() ->
+    [].
+
+tailcall_clobbered_gpr() ->
+    [ 
+     hipe_arm:mk_temp(R, T) ||
+         {R,T} <-
+             hipe_arm_registers:tailcall_clobbered() ++ all_fp_pseudos()
+    ].
+
+insn_use_gpr(I) ->
+    case I of
+        #alu{src = Src,am1 = Am1} ->
+            am1_use(Am1, [Src]);
+        #blx{src = Src} ->
+            [Src];
+        #cmp{src = Src,am1 = Am1} ->
+            am1_use(Am1, [Src]);
+        #load{am2 = Am2} ->
+            am2_use(Am2, []);
+        #ldrsb{am3 = Am3} ->
+            am3_use(Am3, []);
+        #move{am1 = Am1} ->
+            am1_use(Am1, []);
+        #pseudo_blr{} ->
+            LR = hipe_arm:mk_temp(hipe_arm_registers:lr(), untagged),
+            RV =
+                hipe_arm:mk_temp(hipe_arm_registers:return_value(),
+                                 tagged),
+            [RV,LR];
+        #pseudo_bx{src = Src} ->
+            io:format("~w: whoa there! insn_use of ~w occurred\n",
+                      [hipe_arm_defuse,I]),
+            [Src];
+        #pseudo_call{funv = FunV,sdesc = #arm_sdesc{arity = Arity}} ->
+            funv_use(FunV, arity_use_gpr(Arity));
+        #pseudo_move{src = Src} ->
+            [Src];
+        #pseudo_switch{jtab = JTabR,index = IndexR} ->
+            addtemp(JTabR, [IndexR]);
+        #pseudo_tailcall{funv = FunV,arity = Arity,stkargs = StkArgs} ->
+            addargs(StkArgs,
+                    addtemps(tailcall_clobbered_gpr(),
+                             funv_use(FunV, arity_use_gpr(Arity))));
+        #smull{src1 = Src1,src2 = Src2} ->
+            addtemp(Src1, [Src2]);
+        #store{src = Src,am2 = Am2} ->
+            am2_use(Am2, [Src]);
+        _ ->
+            []
+    end.
+
+addargs([Arg|Args], Set) ->
+    addargs(Args, addarg(Arg, Set));
+addargs([], Set) ->
+    Set.
+
+addarg(Arg, Set) ->
+    case Arg of
+        #arm_temp{} ->
+            addtemp(Arg, Set);
+        _ ->
+            Set
+    end.
+
+arity_use_gpr(Arity) ->
+    [ 
+     hipe_arm:mk_temp(R, tagged) ||
+         R <- hipe_arm_registers:args(Arity)
+    ].
+
+funv_use(FunV, Set) ->
+    case FunV of
+        #arm_temp{} ->
+            addtemp(FunV, Set);
+        _ ->
+            Set
+    end.
+
+am1_use(Am1, Set) ->
+    case Am1 of
+        #arm_temp{} ->
+            addtemp(Am1, Set);
+        {Src,rrx} ->
+            addtemp(Src, Set);
+        {Src,_,ShiftArg} ->
+            Set1 = addtemp(Src, Set),
+            case ShiftArg of
+                #arm_temp{} ->
+                    addtemp(ShiftArg, Set1);
+                _ ->
+                    Set1
+            end;
+        _ ->
+            Set
+    end.
+
+am2_use(#am2{src = Src,offset = Am2Offset}, Set) ->
+    Set1 = addtemp(Src, Set),
+    case Am2Offset of
+        #arm_temp{} ->
+            addtemp(Am2Offset, Set1);
+        {Src2,_} ->
+            addtemp(Src2, Set1);
+        {Src2,_,_} ->
+            addtemp(Src2, Set1);
+        _ ->
+            Set1
+    end.
+
+am3_use(#am3{src = Src,offset = Am3Offset}, Set) ->
+    Set1 = addtemp(Src, Set),
+    case Am3Offset of
+        #arm_temp{} ->
+            addtemp(Am3Offset, Set1);
+        _ ->
+            Set1
+    end.
+
+addtemps([Arg|Args], Set) ->
+    addtemps(Args, addtemp(Arg, Set));
+addtemps([], Set) ->
+    Set.
+
+addtemp(Temp, Set) ->
+    case lists:member(Temp, Set) of
+        false ->
+            [Temp|Set];
+        _ ->
+            Set
+    end.
+
+
+

@@ -1,0 +1,1568 @@
+-file("test/lib/inets/examples/httpd_load_test/hdlt_ctrl.erl", 1).
+
+-module(hdlt_ctrl).
+
+-export([start/1,stop/0,help/0]).
+
+-export([init/1,proxy/7]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/kernel-2.15.3/include/file.hrl",
+      1).
+
+-record(file_info,{size :: undefined | non_neg_integer(),
+                   type :: undefined
+                         | device
+                         | directory
+                         | other
+                         | regular
+                         | symlink,
+                   access :: undefined
+                           | read
+                           | write
+                           | read_write
+                           | none,
+                   atime :: undefined | file:date_time() | integer(),
+                   mtime :: undefined | file:date_time() | integer(),
+                   ctime :: undefined | file:date_time() | integer(),
+                   mode :: undefined | integer(),
+                   links :: undefined | non_neg_integer(),
+                   major_device :: undefined | integer(),
+                   minor_device :: undefined | integer(),
+                   inode :: undefined | integer(),
+                   uid :: undefined | integer(),
+                   gid :: undefined | integer()}).
+
+-record(file_descriptor,{module :: undefined | module(),
+                         data :: undefined | term()}).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_ctrl.erl", 35).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_logger.hrl", 1).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_ctrl.erl", 36).
+
+-record(state,{url,
+               test_time,
+               send_rate,
+               http_server,
+               http_port,
+               results = hdlt_results,
+               nodes,
+               server_root,
+               doc_root,
+               server_dir,
+               work_dir,
+               server_conn,
+               client_conns = [],
+               client_mod = hdlt_client,
+               clients,
+               nof_schedulers = 0,
+               max_nof_schedulers,
+               socket_type,
+               server_cert_file,
+               client_cert_file,
+               debugs,
+               client_sz_from,
+               client_sz_to,
+               client_sz_incr}).
+
+-record(proxy,{mode,
+               mod,
+               connection,
+               channel,
+               host,
+               cmd,
+               node_name,
+               node,
+               ref,
+               erl_path,
+               paths,
+               args}).
+
+-record(connection,{proxy,node,node_name,host}).
+
+-record(client,{host,path,version}).
+
+-record(server,{host,path,version}).
+
+start(Config) when is_list(Config) ->
+    proc_lib:start_link(hdlt_ctrl, init, [Config]).
+
+stop() ->
+    global:send(hdlt_ctrl, stop).
+
+init(Config) ->
+    case catch do_init(Config) of
+        {ok,State} ->
+            proc_lib:init_ack({ok,self()}),
+            loop(State);
+        {error,_Reason} = Error ->
+            proc_lib:init_ack(Error),
+            ok;
+        {'EXIT',Reason} ->
+            proc_lib:init_ack({error,Reason}),
+            ok
+    end.
+
+do_init(Config) ->
+    global:register_name(hdlt_ctrl, self()),
+    State = #state{},
+    ets:new(State#state.results, [bag,named_table]),
+    hdlt_logger:start(),
+    global:sync(),
+    Debugs = get_debugs(Config),
+    hdlt_logger:set_name("HDLT CTRL"),
+    set_debug_level(Debugs),
+    hdlt_logger:debug("network info: ~n   Global names: ~p~n   Nodes:  "
+                      "      ~p",
+                      [global:registered_names(),nodes()]),
+    hdlt_logger:log("read config", []),
+    SendRate = get_send_rate(Config),
+    Clients = get_clients(Config),
+    TestTime = get_test_time(Config),
+    Server = get_server(Config),
+    Port = get_port(Config),
+    ServerDir = get_server_dir(Config),
+    WorkingDir = get_work_dir(Config),
+    MaxNofSchedulers = get_max_nof_schedulers(Config),
+    SocketType = get_socket_type(Config),
+    ServerCertFile = get_server_cert_file(Config),
+    ClientCertFile = get_client_cert_file(Config),
+    WorkSim = get_work_sim(Config),
+    {From,To,Incr} = get_data_size(Config),
+    URL = url(Server, Port, SocketType, WorkSim),
+    ServerRoot = filename:join(ServerDir, "server_root"),
+    DocRoot = ServerRoot,
+    hdlt_logger:debug("randomize setup", []),
+    randomized_sizes_init(),
+    hdlt_logger:debug("ensure crypto started", []),
+    crypto:start(),
+    hdlt_logger:debug("ensure ssh started", []),
+    ssh:start(),
+    State2 =
+        State#state{server_root = ServerRoot,
+                    doc_root = DocRoot,
+                    server_dir = ServerDir,
+                    work_dir = WorkingDir,
+                    max_nof_schedulers = MaxNofSchedulers,
+                    socket_type = SocketType,
+                    server_cert_file = ServerCertFile,
+                    client_cert_file = ClientCertFile,
+                    http_server = Server,
+                    http_port = Port,
+                    url = URL,
+                    test_time = TestTime,
+                    send_rate = SendRate,
+                    clients = Clients,
+                    debugs = Debugs,
+                    client_sz_from = From,
+                    client_sz_to = To,
+                    client_sz_incr = Incr},
+    hdlt_logger:log("prepare server host", []),
+    prepare_server_host(State2),
+    hdlt_logger:log("prepare client hosts", []),
+    State3 = prepare_client_hosts(State2),
+    hdlt_logger:log("basic init done", []),
+    {ok,State3}.
+
+loop(#state{nof_schedulers = N,max_nof_schedulers = M} = State)
+    when N > M ->
+    hdlt_logger:info("Starting to analyse data", []),
+    AnalysedTab = analyse_data(State),
+    Files = save_results_to_file(AnalysedTab, State),
+    io:format("~n******************************************************"
+              "~n~nResult(s) saved to: ~n~p~n",
+              [Files]),
+    clean_up(State);
+loop(#state{url = URL,
+            test_time = TestTime,
+            send_rate = SendRate,
+            nof_schedulers = NofSchedulers} =
+         State) ->
+    {StartH,StartM,StartS} = time(),
+    hdlt_logger:info("Performing test with ~p smp-scheduler(s): ~n  It "
+                     "will take a minimum of: ~p seconds. ~n  Start tim"
+                     "e:                ~.2.0w:~.2.0w:~.2.0w",
+                     [NofSchedulers,
+                      round(TestTime / 1000),
+                      StartH,
+                      StartM,
+                      StartS]),
+    State1 = start_server_node(State),
+    hdlt_logger:debug("nodes after server start: ~p",
+                      [nodes() -- [node()]]),
+    hdlt_logger:log("start client node(s)", []),
+    State2 = start_client_nodes(State1),
+    hdlt_logger:debug("nodes after client(s) start: ~p",
+                      [nodes() -- [node()]]),
+    hdlt_logger:log("start server", []),
+    start_server(State2),
+    hdlt_logger:log("start clients", []),
+    start_clients(State2, URL, TestTime, SendRate),
+    hdlt_logger:log("release clients", []),
+    release_clients(State2),
+    hdlt_logger:log("collect data", []),
+    collect_data(State2),
+    hdlt_logger:log("stop all nodes", []),
+    State3 = stop_nodes(State2),
+    hdlt_logger:info("Test with ~p smp-scheduler(s) complete~n~n*******"
+                     "*************************************************"
+                     "********~n",
+                     [NofSchedulers]),
+    loop(State3#state{nof_schedulers = NofSchedulers + 1}).
+
+prepare_server_host(#state{server_root = ServerRoot,
+                           http_server = #server{host = Host},
+                           socket_type = SocketType,
+                           server_cert_file = CertFile}) ->
+    hdlt_logger:info("prepare server host ~s", [Host]),
+    Opts =
+        [{user_interaction,false},
+         {silently_accept_hosts,true},
+         {timeout,2 * 5000},
+         {connect_timeout,5000}],
+    case ssh_sftp:start_channel(Host, Opts) of
+        {ok,Sftp,ConnectionRef} ->
+            hdlt_logger:debug("sftp connection established - now transe"
+                              "r server content",
+                              []),
+            create_server_content(Sftp,
+                                  ServerRoot,
+                                  SocketType,
+                                  CertFile),
+            hdlt_logger:debug("server content transfered - now close ss"
+                              "h connection ",
+                              []),
+            ssh:close(ConnectionRef),
+            hdlt_logger:debug("server preparation complete ", []),
+            ok;
+        Error ->
+            hdlt_logger:info("FAILED creating sftp channel to server ho"
+                             "st ~s: ~n   ~p",
+                             [Host,Error]),
+            exit({failed_establishing_sftp_connection,Error})
+    end.
+
+create_server_content(Sftp, ServerRoot, SocketType, CertFile) ->
+    hdlt_logger:debug("ensure existence of ~p", [ServerRoot]),
+    ensure_remote_dir_exist(Sftp, ServerRoot),
+    EBIN = filename:join(ServerRoot, "ebin"),
+    hdlt_logger:debug("make ebin dir: ~p", [EBIN]),
+    maybe_create_remote_dir(Sftp, EBIN),
+    LOG = filename:join(ServerRoot, "log"),
+    hdlt_logger:debug("make log dir: ~p", [LOG]),
+    maybe_create_remote_dir(Sftp, LOG),
+    LocalServerMod = local_server_module(),
+    hdlt_logger:debug("copy server stub/proxy module ~s",
+                      [LocalServerMod]),
+    RemoteServerMod = remote_server_module(EBIN),
+    {ok,ServerModBin} = file:read_file(LocalServerMod),
+    ok = ssh_sftp:write_file(Sftp, RemoteServerMod, ServerModBin),
+    LocalSlaveMod = local_slave_module(),
+    hdlt_logger:debug("copy slave module ~s", [LocalSlaveMod]),
+    RemoteSlaveMod = remote_slave_module(EBIN),
+    {ok,SlaveModBin} = file:read_file(LocalSlaveMod),
+    ok = ssh_sftp:write_file(Sftp, RemoteSlaveMod, SlaveModBin),
+    LocalLoggerMod = local_logger_module(),
+    hdlt_logger:debug("copy logger module ~s", [LocalLoggerMod]),
+    RemoteLoggerMod = remote_logger_module(EBIN),
+    {ok,LoggerModBin} = file:read_file(LocalLoggerMod),
+    ok = ssh_sftp:write_file(Sftp, RemoteLoggerMod, LoggerModBin),
+    CGI = filename:join(ServerRoot, "cgi-bin"),
+    hdlt_logger:debug("make cgi dir: ~p", [CGI]),
+    maybe_create_remote_dir(Sftp, CGI),
+    LocalRandomMod = local_random_html_module(),
+    hdlt_logger:debug("copy random-html module ~s", [LocalRandomMod]),
+    RemoteRandomMod = remote_random_html_module(EBIN),
+    {ok,RandomModBin} = file:read_file(LocalRandomMod),
+    ok = ssh_sftp:write_file(Sftp, RemoteRandomMod, RandomModBin),
+    case SocketType of
+        ip_comm ->
+            ok;
+        _ ->
+            SSLDir = filename:join(ServerRoot, "ssl"),
+            hdlt_logger:debug("make conf dir: ~p", [SSLDir]),
+            maybe_create_remote_dir(Sftp, SSLDir),
+            hdlt_logger:debug("copy ssl cert file ~s", [CertFile]),
+            {ok,CertBin} = file:read_file(CertFile),
+            RemoteCertFile =
+                filename:join(SSLDir, filename:basename(CertFile)),
+            ok = ssh_sftp:write_file(Sftp, RemoteCertFile, CertBin),
+            ok
+    end,
+    hdlt_logger:debug("done", []),
+    ok.
+
+remote_server_module(Path) ->
+    Mod = server_module(),
+    filename:join(Path, Mod).
+
+local_server_module() ->
+    Mod = server_module(),
+    case code:where_is_file(Mod) of
+        Path when is_list(Path) ->
+            Path;
+        _ ->
+            exit({server_module_not_found,Mod})
+    end.
+
+server_module() ->
+    module(hdlt_server).
+
+prepare_client_hosts(#state{work_dir = WorkDir,
+                            clients = Clients,
+                            socket_type = SocketType,
+                            client_cert_file = CertFile} =
+                         State) ->
+    Clients2 =
+        prepare_client_hosts(WorkDir, SocketType, CertFile, Clients, []),
+    State#state{clients = Clients2}.
+
+prepare_client_hosts(_WorkDir, _SocketType, _CertFile, [], Acc) ->
+    lists:reverse(Acc);
+prepare_client_hosts(WorkDir,
+                     SocketType,
+                     CertFile,
+                     [Client|Clients],
+                     Acc) ->
+    case prepare_client_host(WorkDir, SocketType, CertFile, Client) of
+        ok ->
+            prepare_client_hosts(WorkDir,
+                                 SocketType,
+                                 CertFile,
+                                 Clients,
+                                 [Client|Acc]);
+        _ ->
+            prepare_client_hosts(WorkDir,
+                                 SocketType,
+                                 CertFile,
+                                 Clients,
+                                 Acc)
+    end.
+
+prepare_client_host(WorkDir, SocketType, CertFile, #client{host = Host}) ->
+    hdlt_logger:info("prepare client host ~s", [Host]),
+    Opts =
+        [{user_interaction,false},
+         {silently_accept_hosts,true},
+         {timeout,2 * 5000},
+         {connect_timeout,5000}],
+    case ssh_sftp:start_channel(Host, Opts) of
+        {ok,Sftp,ConnectionRef} ->
+            hdlt_logger:debug("sftp connection established - now transe"
+                              "r client content",
+                              []),
+            create_client_content(Sftp, WorkDir, SocketType, CertFile),
+            hdlt_logger:debug("client content transered - now close ssh"
+                              " connection ",
+                              []),
+            ssh:close(ConnectionRef),
+            hdlt_logger:debug("client preparation complete ", []),
+            ok;
+        Error ->
+            hdlt_logger:info("FAILED creating sftp channel to client ho"
+                             "st ~s: skipping~n   ~p",
+                             [Host,Error]),
+            Error
+    end.
+
+create_client_content(Sftp, WorkDir, SocketType, CertFile) ->
+    hdlt_logger:debug("ensure existence of ~p", [WorkDir]),
+    ensure_remote_dir_exist(Sftp, WorkDir),
+    EBIN = filename:join(WorkDir, "ebin"),
+    RemoteClientMod = remote_client_module(EBIN),
+    hdlt_logger:debug("make ebin dir: ~p", [EBIN]),
+    maybe_create_remote_dir(Sftp, EBIN),
+    LocalClientMod = local_client_module(),
+    hdlt_logger:debug("copy client stub/proxy module ~s",
+                      [LocalClientMod]),
+    {ok,ClientModBin} = file:read_file(LocalClientMod),
+    ok = ssh_sftp:write_file(Sftp, RemoteClientMod, ClientModBin),
+    LocalSlaveMod = local_slave_module(),
+    hdlt_logger:debug("copy slave module ~s", [LocalSlaveMod]),
+    RemoteSlaveMod = remote_slave_module(EBIN),
+    {ok,SlaveModBin} = file:read_file(LocalSlaveMod),
+    ok = ssh_sftp:write_file(Sftp, RemoteSlaveMod, SlaveModBin),
+    LocalLoggerMod = local_logger_module(),
+    hdlt_logger:debug("copy logger module ~s", [LocalLoggerMod]),
+    RemoteLoggerMod = remote_logger_module(EBIN),
+    {ok,LoggerModBin} = file:read_file(LocalLoggerMod),
+    ok = ssh_sftp:write_file(Sftp, RemoteLoggerMod, LoggerModBin),
+    case SocketType of
+        ip_comm ->
+            ok;
+        _ ->
+            SSLDir = filename:join(WorkDir, "ssl"),
+            hdlt_logger:debug("make ssl dir: ~p", [SSLDir]),
+            maybe_create_remote_dir(Sftp, SSLDir),
+            hdlt_logger:debug("copy ssl cert file ~s", [CertFile]),
+            {ok,CertBin} = file:read_file(CertFile),
+            RemoteCertFile =
+                filename:join(SSLDir, filename:basename(CertFile)),
+            ok = ssh_sftp:write_file(Sftp, RemoteCertFile, CertBin),
+            ok
+    end,
+    hdlt_logger:debug("done", []),
+    ok.
+
+remote_client_module(Path) ->
+    Mod = client_module(),
+    filename:join(Path, Mod).
+
+local_client_module() ->
+    Mod = client_module(),
+    case code:where_is_file(Mod) of
+        Path when is_list(Path) ->
+            Path;
+        _ ->
+            exit({client_module_not_found,Mod})
+    end.
+
+client_module() ->
+    module(hdlt_client).
+
+remote_slave_module(Path) ->
+    Mod = slave_module(),
+    filename:join(Path, Mod).
+
+local_slave_module() ->
+    Mod = slave_module(),
+    case code:where_is_file(Mod) of
+        Path when is_list(Path) ->
+            Path;
+        _ ->
+            exit({slave_module_not_found,Mod})
+    end.
+
+slave_module() ->
+    module(hdlt_slave).
+
+remote_logger_module(Path) ->
+    Mod = logger_module(),
+    filename:join(Path, Mod).
+
+local_logger_module() ->
+    Mod = logger_module(),
+    case code:where_is_file(Mod) of
+        Path when is_list(Path) ->
+            Path;
+        _ ->
+            exit({logger_module_not_found,Mod})
+    end.
+
+logger_module() ->
+    module(hdlt_logger).
+
+remote_random_html_module(Path) ->
+    Mod = random_html_module(),
+    filename:join(Path, Mod).
+
+local_random_html_module() ->
+    Mod = random_html_module(),
+    case code:where_is_file(Mod) of
+        Path when is_list(Path) ->
+            Path;
+        _ ->
+            exit({random_module_not_found,Mod})
+    end.
+
+random_html_module() ->
+    module(hdlt_random_html).
+
+module(Mod) ->
+    Ext = string:to_lower(erlang:system_info(machine)),
+    lists:flatten(io_lib:format("~w.~s", [Mod,Ext])).
+
+start_client_nodes(#state{clients = Clients,
+                          work_dir = WorkDir,
+                          debugs = Debugs} =
+                       State) ->
+    Connections =
+        [ 
+         start_client_node(Client, WorkDir, Debugs) ||
+             Client <- Clients
+        ],
+    State#state{client_conns = Connections}.
+
+start_client_node(#client{path = ErlPath,host = Host}, WorkDir, Debugs) ->
+    hdlt_logger:info("start client on host ~p", [Host]),
+    EbinDir = filename:join(WorkDir, "ebin"),
+    start_client_node(Host, ErlPath, [EbinDir], Debugs).
+
+start_client_node(Host, ErlPath, Paths, Debugs) ->
+    start_node(Host,
+               hdlt_client,
+               ErlPath,
+               Paths,
+               [],
+               hdlt_client,
+               Debugs).
+
+start_server_node(#state{http_server =
+                             #server{path = ErlPath,host = Host},
+                         server_root = ServerRoot,
+                         nof_schedulers = NofScheds,
+                         debugs = Debugs} =
+                      State) ->
+    hdlt_logger:info("start server on host ~p", [Host]),
+    CgiBinDir = filename:join(ServerRoot, "cgi-bin"),
+    EbinDir = filename:join(ServerRoot, "ebin"),
+    Connection =
+        start_server_node(Host,
+                          ErlPath,
+                          [CgiBinDir,EbinDir],
+                          Debugs,
+                          NofScheds),
+    State#state{server_conn = Connection}.
+
+start_server_node(Host, ErlPath, Paths, Debugs, NofScheds) ->
+    Args =
+        if
+            NofScheds =:= 0 ->
+                "-smp disable";
+            true ->
+                lists:flatten(io_lib:format("-smp +S ~w", [NofScheds]))
+        end,
+    start_node(Host,
+               hdlt_server,
+               ErlPath,
+               Paths,
+               Args,
+               hdlt_server,
+               Debugs).
+
+start_node(Host, NodeName, ErlPath, Paths, Args, Module, Debugs) ->
+    hdlt_logger:debug("start_node -> start local proxy and remote node",
+                      []),
+    ProxyDebug = proplists:get_value(proxy, Debugs, silence),
+    Proxy =
+        proxy_start(Host,
+                    NodeName,
+                    ErlPath,
+                    Paths,
+                    Args,
+                    Module,
+                    ProxyDebug),
+    hdlt_logger:debug("start_node -> local proxy started - now start no"
+                      "de",
+                      []),
+    SlaveDebug = proplists:get_value(slave, Debugs, silence),
+    Node = proxy_start_node(Proxy, SlaveDebug),
+    hdlt_logger:debug("start_node -> sync global", []),
+    global:sync(),
+    hdlt_logger:debug("start_node -> start remote proxy", []),
+    proxy_start_remote(Proxy),
+    hdlt_logger:debug("start_node -> start (remote) inets framework",
+                      []),
+    proxy_start_inets(Proxy),
+    hdlt_logger:debug("start_node -> done", []),
+    #connection{proxy = Proxy,
+                node = Node,
+                node_name = NodeName,
+                host = Host}.
+
+proxy_start(Host, NodeName, ErlPath, Paths, Args, Module, Debug) ->
+    hdlt_logger:log("try starting local proxy for ~p@~s",
+                    [NodeName,Host]),
+    ProxyArgs = [Host,NodeName,ErlPath,Paths,Args,Module,Debug],
+    case proc_lib:start_link(hdlt_ctrl, proxy, ProxyArgs, 5000 * 4) of
+        {ok,Proxy} ->
+            Proxy;
+        Error ->
+            exit({failed_starting_proxy,Error})
+    end.
+
+proxy_start_node(Proxy, Debug) ->
+    {ok,Node} = proxy_request(Proxy, {start_node,Debug}),
+    Node.
+
+proxy_start_remote(Proxy) ->
+    proxy_request(Proxy, start_remote_proxy).
+
+proxy_start_inets(Proxy) ->
+    proxy_request(Proxy, start_inets).
+
+proxy_start_service(Proxy, Args) ->
+    proxy_request(Proxy, {start_service,Args}).
+
+proxy_release(Proxy) ->
+    proxy_request(Proxy, release).
+
+proxy_stop(Proxy) ->
+    StopResult = proxy_request(Proxy, stop),
+    hdlt_logger:debug("proxy stop result: ~p", [StopResult]),
+    StopResult.
+
+proxy_request(Proxy, Req) ->
+    Ref = make_ref(),
+    Proxy ! {proxy_request,Ref,self(),Req},
+    receive
+        {proxy_reply,Ref,Proxy,Rep} ->
+            Rep
+    end.
+
+proxy_reply(From, Ref, Rep) ->
+    From ! {proxy_reply,Ref,self(),Rep}.
+
+proxy(Host, NodeName, ErlPath, Paths, Args, Module, Debug) ->
+    process_flag(trap_exit, true),
+    SName =
+        lists:flatten(io_lib:format("HDLT CTRL PROXY[~p,~s,~w]",
+                                    [self(),Host,NodeName])),
+    hdlt_logger:set_name(SName),
+    hdlt_logger:set_level(Debug),
+    hdlt_logger:log("starting with~n   Host:     ~p~n   NodeName: ~p~n "
+                    "  ErlPath:  ~p~n   Paths:    ~p~n   Args:     ~p~n"
+                    "   Module:   ~p",
+                    [Host,NodeName,ErlPath,Paths,Args,Module]),
+    State =
+        #proxy{mode = started,
+               mod = Module,
+               host = Host,
+               node_name = NodeName,
+               erl_path = ErlPath,
+               paths = Paths,
+               args = Args},
+    proc_lib:init_ack({ok,self()}),
+    hdlt_logger:debug("started", []),
+    proxy_loop(State).
+
+proxy_loop(#proxy{mode = stopping}) ->
+    receive
+        {proxy_request,Ref,From,stop} ->
+            hdlt_logger:log("[stopping] received stop order", []),
+            proxy_reply(From, Ref, ok),
+            exit(normal);
+        {'EXIT',Pid,Reason} ->
+            hdlt_logger:info("[stopping] received exit message from ~p:"
+                             " ~n   Reason: ~p",
+                             [Pid,Reason]),
+            exit(Reason)
+    end;
+proxy_loop(#proxy{mode = started,
+                  host = Host,
+                  node_name = NodeName,
+                  erl_path = ErlPath,
+                  paths = Paths,
+                  args = Args} =
+               State) ->
+    receive
+        {proxy_request,Ref,From,{start_node,Debug}} ->
+            hdlt_logger:log("[starting] received start_node order", []),
+            case
+                hdlt_slave:start_link(Host,
+                                      NodeName,
+                                      ErlPath,
+                                      Paths,
+                                      Args,
+                                      Debug)
+            of
+                {ok,Node} ->
+                    hdlt_logger:debug("[starting] node ~p started - now"
+                                      " monitor",
+                                      [Node]),
+                    monitor_node(Node, true),
+                    State2 = State#proxy{mode = operational,node = Node},
+                    proxy_reply(From, Ref, {ok,Node}),
+                    proxy_loop(State2);
+                {error,Reason} ->
+                    hdlt_logger:info("[starting] failed starting node: "
+                                     "~n   Reason: ~p",
+                                     [Reason]),
+                    exit({failed_starting_node,{Host,NodeName,Reason}})
+            end;
+        {'EXIT',Pid,Reason} ->
+            hdlt_logger:info("[stopping] received exit message from ~p:"
+                             " ~n   Reason: ~p",
+                             [Pid,Reason]),
+            exit(Reason)
+    end;
+proxy_loop(#proxy{mode = operational,mod = Mod,node = Node} = State) ->
+    hdlt_logger:debug("[operational] await command", []),
+    receive
+        {proxy_request,Ref,From,start_remote_proxy} ->
+            hdlt_logger:log("[operational] start remote proxy", []),
+            case
+                rpc:call(Node, Mod, start, [hdlt_logger:get_level()])
+            of
+                {ok,Pid} ->
+                    hdlt_logger:debug("[operational] remote proxy start"
+                                      "ed (~p) - create monitor",
+                                      [Pid]),
+                    ProxyRef = monitor(process, Pid),
+                    hdlt_logger:debug("[operational] monitor: ~p",
+                                      [Ref]),
+                    proxy_reply(From, Ref, ok),
+                    proxy_loop(State#proxy{ref = ProxyRef});
+                Error ->
+                    hdlt_logger:info("[operational] failed starting rem"
+                                     "ote proxy~n   Error: ~p",
+                                     [Error]),
+                    ReplyReason =
+                        {failed_starting_remote_proxy,{Node,Error}},
+                    Reply = {error,ReplyReason},
+                    proxy_reply(From, Ref, Reply),
+                    exit({failed_starting_remote_proxy,{Node,Error}})
+            end;
+        {proxy_request,Ref,From,start_inets} ->
+            hdlt_logger:info("[operational] start inets framework", []),
+            rpc:cast(Node, Mod, start_inets, []),
+            proxy_reply(From, Ref, ok),
+            proxy_loop(State);
+        {proxy_request,Ref,From,{start_service,Args}} ->
+            hdlt_logger:info("[operational] start service with~n   ~p",
+                             [Args]),
+            case rpc:call(Node, Mod, start_service, Args) of
+                ok ->
+                    hdlt_logger:debug("[operational] service started",
+                                      []),
+                    proxy_reply(From, Ref, ok),
+                    proxy_loop(State);
+                Error ->
+                    hdlt_logger:info("[operational] failed starting ser"
+                                     "vice: ~n   Args.  ~p~n   Error: ~"
+                                     "p",
+                                     [Args,Error]),
+                    demonitor(State#proxy.ref, [flush]),
+                    Reply = {error,{failed_starting_service,Node,Error}},
+                    proxy_reply(From, Ref, Reply),
+                    exit({failed_starting_service,Node,Error})
+            end;
+        {proxy_request,Ref,From,release} ->
+            hdlt_logger:info("[operational] release", []),
+            rpc:call(Node, Mod, release, []),
+            proxy_reply(From, Ref, ok),
+            proxy_loop(State);
+        {proxy_request,Ref,From,stop} ->
+            hdlt_logger:info("[operational] received stop order", []),
+            demonitor(State#proxy.ref, [flush]),
+            hdlt_logger:debug("[operational] rpc cast stop order", []),
+            rpc:cast(Node, Mod, stop, []),
+            Reason =
+                receive
+                    {nodedown,Node} when State#proxy.node =:= Node ->
+                        ok
+                after
+                    10000 ->
+                        hdlt_logger:info("Node did not die within expec"
+                                         "ted time frame",
+                                         []),
+                        {node_death_timeout,Node}
+                end,
+            hdlt_logger:debug("[operational] ack stop", []),
+            proxy_reply(From, Ref, Reason),
+            exit(normal);
+        {nodedown,Node} when State#proxy.node =:= Node ->
+            hdlt_logger:info("[operational] received unexpected nodedoe"
+                             "n message",
+                             []),
+            exit({node_died,Node});
+        {'DOWN',Ref,process,_,normal} when State#proxy.ref =:= Ref ->
+            hdlt_logger:info("[operational] remote proxy terminated nor"
+                             "mally",
+                             []),
+            proxy_loop(State#proxy{ref = undefined,
+                                   connection = undefined,
+                                   mode = stopping});
+        {'DOWN',Ref,process,_,noconnection} when State#proxy.ref =:= Ref ->
+            hdlt_logger:info("[operational] remote proxy terminated - n"
+                             "o node",
+                             []),
+            proxy_loop(State#proxy{ref = undefined,
+                                   connection = undefined,
+                                   mode = stopping});
+        {'DOWN',Ref,process,_,Reason} when State#proxy.ref =:= Ref ->
+            hdlt_logger:info("[operational] remote proxy terminated: ~n"
+                             "   Reason: ~p",
+                             [Reason]),
+            exit({remote_proxy_crash,Reason});
+        {'EXIT',Pid,Reason} ->
+            hdlt_logger:info("[operational] received unexpected exit me"
+                             "ssage from ~p: ~n   Reason: ~p",
+                             [Pid,Reason]),
+            proxy_loop(State)
+    end.
+
+stop_nodes(#state{server_conn = ServerConn,client_conns = ClientConns} =
+               State) ->
+    lists:foreach(fun(#connection{proxy = Proxy,
+                                  node_name = NodeName,
+                                  host = Host}) ->
+                         hdlt_logger:debug("stop_erlang_nodes -> send s"
+                                           "top order to local proxy ~p"
+                                           "~n   for node ~p on ~s",
+                                           [Proxy,NodeName,Host]),
+                         proxy_stop(Proxy)
+                  end,
+                  ClientConns ++ [ServerConn]),
+    hdlt_logger:debug("stop_erlang_nodes -> sleep some to give the node"
+                      "s time to die",
+                      []),
+    timer:sleep(1000),
+    hdlt_logger:debug("stop_erlang_nodes -> and a final cleanup round",
+                      []),
+    lists:foreach(fun(Node) ->
+                         hdlt_logger:info("try brutal stop node ~p",
+                                          [Node]),
+                         rpc:cast(Node, erlang, halt, [])
+                  end,
+                  nodes() -- [node()]),
+    hdlt_logger:debug("stop_erlang_nodes -> done", []),
+    State#state{server_conn = undefined,client_conns = []}.
+
+start_clients(#state{client_conns = Connections,
+                     debugs = Debugs,
+                     work_dir = WorkDir,
+                     socket_type = SocketType,
+                     client_cert_file = CertFile,
+                     client_sz_from = From,
+                     client_sz_to = To,
+                     client_sz_incr = Incr},
+              URL,
+              TestTime,
+              SendRate) ->
+    Debug = proplists:get_value(client, Debugs, silence),
+    StartClient =
+        fun(#connection{host = Host} = Connection) ->
+               hdlt_logger:debug("start client on ~p", [Host]),
+               start_client(Connection,
+                            WorkDir,
+                            SocketType,
+                            CertFile,
+                            URL,
+                            From,
+                            To,
+                            Incr,
+                            TestTime,
+                            SendRate,
+                            Debug);
+           (_) ->
+               ok
+        end,
+    lists:foreach(StartClient, Connections).
+
+start_client(#connection{proxy = Proxy},
+             WorkDir,
+             SocketType,
+             LocalCertFile,
+             URL,
+             From,
+             To,
+             Incr,
+             TestTime,
+             SendRate,
+             Debug) ->
+    SSLDir = filename:join(WorkDir, "ssl"),
+    CertFile = filename:join(SSLDir, filename:basename(LocalCertFile)),
+    Sizes = randomized_sizes(From, To, Incr),
+    Args = [SocketType,CertFile,URL,Sizes,TestTime,SendRate,Debug],
+    proxy_start_service(Proxy, [Args]).
+
+release_clients(#state{client_conns = Connections}) ->
+    ReleaseClient =
+        fun(#connection{proxy = Proxy,host = Host}) ->
+               hdlt_logger:debug("release client on ~p", [Host]),
+               proxy_release(Proxy);
+           (_) ->
+               ok
+        end,
+    lists:foreach(ReleaseClient, Connections).
+
+start_server(#state{server_conn = #connection{proxy = Proxy},
+                    http_port = Port,
+                    server_root = ServerRoot,
+                    doc_root = DocRoot,
+                    socket_type = SocketType,
+                    server_cert_file = CertFile}) ->
+    HttpdConfig =
+        httpd_config(Port,
+                     "hdlt",
+                     ServerRoot,
+                     DocRoot,
+                     SocketType,
+                     CertFile),
+    hdlt_logger:log("start the httpd inets service with config: ~n   ~p",
+                    [HttpdConfig]),
+    proxy_start_service(Proxy, [HttpdConfig]),
+    hdlt_logger:debug("start_server -> done", []),
+    ok.
+
+httpd_config(Port,
+             ServerName,
+             ServerRoot,
+             DocRoot,
+             SocketType,
+             LocalCertFile) ->
+    LogDir = filename:join(ServerRoot, "log"),
+    ErrorLog = filename:join(LogDir, "error_log"),
+    TransferLog = filename:join(LogDir, "access_log"),
+    SSL =
+        case SocketType of
+            ip_comm ->
+                [];
+            _ ->
+                SSLDir = filename:join(ServerRoot, "ssl"),
+                CertFile =
+                    filename:join(SSLDir,
+                                  filename:basename(LocalCertFile)),
+                [{ssl_certificate_file,CertFile},
+                 {ssl_certificate_key_file,CertFile},
+                 {ssl_verify_client,0}]
+        end,
+    [{port,Port},
+     {server_name,ServerName},
+     {server_root,ServerRoot},
+     {document_root,DocRoot},
+     {error_log,ErrorLog},
+     {error_log_format,pretty},
+     {transfer_log,TransferLog},
+     {socket_type,SocketType},
+     {max_clients,10000},
+     {modules,
+      [mod_alias,
+       mod_auth,
+       mod_esi,
+       mod_actions,
+       mod_cgi,
+       mod_dir,
+       mod_get,
+       mod_head,
+       mod_log,
+       mod_disk_log]},
+     {script_alias,{"/cgi-bin",filename:join(ServerRoot, "cgi-bin")}},
+     {erl_script_alias,{"/cgi-bin",[hdlt_random_html]}},
+     {erl_script_timeout,120000}|
+     SSL].
+
+clean_up(#state{server_root = ServerRoot,
+                work_dir = WorkDir,
+                http_server = #server{host = Host},
+                clients = Clients}) ->
+    hdlt_logger:debug("begin server cleanup", []),
+    server_clean_up(ServerRoot, WorkDir, Host),
+    hdlt_logger:debug("begin lient cleanup", []),
+    clients_clean_up(WorkDir, Clients),
+    hdlt_logger:debug("cleanup done", []),
+    ok.
+
+server_clean_up(ServerRoot, WorkDir, Host) ->
+    hdlt_logger:debug("server cleanup - create sftp channel", []),
+    {ok,Sftp,ConnectionRef} =
+        ssh_sftp:start_channel(Host,
+                               [{user_interaction,false},
+                                {silently_accept_hosts,true}]),
+    hdlt_logger:debug("server cleanup - delete ~p dirs", [ServerRoot]),
+    del_dirs(Sftp, ServerRoot),
+    hdlt_logger:debug("server cleanup - delete ~p dirs", [WorkDir]),
+    del_dirs(Sftp, WorkDir),
+    hdlt_logger:debug("server cleanup - close sftp channel", []),
+    ssh:close(ConnectionRef).
+
+clients_clean_up(_WorkDir, []) ->
+    ok;
+clients_clean_up(WorkDir, [Client|Clients]) ->
+    client_clean_up(WorkDir, Client),
+    clients_clean_up(WorkDir, Clients).
+
+client_clean_up(WorkDir, #client{host = Host}) ->
+    hdlt_logger:debug("client cleanup - create sftp channel to ~p",
+                      [Host]),
+    {ok,Sftp,ConnectionRef} =
+        ssh_sftp:start_channel(Host,
+                               [{user_interaction,false},
+                                {silently_accept_hosts,true}]),
+    hdlt_logger:debug("client cleanup - delete ~p dirs", [WorkDir]),
+    del_dirs(Sftp, WorkDir),
+    hdlt_logger:debug("client cleanup - close sftp channel", []),
+    ssh:close(ConnectionRef).
+
+del_dirs(Sftp, Dir) ->
+    case ssh_sftp:list_dir(Sftp, Dir) of
+        {ok,[]} ->
+            ssh_sftp:del_dir(Sftp, Dir);
+        {ok,Files} ->
+            Files2 =
+                [ 
+                 F ||
+                     F <- Files,
+                     F =/= ".."
+                     andalso
+                     F =/= "."
+                ],
+            lists:foreach(fun(File)
+                                 when
+                                     File =/= ".."
+                                     andalso
+                                     File =/= "." ->
+                                 FullPath = filename:join(Dir, File),
+                                 case
+                                     ssh_sftp:read_file_info(Sftp,
+                                                             FullPath)
+                                 of
+                                     {ok,#file_info{type = directory}} ->
+                                         del_dirs(Sftp, FullPath),
+                                         ssh_sftp:del_dir(Sftp,
+                                                          FullPath);
+                                     {ok,_} ->
+                                         ssh_sftp:delete(Sftp, FullPath)
+                                 end
+                          end,
+                          Files2);
+        _ ->
+            ok
+    end.
+
+collect_data(#state{clients = Clients} = State) ->
+    N = length(Clients),
+    collect_req_reply(N, State),
+    collect_time(N, State).
+
+collect_req_reply(0, _State) ->
+    hdlt_logger:debug("all reply data collected", []),
+    ok;
+collect_req_reply(N,
+                  #state{nof_schedulers = NofScheduler,
+                         results = Db,
+                         client_conns = Conns} =
+                      State) ->
+    hdlt_logger:debug("await reply data from ~p client(s)", [N]),
+    receive
+        {load_data,{req_reply,Client,NoRequests,NoReplys}} ->
+            hdlt_logger:debug("received req_reply load-data from client"
+                              " ~p: ~n   Number of requests: ~p~n   Num"
+                              "ber of replies:  ~p",
+                              [Client,NoRequests,NoReplys]),
+            ets:insert(Db,
+                       {{NofScheduler,Client},
+                        {req_reply,NoRequests,NoReplys}});
+        stop ->
+            hdlt_logger:info("received stop", []),
+            exit(self(), stop);
+        {client_exit,Client,Node,Reason} ->
+            hdlt_logger:info("Received unexpected client exit from ~p o"
+                             "n node ~p while collecting replies: ~n   "
+                             "~p",
+                             [Client,Node,Reason]),
+            case lists:keysearch(Node, #connection.node, Conns) of
+                {value,Conn} ->
+                    hdlt_logger:log("Found problem connection: ~n   ~p",
+                                    [Conn]),
+                    exit({unexpected_client_exit,Reason});
+                false ->
+                    collect_req_reply(N, State)
+            end
+    end,
+    collect_req_reply(N - 1, State).
+
+collect_time(0, _State) ->
+    hdlt_logger:debug("all time data collected", []),
+    ok;
+collect_time(N,
+             #state{nof_schedulers = NofScheduler,
+                    results = Db,
+                    client_conns = Conns} =
+                 State) ->
+    hdlt_logger:debug("await time data from ~p clients", [N]),
+    receive
+        {load_data,{time_to_complete,Client,StopTime,LastResponseTime}} ->
+            hdlt_logger:log("received time load-data from client ~p: ~n"
+                            "   Time of stop:           ~p~n   Time of "
+                            "last response:  ~p",
+                            [Client,StopTime,LastResponseTime]),
+            ets:insert(Db,
+                       {{NofScheduler,Client},
+                        {time,StopTime,LastResponseTime}});
+        stop ->
+            hdlt_logger:info("received stop while collecting data, when"
+                             " N = ~p",
+                             [N]),
+            exit(self(), stop);
+        {client_exit,Client,Node,Reason} ->
+            hdlt_logger:info("Received unexpected exit from client ~p o"
+                             "n node ~p while collecting time data: ~n "
+                             "  ~p",
+                             [Client,Node,Reason]),
+            case lists:keysearch(Node, #connection.node, Conns) of
+                {value,Conn} ->
+                    hdlt_logger:log("Found problem connection: ~n   ~p",
+                                    [Conn]),
+                    exit({unexpected_client_exit,Reason});
+                false ->
+                    collect_req_reply(N, State)
+            end;
+        Else ->
+            hdlt_logger:info("RECEIVED UNEXPECTED MESSAGE WHILE COLLECT"
+                             "ING TIME DATA: ~n   ~p",
+                             [Else]),
+            collect_time(N, State)
+    end,
+    collect_time(N - 1, State).
+
+analyse_data(#state{results = Db,
+                    max_nof_schedulers = MaxNofSchedulers,
+                    test_time = MicroSec}) ->
+    Tab = ets:new(analysed_results, [set]),
+    lists:foreach(fun(NofSchedulers) ->
+                         Result = analyse(NofSchedulers, Db, MicroSec),
+                         ets:insert(Tab, Result)
+                  end,
+                  [ 
+                   N ||
+                       N <- lists:seq(0, MaxNofSchedulers)
+                  ]),
+    Tab.
+
+no_requests_replys(NoSchedulers, Tab) ->
+    NoRequests =
+        ets:select(Tab,
+                   [{{{NoSchedulers,'_'},{req_reply,'$1','_'}},
+                     [],
+                     ['$$']}]),
+    NoReplys =
+        ets:select(Tab,
+                   [{{{NoSchedulers,'_'},{req_reply,'_','$1'}},
+                     [],
+                     ['$$']}]),
+    {lists:sum(lists:append(NoRequests)),
+     lists:sum(lists:append(NoReplys))}.
+
+max_time_to_final_response(NofSchedulers, Tab) ->
+    Candidates =
+        ets:select(Tab,
+                   [{{{NofSchedulers,'_'},{time,'$1','$2'}},[],['$$']}]),
+    NewCandidates =
+        lists:map(fun([StopTime,LastTime]) ->
+                         round(timer:now_diff(LastTime, StopTime)
+                               /
+                               100000)
+                         /
+                         10
+                  end,
+                  Candidates),
+    lists:max(NewCandidates).
+
+analyse(NofSchedulers, Db, TestTime) ->
+    Sec = TestTime / 1000,
+    {NoRequests,NoReplys} = no_requests_replys(NofSchedulers, Db),
+    {NofSchedulers,
+     round(NoReplys / Sec),
+     NoRequests,
+     max_time_to_final_response(NofSchedulers, Db)}.
+
+save_results_to_file(AnalysedTab,
+                     #state{socket_type = SocketType,
+                            http_server = #server{host = Server},
+                            max_nof_schedulers = MaxNofSchedulers}) ->
+    FileName =
+        fun(Post) ->
+               File =
+                   lists:flatten(io_lib:format("~s_~w_~s",
+                                               [Server,SocketType,Post])),
+               filename:join("./", File)
+        end,
+    Reps = FileName("replys_per_sec.txt"),
+    Reqs = FileName("total_requests.txt"),
+    Decay = FileName("decay_time.txt"),
+    [FdReps,FdReqs,FdDecay] =
+        lists:map(fun(File) ->
+                         {ok,Fd} = file:open(File, [write]),
+                         Fd
+                  end,
+                  [Reps,Reqs,Decay]),
+    lists:foreach(fun(NofSchedulers) ->
+                         save_result_to_file(NofSchedulers,
+                                             FdReps,
+                                             FdReqs,
+                                             FdDecay,
+                                             AnalysedTab)
+                  end,
+                  [ 
+                   N ||
+                       N <- lists:seq(0, MaxNofSchedulers)
+                  ]),
+    [Reps,Reqs,Decay].
+
+save_result_to_file(NofSchedulers, FdReps, FdReqs, FdDecay, AnalysedTab) ->
+    [{NofSchedulers,NofRepsPerSec,NofReqs,MaxFinalResponseTime}] =
+        ets:lookup(AnalysedTab, NofSchedulers),
+    file:write(FdReps,
+               io_lib:format("~p,~p~n", [NofRepsPerSec,NofSchedulers])),
+    file:write(FdReqs,
+               io_lib:format("~p,~p~n", [NofReqs,NofSchedulers])),
+    file:write(FdDecay,
+               io_lib:format("~p,~p~n",
+                             [MaxFinalResponseTime,NofSchedulers])).
+
+help() ->
+    io:format("hdlt:start(Options). Where options:~n  ~n~p~n~n hdlt:sta"
+              "rt([]). -> hdlt:start(~p)~n~n",
+              [[{send_rate,
+                 "integer()",
+                 "Numer of outstanding requests that a client should ha"
+                 "ve during the test to create a load situation."},
+                {clients,
+                 "[{path(), host()}]",
+                 "Paths to erlang and names of hosts to run clients on."},
+                {test_time,
+                 "{hours(), mins(), sec()}",
+                 "How long the test should be run."},
+                {server,
+                 "{path(), host()}",
+                 "Path to erl and name of host to run the HTTP-server o"
+                 "n."},
+                {port,
+                 "port()",
+                 "The port that the HTTP-server should use."},
+                {server_dir,
+                 "dir()",
+                 "The directory where the HTTP server  stores its conte"
+                 "nts and configuration."},
+                {work_dir,
+                 "dir()",
+                 "Path on the computer, where the test is run, to a dir"
+                 "ectory where the results can be saved."},
+                {max_no_schedulers,
+                 "integer()",
+                 "Max number of schedulers to run."},
+                {socket_type,"Httpd configuration option socket_type"}],
+               defaults()]).
+
+defaults() ->
+    [{send_rate,89},
+     {test_time,120},
+     {port,8889},
+     {server_dir,"/tmp/hdlt"},
+     {work_dir,"/tmp/hdlt"},
+     {max_nof_schedulers,8},
+     {socket_type,ip_comm}].
+
+get_debugs(Config) ->
+    hdlt_logger:debug("get debugs", []),
+    Debugs =
+        proplists:get_value(debug,
+                            Config,
+                            [{ctrl,info},
+                             {slave,silence},
+                             {proxy,silence},
+                             {client,silence}]),
+    verify_debugs(Debugs),
+    Debugs.
+
+verify_debugs([]) ->
+    ok;
+verify_debugs([{Tag,Debug}|Debugs]) ->
+    verify_debug(Tag, Debug),
+    verify_debugs(Debugs).
+
+verify_debug(Tag, Debug) ->
+    case lists:member(Tag, [ctrl,proxy,slave,client]) of
+        true ->
+            ok;
+        false ->
+            exit({bad_debug_tag,Tag})
+    end,
+    case lists:member(Debug, [silence,info,log,debug]) of
+        true ->
+            ok;
+        false ->
+            exit({bad_debug_level,Debug})
+    end.
+
+get_send_rate(Config) ->
+    hdlt_logger:debug("get send_rate", []),
+    case proplists:get_value(send_rate, Config, 89) of
+        SendRate
+            when
+                is_integer(SendRate)
+                andalso
+                SendRate > 0 ->
+            SendRate;
+        BadSendRate ->
+            exit({bad_sendrate,BadSendRate})
+    end.
+
+get_clients(Config) ->
+    hdlt_logger:debug("get clients", []),
+    case proplists:get_value(clients, Config, undefined) of
+        undefined ->
+            missing_mandatory_config(clients);
+        Clients
+            when
+                is_list(Clients)
+                andalso
+                length(Clients) > 0 ->
+            case
+                [ 
+                 #client{path = Path,host = Host} ||
+                     {Path,Host} <- Clients
+                ]
+            of
+                Clients2 when length(Clients2) > 0 ->
+                    Clients2;
+                _ ->
+                    exit({bad_clients,Clients})
+            end;
+        BadClients ->
+            exit({bad_clients,BadClients})
+    end.
+
+get_server(Config) ->
+    hdlt_logger:debug("get server", []),
+    case proplists:get_value(server, Config) of
+        {Path,Host}
+            when
+                is_list(Path)
+                andalso
+                is_list(Host) ->
+            #server{path = Path,host = Host};
+        undefined ->
+            missing_mandatory_config(server)
+    end.
+
+get_server_dir(Config) ->
+    hdlt_logger:debug("get server_dir", []),
+    get_dir(server_dir, Config, "/tmp/hdlt").
+
+get_work_dir(Config) ->
+    hdlt_logger:debug("get work_dir", []),
+    get_dir(work_dir, Config, "/tmp/hdlt").
+
+get_dir(Key, Config, Default) ->
+    Dir = proplists:get_value(Key, Config, Default),
+    ensure_absolute(Dir),
+    Dir.
+
+ensure_absolute(Path) ->
+    case filename:pathtype(Path) of
+        absolute ->
+            ok;
+        PathType ->
+            exit({bad_pathtype,Path,PathType})
+    end.
+
+get_port(Config) ->
+    hdlt_logger:debug("get port", []),
+    case proplists:get_value(port, Config, 8889) of
+        Port
+            when
+                is_integer(Port)
+                andalso
+                Port > 0 ->
+            Port;
+        BadPort ->
+            exit({bad_port,BadPort})
+    end.
+
+get_socket_type(Config) ->
+    hdlt_logger:debug("get socket_type", []),
+    case proplists:get_value(socket_type, Config, ip_comm) of
+        SocketType
+            when
+                SocketType =:= ip_comm
+                orelse
+                SocketType =:= ssl
+                orelse
+                SocketType =:= essl
+                orelse
+                SocketType =:= ossl ->
+            SocketType;
+        BadSocketType ->
+            exit({bad_socket_type,BadSocketType})
+    end.
+
+get_test_time(Config) ->
+    hdlt_logger:debug("get test_time", []),
+    case proplists:get_value(test_time, Config, 120) of
+        Seconds
+            when
+                is_integer(Seconds)
+                andalso
+                Seconds > 0 ->
+            timer:seconds(Seconds);
+        BadTestTime ->
+            exit({bad_test_time,BadTestTime})
+    end.
+
+get_max_nof_schedulers(Config) ->
+    hdlt_logger:debug("get max_nof_schedulers", []),
+    case proplists:get_value(max_nof_schedulers, Config, 8) of
+        MaxNofScheds
+            when
+                is_integer(MaxNofScheds)
+                andalso
+                MaxNofScheds >= 0 ->
+            MaxNofScheds;
+        BadMaxNofScheds ->
+            exit({bad_max_nof_schedulers,BadMaxNofScheds})
+    end.
+
+get_server_cert_file(Config) ->
+    hdlt_logger:debug("get server cert file", []),
+    get_cert_file(server_cert_file, "hdlt_ssl_server_cert.pem", Config).
+
+get_client_cert_file(Config) ->
+    hdlt_logger:debug("get client cert file", []),
+    get_cert_file(client_cert_file, "hdlt_ssl_client_cert.pem", Config).
+
+get_cert_file(Tag, DefaultCertFileName, Config) ->
+    LibDir = code:lib_dir(inets),
+    HdltDir = filename:join(LibDir, "examples/httpd_load_test"),
+    DefaultCertFile = filename:join(HdltDir, DefaultCertFileName),
+    case proplists:get_value(Tag, Config, DefaultCertFile) of
+        F when is_list(F) ->
+            case file:read_file_info(F) of
+                {ok,#file_info{type = regular}} ->
+                    F;
+                {ok,#file_info{type = Type}} ->
+                    exit({wrong_file_type,Tag,F,Type});
+                {error,Reason} ->
+                    exit({failed_readin_file_info,Tag,F,Reason})
+            end;
+        BadFile ->
+            exit({bad_cert_file,Tag,BadFile})
+    end.
+
+get_work_sim(Config) ->
+    hdlt_logger:debug("get work_sim", []),
+    case proplists:get_value(work_simulator, Config, 10000) of
+        WS
+            when
+                is_integer(WS)
+                andalso
+                WS > 0 ->
+            WS;
+        BadWS ->
+            exit({bad_work_simulator,BadWS})
+    end.
+
+get_data_size(Config) ->
+    hdlt_logger:debug("get data_size", []),
+    case proplists:get_value(data_size, Config, {500,1500,1}) of
+        {From,To,Incr} = DS
+            when
+                is_integer(From)
+                andalso
+                is_integer(To)
+                andalso
+                is_integer(Incr)
+                andalso
+                To > From
+                andalso
+                From > 0
+                andalso
+                Incr > 0 ->
+            DS;
+        {From,To}
+            when
+                is_integer(From)
+                andalso
+                is_integer(To)
+                andalso
+                To > From
+                andalso
+                From > 0 ->
+            {From,To,1};
+        BadDS ->
+            exit({bad_data_size,BadDS})
+    end.
+
+url(#server{host = Host}, Port, SocketType, WorkSim) ->
+    Scheme =
+        case SocketType of
+            ip_comm ->
+                "http";
+            _ ->
+                "https"
+        end,
+    lists:flatten(io_lib:format("~s://~s:~w/cgi-bin/hdlt_random_html:pa"
+                                "ge?~w:",
+                                [Scheme,Host,Port,WorkSim])).
+
+missing_mandatory_config(Missing) ->
+    exit({missing_mandatory_config,Missing}).
+
+ensure_remote_dir_exist(Sftp, Path0) ->
+    case filename:split(Path0) of
+        [Root,Dir|Rest] ->
+            Path = filename:join(Root, Dir),
+            case ssh_sftp:read_file_info(Sftp, Path) of
+                {ok,#file_info{type = directory}} ->
+                    ensure_remote_dir_exist(Sftp, Path, Rest);
+                {ok,#file_info{type = Type}} ->
+                    hdlt_logger:info("Not a dir: ~p (~p)", [Path,Type]),
+                    exit({not_a_dir,Path,Type});
+                {error,Reason} ->
+                    hdlt_logger:info("Failed reading file info for ~p: "
+                                     "~p",
+                                     [Path,Reason]),
+                    exit({failed_reading_file_info,Path,Reason})
+            end;
+        BadSplit ->
+            hdlt_logger:info("Bad remote dir path: ~p -> ~p",
+                             [Path0,BadSplit]),
+            exit({bad_dir,Path0})
+    end.
+
+ensure_remote_dir_exist(_Sftp, _Dir, []) ->
+    ok;
+ensure_remote_dir_exist(Sftp, Path, [Dir|Rest]) ->
+    NewPath = filename:join(Path, Dir),
+    case ssh_sftp:read_file_info(Sftp, NewPath) of
+        {ok,#file_info{type = directory}} ->
+            ensure_remote_dir_exist(Sftp, NewPath, Rest);
+        {ok,#file_info{type = Type}} ->
+            hdlt_logger:info("Not a dir: ~p (~p)", [NewPath,Type]),
+            exit({not_a_dir,NewPath,Type});
+        {error,Reason} ->
+            case ssh_sftp:make_dir(Sftp, NewPath) of
+                ok ->
+                    ensure_remote_dir_exist(Sftp, NewPath, Rest);
+                _ ->
+                    hdlt_logger:info("Failed reading file info for ~p: "
+                                     "~p",
+                                     [Dir,Reason]),
+                    exit({failed_reading_file_info,NewPath,Reason})
+            end
+    end.
+
+maybe_create_remote_dir(Sftp, Dir) ->
+    case ssh_sftp:read_file_info(Sftp, Dir) of
+        {ok,#file_info{type = directory}} ->
+            ok;
+        {ok,#file_info{type = Type}} ->
+            hdlt_logger:info("Not a dir: ~p (~p)", [Dir,Type]),
+            exit({not_a_dir,Dir,Type});
+        {error,Reason} ->
+            case ssh_sftp:make_dir(Sftp, Dir) of
+                ok ->
+                    ok;
+                _ ->
+                    hdlt_logger:info("Failed reading file info for ~p: "
+                                     "~p",
+                                     [Dir,Reason]),
+                    exit({failed_reading_file_info,Dir,Reason})
+            end
+    end.
+
+set_debug_level(Debugs) ->
+    Debug = proplists:get_value(ctrl, Debugs, silence),
+    hdlt_logger:set_level(Debug).
+
+randomized_sizes_init() ->
+    {A,B,C} = os:timestamp(),
+    random:seed(A, B, C).
+
+randomized_sizes(From, To, Incr) ->
+    L = lists:seq(From, To, Incr),
+    Len = length(L),
+    randomized_sizes2(L, 0, Len - 1).
+
+randomized_sizes2(L, N, Len) when N >= Len ->
+    L;
+randomized_sizes2(L, N, Len) ->
+    SplitWhere = random:uniform(Len),
+    {A,B} = lists:split(SplitWhere, L),
+    randomized_sizes2(B ++ A, N + 1, Len).
+
+
+

@@ -1,0 +1,104 @@
+-file("test/lib/common_test/test/ct_hooks_SUITE_data/cth/tests/fail_pre_suite_cth.erl",
+      1).
+
+-module(fail_pre_suite_cth).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/src/ct_util.hrl",
+      1).
+
+-record(conn,{handle,targetref,address,callback}).
+
+-record(testspec,{spec_dir,
+                  nodes = [],
+                  init = [],
+                  label = [],
+                  profile = [],
+                  logdir = ["."],
+                  logopts = [],
+                  basic_html = [],
+                  verbosity = [],
+                  silent_connections = [],
+                  cover = [],
+                  config = [],
+                  userconfig = [],
+                  event_handler = [],
+                  ct_hooks = [],
+                  enable_builtin_hooks = true,
+                  release_shell = false,
+                  include = [],
+                  auto_compile = [],
+                  stylesheet = [],
+                  multiply_timetraps = [],
+                  scale_timetraps = [],
+                  create_priv_dir = [],
+                  alias = [],
+                  tests = [],
+                  merge_tests = true}).
+
+-record(cover,{app = none,
+               level = details,
+               excl_mods = [],
+               incl_mods = [],
+               cross = [],
+               src = []}).
+
+-record(conn_log,{client,name,address,action,module}).
+
+-file("test/lib/common_test/test/ct_hooks_SUITE_data/cth/tests/fail_pre_suite_cth.erl",
+      24).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct_event.hrl",
+      1).
+
+-record(event,{name,node,data}).
+
+-file("test/lib/common_test/test/ct_hooks_SUITE_data/cth/tests/fail_pre_suite_cth.erl",
+      25).
+
+-compile(export_all).
+
+init(Id, Opts) ->
+    empty_cth:init(Id, Opts).
+
+pre_init_per_suite(Suite, Config, State) ->
+    empty_cth:pre_init_per_suite(Suite, Config, State),
+    {{fail,"Test failure"},State}.
+
+post_init_per_suite(Suite, Config, Return, State) ->
+    empty_cth:post_init_per_suite(Suite, Config, Return, State).
+
+pre_end_per_suite(Suite, Config, State) ->
+    empty_cth:pre_end_per_suite(Suite, Config, State).
+
+post_end_per_suite(Suite, Config, Return, State) ->
+    empty_cth:post_end_per_suite(Suite, Config, Return, State).
+
+pre_init_per_group(Group, Config, State) ->
+    empty_cth:pre_init_per_group(Group, Config, State).
+
+post_init_per_group(Group, Config, Return, State) ->
+    empty_cth:post_init_per_group(Group, Config, Return, State).
+
+pre_end_per_group(Group, Config, State) ->
+    empty_cth:pre_end_per_group(Group, Config, State).
+
+post_end_per_group(Group, Config, Return, State) ->
+    empty_cth:post_end_per_group(Group, Config, Return, State).
+
+pre_init_per_testcase(TC, Config, State) ->
+    empty_cth:pre_init_per_testcase(TC, Config, State).
+
+post_end_per_testcase(TC, Config, Return, State) ->
+    empty_cth:post_end_per_testcase(TC, Config, Return, State).
+
+on_tc_fail(TC, Reason, State) ->
+    empty_cth:on_tc_fail(TC, Reason, State).
+
+on_tc_skip(TC, Reason, State) ->
+    empty_cth:on_tc_skip(TC, Reason, State).
+
+terminate(State) ->
+    empty_cth:terminate(State).
+
+
+

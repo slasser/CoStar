@@ -1,0 +1,375 @@
+-file("test/lib/hipe/amd64/hipe_amd64_ra_finalise.erl", 1).
+
+-file("test/lib/hipe/amd64/../x86/hipe_x86_ra_finalise.erl", 1).
+
+-module(hipe_x86_ra_finalise).
+
+-export([finalise/4]).
+
+-file("test/lib/hipe/amd64/../x86/../x86/hipe_x86.hrl", 1).
+
+-record(x86_temp,{reg,type,allocatable}).
+
+-record(x86_imm,{value}).
+
+-record(x86_mem,{base,off,type}).
+
+-record(x86_fpreg,{reg,pseudo}).
+
+-record(x86_mfa,{m :: undefined | atom(),
+                 f :: undefined | atom(),
+                 a :: undefined | arity()}).
+
+-record(x86_prim,{prim}).
+
+-record(x86_sdesc,{exnlab,
+                   fsize,
+                   arity :: undefined | arity(),
+                   live :: undefined | tuple()}).
+
+-record(alu,{aluop,src,dst}).
+
+-record(call,{'fun',sdesc,linkage}).
+
+-record(cmovcc,{cc,src,dst}).
+
+-record(cmp,{src,dst}).
+
+-record(comment,{term}).
+
+-record(fmove,{src,dst}).
+
+-record(fp_binop,{op,src,dst}).
+
+-record(fp_unop,{op,arg}).
+
+-record(imul,{imm_opt,src,temp}).
+
+-record(jcc,{cc,label}).
+
+-record(jmp_fun,{'fun',linkage}).
+
+-record(jmp_label,{label}).
+
+-record(jmp_switch,{temp,jtab,labels}).
+
+-record(label,{label}).
+
+-record(lea,{mem,temp}).
+
+-record(move,{src,dst}).
+
+-record(move64,{imm,dst}).
+
+-record(movsx,{src,dst}).
+
+-record(movzx,{src,dst}).
+
+-record(pseudo_call,{'fun',sdesc,contlab,linkage}).
+
+-record(pseudo_jcc,{cc,true_label,false_label,pred}).
+
+-record(pseudo_spill,{args = []}).
+
+-record(pseudo_tailcall,{'fun',arity,stkargs,linkage}).
+
+-record(pseudo_tailcall_prepare,{}).
+
+-record(push,{src}).
+
+-record(pop,{dst}).
+
+-record(ret,{npop}).
+
+-record(shift,{shiftop,src,dst}).
+
+-record(test,{src,dst}).
+
+-file("test/lib/hipe/amd64/../x86/../x86/../misc/hipe_consttab.hrl", 1).
+
+-type ct_alignment() :: 4 | 8.
+
+-type hipe_constlbl() :: non_neg_integer().
+
+-type hipe_consttab() :: {dict(), [hipe_constlbl()], hipe_constlbl()}.
+
+-file("test/lib/hipe/amd64/../x86/../x86/hipe_x86.hrl", 111).
+
+-file([], 111).
+
+-record(defun,{mfa :: undefined | mfa(),
+               formals,
+               code,
+               data :: undefined | hipe_consttab(),
+               isclosure :: undefined | boolean(),
+               isleaf :: undefined | boolean(),
+               var_range,
+               label_range}).
+
+-file("test/lib/hipe/amd64/../x86/hipe_x86_ra_finalise.erl", 36).
+
+-file([], 36).
+
+finalise(Defun, TempMap, FpMap, Options) ->
+    Defun1 = finalise_ra(Defun, TempMap, FpMap, Options),
+    case proplists:get_bool(x87, Options) of
+        true ->
+            hipe_x86_x87:map(Defun1);
+        _ ->
+            Defun1
+    end.
+
+finalise_ra(Defun, [], [], _Options) ->
+    Defun;
+finalise_ra(Defun, TempMap, FpMap, Options) ->
+    Code = hipe_x86:defun_code(Defun),
+    {_,SpillLimit} = hipe_x86:defun_var_range(Defun),
+    Map = mk_ra_map(TempMap, SpillLimit),
+    FpMap0 = mk_ra_map_fp(FpMap, SpillLimit, Options),
+    NewCode = ra_code(Code, Map, FpMap0),
+    Defun#defun{code = NewCode}.
+
+ra_code(Code, Map, FpMap) ->
+    [ 
+     ra_insn(I, Map, FpMap) ||
+         I <- Code
+    ].
+
+ra_insn(I, Map, FpMap) ->
+    case I of
+        #alu{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map),
+            Dst = ra_opnd(Dst0, Map),
+            I#alu{src = Src,dst = Dst};
+        #call{} ->
+            I;
+        #cmovcc{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map),
+            Dst = ra_opnd(Dst0, Map),
+            I#cmovcc{src = Src,dst = Dst};
+        #cmp{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map),
+            Dst = ra_opnd(Dst0, Map),
+            I#cmp{src = Src,dst = Dst};
+        #comment{} ->
+            I;
+        #fmove{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map, FpMap),
+            Dst = ra_opnd(Dst0, Map, FpMap),
+            I#fmove{src = Src,dst = Dst};
+        #fp_unop{arg = Arg0} ->
+            Arg = ra_opnd(Arg0, Map, FpMap),
+            I#fp_unop{arg = Arg};
+        #fp_binop{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map, FpMap),
+            Dst = ra_opnd(Dst0, Map, FpMap),
+            I#fp_binop{src = Src,dst = Dst};
+        #imul{src = Src0,temp = Temp0} ->
+            Src = ra_opnd(Src0, Map),
+            Temp = ra_temp(Temp0, Map),
+            I#imul{src = Src,temp = Temp};
+        #jcc{} ->
+            I;
+        #jmp_fun{'fun' = Fun0} ->
+            Fun = ra_opnd(Fun0, Map),
+            I#jmp_fun{'fun' = Fun};
+        #jmp_label{} ->
+            I;
+        #jmp_switch{temp = Temp0,jtab = JTab0} ->
+            Temp = ra_opnd(Temp0, Map),
+            JTab = ra_opnd(JTab0, Map),
+            I#jmp_switch{temp = Temp,jtab = JTab};
+        #label{} ->
+            I;
+        #lea{mem = Mem0,temp = Temp0} ->
+            Mem = ra_mem(Mem0, Map),
+            Temp = ra_temp(Temp0, Map),
+            I#lea{mem = Mem,temp = Temp};
+        #move{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map),
+            Dst = ra_opnd(Dst0, Map),
+            I#move{src = Src,dst = Dst};
+        #move64{dst = Dst0} ->
+            Dst = ra_opnd(Dst0, Map),
+            I#move64{dst = Dst};
+        #movsx{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map),
+            Dst = ra_opnd(Dst0, Map),
+            I#movsx{src = Src,dst = Dst};
+        #movzx{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map),
+            Dst = ra_opnd(Dst0, Map),
+            I#movzx{src = Src,dst = Dst};
+        #pseudo_call{'fun' = Fun0} ->
+            Fun = ra_opnd(Fun0, Map),
+            I#pseudo_call{'fun' = Fun};
+        #pseudo_jcc{} ->
+            I;
+        #pseudo_tailcall{'fun' = Fun0,stkargs = StkArgs0} ->
+            Fun = ra_opnd(Fun0, Map),
+            StkArgs = ra_args(StkArgs0, Map),
+            I#pseudo_tailcall{'fun' = Fun,stkargs = StkArgs};
+        #pseudo_tailcall_prepare{} ->
+            I;
+        #push{src = Src0} ->
+            Src = ra_opnd(Src0, Map),
+            I#push{src = Src};
+        #ret{} ->
+            I;
+        #shift{src = Src0,dst = Dst0} ->
+            Src = ra_opnd(Src0, Map),
+            Dst = ra_opnd(Dst0, Map),
+            I#shift{src = Src,dst = Dst};
+        _ ->
+            exit({hipe_x86_ra_finalise,ra_insn,I})
+    end.
+
+ra_args(Args, Map) ->
+    [ 
+     ra_opnd(Opnd, Map) ||
+         Opnd <- Args
+    ].
+
+ra_opnd(Opnd, Map) ->
+    ra_opnd(Opnd, Map, gb_trees:empty()).
+
+ra_opnd(Opnd, Map, FpMap) ->
+    case Opnd of
+        #x86_temp{} ->
+            ra_temp(Opnd, Map, FpMap);
+        #x86_mem{} ->
+            ra_mem(Opnd, Map);
+        _ ->
+            Opnd
+    end.
+
+ra_mem(Mem, Map) ->
+    #x86_mem{base = Base0,off = Off0} = Mem,
+    Base = ra_opnd(Base0, Map),
+    Off = ra_opnd(Off0, Map),
+    Mem#x86_mem{base = Base,off = Off}.
+
+ra_temp(Temp, Map) ->
+    ra_temp(Temp, Map, gb_trees:empty()).
+
+ra_temp(Temp, Map, FpMap) ->
+    Reg = hipe_x86:temp_reg(Temp),
+    case hipe_x86:temp_type(Temp) of
+        double ->
+            ra_temp_double(Temp, Reg, FpMap);
+        _ ->
+            case hipe_x86_registers:is_precoloured(Reg) of
+                true ->
+                    Temp;
+                _ ->
+                    case gb_trees:lookup(Reg, Map) of
+                        {value,NewReg} ->
+                            Temp#x86_temp{reg = NewReg};
+                        _ ->
+                            Temp
+                    end
+            end
+    end.
+
+ra_temp_double(Temp, Reg, FpMap) ->
+    case gb_trees:lookup(Reg, FpMap) of
+        {value,NewReg} ->
+            case hipe_x86_registers:is_precoloured_x87(NewReg) of
+                true ->
+                    hipe_x86:mk_fpreg(NewReg);
+                false ->
+                    Temp#x86_temp{reg = NewReg}
+            end;
+        _ ->
+            Temp
+    end.
+
+mk_ra_map(TempMap, SpillLimit) ->
+    lists:foldl(fun(MapLet, Map) ->
+                       {Key,Val} =
+                           conv_ra_maplet(MapLet,
+                                          SpillLimit,
+                                          is_precoloured),
+                       gb_trees:insert(Key, Val, Map)
+                end,
+                gb_trees:empty(),
+                TempMap).
+
+conv_ra_maplet(MapLet = {From,To}, SpillLimit, IsPrecoloured) ->
+    if
+        is_integer(From), From =< SpillLimit ->
+            case hipe_x86_registers:IsPrecoloured(From) of
+                false ->
+                    [];
+                _ ->
+                    case To of
+                        {reg,From} ->
+                            [];
+                        _ ->
+                            exit({hipe_x86_ra_finalise,
+                                  conv_ra_maplet,
+                                  MapLet})
+                    end
+            end;
+        true ->
+            exit({hipe_x86_ra_finalise,conv_ra_maplet,MapLet})
+    end,
+    case To of
+        {reg,NewReg} ->
+            if
+                is_integer(NewReg) ->
+                    case hipe_x86_registers:IsPrecoloured(NewReg) of
+                        true ->
+                            [];
+                        _ ->
+                            if
+                                From =:= NewReg ->
+                                    [];
+                                true ->
+                                    exit({hipe_x86_ra_finalise,
+                                          conv_ra_maplet,
+                                          MapLet})
+                            end
+                    end;
+                true ->
+                    exit({hipe_x86_ra_finalise,conv_ra_maplet,MapLet})
+            end,
+            {From,NewReg};
+        {spill,SpillIndex} ->
+            if
+                is_integer(SpillIndex), SpillIndex >= 0 ->
+                    [];
+                true ->
+                    exit({hipe_x86_ra_finalise,conv_ra_maplet,MapLet})
+            end,
+            ToTempNum = SpillLimit + SpillIndex + 1,
+            MaxTempNum = hipe_gensym:get_var(x86),
+            if
+                MaxTempNum >= ToTempNum ->
+                    ok;
+                true ->
+                    hipe_gensym:set_var(x86, ToTempNum)
+            end,
+            {From,ToTempNum};
+        _ ->
+            exit({hipe_x86_ra_finalise,conv_ra_maplet,MapLet})
+    end.
+
+mk_ra_map_x87(FpMap, SpillLimit) ->
+    lists:foldl(fun(MapLet, Map) ->
+                       {Key,Val} =
+                           conv_ra_maplet(MapLet,
+                                          SpillLimit,
+                                          is_precoloured_x87),
+                       gb_trees:insert(Key, Val, Map)
+                end,
+                gb_trees:empty(),
+                FpMap).
+
+mk_ra_map_fp(FpMap, SpillLimit, _Options) ->
+    mk_ra_map_x87(FpMap, SpillLimit).
+
+-file("test/lib/hipe/amd64/hipe_amd64_ra_finalise.erl", 21).
+
+
+

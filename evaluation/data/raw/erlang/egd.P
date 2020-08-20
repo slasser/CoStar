@@ -1,0 +1,204 @@
+-file("test/lib/percept/src/egd.erl", 1).
+
+-module(egd).
+
+-export([create/2,destroy/1,information/1]).
+
+-export([text/5,line/4,color/1,color/2]).
+
+-export([rectangle/4,filledRectangle/4,filledEllipse/4]).
+
+-export([arc/4,arc/5]).
+
+-export([render/1,render/2,render/3]).
+
+-export([filledTriangle/5,polygon/3]).
+
+-export([save/2]).
+
+-file("test/lib/percept/src/egd.hrl", 1).
+
+-type rgba_float() :: {float(), float(), float(), float()}.
+
+-type rgba_byte() :: {byte(), byte(), byte(), byte()}.
+
+-type rgb() :: {byte(), byte(), byte()}.
+
+-record(image_object,{type,points = [],span,internals,intervals,color}).
+
+-record(image,{width,
+               height,
+               objects = [],
+               background = {1.0,1.0,1.0,1.0},
+               image}).
+
+-file("test/lib/percept/src/egd.erl", 37).
+
+-type egd_image() :: pid().
+
+-type point() :: {non_neg_integer(), non_neg_integer()}.
+
+-type render_option() :: {render_engine, opaque}
+                       | {render_engine, alpha}.
+
+-type color() :: {float(), float(), float(), float()}.
+
+-spec create(Width :: integer(), Height :: integer()) -> egd_image().
+
+create(Width, Height) ->
+    spawn_link(fun() ->
+                      init(trunc(Width), trunc(Height))
+               end).
+
+-spec destroy(Image :: egd_image()) -> ok.
+
+destroy(Image) ->
+    cast(Image, destroy),
+    ok.
+
+-spec render(Image :: egd_image()) -> binary().
+
+render(Image) ->
+    render(Image, png, [{render_engine,opaque}]).
+
+render(Image, Type) ->
+    render(Image, Type, [{render_engine,opaque}]).
+
+-spec render(Image :: egd_image(),
+             Type :: png | raw_bitmap | eps,
+             Options :: [render_option()]) ->
+                binary().
+
+render(Image, Type, Options) ->
+    {render_engine,RenderType} =
+        proplists:lookup(render_engine, Options),
+    call(Image, {render,Type,RenderType}).
+
+information(Pid) ->
+    cast(Pid, information),
+    ok.
+
+-spec line(Image :: egd_image(),
+           P1 :: point(),
+           P2 :: point(),
+           Color :: color()) ->
+              ok.
+
+line(Image, P1, P2, Color) ->
+    cast(Image, {line,P1,P2,Color}),
+    ok.
+
+-spec color(Value :: {byte(), byte(), byte()}
+                   | {byte(), byte(), byte(), byte()}
+                   | atom()) ->
+               color().
+
+color(Color) ->
+    egd_primitives:color(Color).
+
+color(_Image, Color) ->
+    egd_primitives:color(Color).
+
+text(Image, P, Font, Text, Color) ->
+    cast(Image, {text,P,Font,Text,Color}),
+    ok.
+
+rectangle(Image, P1, P2, Color) ->
+    cast(Image, {rectangle,P1,P2,Color}),
+    ok.
+
+filledRectangle(Image, P1, P2, Color) ->
+    cast(Image, {filled_rectangle,P1,P2,Color}),
+    ok.
+
+filledEllipse(Image, P1, P2, Color) ->
+    cast(Image, {filled_ellipse,P1,P2,Color}),
+    ok.
+
+filledTriangle(Image, P1, P2, P3, Color) ->
+    cast(Image, {filled_triangle,P1,P2,P3,Color}),
+    ok.
+
+polygon(Image, Pts, Color) ->
+    cast(Image, {polygon,Pts,Color}),
+    ok.
+
+arc(Image, P1, P2, Color) ->
+    cast(Image, {arc,P1,P2,Color}),
+    ok.
+
+arc(Image, P1, P2, D, Color) ->
+    cast(Image, {arc,P1,P2,D,Color}),
+    ok.
+
+save(Binary, Filename) when is_binary(Binary) ->
+    file:write_file(Filename, Binary),
+    ok.
+
+cast(Pid, Command) ->
+    Pid ! {egd,self(),Command}.
+
+call(Pid, Command) ->
+    Pid ! {egd,self(),Command},
+    receive
+        {egd,Pid,Result} ->
+            Result
+    end.
+
+init(W, H) ->
+    Image = egd_primitives:create(W, H),
+    loop(Image).
+
+loop(Image) ->
+    receive
+        {egd,_Pid,destroy} ->
+            ok;
+        {egd,Pid,{render,BinaryType,RenderType}} ->
+            case BinaryType of
+                raw_bitmap ->
+                    Bitmap = egd_render:binary(Image, RenderType),
+                    Pid ! {egd,self(),Bitmap},
+                    loop(Image);
+                eps ->
+                    Eps = egd_render:eps(Image),
+                    Pid ! {egd,self(),Eps},
+                    loop(Image);
+                png ->
+                    Bitmap = egd_render:binary(Image, RenderType),
+                    Png =
+                        egd_png:binary(Image#image.width,
+                                       Image#image.height,
+                                       Bitmap),
+                    Pid ! {egd,self(),Png},
+                    loop(Image);
+                Unhandled ->
+                    Pid ! {egd,self(),{error,{format,Unhandled}}},
+                    loop(Image)
+            end;
+        {egd,_Pid,{line,P1,P2,C}} ->
+            loop(egd_primitives:line(Image, P1, P2, C));
+        {egd,_Pid,{text,P,Font,Text,C}} ->
+            loop(egd_primitives:text(Image, P, Font, Text, C));
+        {egd,_Pid,{filled_ellipse,P1,P2,C}} ->
+            loop(egd_primitives:filledEllipse(Image, P1, P2, C));
+        {egd,_Pid,{filled_rectangle,P1,P2,C}} ->
+            loop(egd_primitives:filledRectangle(Image, P1, P2, C));
+        {egd,_Pid,{filled_triangle,P1,P2,P3,C}} ->
+            loop(egd_primitives:filledTriangle(Image, P1, P2, P3, C));
+        {egd,_Pid,{polygon,Pts,C}} ->
+            loop(egd_primitives:polygon(Image, Pts, C));
+        {egd,_Pid,{arc,P1,P2,C}} ->
+            loop(egd_primitives:arc(Image, P1, P2, C));
+        {egd,_Pid,{arc,P1,P2,D,C}} ->
+            loop(egd_primitives:arc(Image, P1, P2, D, C));
+        {egd,_Pid,{rectangle,P1,P2,C}} ->
+            loop(egd_primitives:rectangle(Image, P1, P2, C));
+        {egd,_Pid,information} ->
+            egd_primitives:info(Image),
+            loop(Image);
+        _ ->
+            loop(Image)
+    end.
+
+
+

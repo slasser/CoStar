@@ -1,0 +1,247 @@
+-file("test/lib/diameter/test/diameter_enum.erl", 1).
+
+-module(diameter_enum).
+
+-export([new/1,
+         combine/1,
+         reverse/1,
+         map/2,
+         append/1,
+         duplicate/2,
+         nthtail/2,
+         seq/2,
+         seq/3,
+         zip/1,
+         zip/2,
+         slice/3,
+         split/2]).
+
+-export([foreach/2,
+         foldl/3,
+         foldr/3,
+         all/2,
+         any/2,
+         member/2,
+         last/1,
+         nth/2,
+         to_list/1]).
+
+new(L) when is_list(L) ->
+    new(list_to_tuple(L));
+new(T) when is_tuple(T) ->
+    enum(size(T),
+         fun(N) ->
+                element(N, T)
+         end);
+new(T) ->
+    fun(0) ->
+           1;
+       (1) ->
+           T
+    end.
+
+enum(Ord, F) ->
+    fun(0) ->
+           Ord;
+       (N) when 0 < N, N =< Ord ->
+           F(N)
+    end.
+
+combine(T) when is_tuple(T) ->
+    F = combine(tuple_to_list(T)),
+    enum(F(0),
+         fun(N) ->
+                list_to_tuple(F(N))
+         end);
+combine([]) ->
+    fun(0) ->
+           0
+    end;
+combine([_|_] = L) ->
+    [Ord|Divs] =
+        lists:foldl(fun(F, [D|_] = A) ->
+                           [F(0) * D|A]
+                    end,
+                    [1],
+                    L),
+    RL = lists:reverse(L),
+    enum(Ord,
+         fun(N) ->
+                combine(N, Ord, Divs, RL)
+         end).
+
+combine(N, Ord, Divs, L) when 0 < N, N =< Ord ->
+    {Vs,[]} =
+        lists:foldl(fun(F, {A,[D|Ds]}) ->
+                           {[F(1 + (N - 1) div D rem F(0))|A],Ds}
+                    end,
+                    {[],Divs},
+                    L),
+    Vs.
+
+reverse(E) ->
+    Ord = E(0),
+    enum(Ord,
+         fun(N) ->
+                E(Ord + 1 - N)
+         end).
+
+map(Fun, E) ->
+    enum(E(0),
+         fun(N) ->
+                Fun(E(N))
+         end).
+
+append(Es) ->
+    [Ord|Os] =
+        lists:foldl(fun(E, [N|_] = A) ->
+                           [N + E(0)|A]
+                    end,
+                    [0],
+                    Es),
+    Rev = lists:reverse(Es),
+    enum(Ord,
+         fun(N) ->
+                append(N, Os, Rev)
+         end).
+
+append(N, [Ord|_], [E|_]) when N > Ord ->
+    E(N - Ord);
+append(N, [_|Os], [_|Es]) ->
+    append(N, Os, Es).
+
+duplicate(N, E) ->
+    Ord = E(0),
+    enum(N * Ord,
+         fun(M) ->
+                E(1 + (M - 1) rem Ord)
+         end).
+
+nthtail(N, E) when 0 =< N ->
+    nthtail(E(0) - N, N, E).
+
+nthtail(Ord, N, E) when 0 =< Ord ->
+    enum(Ord,
+         fun(M) ->
+                E(M + N)
+         end).
+
+seq(From, To) ->
+    seq(From, To, 1).
+
+seq(From, To, Incr) when From =< To ->
+    enum((To - From + Incr) div Incr,
+         fun(N) ->
+                From + (N - 1) * Incr
+         end).
+
+zip(Es) ->
+    zip(fun(T) ->
+               T
+        end,
+        Es).
+
+zip(_, []) ->
+    [];
+zip(Fun, Es) ->
+    enum(lists:min([ 
+                    E(0) ||
+                        E <- Es
+                   ]),
+         fun(N) ->
+                Fun([ 
+                     E(N) ||
+                         E <- Es
+                    ])
+         end).
+
+slice(N, Len, E) when is_integer(N), N > 0, is_integer(Len), Len >= 0 ->
+    slice(N, Len, E(0) - (N - 1), E).
+
+slice(_, _, Tail, _) when Tail < 1 ->
+    fun(0) ->
+           0
+    end;
+slice(N, Len, Tail, E) ->
+    enum(lists:min([Len,Tail]),
+         fun(M) ->
+                E(N - 1 + M)
+         end).
+
+split(Len, E) when is_integer(Len), Len > 0 ->
+    split(1, E(0), Len, E, []).
+
+split(N, Ord, _, _, Acc) when N > Ord ->
+    lists:reverse(Acc);
+split(N, Ord, Len, E, Acc) ->
+    split(N + Len, Ord, Len, E, [slice(N, Len, E)|Acc]).
+
+foreach(Fun, E) ->
+    foldl(fun(N, ok) ->
+                 Fun(N),
+                 ok
+          end,
+          ok,
+          E).
+
+foldl(Fun, Acc, E) ->
+    foldl(E(0), 1, Fun, Acc, E).
+
+foldl(M, N, _, Acc, _) when N == M + 1 ->
+    Acc;
+foldl(M, N, Fun, Acc, E) ->
+    foldl(M, N + 1, Fun, Fun(E(N), Acc), E).
+
+foldr(Fun, Acc, E) ->
+    foldl(Fun, Acc, reverse(E)).
+
+all(Pred, E) ->
+    all(E(0), 1, Pred, E).
+
+all(M, N, _, _) when N == M + 1 ->
+    true;
+all(M, N, Pred, E) ->
+    Pred(E(N))
+    andalso
+    all(M, N + 1, Pred, E).
+
+any(Pred, E) ->
+    any(E(0), 1, Pred, E).
+
+any(M, N, _, _) when N == M + 1 ->
+    false;
+any(M, N, Pred, E) ->
+    Pred(E(N))
+    orelse
+    any(M, N + 1, Pred, E).
+
+member(X, E) ->
+    member(E(0), 1, X, E).
+
+member(M, N, _, _) when N == M + 1 ->
+    false;
+member(M, N, X, E) ->
+    match(E(N), X)
+    orelse
+    member(M, N + 1, X, E).
+
+match(X, X) ->
+    true;
+match(_, _) ->
+    false.
+
+last(E) ->
+    E(E(0)).
+
+nth(N, E) ->
+    E(N).
+
+to_list(E) ->
+    foldr(fun(X, A) ->
+                 [X|A]
+          end,
+          [],
+          E).
+
+
+

@@ -1,0 +1,29 @@
+-file("test/lib/stdlib/test/error_logger_forwarder.erl", 1).
+
+-module(error_logger_forwarder).
+
+-export([register/0]).
+
+-export([init/1,handle_event/2,handle_call/2,handle_info/2,terminate/2]).
+
+register() ->
+    error_logger:add_report_handler(error_logger_forwarder, self()).
+
+init(Tester) ->
+    {ok,Tester}.
+
+handle_event(Event, Tester) ->
+    Tester ! Event,
+    {ok,Tester}.
+
+handle_info(_, State) ->
+    {ok,State}.
+
+handle_call(_Query, State) ->
+    {ok,{error,bad_query},State}.
+
+terminate(_Reason, State) ->
+    State.
+
+
+

@@ -1,0 +1,518 @@
+-file("test/erts/test/erl_print_SUITE.erl", 1).
+
+-module(erl_print_SUITE).
+
+-author('rickard.s.green@ericsson.com').
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2,
+         init_per_testcase/2,
+         end_per_testcase/2]).
+
+-export([erlang_display/1,
+         integer/1,
+         float/1,
+         string/1,
+         character/1,
+         snprintf/1,
+         quote/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/erts/test/erl_print_SUITE.erl", 43).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    test_cases().
+
+groups() ->
+    [].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+test_cases() ->
+    [erlang_display,integer,float,string,character,snprintf,quote].
+
+erlang_display(doc) ->
+    [];
+erlang_display(suite) ->
+    [];
+erlang_display(Config) when is_list(Config) ->
+    put(erlang_display_test, ok),
+    OAIS = erts_debug:set_internal_state(available_internal_state, true),
+    chk_display(atom, "atom"),
+    chk_display(true, "true"),
+    chk_display(false, "false"),
+    chk_display('DOWN', "'DOWN'"),
+    chk_display('EXIT', "'EXIT'"),
+    chk_display('asdDofw $@{}][', "'asdDofw $@{}]['"),
+    chk_display(0, "0"),
+    chk_display(1, "1"),
+    chk_display(4711, "4711"),
+    chk_display(1 bsl 27 - 1, "134217727"),
+    chk_display(1 bsl 27, "134217728"),
+    chk_display(1 bsl 32, "4294967296"),
+    chk_display(11111111111, "11111111111"),
+    chk_display(1 bsl 59 - 1, "576460752303423487"),
+    chk_display(1 bsl 59, "576460752303423488"),
+    chk_display(111111111111111111111, "111111111111111111111"),
+    chk_display(123456789012345678901234567890,
+                "123456789012345678901234567890"),
+    chk_display(1 bsl 10000, str_1_bsl_10000()),
+    chk_display(- 1, "-1"),
+    chk_display(- 4711, "-4711"),
+    chk_display(- (1 bsl 27), "-134217728"),
+    chk_display(- (1 bsl 27 + 1), "-134217729"),
+    chk_display(- (1 bsl 32), "-4294967296"),
+    chk_display(- 11111111111, "-11111111111"),
+    chk_display(- (1 bsl 59), "-576460752303423488"),
+    chk_display(- (1 bsl 59 + 1), "-576460752303423489"),
+    chk_display(- 111111111111111111111, "-111111111111111111111"),
+    chk_display(- 123456789012345678901234567890,
+                "-123456789012345678901234567890"),
+    chk_display(- (1 bsl 10000), [$-|str_1_bsl_10000()]),
+    MyCre = my_cre(),
+    chk_display(mk_pid_xstr({node(),MyCre}, 4711, 42)),
+    chk_display(mk_pid_xstr({node(),oth_cre(MyCre)}, 4711, 42)),
+    chk_display(mk_pid_xstr({node(),oth_cre(oth_cre(MyCre))}, 4711, 42)),
+    chk_display(mk_pid_xstr({a@b,MyCre}, 4711, 42)),
+    chk_display(mk_pid_xstr({a@b,oth_cre(MyCre)}, 4711, 42)),
+    chk_display(mk_pid_xstr({a@b,oth_cre(oth_cre(MyCre))}, 4711, 42)),
+    chk_display(mk_port_xstr({node(),MyCre}, 4711)),
+    chk_display(mk_port_xstr({node(),oth_cre(MyCre)}, 4711)),
+    chk_display(mk_port_xstr({node(),oth_cre(oth_cre(MyCre))}, 4711)),
+    chk_display(mk_port_xstr({c@d,MyCre}, 4711)),
+    chk_display(mk_port_xstr({c@d,oth_cre(MyCre)}, 4711)),
+    chk_display(mk_port_xstr({c@d,oth_cre(oth_cre(MyCre))}, 4711)),
+    chk_display(mk_ref_xstr({node(),MyCre}, [1,2,3])),
+    chk_display(mk_ref_xstr({node(),oth_cre(MyCre)}, [1,2,3])),
+    chk_display(mk_ref_xstr({node(),oth_cre(oth_cre(MyCre))}, [1,2,3])),
+    chk_display(mk_ref_xstr({e@f,MyCre}, [1,2,3])),
+    chk_display(mk_ref_xstr({e@f,oth_cre(MyCre)}, [1,2,3])),
+    chk_display(mk_ref_xstr({e@f,oth_cre(oth_cre(MyCre))}, [1,2,3])),
+    {Pid,PidStr} = mk_pid_xstr({x@y,oth_cre(MyCre)}, 4712, 41),
+    {Port,PortStr} = mk_port_xstr({x@y,oth_cre(MyCre)}, 4712),
+    {Ref,RefStr} = mk_ref_xstr({e@f,oth_cre(MyCre)}, [11,12,13]),
+    chk_display({atom,
+                 - 4711,
+                 Ref,
+                 {"hej",[Pid,222222222222222222222222,Port,4711]}},
+                "{atom,-4711,"
+                ++
+                RefStr
+                ++
+                ",{\"hej\",["
+                ++
+                PidStr
+                ++
+                ",222222222222222222222222," ++ PortStr ++ ",4711]}}"),
+    chk_display({{{{{{{{{{{{{{{{{{{{{{{hi}}}}}}}}}}}}}}}}}}}}}}},
+                "{{{{{{{{{{{{{{{{{{{{{{{hi}}}}}}}}}}}}}}}}}}}}}}}"),
+    chk_display([[[[[[[[[[[[[[[[[[[[[[[yo]]]]]]]]]]]]]]]]]]]]]]],
+                "[[[[[[[[[[[[[[[[[[[[[[[yo]]]]]]]]]]]]]]]]]]]]]]]"),
+    chk_display({[{[{[{[{[{[{[{[{[{[{[{[ii]}]}]}]}]}]}]}]}]}]}]}]},
+                "{[{[{[{[{[{[{[{[{[{[{[{[ii]}]}]}]}]}]}]}]}]}]}]}]}"),
+    chk_display([], "[]"),
+    chk_display([a|b], "[a|b]"),
+    chk_display([a,b,c|z], "[a,b,c|z]"),
+    chk_display([a,b,c], "[a,b,c]"),
+    chk_display([Pid,Port,Ref],
+                "[" ++ PidStr ++ "," ++ PortStr ++ "," ++ RefStr ++ "]"),
+    chk_display("abcdefghijklmnopqrstuvwxyz",
+                "\"abcdefghijklmnopqrstuvwxyz\""),
+    chk_display("ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                "\"ABCDEFGHIJKLMNOPQRSTUVWXYZ\""),
+    chk_display("H E J", "\"H E J\""),
+    chk_display("asdDofw $@{}][", "\"asdDofw $@{}][\""),
+    erts_debug:set_internal_state(available_internal_state, OAIS),
+    ok = get(erlang_display_test).
+
+get_chnl_no(NodeName) when is_atom(NodeName) ->
+    erts_debug:get_internal_state({channel_number,NodeName}).
+
+chk_display(Term, Expect) when is_list(Expect) ->
+    Dstr = erts_debug:display(Term),
+    case Expect ++ io_lib:nl() of
+        Dstr ->
+            test_server:format("Test of \"~p\" succeeded.~n  Expected a"
+                               "nd got: ~s~n",
+                               [Term,io_lib:write_string(Dstr)]);
+        DoExpect ->
+            test_server:format("***~n*** Test of \"~p\" failed!~n***   "
+                               "    Expected: ~s~n***            Got: ~"
+                               "s~n***~n",
+                               [Term,
+                                io_lib:write_string(DoExpect),
+                                io_lib:write_string(Dstr)]),
+            put(erlang_display_test, failed)
+    end.
+
+chk_display({Term,Expect}) ->
+    chk_display(Term, Expect).
+
+mk_pid_xstr({NodeName,Creation}, Number, Serial) ->
+    Pid = mk_pid({NodeName,Creation}, Number, Serial),
+    XStr =
+        "<"
+        ++
+        integer_to_list(get_chnl_no(NodeName))
+        ++
+        "."
+        ++
+        integer_to_list(Number) ++ "." ++ integer_to_list(Serial) ++ ">",
+    {Pid,XStr}.
+
+mk_port_xstr({NodeName,Creation}, Number) ->
+    Port = mk_port({NodeName,Creation}, Number),
+    XStr =
+        "#Port<"
+        ++
+        integer_to_list(get_chnl_no(NodeName))
+        ++
+        "." ++ integer_to_list(Number) ++ ">",
+    {Port,XStr}.
+
+mk_ref_xstr({NodeName,Creation}, Numbers) ->
+    Ref = mk_ref({NodeName,Creation}, Numbers),
+    XStr =
+        "#Ref<"
+        ++
+        integer_to_list(get_chnl_no(NodeName))
+        ++
+        ref_numbers_xstr(Numbers) ++ ">",
+    {Ref,XStr}.
+
+ref_numbers_xstr([]) ->
+    [];
+ref_numbers_xstr([N|Ns]) ->
+    ref_numbers_xstr(Ns) ++ "." ++ integer_to_list(N).
+
+integer(A) ->
+    default_testcase_impl(A).
+
+float(A) ->
+    default_testcase_impl(A).
+
+string(A) ->
+    default_testcase_impl(A).
+
+character(A) ->
+    default_testcase_impl(A).
+
+snprintf(A) ->
+    default_testcase_impl(A).
+
+quote(A) ->
+    default_testcase_impl(A).
+
+default_testcase_impl(doc) ->
+    [];
+default_testcase_impl(suite) ->
+    [];
+default_testcase_impl(Config) when is_list(Config) ->
+    run_case(Config).
+
+init_per_testcase(Case, Config) ->
+    Dog = test_server:timetrap(test_server:minutes(10)),
+    [{testcase,Case},{watchdog,Dog}|Config].
+
+end_per_testcase(_Case, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog),
+    ok.
+
+port_prog_killer(EProc, OSProc) when is_pid(EProc), is_list(OSProc) ->
+    process_flag(trap_exit, true),
+    Ref = monitor(process, EProc),
+    receive
+        {'DOWN',Ref,_,_,Reason}
+            when
+                is_tuple(Reason), element(1, Reason) == timetrap_timeout ->
+            Cmd = "kill -9 " ++ OSProc,
+            test_server:format("Test case timed out. Trying to kill por"
+                               "t program.~n  Executing: ~p~n",
+                               [Cmd]),
+            case os:cmd(Cmd) of
+                [] ->
+                    ok;
+                OsCmdRes ->
+                    test_server:format("             ~s", [OsCmdRes])
+            end;
+        {'DOWN',Ref,_,_,_} ->
+            ok
+    end.
+
+get_line(_Port, eol, Data) ->
+    Data;
+get_line(Port, noeol, Data) ->
+    receive
+        {Port,{data,{Flag,NextData}}} ->
+            get_line(Port, Flag, Data ++ NextData);
+        {Port,eof} ->
+            test_server:fail(port_prog_unexpectedly_closed)
+    end.
+
+read_case_data(Port, TestCase) ->
+    receive
+        {Port,
+         {data,{eol,[$E,$P,$-,$T,$E,$S,$T,$-,$S,$U,$C,$C,$E,$S,$S]}}} ->
+            ok;
+        {Port,
+         {data,
+          {Flag,
+           [$E,$P,$-,$T,$E,$S,$T,$-,$S,$U,$C,$C,$E,$S,$S|CommentStart]}}} ->
+            {comment,get_line(Port, Flag, CommentStart)};
+        {Port,
+         {data,
+          {Flag,[$E,$P,$-,$T,$E,$S,$T,$-,$S,$K,$I,$P|CommentStart]}}} ->
+            {skipped,get_line(Port, Flag, CommentStart)};
+        {Port,
+         {data,
+          {Flag,
+           [$E,$P,$-,$T,$E,$S,$T,$-,$F,$A,$I,$L,$U,$R,$E|ReasonStart]}}} ->
+            test_server:fail(get_line(Port, Flag, ReasonStart));
+        {Port,{data,{eol,[$E,$P,$-,$T,$E,$S,$T,$-,$P,$I,$D|PidStr]}}} ->
+            test_server:format("Port program pid: ~s~n", [PidStr]),
+            CaseProc = self(),
+            _ = list_to_integer(PidStr),
+            spawn_opt(fun() ->
+                             port_prog_killer(CaseProc, PidStr)
+                      end,
+                      [{priority,max},link]),
+            read_case_data(Port, TestCase);
+        {Port,{data,{Flag,LineStart}}} ->
+            test_server:format("~s~n",
+                               [get_line(Port, Flag, LineStart)]),
+            read_case_data(Port, TestCase);
+        {Port,eof} ->
+            test_server:fail(port_prog_unexpectedly_closed)
+    end.
+
+run_case(Config) ->
+    run_case(Config, "").
+
+run_case(Config, TestArgs) ->
+    run_case(Config,
+             TestArgs,
+             fun(_Port) ->
+                    ok
+             end).
+
+run_case(Config, TestArgs, Fun) ->
+    Test = atom_to_list(test_server:lookup_config(testcase, Config)),
+    TestProg =
+        filename:join([test_server:lookup_config(data_dir, Config),
+                       "erl_print_tests"
+                       ++
+                       "." ++ atom_to_list(erlang:system_info(threads))]),
+    Cmd = TestProg ++ " " ++ Test ++ " " ++ TestArgs,
+    case
+        catch
+            open_port({spawn,Cmd},
+                      [stream,
+                       use_stdio,
+                       stderr_to_stdout,
+                       eof,
+                       {line,1024}])
+    of
+        Port when is_port(Port) ->
+            Fun(Port),
+            CaseResult = read_case_data(Port, Test),
+            receive
+                {Port,eof} ->
+                    ok
+            end,
+            CaseResult;
+        Error ->
+            test_server:fail({open_port_failed,Error})
+    end.
+
+uint32_be(Uint) when is_integer(Uint), 0 =< Uint, Uint < 1 bsl 32 ->
+    [(Uint bsr 24) band 255,
+     (Uint bsr 16) band 255,
+     (Uint bsr 8) band 255,
+     Uint band 255];
+uint32_be(Uint) ->
+    exit({badarg,uint32_be,[Uint]}).
+
+uint16_be(Uint) when is_integer(Uint), 0 =< Uint, Uint < 1 bsl 16 ->
+    [(Uint bsr 8) band 255,Uint band 255];
+uint16_be(Uint) ->
+    exit({badarg,uint16_be,[Uint]}).
+
+uint8(Uint) when is_integer(Uint), 0 =< Uint, Uint < 1 bsl 8 ->
+    Uint band 255;
+uint8(Uint) ->
+    exit({badarg,uint8,[Uint]}).
+
+mk_pid({NodeName,Creation}, Number, Serial) when is_atom(NodeName) ->
+    mk_pid({atom_to_list(NodeName),Creation}, Number, Serial);
+mk_pid({NodeName,Creation}, Number, Serial) ->
+    case
+        catch
+            binary_to_term(list_to_binary([131,
+                                           103,
+                                           100,
+                                           uint16_be(length(NodeName)),
+                                           NodeName,
+                                           uint32_be(Number),
+                                           uint32_be(Serial),
+                                           uint8(Creation)]))
+    of
+        Pid when is_pid(Pid) ->
+            Pid;
+        {'EXIT',{badarg,_}} ->
+            exit({badarg,mk_pid,[{NodeName,Creation},Number,Serial]});
+        Other ->
+            exit({unexpected_binary_to_term_result,Other})
+    end.
+
+mk_port({NodeName,Creation}, Number) when is_atom(NodeName) ->
+    mk_port({atom_to_list(NodeName),Creation}, Number);
+mk_port({NodeName,Creation}, Number) ->
+    case
+        catch
+            binary_to_term(list_to_binary([131,
+                                           102,
+                                           100,
+                                           uint16_be(length(NodeName)),
+                                           NodeName,
+                                           uint32_be(Number),
+                                           uint8(Creation)]))
+    of
+        Port when is_port(Port) ->
+            Port;
+        {'EXIT',{badarg,_}} ->
+            exit({badarg,mk_port,[{NodeName,Creation},Number]});
+        Other ->
+            exit({unexpected_binary_to_term_result,Other})
+    end.
+
+mk_ref({NodeName,Creation}, Numbers)
+    when is_atom(NodeName), is_integer(Creation), is_list(Numbers) ->
+    mk_ref({atom_to_list(NodeName),Creation}, Numbers);
+mk_ref({NodeName,Creation}, [Number])
+    when is_list(NodeName), is_integer(Creation), is_integer(Number) ->
+    case
+        catch
+            binary_to_term(list_to_binary([131,
+                                           101,
+                                           100,
+                                           uint16_be(length(NodeName)),
+                                           NodeName,
+                                           uint32_be(Number),
+                                           uint8(Creation)]))
+    of
+        Ref when is_reference(Ref) ->
+            Ref;
+        {'EXIT',{badarg,_}} ->
+            exit({badarg,mk_ref,[{NodeName,Creation},[Number]]});
+        Other ->
+            exit({unexpected_binary_to_term_result,Other})
+    end;
+mk_ref({NodeName,Creation}, Numbers)
+    when is_list(NodeName), is_integer(Creation), is_list(Numbers) ->
+    case
+        catch
+            binary_to_term(list_to_binary([131,
+                                           114,
+                                           uint16_be(length(Numbers)),
+                                           100,
+                                           uint16_be(length(NodeName)),
+                                           NodeName,
+                                           uint8(Creation),
+                                           lists:map(fun(N) ->
+                                                            uint32_be(N)
+                                                     end,
+                                                     Numbers)]))
+    of
+        Ref when is_reference(Ref) ->
+            Ref;
+        {'EXIT',{badarg,_}} ->
+            exit({badarg,mk_ref,[{NodeName,Creation},Numbers]});
+        Other ->
+            exit({unexpected_binary_to_term_result,Other})
+    end.
+
+my_cre() ->
+    erlang:system_info(creation).
+
+oth_cre(0) ->
+    1;
+oth_cre(1) ->
+    2;
+oth_cre(2) ->
+    3;
+oth_cre(3) ->
+    1;
+oth_cre(N) ->
+    exit({invalid_creation,N}).
+
+str_1_bsl_10000() ->
+    "199506311688075838488374216268358508382349683188619245485200894985"
+    "294388302219466319199616840361945978993311294232091242715564913494"
+    "137811175937859320963239578557300467937945267652465512660598955205"
+    "500869181933115425086084606181046855090748660896248880904898948380"
+    "092539416332578506215683094739025569123880652250966438744410467598"
+    "716269854532228685381616943157756296407628368807607322285350916414"
+    "761839563814589694638994108409605362678210646214273333940365255656"
+    "495306031426802349694003359343166514592977732796657756061725820314"
+    "079941981796073782456837622800373028854872519008344645814546505579"
+    "296014148339216157345881392570953797691192778008269577356744441230"
+    "620187578363255027283237892707103738028663930314281332414016241956"
+    "716905740614196543423246388012488561473052074319922596117962501309"
+    "928602417083408076059323201612684922884962558413128440615367389514"
+    "871142563151110897455142033138202029316409575964647560104058458415"
+    "660720449628670165150619206310041864222759086709005746064178569519"
+    "114560550682512504060075198422618980592371180544447880729063952425"
+    "483392219827074044731623767608466130337787060398034131971334936546"
+    "227005631699374555082417809728109832913144035718775247685098572769"
+    "379264332215993998768866608083688378380276432827751722736575727447"
+    "841122943897338108616074232532919748131201976041782819656974758981"
+    "645312584341359598627841301281854062834766490886905210475808826158"
+    "239619857701224070443305830758690393196046034049731565832086721059"
+    "133009037528234155397453943977152574552905102123109473216107534748"
+    "257407752739863482984983407569379556466386218745694992790165721037"
+    "013644331358172143117913982229838458473344402709641828510050729277"
+    "483645505786345011008529878123894739286995408343461588070439591189"
+    "858151457791771436196987281314594837832020814749821718580113890712"
+    "282509058268174362205774759214176537156877256149045829049924610286"
+    "300815355833081301019876758562343435389554091756234008448875261626"
+    "435686488335194637203772932400944562469232543504006780272738377553"
+    "764067268986362410374914109667185570507590981002467898801782719259"
+    "533812824219540283027594084489550146766683896979968862416363133763"
+    "939033734558014076367418777110553842257394991101864682196965816514"
+    "851304942223699477147630691554682176828762003627772577237813653316"
+    "111968112807926694818872012986436607685516398605346022978715575179"
+    "473852463694469230878942659482170080511203223654962881690357391213"
+    "683383935917564187338505109702716139154395909915981546544173363116"
+    "569360311222499379699992267817323580231118626445752991357581750081"
+    "998392362846152498810889602322443621737716180863570154684840586223"
+    "297928538756234865564405369626220189635710288123615675125433383032"
+    "700290976686505685571575055167275188991941297113376901499161813151"
+    "715440077286505731895574509203301853048471138183154073240533190384"
+    "620840364217637039115506397890007428536721962809034779745333204683"
+    "687958685802379522186291200807428195513179481576244482985184615097"
+    "048880272747215746881315947504097321150804981904558034168269497871"
+    "41316063210686391511681774304792596709376".
+
+
+

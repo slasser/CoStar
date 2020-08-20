@@ -1,0 +1,50 @@
+-file("test/lib/common_test/test/ct_event_handler_SUITE_data/event_handling_1/test/eh_11_SUITE.erl",
+      1).
+
+-module(eh_11_SUITE).
+
+-compile(export_all).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      21).
+
+-file([], 21).
+
+-file("test/lib/common_test/test/ct_event_handler_SUITE_data/event_handling_1/test/eh_11_SUITE.erl",
+      30).
+
+suite() ->
+    [{timetrap,{seconds,10}}].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_testcase(_TestCase, Config) ->
+    Config.
+
+end_per_testcase(_TestCase, _Config) ->
+    ok.
+
+all() ->
+    [tc1,tc2,tc3].
+
+tc1(_Config) ->
+    ok.
+
+tc2(_Config) ->
+    {skip,"Skipped"}.
+
+tc3(_Config) ->
+    exit('Failing').
+
+
+

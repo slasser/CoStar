@@ -1,0 +1,104 @@
+-file("test/lib/inets/examples/httpd_load_test/hdlt_logger.erl", 1).
+
+-module(hdlt_logger).
+
+-export([start/0,
+         set_level/1,
+         get_level/0,
+         set_name/1,
+         info/2,
+         log/2,
+         debug/2]).
+
+-export([logger/1]).
+
+start() ->
+    Self = self(),
+    proc_lib:start(hdlt_logger, logger, [Self]).
+
+set_name(Name) when is_list(Name) ->
+    put(hdlt_logger_name, Name),
+    ok.
+
+get_level() ->
+    get(hdlt_logger_level).
+
+set_level(Level) ->
+    case lists:member(Level, [silence,info,log,debug]) of
+        true ->
+            put(hdlt_logger_level, Level),
+            ok;
+        false ->
+            error({bad_debug_level,Level})
+    end.
+
+info(F, A) ->
+    do_log(info, get(hdlt_logger_level), F, A).
+
+log(F, A) ->
+    do_log(log, get(hdlt_logger_level), F, A).
+
+debug(F, A) ->
+    do_log(debug, get(hdlt_logger_level), F, A).
+
+logger(Parent) ->
+    global:register_name(hdlt_logger, self()),
+    Ref = monitor(process, Parent),
+    proc_lib:init_ack(self()),
+    logger_loop(Ref).
+
+logger_loop(Ref) ->
+    receive
+        {hdlt_logger_msg,F,A} ->
+            io:format(F, A),
+            logger_loop(Ref);
+        {'DOWN',Ref,process,_Object,_Info} ->
+            erlang:send_after(timer:seconds(5), self(), stop),
+            logger_loop(undefined);
+        stop ->
+            global:unregister_name(hdlt_logger),
+            ok
+    end.
+
+formated_timestamp() ->
+    {Date,Time} = erlang:localtime(),
+    {YYYY,MM,DD} = Date,
+    {Hour,Min,Sec} = Time,
+    FormatDate =
+        io_lib:format("~.4w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w",
+                      [YYYY,MM,DD,Hour,Min,Sec]),
+    lists:flatten(FormatDate).
+
+do_log(_, silence, _, _) ->
+    ok;
+do_log(info, info, F, A) ->
+    do_log("INFO", F, A);
+do_log(info, log, F, A) ->
+    do_log("INFO", F, A);
+do_log(log, log, F, A) ->
+    do_log("LOG ", F, A);
+do_log(info, debug, F, A) ->
+    do_log("INFO", F, A);
+do_log(log, debug, F, A) ->
+    do_log("LOG ", F, A);
+do_log(debug, debug, F, A) ->
+    do_log("DBG ", F, A);
+do_log(_, _, _F, _A) ->
+    ok.
+
+do_log(SEV, F, A) ->
+    Name =
+        case get(hdlt_logger_name) of
+            L when is_list(L) ->
+                L;
+            _ ->
+                "UNDEFINED"
+        end,
+    Msg =
+        {hdlt_logger_msg,
+         "~s ~s [~s] " ++ F ++ "~n",
+         [SEV,Name,formated_timestamp()|A]},
+    catch global:send(hdlt_logger, Msg).
+
+
+

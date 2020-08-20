@@ -1,0 +1,359 @@
+-file("test/lib/common_test/test/ct_testspec_1_SUITE_data/groups_1/groups_12_SUITE.erl",
+      1).
+
+-module(groups_12_SUITE).
+
+-compile(export_all).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/common_test-1.6.3/include/ct.hrl",
+      21).
+
+-file([], 21).
+
+-file("test/lib/common_test/test/ct_testspec_1_SUITE_data/groups_1/groups_12_SUITE.erl",
+      24).
+
+suite() ->
+    [{timetrap,{minutes,1}}].
+
+groups() ->
+    [{test_group_1a,[shuffle],[testcase_1a,testcase_1b,testcase_1c]},
+     {test_group_1b,[parallel],[testcase_1a,testcase_1b]},
+     {test_group_2,
+      [parallel],
+      [testcase_2a,
+       {test_group_3,[{repeat,2}],[testcase_3a,testcase_3b]},
+       testcase_2b]},
+     {test_group_4,
+      [{test_group_5,
+        [parallel],
+        [testcase_5a,{group,test_group_6},testcase_5b]}]},
+     {test_group_6,
+      [parallel],
+      [{group,test_group_7},{group,test_group_8}]},
+     {test_group_7,[sequence],[testcase_7a,testcase_7b]},
+     {test_group_8,[shuffle,sequence],[testcase_8a,testcase_8b]}].
+
+all() ->
+    [{group,test_group_1a},
+     {group,test_group_1b},
+     testcase_1,
+     testcase_2,
+     {group,test_group_2},
+     testcase_3,
+     {group,test_group_4}].
+
+grs_and_tcs() ->
+    {[test_group_1a,
+      test_group_1b,
+      test_group_2,
+      test_group_3,
+      test_group_4,
+      test_group_5,
+      test_group_6,
+      test_group_7,
+      test_group_8],
+     [testcase_1a,
+      testcase_1b,
+      testcase_1c,
+      testcase_1,
+      testcase_2,
+      testcase_2a,
+      testcase_2b,
+      testcase_3a,
+      testcase_3b,
+      testcase_3,
+      testcase_5a,
+      testcase_5b,
+      testcase_7a,
+      testcase_7b,
+      testcase_8a,
+      testcase_8b]}.
+
+init_per_suite(Config) ->
+    [{suite,init}|Config].
+
+end_per_suite(Config) ->
+    init = test_server:lookup_config(suite, Config).
+
+init_per_group(Group, Config) ->
+    Cmt =
+        case
+            {Group,
+             test_server:lookup_config(tc_group_properties, Config)}
+        of
+            {test_group_1a,[{shuffle,S},{name,test_group_1a}]} ->
+                io_lib:format("shuffled, ~w", [S]);
+            {test_group_1b,[{name,test_group_1b},parallel]} ->
+                "parallel";
+            {test_group_2,[{name,test_group_2},parallel]} ->
+                "parallel";
+            {test_group_3,[{name,test_group_3},{repeat,2}]} ->
+                "repeat 2";
+            {test_group_3,[{name,test_group_3}]} ->
+                "repeat 1";
+            {test_group_4,[{name,test_group_4}]} ->
+                ok;
+            {test_group_5,[{name,test_group_5},parallel]} ->
+                "parallel";
+            {test_group_6,[{name,test_group_6},parallel]} ->
+                "parallel";
+            {test_group_7,[{name,test_group_7},sequence]} ->
+                "sequence";
+            {test_group_8,[{shuffle,_},{name,test_group_8},sequence]} ->
+                "shuffle & sequence"
+        end,
+    {Grs,_} = grs_and_tcs(),
+    case lists:member(Group, Grs) of
+        true ->
+            init = test_server:lookup_config(suite, Config),
+            ct:comment(io_lib:format("~w, ~s", [Group,Cmt])),
+            [{Group,Group}|Config];
+        false ->
+            ct:fail({bad_group,Group})
+    end.
+
+end_per_group(Group, Config) ->
+    {Grs,_} = grs_and_tcs(),
+    case lists:member(Group, Grs) of
+        true ->
+            init = test_server:lookup_config(suite, Config),
+            Group = test_server:lookup_config(Group, Config),
+            ok;
+        false ->
+            ct:fail({bad_group,Group})
+    end.
+
+init_per_testcase(TestCase, Config) ->
+    {_,TCs} = grs_and_tcs(),
+    case lists:member(TestCase, TCs) of
+        true ->
+            init = test_server:lookup_config(suite, Config),
+            [{TestCase,TestCase}|Config];
+        false ->
+            ct:fail({unknown_testcase,TestCase})
+    end.
+
+end_per_testcase(TestCase, Config) ->
+    {_,TCs} = grs_and_tcs(),
+    case lists:member(TestCase, TCs) of
+        true ->
+            init = test_server:lookup_config(suite, Config),
+            TestCase = test_server:lookup_config(TestCase, Config),
+            ok;
+        false ->
+            ct:fail({unknown_testcase,TestCase})
+    end.
+
+testcase_1a() ->
+    [].
+
+testcase_1a(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    case test_server:lookup_config(test_group_1a, Config) of
+        test_group_1a ->
+            ok;
+        _ ->
+            case test_server:lookup_config(test_group_1b, Config) of
+                test_group_1b ->
+                    ok;
+                _ ->
+                    ct:fail(no_group_data)
+            end
+    end,
+    testcase_1a = test_server:lookup_config(testcase_1a, Config),
+    ok.
+
+testcase_1b() ->
+    [].
+
+testcase_1b(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    case test_server:lookup_config(test_group_1a, Config) of
+        test_group_1a ->
+            ok;
+        _ ->
+            case test_server:lookup_config(test_group_1b, Config) of
+                test_group_1b ->
+                    ok;
+                _ ->
+                    ct:fail(no_group_data)
+            end
+    end,
+    undefined = test_server:lookup_config(testcase_1a, Config),
+    testcase_1b = test_server:lookup_config(testcase_1b, Config),
+    ok.
+
+testcase_1c() ->
+    [].
+
+testcase_1c(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    case test_server:lookup_config(test_group_1a, Config) of
+        test_group_1a ->
+            ok;
+        _ ->
+            case test_server:lookup_config(test_group_1b, Config) of
+                test_group_1b ->
+                    ok;
+                _ ->
+                    ct:fail(no_group_data)
+            end
+    end,
+    undefined = test_server:lookup_config(testcase_1b, Config),
+    testcase_1c = test_server:lookup_config(testcase_1c, Config),
+    ok.
+
+testcase_1() ->
+    [].
+
+testcase_1(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    testcase_1 = test_server:lookup_config(testcase_1, Config),
+    ok.
+
+testcase_2() ->
+    [].
+
+testcase_2(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    undefined = test_server:lookup_config(test_group_1a, Config),
+    undefined = test_server:lookup_config(test_group_1b, Config),
+    testcase_2 = test_server:lookup_config(testcase_2, Config),
+    ok.
+
+testcase_2a() ->
+    [].
+
+testcase_2a(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    test_group_2 = test_server:lookup_config(test_group_2, Config),
+    testcase_2a = test_server:lookup_config(testcase_2a, Config),
+    ok.
+
+testcase_2b() ->
+    [].
+
+testcase_2b(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    test_group_2 = test_server:lookup_config(test_group_2, Config),
+    undefined = test_server:lookup_config(testcase_2a, Config),
+    testcase_2b = test_server:lookup_config(testcase_2b, Config),
+    ok.
+
+testcase_3a() ->
+    [].
+
+testcase_3a(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    test_group_2 = test_server:lookup_config(test_group_2, Config),
+    test_group_3 = test_server:lookup_config(test_group_3, Config),
+    undefined = test_server:lookup_config(testcase_2b, Config),
+    testcase_3a = test_server:lookup_config(testcase_3a, Config),
+    ok.
+
+testcase_3b() ->
+    [].
+
+testcase_3b(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    test_group_2 = test_server:lookup_config(test_group_2, Config),
+    test_group_3 = test_server:lookup_config(test_group_3, Config),
+    undefined = test_server:lookup_config(testcase_3a, Config),
+    testcase_3b = test_server:lookup_config(testcase_3b, Config),
+    ok.
+
+testcase_3() ->
+    [].
+
+testcase_3(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    undefined = test_server:lookup_config(test_group_2, Config),
+    undefined = test_server:lookup_config(test_group_3, Config),
+    testcase_3 = test_server:lookup_config(testcase_3, Config),
+    ok.
+
+testcase_5a() ->
+    [].
+
+testcase_5a(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    undefined = test_server:lookup_config(test_group_3, Config),
+    test_group_4 = test_server:lookup_config(test_group_4, Config),
+    test_group_5 = test_server:lookup_config(test_group_5, Config),
+    undefined = test_server:lookup_config(testcase_3, Config),
+    testcase_5a = test_server:lookup_config(testcase_5a, Config),
+    timer:sleep(3),
+    ok.
+
+testcase_5b() ->
+    [].
+
+testcase_5b(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    test_group_4 = test_server:lookup_config(test_group_4, Config),
+    test_group_5 = test_server:lookup_config(test_group_5, Config),
+    undefined = test_server:lookup_config(testcase_5a, Config),
+    testcase_5b = test_server:lookup_config(testcase_5b, Config),
+    ok.
+
+testcase_7a() ->
+    [].
+
+testcase_7a(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    undefined = test_server:lookup_config(test_group_3, Config),
+    test_group_4 = test_server:lookup_config(test_group_4, Config),
+    test_group_5 = test_server:lookup_config(test_group_5, Config),
+    test_group_6 = test_server:lookup_config(test_group_6, Config),
+    test_group_7 = test_server:lookup_config(test_group_7, Config),
+    testcase_7a = test_server:lookup_config(testcase_7a, Config),
+    ok.
+
+testcase_7b() ->
+    [].
+
+testcase_7b(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    test_group_4 = test_server:lookup_config(test_group_4, Config),
+    test_group_5 = test_server:lookup_config(test_group_5, Config),
+    test_group_6 = test_server:lookup_config(test_group_6, Config),
+    test_group_7 = test_server:lookup_config(test_group_7, Config),
+    undefined = test_server:lookup_config(testcase_7a, Config),
+    testcase_7b = test_server:lookup_config(testcase_7b, Config),
+    ok.
+
+testcase_8a() ->
+    [].
+
+testcase_8a(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    undefined = test_server:lookup_config(test_group_3, Config),
+    test_group_4 = test_server:lookup_config(test_group_4, Config),
+    test_group_5 = test_server:lookup_config(test_group_5, Config),
+    test_group_6 = test_server:lookup_config(test_group_6, Config),
+    test_group_8 = test_server:lookup_config(test_group_8, Config),
+    testcase_8a = test_server:lookup_config(testcase_8a, Config),
+    ok.
+
+testcase_8b() ->
+    [].
+
+testcase_8b(Config) ->
+    init = test_server:lookup_config(suite, Config),
+    test_group_4 = test_server:lookup_config(test_group_4, Config),
+    test_group_5 = test_server:lookup_config(test_group_5, Config),
+    test_group_6 = test_server:lookup_config(test_group_6, Config),
+    test_group_8 = test_server:lookup_config(test_group_8, Config),
+    undefined = test_server:lookup_config(testcase_8a, Config),
+    testcase_8b = test_server:lookup_config(testcase_8b, Config),
+    ok.
+
+
+

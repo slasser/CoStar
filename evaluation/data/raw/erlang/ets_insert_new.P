@@ -1,0 +1,19 @@
+-file("test/lib/dialyzer/test/race_SUITE_data/src/ets_insert_new.erl",
+      1).
+
+-module(ets_insert_new).
+
+-export([test/0]).
+
+test() ->
+    T1 = ets:new(foo, [public]),
+    T2 = ets:new(bar, []),
+    ets:lookup(T2, counter),
+    aux(T1),
+    aux(T2).
+
+aux(Tab) ->
+    ets:insert(Tab, {counter,1}).
+
+
+

@@ -1,0 +1,18 @@
+-file("test/lib/dialyzer/test/small_SUITE_data/src/failing_guard1.erl",
+      1).
+
+-module(failing_guard1).
+
+-export([n/1]).
+
+n(N) when N / 2 =:= 2 ->
+    multiple_of_four;
+n(N) when N div 3 =:= 2.0 ->
+    multiple_of_six;
+n(N) when N rem 3 =:= 2.0 ->
+    multiple_of_six;
+n(N) when is_number(N) ->
+    other_number.
+
+
+

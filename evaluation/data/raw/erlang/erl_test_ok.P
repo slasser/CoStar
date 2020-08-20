@@ -1,0 +1,21 @@
+-file("test/erts/test/erlc_SUITE_data/src/erl_test_ok.erl", 1).
+
+-module(erl_test_ok).
+
+-export([shoe_size/1]).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/erts/test/erlc_SUITE_data/src/../include/erl_test.hrl",
+      1).
+
+-record(person,{name,shoe_size}).
+
+-file("test/erts/test/erlc_SUITE_data/src/erl_test_ok.erl", 24).
+
+shoe_size(#person{shoe_size = Size}) ->
+    Size.
+
+foo() ->
+    ok.
+
+
+

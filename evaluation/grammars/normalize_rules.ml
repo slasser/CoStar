@@ -91,14 +91,50 @@ let normalize_ebnf_rule ((lhs, rhs) : ebnf_rule) : bnf_rule * ebnf_rule list =
 let bnf_rules_of_ebnf_rule (e : ebnf_rule) : bnf_rule list =
   let rec f (es : ebnf_rule list) (bs : bnf_rule list) : bnf_rule list =
     match es with
-    | [] -> bs
+    | []        -> bs
     | e :: es'' ->
        let (b, es') = normalize_ebnf_rule e
        in  f (es' @ es'') (bs @ [b])
   in  f [e] []
-
+        
 let bnf_of (g : ebnf_grammar) : bnf_grammar =
   concat (map bnf_rules_of_ebnf_rule g)
+
+(* Removing left recursion *)
+let lhss (g : bnf_grammar) : string list =
+  List.sort_uniq String.compare (map fst g)
+
+let group_by_lhs (g : bnf_grammar) : (string * symbol list list) list =
+  let tbl = Hashtbl.create (length g)                         in
+  let ()  = List.iter (fun (x, ys) -> Hashtbl.add tbl x ys) g in
+  map (fun x -> (x, Hashtbl.find_all tbl x)) (lhss g)
+
+(* Does the list ys start with nonterminal x? *)
+let starts_with (x : string) (ys : symbol list) : bool =
+  match ys with
+  | []
+  | T _ :: _  -> false
+  | NT y :: _ -> String.equal x y
+
+let alphabetize_rhss (x : string) (rhss : symbol list list) : symbol list list * symbol list list =
+  let (lr_rhss, non_lr_rhss) = partition (starts_with x) rhss
+  in  (map tl lr_rhss, non_lr_rhss)
+
+let leftrec_elim_count = ref 0
+                             
+let elim_left_recursion' ((x, rhss) : string * symbol list list) : bnf_rule list =
+  let (alphas, betas) = alphabetize_rhss x rhss                              in
+  match alphas with
+  | []     -> map (fun rhs -> (x, rhs)) rhss (* no left-recursive right-hand sides *)
+  | _ :: _ ->
+     let x' = "leftrec_" ^ (string_of_int !leftrec_elim_count)                  in
+     let () = leftrec_elim_count := !leftrec_elim_count + 1                     in
+     let x_rules  = map (fun beta -> (x, beta @ [NT x'])) betas                 in
+     let x'_rules = (x', []) :: map (fun alpha -> (x', alpha @ [NT x'])) alphas in
+     x_rules @ x'_rules
+
+let elim_left_recursion (g : bnf_grammar) : bnf_grammar =
+  concat (map elim_left_recursion' (group_by_lhs g))
 
 let rec rhs_terminals (ys : symbol list) : string list =
   match ys with
@@ -422,18 +458,11 @@ let coq_types_module (g : bnf_grammar) (g_name : string) : string =
                        ; coq__compareT_eq_lemma
                        ; coq__compareT_trans_lemma
                        ; coq_nonterminal_defs g
-(*                       ; coq_t_eq_dec
-                       ; coq_nt_eq_dec *)
                        ; coq_compareNT_def g
                        ; coq__nat_of_nt_def g
                        ; coq__compareNT_compare_nat_lemma
-                       (*; coq__compareT_sym_lemma*)
                        ; coq__compareNT_eq_lemma
-                       (*                       ; coq__compareNT_sym_lemma *)
                        ; coq__compareNT_trans_lemma
-              (*         ; coq__terminal_ltb_def g
-                       ; coq__terminal_ltb_not_eq_lemma
-                       ; coq__terminal_ltb_trans_lemma *)
                        ; coq_showT_def  g
                        ; coq_showNT_def g
                        ; coq_terminalOfString_def g
@@ -468,37 +497,10 @@ let coq_grammar_file_contents (g : bnf_grammar) (g_name : string) : string =
                 ; coq_defs_module g_name
                 ; coq_export_pg
                 ; coq_grammar_def g_name g
-                                  (*                ; coq_extraction_command g_name*)
                 ]
 
 let write_coq_grammar_file (g : ebnf_grammar) (g_name : string) (f_name : string) : unit =
-  let g' = bnf_of g                                               in
+  let g' = elim_left_recursion (bnf_of g)                         in
   let oc = open_out f_name                                        in
   let _  = output_string oc (coq_grammar_file_contents g' g_name) in
   close_out oc
-
-
-            (*
-            (* grammar for s-expressions *)
-let sexpr_grammar : ebnf_grammar = [
-
-    ("sexpr", [ZeroOrMore (NonTerminal "item"); Terminal "EOF"]);
-    
-    ("item", [NonTerminal "atom"]);
-    
-    ("item", [NonTerminal "list"]);
-    
-    ("item", [Terminal "LPAREN"; NonTerminal "item"; Terminal "DOT"; NonTerminal "item"; Terminal "RPAREN"]);
-    
-    ("list", [Terminal "LPAREN"; ZeroOrMore (NonTerminal "item"); Terminal "RPAREN"]);
-    
-    ("atom", [Terminal "STRING"]);
-    
-    ("atom", [Terminal "SYMBOL"]);
-    
-    ("atom", [Terminal "NUMBER"]);
-    
-    ("atom", [Terminal "DOT"])
-      
-  ]
-             *)        

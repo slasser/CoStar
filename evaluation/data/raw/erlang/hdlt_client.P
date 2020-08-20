@@ -1,0 +1,317 @@
+-file("test/lib/inets/examples/httpd_load_test/hdlt_client.erl", 1).
+
+-module(hdlt_client).
+
+-export([start/1,
+         stop/0,
+         start_inets/0,
+         start_service/1,
+         release/0,
+         node_info/0]).
+
+-export([proxy/1]).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_logger.hrl", 1).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_client.erl", 41).
+
+-record(state,{mode = initial,
+               send_rate,
+               time,
+               stop_time,
+               url,
+               nof_reqs = 0,
+               nof_reps = 0,
+               last_req,
+               sizes,
+               socket_type,
+               cert_file}).
+
+start(Debug) ->
+    proc_lib:start_link(hdlt_client, proxy, [Debug]).
+
+stop() ->
+    catch erlang:send(hdlt_proxy, stop),
+    ok.
+
+start_inets() ->
+    hdlt_proxy ! start_inets.
+
+start_service(Args) ->
+    hdlt_proxy ! {start_client,Args,self()},
+    receive
+        client_started ->
+            ok
+    end.
+
+release() ->
+    hdlt_proxy ! release.
+
+node_info() ->
+    hdlt_proxy ! {node_info,self()},
+    receive
+        {node_info,NodeInfo} ->
+            NodeInfo
+    end.
+
+proxy(Debug) ->
+    process_flag(trap_exit, true),
+    register(hdlt_proxy, self()),
+    SName =
+        lists:flatten(io_lib:format("HDLT PROXY[~p,~p]",
+                                    [self(),node()])),
+    hdlt_logger:set_name(SName),
+    hdlt_logger:set_level(Debug),
+    hdlt_logger:log("starting", []),
+    Ref = await_for_controller(10),
+    CtrlNode = node(Ref),
+    monitor_node(CtrlNode, true),
+    proc_lib:init_ack({ok,self()}),
+    hdlt_logger:debug("started", []),
+    proxy_loop(Ref, CtrlNode, undefined).
+
+await_for_controller(N) when N > 0 ->
+    case global:whereis_name(hdlt_ctrl) of
+        Pid when is_pid(Pid) ->
+            monitor(process, Pid);
+        _ ->
+            timer:sleep(1000),
+            await_for_controller(N - 1)
+    end;
+await_for_controller(_) ->
+    proc_lib:init_ack({error,controller_not_found,nodes()}),
+    timer:sleep(500),
+    init:stop().
+
+proxy_loop(Ref, CtrlNode, Client) ->
+    hdlt_logger:debug("await command", []),
+    receive
+        stop ->
+            hdlt_logger:log("stop", []),
+            timer:sleep(1000),
+            halt();
+        start_inets ->
+            hdlt_logger:log("start the inets service framework", []),
+            case catch inets:start() of
+                ok ->
+                    hdlt_logger:log("framework started", []),
+                    proxy_loop(Ref, CtrlNode, Client);
+                Error ->
+                    hdlt_logger:log("failed starting inets service fram"
+                                    "ework: ~n   Error: ~p",
+                                    [Error]),
+                    timer:sleep(1000),
+                    halt()
+            end;
+        {start_client,Args,From} ->
+            hdlt_logger:log("start client with~n   Args: ~p", [Args]),
+            Client2 =
+                spawn_link(fun() ->
+                                  client(Args)
+                           end),
+            From ! client_started,
+            proxy_loop(Ref, CtrlNode, Client2);
+        release ->
+            hdlt_logger:log("release", []),
+            Client ! go,
+            proxy_loop(Ref, CtrlNode, Client);
+        {node_info,Pid} ->
+            hdlt_logger:log("received requets for node info", []),
+            NodeInfo = get_node_info(),
+            Pid ! {node_info,NodeInfo},
+            proxy_loop(Ref, CtrlNode, Client);
+        {'EXIT',Client,normal} ->
+            hdlt_logger:log("received normal exit message from client ("
+                            "~p)",
+                            [Client]),
+            exit(normal);
+        {'EXIT',Client,Reason} ->
+            hdlt_logger:info("received exit message from client (~p)~n "
+                             "  Reason: ~p",
+                             [Client,Reason]),
+            global:send(hdlt_ctrl, {client_exit,Client,node(),Reason}),
+            exit({client_exit,Reason});
+        {nodedown,CtrlNode} ->
+            hdlt_logger:log("received nodedown for controller node - te"
+                            "rminate",
+                            []),
+            halt();
+        {'DOWN',Ref,process,_,_} ->
+            hdlt_logger:info("received DOWN message for controller - te"
+                             "rminate",
+                             []),
+            halt()
+    end.
+
+client([SocketType,CertFile,URLBase,Sizes,Time,SendRate,Debug]) ->
+    SName =
+        lists:flatten(io_lib:format("HDLT CLIENT[~p,~p]",
+                                    [self(),node()])),
+    hdlt_logger:set_name(SName),
+    hdlt_logger:set_level(Debug),
+    hdlt_logger:log("starting with~n   SocketType: ~p~n   Time:       ~"
+                    "p~n   SendRate:   ~p",
+                    [SocketType,Time,SendRate]),
+    httpc:set_options([{max_pipeline_length,0}]),
+    if
+        SocketType =:= ssl
+        orelse
+        SocketType =:= ossl
+        orelse
+        SocketType =:= essl ->
+            crypto:start(),
+            ssl:start();
+        true ->
+            ok
+    end,
+    State =
+        #state{mode = idle,
+               url = URLBase,
+               time = Time,
+               send_rate = SendRate,
+               sizes = Sizes,
+               socket_type = SocketType,
+               cert_file = CertFile},
+    hdlt_logger:debug("started", []),
+    client_loop(State).
+
+client_loop(#state{mode = idle,time = Time,send_rate = SendRate} = State) ->
+    hdlt_logger:debug("[idle] awaiting the go command", []),
+    receive
+        go ->
+            hdlt_logger:log("[idle] received go", []),
+            erlang:send_after(Time, self(), stop),
+            NewState = send_requests(State, SendRate),
+            client_loop(NewState#state{mode = generating,
+                                       nof_reqs = SendRate})
+    end;
+client_loop(#state{mode = generating} = State) ->
+    receive
+        stop ->
+            hdlt_logger:log("[generating] received stop", []),
+            StopTime = timestamp(),
+            req_reply(State),
+            client_loop(State#state{mode = stopping,
+                                    stop_time = StopTime});
+        {http,{_,{{_,200,_},_,_}}} ->
+            NewState = send_requests(State, 1),
+            client_loop(NewState#state{nof_reps =
+                                           NewState#state.nof_reps + 1,
+                                       nof_reqs =
+                                           NewState#state.nof_reqs + 1});
+        {http,{ReqId,{error,Reason}}} ->
+            hdlt_logger:info("[generating] request ~p failed: ~n   Reas"
+                             "on:  ~p~n   NofReqs: ~p~n   NofReps: ~p",
+                             [ReqId,
+                              Reason,
+                              State#state.nof_reqs,
+                              State#state.nof_reps]),
+            exit({Reason,
+                  generating,
+                  State#state.nof_reqs,
+                  State#state.nof_reps});
+        Else ->
+            hdlt_logger:log("[generating] received unexpected message: "
+                            "~n~p",
+                            [Else]),
+            unexpected_data(Else),
+            client_loop(State)
+    end;
+client_loop(#state{mode = stopping,time = Time,last_req = LastReqId} =
+                State) ->
+    receive
+        {http,{LastReqId,{{_,200,_},_,_}}} ->
+            hdlt_logger:debug("[stopping] received reply for last reque"
+                              "st (~p)",
+                              [LastReqId]),
+            time_to_complete(State),
+            ok;
+        {http,{ReqId,{{_,200,_},_,_}}} ->
+            hdlt_logger:debug("[stopping] received reply ~p", [ReqId]),
+            client_loop(State);
+        {http,{ReqId,{error,Reason}}} ->
+            hdlt_logger:info("[stopping] request ~p failed: ~n   Reason"
+                             ":  ~p~n   NofReqs: ~p~n   NofReps: ~p",
+                             [ReqId,
+                              Reason,
+                              State#state.nof_reqs,
+                              State#state.nof_reps]),
+            exit({Reason,
+                  stopping,
+                  State#state.nof_reqs,
+                  State#state.nof_reps});
+        Else ->
+            hdlt_logger:log("[stopping] received unexpected message: ~n"
+                            "~p",
+                            [Else]),
+            unexpected_data(Else),
+            client_loop(State)
+    after
+        Time ->
+            hdlt_logger:info("timeout when~n   Number of requests: ~p~n"
+                             "   Number of replies:  ~p",
+                             [State#state.nof_reqs,State#state.nof_reps]),
+            exit({timeout,State#state.nof_reqs,State#state.nof_reps})
+    end.
+
+req_reply(#state{nof_reqs = NofReqs,nof_reps = NofReps}) ->
+    load_data({req_reply,node(),NofReqs,NofReps}).
+
+time_to_complete(#state{stop_time = StopTime}) ->
+    StoppedTime = os:timestamp(),
+    load_data({time_to_complete,node(),StopTime,StoppedTime}).
+
+load_data(Data) ->
+    global:send(hdlt_ctrl, {load_data,Data}).
+
+unexpected_data(Else) ->
+    global:send(hdlt_ctrl, {unexpected_data,Else}).
+
+send_requests(#state{sizes = Sizes} = State, N) ->
+    send_requests(State, N, Sizes).
+
+send_requests(State, 0, Sizes) ->
+    State#state{sizes = Sizes};
+send_requests(#state{socket_type = SocketType,cert_file = CertFile} =
+                  State,
+              N,
+              [Sz|Sizes]) ->
+    URL = lists:flatten(io_lib:format("~s~w", [State#state.url,Sz])),
+    Method = get,
+    Request = {URL,[]},
+    HTTPOptions =
+        case SocketType of
+            ip_comm ->
+                [];
+            _ ->
+                SslOpts =
+                    [{verify,0},{certfile,CertFile},{keyfile,CertFile}],
+                case SocketType of
+                    ssl ->
+                        [{ssl,SslOpts}];
+                    ossl ->
+                        [{ssl,{ossl,SslOpts}}];
+                    essl ->
+                        [{ssl,{essl,SslOpts}}]
+                end
+        end,
+    Options = [{sync,false}],
+    {ok,Ref} = httpc:request(Method, Request, HTTPOptions, Options),
+    send_requests(State#state{last_req = Ref},
+                  N - 1,
+                  lists:append(Sizes, [Sz])).
+
+timestamp() ->
+    os:timestamp().
+
+get_node_info() ->
+    [{cpu_topology,erlang:system_info(cpu_topology)},
+     {heap_type,erlang:system_info(heap_type)},
+     {nof_schedulers,erlang:system_info(schedulers)},
+     {otp_release,erlang:system_info(otp_release)},
+     {version,erlang:system_info(version)},
+     {system_version,erlang:system_info(system_version)},
+     {system_architecture,erlang:system_info(system_architecture)}].
+
+
+

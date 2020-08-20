@@ -1,0 +1,1211 @@
+-file("test/lib/diameter/src/compiler/diameter_dict_util.erl", 1).
+
+-module(diameter_dict_util).
+
+-export([parse/2,format_error/1,format/1]).
+
+-file("test/lib/diameter/src/compiler/diameter_vsn.hrl", 1).
+
+-file("test/lib/diameter/src/compiler/diameter_dict_util.erl", 33).
+
+-spec parse(File, Opts) -> {ok, orddict:orddict()} | {error, term()}
+               when
+                   is_subtype(File,
+                              {path, string()} | iolist() | binary()),
+                   is_subtype(Opts, list()).
+
+parse(File, Opts) ->
+    putr(verbose, lists:member(verbose, Opts)),
+    try
+        {ok,do_parse(File, Opts)}
+    catch
+        {Reason,diameter_dict_util,_Line} ->
+            {error,Reason}
+    after
+        eraser(verbose)
+    end.
+
+format_error({read,Reason}) ->
+    file:format_error(Reason);
+format_error({scan,Reason}) ->
+    diameter_dict_scanner:format_error(Reason);
+format_error({parse,{Line,_Mod,Reason}}) ->
+    lists:flatten(["Line ",integer_to_list(Line),", ",Reason]);
+format_error(T) ->
+    {Fmt,As} = fmt(T),
+    lists:flatten(io_lib:format(Fmt, As)).
+
+fmt({avp_code_already_defined = E,[Code,false,Name,Line,L]}) ->
+    {fmt(E),[Code,"",Name,Line,L]};
+fmt({avp_code_already_defined = E,[Code,Vid,Name,Line,L]}) ->
+    {fmt(E),[Code,io_lib:format("/~p", [Vid]),Name,Line,L]};
+fmt({uint32_out_of_range = E,[id|T]}) ->
+    {fmt(E),["@id","application identifier"|T]};
+fmt({uint32_out_of_range = E,[K|T]})
+    when K == vendor; K == avp_vendor_id ->
+    {fmt(E),[io_lib:format("@~p", [K]),"vendor id"|T]};
+fmt({uint32_out_of_range = E,[K,Name|T]}) when K == enum; K == define ->
+    {fmt(E),[io_lib:format("@~p ~s", [K,Name]),"value"|T]};
+fmt({uint32_out_of_range = E,[avp_types,Name|T]}) ->
+    {fmt(E),["AVP " ++ Name,"AVP code"|T]};
+fmt({uint32_out_of_range = E,[grouped,Name|T]}) ->
+    {fmt(E),["Grouped AVP " ++ Name|T]};
+fmt({uint32_out_of_range = E,[messages,Name|T]}) ->
+    {fmt(E),["Message " ++ Name,"command code"|T]};
+fmt({Reason,As}) ->
+    {fmt(Reason),As};
+fmt(avp_code_already_defined) ->
+    "AVP ~p~s (~s) at line ~p already defined at line ~p";
+fmt(uint32_out_of_range) ->
+    "~s specifies ~s ~p at line ~p that is out of range for a value of "
+    "Diameter type Unsigned32";
+fmt(imported_avp_already_defined) ->
+    "AVP ~s imported by @inherits ~p at line ~p defined at line ~p";
+fmt(duplicate_import) ->
+    "AVP ~s is imported by more than one @inherits, both at line ~p and"
+    " at line ~p";
+fmt(duplicate_section) ->
+    "Section @~s at line ~p already declared at line ~p";
+fmt(already_declared) ->
+    "Section @~p ~s at line ~p already declared at line ~p";
+fmt(inherited_avp_already_defined) ->
+    "AVP ~s inherited at line ~p defined in @avp_types at line ~p";
+fmt(avp_already_defined) ->
+    "AVP ~s at line ~p already in @~p at line ~p";
+fmt(key_already_defined) ->
+    "Value for ~s:~s in @~p at line ~p already provided at line ~p";
+fmt(messages_without_id) ->
+    "@messages at line ~p but @id not declared";
+fmt(avp_name_already_defined) ->
+    "AVP ~s at line ~p already defined at line ~p";
+fmt(avp_has_unknown_type) ->
+    "AVP ~s at line ~p defined with unknown type ~s";
+fmt(avp_has_invalid_flag) ->
+    "AVP ~s at line ~p specifies invalid flag ~c";
+fmt(avp_has_duplicate_flag) ->
+    "AVP ~s at line ~p specifies duplicate flag ~c";
+fmt(avp_has_vendor_id) ->
+    "AVP ~s at line ~p does not specify V flag but is assigned vendor i"
+    "d ~p at line ~p";
+fmt(avp_has_no_vendor) ->
+    "AVP ~s at line ~p specifies V flag but neither @vendor_avp_id nor "
+    "@vendor supplies a value";
+fmt(group_already_defined) ->
+    "Group ~s at line ~p already defined at line ~p";
+fmt(grouped_avp_code_mismatch) ->
+    "AVP ~s at line ~p has with code ~p but @avp_types specifies ~p at "
+    "line ~p";
+fmt(grouped_avp_has_wrong_type) ->
+    "Grouped AVP ~s at line ~p defined with type ~s at line ~p";
+fmt(grouped_avp_not_defined) ->
+    "Grouped AVP ~s on line ~p not defined in @avp_types";
+fmt(grouped_vendor_id_without_flag) ->
+    "Grouped AVP ~s at line ~p has vendor id but definition at line ~p "
+    "does not specify V flag";
+fmt(grouped_vendor_id_mismatch) ->
+    "Grouped AVP ~s at line ~p has vendor id ~p but ~p specified at lin"
+    "e ~p";
+fmt(message_name_already_defined) ->
+    "Message ~s at line ~p already defined at line ~p";
+fmt(message_code_already_defined) ->
+    "~s message with code ~p at line ~p already defined at line ~p";
+fmt(message_has_duplicate_flag) ->
+    "Message ~s has duplicate flag ~s at line ~p";
+fmt(message_application_id_mismatch) ->
+    "Message ~s has application id ~p at line ~p but @id specifies ~p a"
+    "t line ~p";
+fmt(invalid_avp_order) ->
+    "AVP reference ~c~s~c at line ~p breaks fixed/required/optional ord"
+    "er";
+fmt(required_avp_has_zero_max_arity) ->
+    "Required AVP has maximum arity 0 at line ~p";
+fmt(required_avp_has_zero_min_arity) ->
+    "Required AVP has minimum arity 0 at line ~p";
+fmt(optional_avp_has_nonzero_min_arity) ->
+    "Optional AVP has non-zero minimum arity at line ~p";
+fmt(qualifier_has_min_greater_than_max) ->
+    "Qualifier ~p*~p at line ~p has Min > Max";
+fmt(avp_already_referenced) ->
+    "AVP ~s at line ~p already referenced at line ~p";
+fmt(message_missing) ->
+    "~s message at line ~p but no ~s message is defined";
+fmt(requested_avp_not_found) ->
+    "@inherit ~s at line ~p requests AVP ~s at line ~p but module does "
+    "not define that AVP";
+fmt(enumerated_avp_has_wrong_local_type) ->
+    "Enumerated AVP ~s in @enum at line ~p defined with type ~s at line"
+    " ~p";
+fmt(enumerated_avp_has_wrong_inherited_type) ->
+    "Enumerated AVP ~s in @enum at line ~p inherited with type ~s from "
+    "module ~s at line ~p";
+fmt(enumerated_avp_not_defined) ->
+    "Enumerated AVP ~s in @enum at line ~p neither defined nor inherite"
+    "d";
+fmt(avp_not_defined) ->
+    "AVP ~s referenced at line ~p neither defined nor inherited";
+fmt(recompile) ->
+    "Module ~p appears to have been compiler with an incompatible versi"
+    "on of the dictionary compiler and must be recompiled";
+fmt(not_loaded) ->
+    "Module ~p is not on the code path or could not be loaded";
+fmt(no_dict) ->
+    "Module ~p does not appear to be a diameter dictionary".
+
+-spec format(Dict) -> iolist() when is_subtype(Dict, orddict:orddict()).
+
+format(Dict) ->
+    Io = orddict:fold(fun io/3, [], Dict),
+    [ 
+     S ||
+         {_,S} <- lists:sort(fun keysort/2, Io)
+    ].
+
+keysort({A,_}, {B,_}) ->
+    [HA,HB] =
+        [ 
+         H ||
+             K <- [A,B],
+             H <-
+                 [lists:takewhile(fun(X) ->
+                                         X /= K
+                                  end,
+                                  [id,
+                                   name,
+                                   prefix,
+                                   vendor,
+                                   inherits,
+                                   codecs,
+                                   custom_types,
+                                   avp_types,
+                                   messages,
+                                   grouped,
+                                   enum,
+                                   define])]
+        ],
+    HA < HB.
+
+io(K, _, Acc)
+    when
+        K == command_codes;
+        K == import_avps;
+        K == import_groups;
+        K == import_enums ->
+    Acc;
+io(Key, Body, Acc) ->
+    [{Key,io(Key, Body)}|Acc].
+
+io(K, Id) when K == id; K == name; K == prefix ->
+    [$\n,section(K)," ",tok(Id)];
+io(vendor = K, {Id,Name}) ->
+    [$\n,
+     section(K)|
+     [ 
+      [" ",tok(X)] ||
+          X <- [Id,Name]
+     ]];
+io(avp_types = K, Body) ->
+    [$\n,
+     $\n,
+     section(K),
+     $\n,
+     [ 
+      body(K, A) ||
+          A <- Body
+     ]];
+io(K, Body) when K == messages; K == grouped ->
+    [$\n,
+     $\n,
+     section(K),
+     [ 
+      body(K, A) ||
+          A <- Body
+     ]];
+io(K, Body)
+    when
+        K == avp_vendor_id;
+        K == inherits;
+        K == custom_types;
+        K == codecs;
+        K == enum;
+        K == define ->
+    [ 
+     [$\n,pairs(K, T)] ||
+         T <- Body
+    ].
+
+pairs(K, {Id,Avps}) ->
+    [$\n,
+     section(K),
+     " ",
+     tok(Id),
+     $\n,
+     [ 
+      [$\n,body(K, A)] ||
+          A <- Avps
+     ]].
+
+body(K, AvpName)
+    when
+        K == avp_vendor_id;
+        K == inherits;
+        K == custom_types;
+        K == codecs ->
+    ["    ",word(AvpName)];
+body(K, {Name,N}) when K == enum; K == define ->
+    ["    ",word(Name)," ",integer_to_list(N)];
+body(avp_types = K, {Name,Code,Type,""}) ->
+    body(K, {Name,Code,Type,"-"});
+body(avp_types, {Name,Code,Type,Flags}) ->
+    [$\n,
+     "    ",
+     word(Name),
+     [ 
+      [" "," ",S] ||
+          S <- [integer_to_list(Code),Type,Flags]
+     ]];
+body(messages, {"answer-message",_,_,[],Avps}) ->
+    [$\n,
+     $\n,
+     "    ",
+     "answer-message ::= < Diameter Header: code, ERR [PXY] >",
+     f_avps(Avps)];
+body(messages, {Name,Code,Flags,ApplId,Avps}) ->
+    [$\n,
+     $\n,
+     "    ",
+     word(Name),
+     " ::= ",
+     header(Code, Flags, ApplId),
+     f_avps(Avps)];
+body(grouped, {Name,Code,Vid,Avps}) ->
+    [$\n,
+     $\n,
+     "    ",
+     word(Name),
+     " ::= ",
+     avp_header(Code, Vid),
+     f_avps(Avps)].
+
+header(Code, Flags, ApplId) ->
+    ["< Diameter Header: ",
+     integer_to_list(Code),
+     [ 
+      [", ",atom_to_list(F)] ||
+          F <- Flags
+     ],
+     [ 
+      [" ",integer_to_list(N)] ||
+          N <- ApplId
+     ],
+     " >"].
+
+avp_header(Code, Vid) ->
+    ["< AVP Header: ",
+     integer_to_list(Code),
+     [ 
+      [" ",integer_to_list(V)] ||
+          V <- Vid
+     ],
+     " >"].
+
+f_avps(L) ->
+    [ 
+     [$\n,"    ","    ",f_avp(A)] ||
+         A <- L
+    ].
+
+f_avp({Q,A}) ->
+    [D|_] = Avp = f_delim(A),
+    f_avp(f_qual(D, Q), Avp);
+f_avp(A) ->
+    f_avp("", f_delim(A)).
+
+f_delim({{A}}) ->
+    [$<,word(A),$>];
+f_delim({A}) ->
+    [${,word(A),$}];
+f_delim([A]) ->
+    [$[,word(A),$]].
+
+f_avp(Q, [L,Avp,R]) ->
+    Len = length(lists:flatten([Q])),
+    [io_lib:format("~*s", [- 1 * max(Len + 1, 6),Q]),L," ",Avp," ",R].
+
+f_qual(${, '*') ->
+    "1*";
+f_qual(_, '*') ->
+    "*";
+f_qual(_, {'*',N}) ->
+    [$*,integer_to_list(N)];
+f_qual(_, {N,'*'}) ->
+    [integer_to_list(N),$*];
+f_qual(_, {M,N}) ->
+    [integer_to_list(M),$*,integer_to_list(N)].
+
+section(Key) ->
+    ["@",atom_to_list(Key)].
+
+tok(N) when is_integer(N) ->
+    integer_to_list(N);
+tok(N) ->
+    word(N).
+
+word(Str) ->
+    word(diameter_dict_scanner:is_name(Str), Str).
+
+word(true, Str) ->
+    Str;
+word(false, Str) ->
+    [$',Str,$'].
+
+do_parse(File, Opts) ->
+    Bin = do([fun read/1,File], read),
+    Toks = do([fun diameter_dict_scanner:scan/1,Bin], scan),
+    Tree = do([fun diameter_dict_parser:parse/1,Toks], parse),
+    make_dict(Tree, Opts).
+
+do([F|A], E) ->
+    case apply(F, A) of
+        {ok,T} ->
+            T;
+        {error,Reason} ->
+            throw({{E,Reason},diameter_dict_util,392})
+    end.
+
+read({path,Path}) ->
+    file:read_file(Path);
+read(File) ->
+    {ok,iolist_to_binary([File])}.
+
+make_dict(Parse, Opts) ->
+    make_orddict(pass4(pass3(pass2(pass1(reset(make_dict(Parse), Opts))),
+                             Opts))).
+
+make_orddict(Dict) ->
+    dict:fold(fun mo/3,
+              orddict:from_list([ 
+                                 {K,[]} ||
+                                     K <-
+                                         [avp_types,
+                                          messages,
+                                          grouped,
+                                          inherits,
+                                          custom_types,
+                                          codecs,
+                                          avp_vendor_id,
+                                          enum,
+                                          define]
+                                ]),
+              Dict).
+
+mo(K, Sects, Dict) when is_atom(K) ->
+    orddict:store(K, make(K, Sects), Dict);
+mo(_, _, Dict) ->
+    Dict.
+
+make(K, [[_Line,{_,_,X}]]) when K == id; K == name; K == prefix ->
+    X;
+make(vendor, [[_Line,{_,_,Id},{_,_,Name}]]) ->
+    {Id,Name};
+make(K, T)
+    when
+        K == command_codes;
+        K == import_avps;
+        K == import_groups;
+        K == import_enums ->
+    T;
+make(K, Sects) ->
+    post(K,
+         foldl(fun([_L|B], A) ->
+                      make(K, B, A)
+               end,
+               [],
+               Sects)).
+
+post(avp_types, L) ->
+    lists:sort(L);
+post(K, L) when K == grouped; K == messages; K == enum; K == define ->
+    lists:reverse(L);
+post(_, L) ->
+    L.
+
+make(K, [{_,_,Name}|Body], Acc)
+    when
+        K == enum;
+        K == define;
+        K == avp_vendor_id;
+        K == custom_types;
+        K == inherits;
+        K == codecs ->
+    [{Name,mk(K, Body)}|Acc];
+make(K, Body, Acc) ->
+    foldl(fun(T, A) ->
+                 [mk(K, T)|A]
+          end,
+          Acc,
+          Body).
+
+mk(avp_types, [{_,_,Name},{_,_,Code},{_,_,Type},{_,_,Flags}]) ->
+    {Name,Code,type(Type),Flags};
+mk(messages, [{'answer-message' = A,_},false|Avps]) ->
+    {atom_to_list(A),- 1,['ERR','PXY'],[],make_body(Avps)};
+mk(messages, [{_,_,Name},[{_,_,Code},Flags,ApplId]|Avps]) ->
+    {Name,
+     Code,
+     lists:map(fun({F,_}) ->
+                      F
+               end,
+               Flags),
+     opt(ApplId),
+     make_body(Avps)};
+mk(grouped, [{_,_,Name},[{_,_,Code},Vid]|Avps]) ->
+    {Name,Code,opt(Vid),make_body(Avps)};
+mk(K, Body) when K == enum; K == define ->
+    lists:map(fun([{_,_,Name},{_,_,Value}]) ->
+                     {Name,Value}
+              end,
+              Body);
+mk(K, Avps)
+    when
+        K == avp_vendor_id;
+        K == custom_types;
+        K == inherits;
+        K == codecs ->
+    lists:map(fun({_,_,N}) ->
+                     N
+              end,
+              Avps).
+
+opt(false) ->
+    [];
+opt({_,_,X}) ->
+    [X].
+
+make_body(Avps) ->
+    lists:map(fun avp/1, Avps).
+
+avp([false,D,Avp]) ->
+    avp(D, Avp);
+avp([Q,D,Avp]) ->
+    case {qual(D, Q),avp(D, Avp)} of
+        {{0,1},A} when D == $[ ->
+            A;
+        {{1,1},A} ->
+            A;
+        T ->
+            T
+    end.
+
+avp(D, {'AVP',_}) ->
+    delim(D, "AVP");
+avp(D, {_,_,Name}) ->
+    delim(D, Name).
+
+delim($<, N) ->
+    {{N}};
+delim(${, N) ->
+    {N};
+delim($[, N) ->
+    [N].
+
+qual(${, {{_,L,0},_}) ->
+    throw({{required_avp_has_zero_min_arity,[L]},diameter_dict_util,541});
+qual(${, {_,{_,L,0}}) ->
+    throw({{required_avp_has_zero_max_arity,[L]},diameter_dict_util,543});
+qual($[, {{_,L,N},_}) when 0 < N ->
+    throw({{optional_avp_has_nonzero_min_arity,[L]},
+           diameter_dict_util,
+           547});
+qual(_, {{_,L,Min},{_,_,Max}}) when Min > Max ->
+    throw({{qualifier_has_min_greater_than_max,[Min,Max,L]},
+           diameter_dict_util,
+           551});
+qual(_, true) ->
+    '*';
+qual(${, {true,{_,_,N}}) ->
+    {1,N};
+qual(_, {true,{_,_,N}}) ->
+    {0,N};
+qual(D, {{_,_,N},true}) when D == ${, N == 1; D /= ${, N == 0 ->
+    '*';
+qual(_, {{_,_,N},true}) ->
+    {N,'*'};
+qual(_, {{_,_,Min},{_,_,Max}}) ->
+    {Min,Max}.
+
+report(What, [F|A]) when is_function(F) ->
+    report(What, apply(F, A));
+report(What, Data) ->
+    report(getr(verbose), What, Data).
+
+report(true, Tag, Data) ->
+    io:format("##~n## ~p ~p~n", [Tag,Data]);
+report(false, _, _) ->
+    ok.
+
+make_dict(Parse) ->
+    foldl(fun(T, A) ->
+                 report(section, T),
+                 section(T, A)
+          end,
+          dict:new(),
+          Parse).
+
+section([{T,L}|Rest], Dict)
+    when T == name; T == prefix; T == id; T == vendor ->
+    case find(T, Dict) of
+        [] ->
+            dict:store(T, [[L|Rest]], Dict);
+        [[Line|_]] ->
+            throw({{duplicate_section,[T,L,Line]},
+                   diameter_dict_util,
+                   605})
+    end;
+section([{T,L}|Rest], Dict)
+    when
+        T == avp_types;
+        T == messages;
+        T == grouped;
+        T == inherits;
+        T == custom_types;
+        T == codecs;
+        T == avp_vendor_id;
+        T == enum;
+        T == define ->
+    dict:append(T, [L|Rest], Dict).
+
+reset(Dict, Opts) ->
+    foldl([fun reset/3,Opts], Dict, [name,prefix,inherits]).
+
+reset(K, Dict, Opts) ->
+    foldl(fun opt/2,
+          Dict,
+          [ 
+           T ||
+               {A,_} = T <- Opts,
+               A == K
+          ]).
+
+opt({inherits = Key,"-"}, Dict) ->
+    dict:erase(Key, Dict);
+opt({inherits = Key,Mod}, Dict) ->
+    case
+        lists:splitwith(fun(C) ->
+                               C /= $/
+                        end,
+                        Mod)
+    of
+        {Mod,""} ->
+            dict:append(Key, [0,{word,0,Mod}], Dict);
+        {From,[$/|To]} ->
+            dict:store(Key,
+                       [ 
+                        reinherit(From, To, M) ||
+                            M <- find(Key, Dict)
+                       ],
+                       Dict)
+    end;
+opt({Key,Val}, Dict) ->
+    dict:store(Key, [[0,{word,0,Val}]], Dict);
+opt(_, Dict) ->
+    Dict.
+
+reinherit(From, To, [L,{word,_,From} = T|Avps]) ->
+    [L,setelement(3, T, To)|Avps];
+reinherit(_, _, T) ->
+    T.
+
+pass1(Dict) ->
+    true = no_messages_without_id(Dict),
+    foldl(fun(K, D) ->
+                 foldl([fun p1/3,K], D, find(K, D))
+          end,
+          Dict,
+          [id,
+           vendor,
+           avp_types,
+           avp_vendor_id,
+           custom_types,
+           codecs,
+           inherits,
+           grouped,
+           messages,
+           enum,
+           define]).
+
+p1([_Line,N], Dict, id = K) ->
+    true = is_uint32(N, [K]),
+    Dict;
+p1([_Line,Id,_Name], Dict, vendor = K) ->
+    true = is_uint32(Id, [K]),
+    Dict;
+p1([_Line,X|Body], Dict, K)
+    when
+        K == avp_vendor_id;
+        K == custom_types;
+        K == codecs;
+        K == inherits ->
+    foldl([fun explode/4,X,K], Dict, Body);
+p1([_Line,X|Body], Dict, K) when K == define; K == enum ->
+    {_,L,Name} = X,
+    foldl([fun explode2/4,X,K],
+          store_new({K,Name},
+                    [L,Body],
+                    Dict,
+                    [K,Name,L],
+                    already_declared),
+          Body);
+p1([_Line|Body], Dict, K)
+    when K == avp_types; K == grouped; K == messages ->
+    foldl([fun explode/3,K], Dict, Body).
+
+no_messages_without_id(Dict) ->
+    case find(messages, Dict) of
+        [] ->
+            true;
+        [[Line|_]|_] ->
+            [] /= find(id, Dict)
+            orelse
+            throw({{messages_without_id,[Line]},diameter_dict_util,719})
+    end.
+
+explode({_,Line,AvpName}, Dict, {_,_,X} = T, K) ->
+    true =
+        K /= avp_vendor_id
+        orelse
+        is_uint32(T, [K]),
+    true =
+        K /= inherits
+        orelse
+        avp_not_local(AvpName, Line, Dict),
+    store_new({key(K),AvpName},
+              [Line,X],
+              Dict,
+              [AvpName,Line,K],
+              avp_already_defined).
+
+explode2([{_,Line,Key},{_,_,Value} = T], Dict, {_,_,Name}, K) ->
+    true = is_uint32(T, [K,Name]),
+    store_new({key(K),{Name,Key}},
+              [Line,Value,K],
+              Dict,
+              [Name,Key,K,Line],
+              key_already_defined).
+
+key(K) when K == enum; K == define ->
+    define;
+key(K) when K == custom_types; K == codecs ->
+    custom;
+key(K) ->
+    K.
+
+explode([{_,Line,Name}|Toks], Dict0, avp_types = K) ->
+    Dict =
+        store_new({K,Name},
+                  [Line|Toks],
+                  Dict0,
+                  [Name,Line],
+                  avp_name_already_defined),
+    [{number,_,_Code} = C,{word,_,Type},{word,_,_Flags}] = Toks,
+    true = avp_type_known(Type, Name, Line),
+    true = is_uint32(C, [K,Name]),
+    Dict;
+explode([{_,Line,Name},Header|Avps], Dict0, grouped = K) ->
+    Dict =
+        store_new({K,Name},
+                  [Line,Header|Avps],
+                  Dict0,
+                  [Name,Line],
+                  group_already_defined),
+    [{_,_,Code} = C,Vid] = Header,
+    {DefLine,{_,_,Flags}} = grouped_flags(Name, Code, Dict0, Line),
+    V = lists:member($V, Flags),
+    true = is_uint32(C, [K,Name,"AVP code"]),
+    true = is_uint32(Vid, [K,Name,"vendor id"]),
+    false = vendor_id_mismatch(Vid, V, Name, Dict0, Line, DefLine),
+    explode_avps(Avps, Dict, K, Name);
+explode([{'answer-message' = A,Line},false = H|Avps],
+        Dict0,
+        messages = K) ->
+    Name = atom_to_list(A),
+    Dict1 =
+        store_new({K,Name},
+                  [Line,H,Avps],
+                  Dict0,
+                  [Name,Line],
+                  message_name_already_defined),
+    explode_avps(Avps, Dict1, K, Name);
+explode([{_,Line,MsgName} = M,Header|Avps], Dict0, messages = K) ->
+    Dict1 =
+        store_new({K,MsgName},
+                  [Line,Header|Avps],
+                  Dict0,
+                  [MsgName,Line],
+                  message_name_already_defined),
+    [{_,_,Code} = C,Bits,ApplId] = Header,
+    true = is_uint32(C, [K,MsgName]),
+    false = application_id_mismatch(ApplId, Dict1, MsgName),
+    IsReq = lists:keymember('REQ', 1, Bits),
+    Dict2 =
+        store_new({K,{Code,IsReq}},
+                  [Line,M],
+                  Dict1,
+                  [choose(IsReq, "Request", "Answer"),Code,Line],
+                  message_code_already_defined),
+    Dict3 =
+        foldl(fun({F,L}, D) ->
+                     store_new({K,{MsgName,F}},
+                               [L],
+                               D,
+                               [MsgName,atom_to_list(F)],
+                               message_has_duplicate_flag)
+              end,
+              Dict2,
+              Bits),
+    dict:append({K,Code},
+                [Line,M,IsReq],
+                explode_avps(Avps, Dict3, K, MsgName)).
+
+explode_avps(Avps, Dict, Key, Name) ->
+    xa("<{[<", Avps, Dict, Key, Name).
+
+xa(_, [], Dict, _, _) ->
+    Dict;
+xa(Ds, [[Qual,D,{'AVP',Line}]|Avps], Dict, Key, Name) ->
+    xa(Ds, [[Qual,D,{word,Line,"AVP"}]|Avps], Dict, Key, Name);
+xa([], [[_Qual,D,{_,Line,Name}]|_], _, _, _) ->
+    throw({{invalid_avp_order,[D,Name,close(D),Line]},
+           diameter_dict_util,
+           912});
+xa([D|_] = Ds, [[Qual,D,{_,Line,AvpName}]|Avps], Dict, Key, Name) ->
+    xa(Ds,
+       Avps,
+       store_new({Key,{Name,AvpName}},
+                 [Line,Qual,D],
+                 Dict,
+                 [Name,Line],
+                 avp_already_referenced),
+       Key,
+       Name);
+xa([_|Ds], Avps, Dict, Key, Name) ->
+    xa(Ds, Avps, Dict, Key, Name).
+
+close($<) ->
+    $>;
+close(${) ->
+    $};
+close($[) ->
+    $].
+
+is_uint32(false, _) ->
+    true;
+is_uint32({Line,_,N}, Args) ->
+    N < 1 bsl 32
+    orelse
+    throw({{uint32_out_of_range,Args ++ [N,Line]},
+           diameter_dict_util,
+           937}).
+
+application_id_mismatch({number,Line,Id}, Dict, MsgName) ->
+    [[_,{_,L,I}]] = dict:fetch(id, Dict),
+    I /= Id
+    andalso
+    throw({{message_application_id_mismatch,[MsgName,Id,Line,I,L]},
+           diameter_dict_util,
+           946});
+application_id_mismatch(false = No, _, _) ->
+    No.
+
+avp_not_local(Name, Line, Dict) ->
+    A = find({avp_types,Name}, Dict),
+    [] == A
+    orelse
+    throw({{inherited_avp_already_defined,[Name,Line,hd(A)]},
+           diameter_dict_util,
+           957}).
+
+avp_type_known(Type, Name, Line) ->
+    false /= type(Type)
+    orelse
+    throw({{avp_has_unknown_type,[Name,Line,Type]},
+           diameter_dict_util,
+           963}).
+
+vendor_id_mismatch({_,_,_}, false, Name, _, Line, DefLine) ->
+    throw({{grouped_vendor_id_without_flag,[Name,Line,DefLine]},
+           diameter_dict_util,
+           973});
+vendor_id_mismatch({_,_,I}, true, Name, Dict, Line, _) ->
+    case vendor_id(Name, Dict) of
+        {avp_vendor_id,L,N} ->
+            I /= N
+            andalso
+            throw({{grouped_vendor_id_mismatch,[Name,Line,I,N,L]},
+                   diameter_dict_util,
+                   979});
+        _ ->
+            false
+    end;
+vendor_id_mismatch(_, _, _, _, _, _) ->
+    false.
+
+grouped_flags(Name, Code, Dict, Line) ->
+    case find({avp_types,Name}, Dict) of
+        [L,{_,_,Code},{_,_,"Grouped"},Flags] ->
+            {L,Flags};
+        [_,{_,L,C},{_,_,"Grouped"},_Flags] ->
+            throw({{grouped_avp_code_mismatch,[Name,Line,Code,C,L]},
+                   diameter_dict_util,
+                   994});
+        [_,_Code,{_,L,T},_] ->
+            throw({{grouped_avp_has_wrong_type,[Name,Line,T,L]},
+                   diameter_dict_util,
+                   996});
+        [] ->
+            throw({{grouped_avp_not_defined,[Name,Line]},
+                   diameter_dict_util,
+                   998})
+    end.
+
+vendor_id(Name, Dict) ->
+    case find({avp_vendor_id,Name}, Dict) of
+        [Line,Id] when is_integer(Id) ->
+            {avp_vendor_id,Line,Id};
+        [] ->
+            vendor(Dict)
+    end.
+
+vendor(Dict) ->
+    case find(vendor, Dict) of
+        [[_Line,{_,_,Id},{_,_,_}]] ->
+            {vendor,Id};
+        [] ->
+            false
+    end.
+
+find(Key, Dict) ->
+    case dict:find(Key, Dict) of
+        {ok,L} when is_list(L) ->
+            L;
+        error ->
+            []
+    end.
+
+store_new(Key, Value, Dict, Args, Err) ->
+    case dict:find(Key, Dict) of
+        {ok,[L|_]} ->
+            throw({{Err,Args ++ [L]},diameter_dict_util,1035});
+        error ->
+            dict:store(Key, Value, Dict)
+    end.
+
+type("DiamIdent") ->
+    "DiameterIdentity";
+type("DiamURI") ->
+    "DiameterURI";
+type(T)
+    when
+        T == "OctetString";
+        T == "Integer32";
+        T == "Integer64";
+        T == "Unsigned32";
+        T == "Unsigned64";
+        T == "Float32";
+        T == "Float64";
+        T == "Grouped";
+        T == "Enumerated";
+        T == "Address";
+        T == "Time";
+        T == "UTF8String";
+        T == "DiameterIdentity";
+        T == "DiameterURI";
+        T == "IPFilterRule";
+        T == "QoSFilterRule" ->
+    T;
+type(_) ->
+    false.
+
+pass2(Dict) ->
+    foldl(fun(K, D) ->
+                 foldl([fun p2/3,K], D, find(K, D))
+          end,
+          Dict,
+          [avp_types]).
+
+p2([_Line|Body], Dict, avp_types) ->
+    foldl(fun explode_avps/2, Dict, Body);
+p2([], Dict, _) ->
+    Dict.
+
+explode_avps([{_,Line,Name}|Toks], Dict) ->
+    [{number,_,Code},{word,_,_Type},{word,_,Flags}] = Toks,
+    true = avp_flags_valid(Flags, Name, Line),
+    Vid = avp_vendor_id(Flags, Name, Line, Dict),
+    store_new({avp_types,{Code,Vid}},
+              [Line,Name],
+              Dict,
+              [Code,Vid,Name,Line],
+              avp_code_already_defined).
+
+avp_flags_valid(Flags, Name, Line) ->
+    Bad =
+        lists:filter(fun(C) ->
+                            not lists:member(C, "MVP")
+                     end,
+                     Flags),
+    [] == Bad
+    orelse
+    throw({{avp_has_invalid_flag,[Name,Line,hd(Bad)]},
+           diameter_dict_util,
+           1104}),
+    Dup = Flags -- "MVP",
+    [] == Dup
+    orelse
+    throw({{avp_has_duplicate_flag,[Name,Line,hd(Dup)]},
+           diameter_dict_util,
+           1108}).
+
+avp_vendor_id(Flags, Name, Line, Dict) ->
+    V = lists:member($V, Flags),
+    case vendor_id(Name, Dict) of
+        {avp_vendor_id,_,I} when V ->
+            I;
+        {avp_vendor_id,L,I} ->
+            throw({{avp_has_vendor_id,[Name,Line,I,L]},
+                   diameter_dict_util,
+                   1119});
+        {vendor,I} when V ->
+            I;
+        false when V ->
+            throw({{avp_has_no_vendor,[Name,Line]},
+                   diameter_dict_util,
+                   1123});
+        _ ->
+            false
+    end.
+
+pass3(Dict, Opts) ->
+    import_enums(import_groups(import_avps(insert_codes(Dict), Opts))).
+
+insert_codes(Dict) ->
+    dict:store(command_codes,
+               dict:fold(fun make_code/3, [], Dict),
+               Dict).
+
+make_code({messages,Code}, Names, Acc) when is_integer(Code) ->
+    [mk_code(Code, Names)|Acc];
+make_code(_, _, Acc) ->
+    Acc.
+
+mk_code(Code, [[_,_,false] = Ans,[_,_,true] = Req]) ->
+    mk_code(Code, [Req,Ans]);
+mk_code(Code, [[_,{_,_,Req},true],[_,{_,_,Ans},false]]) ->
+    {Code,Req,Ans};
+mk_code(_Code, [[Line,_Name,IsReq]]) ->
+    throw({{message_missing,
+            [choose(IsReq, "Request", "Answer"),
+             Line,
+             choose(IsReq, "answer", "request")]},
+           diameter_dict_util,
+           1160}).
+
+import_avps(Dict, Opts) ->
+    Import = inherit(Dict, Opts),
+    report(imported, Import),
+    dict:store(import_avps,
+               lists:map(fun({M,_,As}) ->
+                                {M,
+                                 [ 
+                                  A ||
+                                      {_,A} <- As
+                                 ]}
+                         end,
+                         lists:reverse(Import)),
+               foldl(fun explode_imports/2, Dict, Import)).
+
+explode_imports({Mod,Line,Avps}, Dict) ->
+    foldl([fun xi/4,Mod,Line], Dict, Avps).
+
+xi({L,{Name,_Code,_Type,_Flags} = A}, Dict, Mod, Line) ->
+    store_new({avp_types,Name},
+              [0,Mod,Line,L,A],
+              store_new({import,Name},
+                        [Line],
+                        Dict,
+                        [Name,Line],
+                        duplicate_import),
+              [Name,Mod,Line],
+              imported_avp_already_defined).
+
+import_groups(Dict) ->
+    dict:store(import_groups, import(grouped, Dict), Dict).
+
+import_enums(Dict) ->
+    dict:store(import_enums, import(enum, Dict), Dict).
+
+import(Key, Dict) ->
+    flatmap([fun import_key/2,Key], dict:fetch(import_avps, Dict)).
+
+import_key({Mod,Avps}, Key) ->
+    As =
+        lists:flatmap(fun(T) ->
+                             N = element(1, T),
+                             choose(lists:keymember(N, 1, Avps),
+                                    [T],
+                                    [])
+                      end,
+                      orddict:fetch(Key, dict(Mod))),
+    if
+        As == [] ->
+            [];
+        true ->
+            [{Mod,As}]
+    end.
+
+inherit(Dict, Opts) ->
+    code:add_pathsa([ 
+                     D ||
+                         {include,D} <- Opts
+                    ]),
+    foldl(fun inherit_avps/2, [], find(inherits, Dict)).
+
+inherit_avps([Line,{_,_,M}|Names], Acc) ->
+    Mod = list_to_atom(M),
+    report(inherit_from, Mod),
+    case find_avps(Names, avps_from_module(Mod)) of
+        {_,[{_,L,N}|_]} ->
+            throw({{requested_avp_not_found,[Mod,Line,N,L]},
+                   diameter_dict_util,
+                   1235});
+        {Found,[]} ->
+            [{Mod,Line,lists:sort(Found)}|Acc]
+    end.
+
+find_avps([], Avps) ->
+    {[ 
+      {0,A} ||
+          A <- Avps
+     ],
+     []};
+find_avps(Names, Avps) ->
+    foldl(fun acc_avp/2, {[],Names}, Avps).
+
+acc_avp({Name,_Code,_Type,_Flags} = A, {Found,Not} = Acc) ->
+    case lists:keyfind(Name, 3, Not) of
+        {_,Line,Name} ->
+            {[{Line,A}|Found],lists:keydelete(Name, 3, Not)};
+        false ->
+            Acc
+    end.
+
+avps_from_module(Mod) ->
+    orddict:fetch(avp_types, dict(Mod)).
+
+dict(Mod) ->
+    try Mod:dict() of
+        [1|Dict] ->
+            Dict;
+        _ ->
+            throw({{recompile,[Mod]},diameter_dict_util,1266})
+    catch
+        error:_ ->
+            throw({{choose(false == code:is_loaded(Mod),
+                           not_loaded,
+                           no_dict),
+                    [Mod]},
+                   diameter_dict_util,
+                   1272})
+    end.
+
+pass4(Dict) ->
+    dict:fold(fun(K, V, _) ->
+                     p4(K, V, Dict)
+              end,
+              ok,
+              Dict),
+    Dict.
+
+p4({enum,Name}, [Line|_], Dict) when is_list(Name) ->
+    true = is_enumerated_avp(Name, Dict, Line);
+p4({K,{Name,AvpName}}, [Line|_], Dict)
+    when
+        K == grouped
+        orelse
+        K == messages,
+        is_list(Name),
+        is_list(AvpName),
+        AvpName /= "AVP" ->
+    true = avp_is_defined(AvpName, Dict, Line);
+p4({K,AvpName}, [Line|_], Dict)
+    when K == avp_vendor_id; K == custom_types; K == codecs ->
+    true = avp_is_defined(AvpName, Dict, Line);
+p4(_, _, _) ->
+    ok.
+
+is_enumerated_avp(Name, Dict, Line) ->
+    case find({avp_types,Name}, Dict) of
+        [_Line,_Code,{_,_,"Enumerated"},_Flags] ->
+            true;
+        [_Line,_Code,{_,L,T},_] ->
+            throw({{enumerated_avp_has_wrong_local_type,[Name,Line,T,L]},
+                   diameter_dict_util,
+                   1315});
+        [0,_,_,_,{_Name,_Code,"Enumerated",_Flags}] ->
+            true;
+        [0,Mod,LM,LA,{_Name,_Code,Type,_Flags}] ->
+            throw({{enumerated_avp_has_wrong_inherited_type,
+                    [Name,Line,Type,Mod,choose(0 == LA, LM, LA)]},
+                   diameter_dict_util,
+                   1320});
+        [] ->
+            throw({{enumerated_avp_not_defined,[Name,Line]},
+                   diameter_dict_util,
+                   1322})
+    end.
+
+avp_is_defined(Name, Dict, Line) ->
+    case find({avp_types,Name}, Dict) of
+        [_Line,_Code,_Type,_Flags] ->
+            true;
+        [0,_,_,_,{Name,_Code,_Type,_Flags}] ->
+            true;
+        [] ->
+            throw({{avp_not_defined,[Name,Line]},
+                   diameter_dict_util,
+                   1332})
+    end.
+
+putr(Key, Value) ->
+    put({diameter_dict_util,Key}, Value).
+
+getr(Key) ->
+    get({diameter_dict_util,Key}).
+
+eraser(Key) ->
+    erase({diameter_dict_util,Key}).
+
+choose(true, X, _) ->
+    X;
+choose(false, _, X) ->
+    X.
+
+foldl(F, Acc, List) ->
+    lists:foldl(fun(T, A) ->
+                       eval([F,T,A])
+                end,
+                Acc,
+                List).
+
+flatmap(F, List) ->
+    lists:flatmap(fun(T) ->
+                         eval([F,T])
+                  end,
+                  List).
+
+eval([[F|X]|A]) ->
+    eval([F|A ++ X]);
+eval([F|A]) ->
+    apply(F, A).
+
+
+

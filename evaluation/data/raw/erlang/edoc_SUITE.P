@@ -1,0 +1,64 @@
+-file("test/lib/edoc/test/edoc_SUITE.erl", 1).
+
+-module(edoc_SUITE).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/edoc/test/edoc_SUITE.erl", 19).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2]).
+
+-export([build_std/1]).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    [build_std].
+
+groups() ->
+    [].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+build_std(suite) ->
+    [];
+build_std(doc) ->
+    ["Build some documentation using standard EDoc layout"];
+build_std(Config) when is_list(Config) ->
+    DataDir = test_server:lookup_config(data_dir, Config),
+    Overview1 = filename:join(DataDir, "overview.edoc"),
+    Overview2 = filename:join(DataDir, "overview.syntax_tools"),
+    PrivDir = test_server:lookup_config(priv_dir, Config),
+    ok =
+        edoc:application(edoc,
+                         [{overview,Overview1},
+                          {def,{vsn,"TEST"}},
+                          {dir,PrivDir}]),
+    ok =
+        edoc:application(syntax_tools,
+                         [{overview,Overview2},
+                          {def,{vsn,"TEST"}},
+                          {dir,PrivDir}]),
+    ok = edoc:application(xmerl, [{dir,PrivDir}]),
+    ok.
+
+
+

@@ -1,0 +1,38 @@
+-file("test/lib/tools/test/eprof_SUITE_data/eprof_suite_test.erl", 1).
+
+-module(eprof_suite_test).
+
+-export([test/1]).
+
+-export([new/0,push/3,pop/1]).
+
+test(Config) ->
+    Q1 = new(),
+    Q2 = push(Q1, "monkey", 3),
+    Q3 = push(Q2, "banana", 4),
+    Q4 = push(Q3, "jungle", 2),
+    Q5 = push(Q4, "world", 5),
+    Q6 = push(Q5, "universe", 6),
+    Q7 = push(Q6, "peanut", 1),
+    {Itm,Q8} = pop(Q7),
+    ok.
+
+new() ->
+    [].
+
+push(Queue, Itm, Pri) ->
+    insert(Queue, Itm, Pri, []).
+
+pop([{Itm,Pri}|Queue]) ->
+    {Itm,Queue}.
+
+insert([], Itm, Pri, NewQ) ->
+    lists:flatten([lists:reverse(NewQ),{Itm,Pri}]);
+insert([{QItm,QPri}|Queue], Itm, Pri, NewQ) when Pri > QPri ->
+    A = [{Itm,Pri},{QItm,QPri}],
+    lists:flatten([[A|NewQ]|Queue]);
+insert([QItm|Rest], Itm, Pri, NewQ) ->
+    insert(Rest, Itm, Pri, [QItm|NewQ]).
+
+
+

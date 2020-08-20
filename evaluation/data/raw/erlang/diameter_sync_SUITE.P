@@ -1,0 +1,114 @@
+-file("test/lib/diameter/test/diameter_sync_SUITE.erl", 1).
+
+-module(diameter_sync_SUITE).
+
+-export([suite/0,all/0,groups/0,init_per_suite/1,end_per_suite/1]).
+
+-export([call/1,cast/1,timeout/1,flush/1]).
+
+suite() ->
+    [{timetrap,{seconds,60}}].
+
+all() ->
+    [{group,all},{group,all,[parallel]}].
+
+groups() ->
+    [{all,[],tc()}].
+
+tc() ->
+    [call,cast,timeout,flush].
+
+init_per_suite(Config) ->
+    ok = diameter:start(),
+    Config.
+
+end_per_suite(_Config) ->
+    ok = diameter:stop().
+
+call(_) ->
+    Ref = make_ref(),
+    Q = {q,Ref},
+    F = fun() ->
+               Ref
+        end,
+    Ref = diameter_sync:call(Q, F, infinity, infinity),
+    Ref = diameter_sync:call(Q, F, 0, infinity),
+    Ref = call(Q, F),
+    Ref =
+        call(Q,
+             {fun(_) ->
+                     Ref
+              end,
+              x}),
+    timeout =
+        call(Q,
+             fun() ->
+                    exit(unexpected)
+             end),
+    {_,_,_} = call(Q, {erlang,now,[]}),
+    {_,_,_} = call(Q, [fun erlang:now/0]).
+
+cast(_) ->
+    Ref = make_ref(),
+    Q = {q,Ref},
+    false = diameter_sync:carp(Q),
+    [] = diameter_sync:pids(Q),
+    ok =
+        cast(Q,
+             fun() ->
+                    receive
+                        Ref ->
+                            ok
+                    end
+             end),
+    ok =
+        cast(Q,
+             fun() ->
+                    exit(Ref)
+             end),
+    [_,Pid] = diameter_sync:pids(Q),
+    2 = diameter_sync:pending(Q),
+    true = 2 =< diameter_sync:pending(),
+    true = lists:member(Q, diameter_sync:queues()),
+    rejected = diameter_sync:call(Q, {erlang,now,[]}, 1, infinity),
+    rejected = diameter_sync:cast(Q, {erlang,now,[]}, 1, infinity),
+    MRef = monitor(process, Pid),
+    {value,P} = diameter_sync:carp(Q),
+    P ! Ref,
+    Ref =
+        receive
+            {'DOWN',MRef,process,_,Reason} ->
+                Reason
+        after
+            infinity -> false
+        end.
+
+timeout(_) ->
+    Q = make_ref(),
+    ok = diameter_sync:cast(Q, {timer,sleep,[2000]}, infinity, 2000),
+    timeout =
+        diameter_sync:call(Q,
+                           fun() ->
+                                  ok
+                           end,
+                           infinity,
+                           1000).
+
+flush(_) ->
+    Q = make_ref(),
+    F = {timer,sleep,[2000]},
+    ok = cast(Q, F),
+    ok = cast(Q, F),
+    1 = diameter_sync:flush(Q).
+
+call(Q, Req) ->
+    sync(call, Q, Req).
+
+cast(Q, Req) ->
+    sync(cast, Q, Req).
+
+sync(F, Q, Req) ->
+    diameter_sync:F(Q, Req, infinity, infinity).
+
+
+

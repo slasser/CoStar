@@ -39,7 +39,7 @@ let json_of_test_results (trs : test_result list) : Yb.t =
 
 let write_test_results (trs : test_result list) (fname : string) : unit =
   Yb.to_file fname (json_of_test_results trs)
-  
+             
 (* Functions for reading JSON encodings of CoStar tokens from a file  *)
       
 (*let read_json_tokens : string -> (Json.D.SymTy.terminal * coq_string) list = read_tokens_from_file Json.D.SymTy.terminalOfString*)
@@ -93,15 +93,19 @@ let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
   let time  = stop -. start
   in  (time, res)
 
-let benchmark_parser_on_dataset parse grammar start_sym t_of_str data_dir : test_result list =
+let print_result (fname : string) (res : coq_string) =
+  Printf.printf "***\nFile  : %s\nResult: %s \n%!" fname (str_of_coqstr res)
+        
+let benchmark_parser_on_dataset parse grammar start_sym t_of_str show_result data_dir : test_result list =
   let parse'  = parse grammar start_sym in
   let files   = Sys.readdir data_dir    in
   let results = ref []                  in
   for i = 0 to Array.length files - 1 do
     let fname       = files.(i)                                               in
-    let ()          = print_endline fname                                     in
     let ts          = read_tokens_from_file t_of_str (data_dir ^ "/" ^ fname) in
+    (*    let ()          = Printf.printf "filename: %s, number of tokens: %d%!" fname (List.length ts) in*)
     let (time, res) = benchmark parse' ts                                     in
+    let ()          = print_result fname (show_result res)                    in
     results := (mk_test_result fname (List.length ts) time) :: !results
   done;
   !results
@@ -174,11 +178,33 @@ let main () =
   let outfile  = Sys.argv.(3) in
   let results  =
     (match lang with
-     | "json" ->
+     | "-c" ->
+        benchmark_parser_on_dataset C.PG.ParserAndProofs.PEF.PS.P.parse
+                                    C.coq_JsonGrammar
+                                    Coq_json
+                                    Json.D.SymTy.terminalOfString
+                                    Json.PG.ParserAndProofs.PEF.PS.P.showResult
+                                    data_dir
+     | "-json" ->
         benchmark_parser_on_dataset Json.PG.ParserAndProofs.PEF.PS.P.parse
                                     Json.coq_JsonGrammar
                                     Coq_json
                                     Json.D.SymTy.terminalOfString
+                                    Json.PG.ParserAndProofs.PEF.PS.P.showResult
+                                    data_dir
+     | "-dot" ->
+        benchmark_parser_on_dataset DOT.PG.ParserAndProofs.PEF.PS.P.parse
+                                    DOT.coq_DOTGrammar
+                                    Coq_graph
+                                    DOT.D.SymTy.terminalOfString
+                                    DOT.PG.ParserAndProofs.PEF.PS.P.showResult
+                                    data_dir
+     | "-erlang" ->
+        benchmark_parser_on_dataset Erlang.PG.ParserAndProofs.PEF.PS.P.parse
+                                    Erlang.coq_ErlangGrammar
+                                    Coq_forms
+                                    Erlang.D.SymTy.terminalOfString
+                                    Erlang.PG.ParserAndProofs.PEF.PS.P.showResult
                                     data_dir
      | _ -> failwith "unrecognized lang argument")
   in

@@ -1,0 +1,9 @@
+-file("test/lib/sasl/test/systools_SUITE_data/d_normal/lib/fe-3.1/src/fe2.erl",
+      1).
+
+-module(fe2).
+
+-vsn("1.0").
+
+
+

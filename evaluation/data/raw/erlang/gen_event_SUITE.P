@@ -1,0 +1,1014 @@
+-file("test/lib/stdlib/test/gen_event_SUITE.erl", 1).
+
+-module(gen_event_SUITE).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/stdlib/test/gen_event_SUITE.erl", 22).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2]).
+
+-export([start/1,
+         add_handler/1,
+         add_sup_handler/1,
+         delete_handler/1,
+         swap_handler/1,
+         swap_sup_handler/1,
+         notify/1,
+         sync_notify/1,
+         call/1,
+         info/1,
+         hibernate/1,
+         call_format_status/1,
+         call_format_status_anon/1,
+         error_format_status/1,
+         get_state/1,
+         replace_state/1]).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    [start,
+     {group,test_all},
+     hibernate,
+     call_format_status,
+     call_format_status_anon,
+     error_format_status,
+     get_state,
+     replace_state].
+
+groups() ->
+    [{test_all,
+      [],
+      [add_handler,
+       add_sup_handler,
+       delete_handler,
+       swap_handler,
+       swap_sup_handler,
+       notify,
+       sync_notify,
+       call,
+       info]}].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+start(doc) ->
+    [];
+start(suite) ->
+    [];
+start(Config) when is_list(Config) ->
+    OldFl = process_flag(trap_exit, true),
+    dummy_via:reset(),
+    {ok,Pid0} = gen_event:start(),
+    [] = gen_event:which_handlers(Pid0),
+    ok = gen_event:stop(Pid0),
+    {ok,Pid1} = gen_event:start_link(),
+    [] = gen_event:which_handlers(Pid1),
+    ok = gen_event:stop(Pid1),
+    {ok,Pid2} = gen_event:start({local,my_dummy_name}),
+    [] = gen_event:which_handlers(my_dummy_name),
+    [] = gen_event:which_handlers(Pid2),
+    ok = gen_event:stop(my_dummy_name),
+    {ok,Pid3} = gen_event:start_link({local,my_dummy_name}),
+    [] = gen_event:which_handlers(my_dummy_name),
+    [] = gen_event:which_handlers(Pid3),
+    ok = gen_event:stop(my_dummy_name),
+    {ok,Pid4} = gen_event:start_link({global,my_dummy_name}),
+    [] = gen_event:which_handlers({global,my_dummy_name}),
+    [] = gen_event:which_handlers(Pid4),
+    ok = gen_event:stop({global,my_dummy_name}),
+    {ok,Pid5} = gen_event:start_link({via,dummy_via,my_dummy_name}),
+    [] = gen_event:which_handlers({via,dummy_via,my_dummy_name}),
+    [] = gen_event:which_handlers(Pid5),
+    ok = gen_event:stop({via,dummy_via,my_dummy_name}),
+    {ok,_} = gen_event:start_link({local,my_dummy_name}),
+    {error,{already_started,_}} =
+        gen_event:start_link({local,my_dummy_name}),
+    {error,{already_started,_}} = gen_event:start({local,my_dummy_name}),
+    ok = gen_event:stop(my_dummy_name),
+    {ok,Pid6} = gen_event:start_link({global,my_dummy_name}),
+    {error,{already_started,_}} =
+        gen_event:start_link({global,my_dummy_name}),
+    {error,{already_started,_}} =
+        gen_event:start({global,my_dummy_name}),
+    exit(Pid6, shutdown),
+    receive
+        {'EXIT',Pid6,shutdown} ->
+            ok
+    after
+        10000 -> test_server:fail(exit_gen_event)
+    end,
+    {ok,Pid7} = gen_event:start_link({via,dummy_via,my_dummy_name}),
+    {error,{already_started,_}} =
+        gen_event:start_link({via,dummy_via,my_dummy_name}),
+    {error,{already_started,_}} =
+        gen_event:start({via,dummy_via,my_dummy_name}),
+    exit(Pid7, shutdown),
+    receive
+        {'EXIT',Pid7,shutdown} ->
+            ok
+    after
+        10000 -> test_server:fail(exit_gen_event)
+    end,
+    test_server:messages_get(),
+    process_flag(trap_exit, OldFl),
+    ok.
+
+hibernate(suite) ->
+    [];
+hibernate(Config) when is_list(Config) ->
+    {ok,Pid} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    true = gen_event:call(my_dummy_handler, dummy_h, hibernate),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    Pid ! wake,
+    receive after 1000 -> ok end,
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    later = gen_event:call(my_dummy_handler, dummy_h, hibernate_later),
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    receive after 2000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    Pid ! wake,
+    receive after 1000 -> ok end,
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    gen_event:notify(my_dummy_handler, hibernate),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    gen_event:notify(my_dummy_handler, wakeup),
+    receive after 1000 -> ok end,
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    gen_event:notify(my_dummy_handler, hibernate),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    gen_event:sync_notify(my_dummy_handler, wakeup),
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    ok = gen_event:sync_notify(my_dummy_handler, hibernate),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    Pid ! wake,
+    receive after 1000 -> ok end,
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    ok = gen_event:add_handler(my_dummy_handler, dummy1_h, [self()]),
+    [_,_] = gen_event:which_handlers(my_dummy_handler),
+    gen_event:notify(my_dummy_handler, hibernate),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    gen_event:notify(my_dummy_handler, wakeup),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    Pid ! wake,
+    receive after 1000 -> ok end,
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    Pid ! gnurf,
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    Pid ! sleep,
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid, current_function),
+    Pid ! wake,
+    receive after 1000 -> ok end,
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid, current_function),
+    ok = gen_event:stop(my_dummy_handler),
+    {ok,Pid2} = gen_event:start({local,my_dummy_handler}),
+    ok =
+        gen_event:add_handler(my_dummy_handler,
+                              dummy_h,
+                              [self(),hibernate]),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid2, current_function),
+    sys:suspend(my_dummy_handler),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid2, current_function),
+    sys:resume(my_dummy_handler),
+    receive after 1000 -> ok end,
+    {current_function,{erlang,hibernate,3}} =
+        process_info(Pid2, current_function),
+    Pid2 ! wake,
+    receive after 1000 -> ok end,
+    true =
+        {current_function,{erlang,hibernate,3}}
+        =/=
+        process_info(Pid2, current_function),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+add_handler(doc) ->
+    [];
+add_handler(suite) ->
+    [];
+add_handler(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    {error,my_error} =
+        gen_event:add_handler(my_dummy_handler, dummy_h, make_error),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    {error,my_error} =
+        gen_event:add_handler(my_dummy_handler,
+                              {dummy_h,self()},
+                              make_error),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    ok =
+        gen_event:add_handler(my_dummy_handler,
+                              {dummy_h,self()},
+                              [self()]),
+    Self = self(),
+    [{dummy_h,Self},dummy_h] =
+        gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+add_sup_handler(doc) ->
+    [];
+add_sup_handler(suite) ->
+    [];
+add_sup_handler(Config) when is_list(Config) ->
+    {ok,Pid} = gen_event:start({local,my_dummy_handler}),
+    {error,my_error} =
+        gen_event:add_sup_handler(my_dummy_handler, dummy_h, make_error),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    exit(Pid, sup_died),
+    test_server:sleep(1000),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    {error,my_error} =
+        gen_event:add_handler(my_dummy_handler,
+                              {dummy_h,self()},
+                              make_error),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    ok =
+        gen_event:add_sup_handler(my_dummy_handler,
+                                  {dummy_h,self()},
+                                  [self()]),
+    Self = self(),
+    [{dummy_h,Self},dummy_h] =
+        gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:stop(my_dummy_handler),
+    receive
+        {gen_event_EXIT,dummy_h,shutdown} ->
+            ok
+    after
+        1000 -> test_server:fail({no,{gen_event_EXIT,dummy_h,shutdown}})
+    end,
+    receive
+        {gen_event_EXIT,{dummy_h,Self},shutdown} ->
+            ok
+    after
+        1000 ->
+            test_server:fail({no,
+                              {gen_event_EXIT,{dummy_h,Self},shutdown}})
+    end,
+    ok.
+
+delete_handler(doc) ->
+    [];
+delete_handler(suite) ->
+    [];
+delete_handler(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    {error,module_not_found} =
+        gen_event:delete_handler(my_dummy_handler, duuuuuuuuumy, []),
+    return_hej =
+        gen_event:delete_handler(my_dummy_handler, dummy_h, return_hej),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    ok = gen_event:delete_handler(my_dummy_handler, dummy_h, []),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,1}, [self()]),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,2}, [self()]),
+    {error,module_not_found} =
+        gen_event:delete_handler(my_dummy_handler, {duuuuuuuuumy,1}, []),
+    return_hej =
+        gen_event:delete_handler(my_dummy_handler,
+                                 {dummy_h,1},
+                                 return_hej),
+    return_hej =
+        gen_event:delete_handler(my_dummy_handler,
+                                 {dummy_h,2},
+                                 return_hej),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,2}, [self()]),
+    ok = gen_event:delete_handler(my_dummy_handler, {dummy_h,2}, []),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+swap_handler(doc) ->
+    [];
+swap_handler(suite) ->
+    [];
+swap_handler(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    {error,non_existing} =
+        gen_event:swap_handler(my_dummy_handler,
+                               {faulty_h,swap},
+                               {dummy1_h,[]}),
+    ok =
+        gen_event:swap_handler(my_dummy_handler,
+                               {dummy_h,swap},
+                               {dummy1_h,swap}),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:delete_handler(my_dummy_handler, dummy1_h, []),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,3}, [self()]),
+    {error,non_existing} =
+        gen_event:swap_handler(my_dummy_handler,
+                               {faulty_h,swap},
+                               {dummy1_h,[]}),
+    ok =
+        gen_event:swap_handler(my_dummy_handler,
+                               {{dummy_h,3},swap},
+                               {{dummy1_h,4},swap}),
+    [{dummy1_h,4}] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:delete_handler(my_dummy_handler, {dummy1_h,4}, []),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+swap_sup_handler(doc) ->
+    [];
+swap_sup_handler(suite) ->
+    [];
+swap_sup_handler(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    {error,non_existing} =
+        gen_event:swap_handler(my_dummy_handler,
+                               {faulty_h,swap},
+                               {dummy1_h,[]}),
+    ok =
+        gen_event:swap_handler(my_dummy_handler,
+                               {dummy_h,swap},
+                               {dummy1_h,swap}),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:delete_handler(my_dummy_handler, dummy1_h, []),
+    receive
+        {gen_event_EXIT,dummy1_h,normal} ->
+            ok
+    after
+        1000 -> test_server:fail({no,{gen_event_EXIT,dummy1_h,normal}})
+    end,
+    ok =
+        gen_event:add_sup_handler(my_dummy_handler,
+                                  {dummy_h,3},
+                                  [self()]),
+    {error,non_existing} =
+        gen_event:swap_sup_handler(my_dummy_handler,
+                                   {faulty_h,swap},
+                                   {dummy1_h,[]}),
+    ok =
+        gen_event:swap_sup_handler(my_dummy_handler,
+                                   {{dummy_h,3},swap},
+                                   {{dummy1_h,4},swap}),
+    [{dummy1_h,4}] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:delete_handler(my_dummy_handler, {dummy1_h,4}, []),
+    receive
+        {gen_event_EXIT,{dummy1_h,4},normal} ->
+            ok
+    after
+        1000 ->
+            test_server:fail({no,{gen_event_EXIT,{dummy1_h,4},normal}})
+    end,
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+notify(doc) ->
+    [];
+notify(suite) ->
+    [];
+notify(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    Event = {event,self()},
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:notify(my_dummy_handler, Event),
+    receive
+        {dummy_h,Event} ->
+            ok
+    end,
+    ok = gen_event:notify(my_dummy_handler, {swap_event,dummy1_h,swap}),
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:notify(my_dummy_handler, Event),
+    receive
+        {dummy1_h,Event} ->
+            ok
+    end,
+    ok = gen_event:notify(my_dummy_handler, delete_event),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    ok = gen_event:notify(my_dummy_handler, error_event),
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,5}, [self()]),
+    [{dummy_h,5}] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:notify(my_dummy_handler, Event),
+    receive
+        {dummy_h,Event} ->
+            ok
+    end,
+    ok =
+        gen_event:notify(my_dummy_handler,
+                         {swap_event,{dummy1_h,9},swap}),
+    test_server:sleep(1000),
+    [{dummy1_h,9}] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:notify(my_dummy_handler, Event),
+    receive
+        {dummy1_h,Event} ->
+            ok
+    end,
+    ok = gen_event:notify(my_dummy_handler, delete_event),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,a}, [self()]),
+    ok = gen_event:notify(my_dummy_handler, error_event),
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:notify(my_dummy_handler, Event),
+    receive
+        {dummy_h,Event} ->
+            ok
+    end,
+    ok = gen_event:notify(my_dummy_handler, do_crash),
+    receive
+        {gen_event_EXIT,dummy_h,{'EXIT',_}} ->
+            ok
+    end,
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    ok = gen_event:notify(my_dummy_handler, {swap_event,dummy1_h,swap}),
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:notify(my_dummy_handler, do_crash),
+    receive
+        {gen_event_EXIT,dummy1_h,{'EXIT',_}} ->
+            ok
+    end,
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    ok = gen_event:notify(my_dummy_handler, {swap_event,dummy1_h,swap}),
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:notify(my_dummy_handler, delete_event),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    receive
+        {gen_event_EXIT,dummy1_h,normal} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+sync_notify(doc) ->
+    [];
+sync_notify(suite) ->
+    [];
+sync_notify(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    Event = {event,self()},
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:sync_notify(my_dummy_handler, Event),
+    receive
+        {dummy_h,Event} ->
+            ok
+    end,
+    ok =
+        gen_event:sync_notify(my_dummy_handler,
+                              {swap_event,dummy1_h,swap}),
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:sync_notify(my_dummy_handler, Event),
+    receive
+        {dummy1_h,Event} ->
+            ok
+    end,
+    ok = gen_event:sync_notify(my_dummy_handler, delete_event),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    ok = gen_event:sync_notify(my_dummy_handler, error_event),
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,5}, [self()]),
+    [{dummy_h,5}] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:sync_notify(my_dummy_handler, Event),
+    receive
+        {dummy_h,Event} ->
+            ok
+    end,
+    ok =
+        gen_event:sync_notify(my_dummy_handler,
+                              {swap_event,{dummy1_h,9},swap}),
+    test_server:sleep(1000),
+    [{dummy1_h,9}] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:sync_notify(my_dummy_handler, Event),
+    receive
+        {dummy1_h,Event} ->
+            ok
+    end,
+    ok = gen_event:sync_notify(my_dummy_handler, delete_event),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,a}, [self()]),
+    ok = gen_event:sync_notify(my_dummy_handler, error_event),
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:sync_notify(my_dummy_handler, Event),
+    receive
+        {dummy_h,Event} ->
+            ok
+    end,
+    ok = gen_event:sync_notify(my_dummy_handler, do_crash),
+    receive
+        {gen_event_EXIT,dummy_h,{'EXIT',_}} ->
+            ok
+    end,
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    ok =
+        gen_event:sync_notify(my_dummy_handler,
+                              {swap_event,dummy1_h,swap}),
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:sync_notify(my_dummy_handler, do_crash),
+    receive
+        {gen_event_EXIT,dummy1_h,{'EXIT',_}} ->
+            ok
+    end,
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    ok =
+        gen_event:sync_notify(my_dummy_handler,
+                              {swap_event,dummy1_h,swap}),
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:sync_notify(my_dummy_handler, delete_event),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    receive
+        {gen_event_EXIT,dummy1_h,normal} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+call(doc) ->
+    [];
+call(suite) ->
+    [];
+call(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,1}, [self()]),
+    [{dummy_h,1},dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    {'EXIT',_} = (catch gen_event:call(non_exist, dummy_h, hejsan)),
+    {error,bad_module} = gen_event:call(my_dummy_handler, bad_h, hejsan),
+    {ok,hejhopp} = gen_event:call(my_dummy_handler, dummy_h, hejsan),
+    {ok,hejhopp} = gen_event:call(my_dummy_handler, {dummy_h,1}, hejsan),
+    {ok,hejhopp} =
+        gen_event:call(my_dummy_handler, dummy_h, hejsan, 10000),
+    {'EXIT',{timeout,_}} =
+        (catch gen_event:call(my_dummy_handler, dummy_h, hejsan, 0)),
+    flush(),
+    ok = gen_event:delete_handler(my_dummy_handler, {dummy_h,1}, []),
+    {ok,swapped} =
+        gen_event:call(my_dummy_handler,
+                       dummy_h,
+                       {swap_call,dummy1_h,swap}),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    {error,bad_module} =
+        gen_event:call(my_dummy_handler, dummy_h, hejsan),
+    ok = gen_event:call(my_dummy_handler, dummy1_h, delete_call),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    {error,{return,faulty}} =
+        gen_event:call(my_dummy_handler, dummy_h, error_call),
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    {error,{'EXIT',_}} =
+        gen_event:call(my_dummy_handler, dummy_h, exit_call),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,1}, [self()]),
+    [{dummy_h,1}] = gen_event:which_handlers(my_dummy_handler),
+    {error,bad_module} = gen_event:call(my_dummy_handler, bad_h, hejsan),
+    {ok,hejhopp} = gen_event:call(my_dummy_handler, {dummy_h,1}, hejsan),
+    {ok,swapped} =
+        gen_event:call(my_dummy_handler,
+                       {dummy_h,1},
+                       {swap_call,{dummy1_h,2},swap}),
+    [{dummy1_h,2}] = gen_event:which_handlers(my_dummy_handler),
+    {error,bad_module} =
+        gen_event:call(my_dummy_handler, dummy_h, hejsan),
+    ok = gen_event:call(my_dummy_handler, {dummy1_h,2}, delete_call),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,3}, [self()]),
+    {error,{return,faulty}} =
+        gen_event:call(my_dummy_handler, {dummy_h,3}, error_call),
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,4}, [self()]),
+    {error,{'EXIT',_}} =
+        gen_event:call(my_dummy_handler, {dummy_h,4}, exit_call),
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    {error,bad_module} = gen_event:call(my_dummy_handler, bad_h, hejsan),
+    {ok,hejhopp} = gen_event:call(my_dummy_handler, dummy_h, hejsan),
+    {ok,swapped} =
+        gen_event:call(my_dummy_handler,
+                       dummy_h,
+                       {swap_call,dummy1_h,swap}),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    {error,bad_module} =
+        gen_event:call(my_dummy_handler, dummy_h, hejsan),
+    ok = gen_event:call(my_dummy_handler, dummy1_h, delete_call),
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    receive
+        {gen_event_EXIT,dummy1_h,normal} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    {error,{return,faulty}} =
+        gen_event:call(my_dummy_handler, dummy_h, error_call),
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    receive
+        {gen_event_EXIT,dummy_h,{return,faulty}} ->
+            ok
+    after
+        1000 ->
+            test_server:fail({no,
+                              {gen_event_EXIT,dummy_h,{return,faulty}}})
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    {error,{'EXIT',_}} =
+        gen_event:call(my_dummy_handler, dummy_h, exit_call),
+    receive
+        {gen_event_EXIT,dummy_h,{'EXIT',_}} ->
+            ok
+    after
+        1000 ->
+            test_server:fail({no,{gen_event_EXIT,dummy_h,{'EXIT','_'}}})
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+flush() ->
+    receive
+        _ ->
+            flush()
+    after
+        0 -> ok
+    end.
+
+info(doc) ->
+    [];
+info(suite) ->
+    [];
+info(Config) when is_list(Config) ->
+    {ok,_} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    Info = {info,self()},
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    my_dummy_handler ! Info,
+    receive
+        {dummy_h,Info} ->
+            ok
+    end,
+    my_dummy_handler ! {swap_info,dummy1_h,swap},
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    my_dummy_handler ! Info,
+    receive
+        {dummy1_h,Info} ->
+            ok
+    end,
+    my_dummy_handler ! delete_info,
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, dummy_h, [self()]),
+    my_dummy_handler ! error_info,
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,1}, [self()]),
+    [{dummy_h,1}] = gen_event:which_handlers(my_dummy_handler),
+    my_dummy_handler ! Info,
+    receive
+        {dummy_h,Info} ->
+            ok
+    end,
+    my_dummy_handler ! {swap_info,{dummy1_h,2},swap},
+    test_server:sleep(1000),
+    [{dummy1_h,2}] = gen_event:which_handlers(my_dummy_handler),
+    my_dummy_handler ! Info,
+    receive
+        {dummy1_h,Info} ->
+            ok
+    end,
+    my_dummy_handler ! delete_info,
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_handler(my_dummy_handler, {dummy_h,3}, [self()]),
+    my_dummy_handler ! error_info,
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    [dummy_h] = gen_event:which_handlers(my_dummy_handler),
+    my_dummy_handler ! Info,
+    receive
+        {dummy_h,Info} ->
+            ok
+    end,
+    my_dummy_handler ! {swap_info,dummy1_h,swap},
+    test_server:sleep(1000),
+    [dummy1_h] = gen_event:which_handlers(my_dummy_handler),
+    my_dummy_handler ! Info,
+    receive
+        {dummy1_h,Info} ->
+            ok
+    end,
+    my_dummy_handler ! delete_info,
+    receive
+        {dummy1_h,removed} ->
+            ok
+    end,
+    receive
+        {gen_event_EXIT,dummy1_h,normal} ->
+            ok
+    after
+        1000 -> test_server:fail({no,{gen_event_EXIT,dummy1_h,normal}})
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    my_dummy_handler ! error_info,
+    receive
+        {dummy_h,returned_error} ->
+            ok
+    end,
+    receive
+        {gen_event_EXIT,dummy_h,{return,faulty}} ->
+            ok
+    after
+        1000 ->
+            test_server:fail({no,
+                              {gen_event_EXIT,dummy_h,{return,faulty}}})
+    end,
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy_h, [self()]),
+    my_dummy_handler ! do_crash,
+    receive
+        {gen_event_EXIT,dummy_h,{'EXIT',_}} ->
+            ok
+    after
+        1000 ->
+            test_server:fail({no,{gen_event_EXIT,dummy_h,{'EXIT','_'}}})
+    end,
+    [] = gen_event:which_handlers(my_dummy_handler),
+    ok = gen_event:stop(my_dummy_handler),
+    ok.
+
+call_format_status(suite) ->
+    [];
+call_format_status(doc) ->
+    ["Test that sys:get_status/1,2 calls format_status/2"];
+call_format_status(Config) when is_list(Config) ->
+    {ok,Pid} = gen_event:start({local,my_dummy_handler}),
+    State = self(),
+    FmtState = "dummy1_h handler state",
+    ok = gen_event:add_handler(my_dummy_handler, dummy1_h, [State]),
+    Status1 = sys:get_status(Pid),
+    Status2 = sys:get_status(Pid, 5000),
+    ok = gen_event:stop(Pid),
+    {status,Pid,_,[_,_,Pid,[],Data1]} = Status1,
+    HandlerInfo1 = proplists:get_value(items, Data1),
+    {"Installed handlers",[{_,dummy1_h,_,FmtState,_}]} = HandlerInfo1,
+    {status,Pid,_,[_,_,Pid,[],Data2]} = Status2,
+    HandlerInfo2 = proplists:get_value(items, Data2),
+    {"Installed handlers",[{_,dummy1_h,_,FmtState,_}]} = HandlerInfo2,
+    ok.
+
+call_format_status_anon(suite) ->
+    [];
+call_format_status_anon(doc) ->
+    ["Test that sys:get_status/1,2 calls format_status/2 for anonymous "
+     "gen_event processes"];
+call_format_status_anon(Config) when is_list(Config) ->
+    {ok,Pid} = gen_event:start(),
+    Status1 = sys:get_status(Pid),
+    ok = gen_event:stop(Pid),
+    Header = "Status for event handler " ++ pid_to_list(Pid),
+    {status,Pid,_,[_,_,Pid,[],Data1]} = Status1,
+    Header = proplists:get_value(header, Data1),
+    ok.
+
+error_format_status(suite) ->
+    [];
+error_format_status(doc) ->
+    ["Test that a handler error calls format_status/2"];
+error_format_status(Config) when is_list(Config) ->
+    error_logger_forwarder:register(),
+    OldFl = process_flag(trap_exit, true),
+    State = self(),
+    {ok,Pid} = gen_event:start({local,my_dummy_handler}),
+    ok = gen_event:add_sup_handler(my_dummy_handler, dummy1_h, [State]),
+    ok = gen_event:notify(my_dummy_handler, do_crash),
+    receive
+        {gen_event_EXIT,dummy1_h,{'EXIT',_}} ->
+            ok
+    after
+        5000 -> test_server:fail(exit_gen_event)
+    end,
+    FmtState = "dummy1_h handler state",
+    receive
+        {error,
+         _GroupLeader,
+         {Pid,
+          "** gen_event handler" ++ _,
+          [dummy1_h,my_dummy_handler,do_crash,FmtState,_]}} ->
+            ok;
+        Other ->
+            io:format("Unexpected: ~p", [Other]),
+            test_server:fail()
+    end,
+    test_server:messages_get(),
+    ok = gen_event:stop(Pid),
+    process_flag(trap_exit, OldFl),
+    ok.
+
+get_state(suite) ->
+    [];
+get_state(doc) ->
+    ["Test that sys:get_state/1,2 return the gen_event state"];
+get_state(Config) when is_list(Config) ->
+    {ok,Pid} = gen_event:start({local,my_dummy_handler}),
+    State1 = self(),
+    ok = gen_event:add_handler(my_dummy_handler, dummy1_h, [State1]),
+    [{dummy1_h,false,State1}] = sys:get_state(Pid),
+    [{dummy1_h,false,State1}] = sys:get_state(Pid, 5000),
+    State2 = {gen_event_SUITE,self()},
+    ok =
+        gen_event:add_handler(my_dummy_handler, {dummy1_h,id}, [State2]),
+    Result1 = sys:get_state(Pid),
+    [{dummy1_h,false,State1},{dummy1_h,id,State2}] = lists:sort(Result1),
+    Result2 = sys:get_state(Pid, 5000),
+    [{dummy1_h,false,State1},{dummy1_h,id,State2}] = lists:sort(Result2),
+    ok = gen_event:stop(Pid),
+    ok.
+
+replace_state(suite) ->
+    [];
+replace_state(doc) ->
+    ["Test that replace_state/2,3 replace the gen_event state"];
+replace_state(Config) when is_list(Config) ->
+    {ok,Pid} = gen_event:start({local,my_dummy_handler}),
+    State1 = self(),
+    ok = gen_event:add_handler(my_dummy_handler, dummy1_h, [State1]),
+    [{dummy1_h,false,State1}] = sys:get_state(Pid),
+    NState1 = "replaced",
+    Replace1 =
+        fun({dummy1_h,false,_} = S) ->
+               setelement(3, S, NState1)
+        end,
+    [{dummy1_h,false,NState1}] = sys:replace_state(Pid, Replace1),
+    [{dummy1_h,false,NState1}] = sys:get_state(Pid),
+    NState2 = "replaced again",
+    Replace2 =
+        fun({dummy1_h,false,_} = S) ->
+               setelement(3, S, NState2)
+        end,
+    [{dummy1_h,false,NState2}] = sys:replace_state(Pid, Replace2, 5000),
+    [{dummy1_h,false,NState2}] = sys:get_state(Pid),
+    Replace3 =
+        fun(_) ->
+               exit(fail)
+        end,
+    [{dummy1_h,false,NState2}] = sys:replace_state(Pid, Replace3),
+    [{dummy1_h,false,NState2}] = sys:get_state(Pid),
+    ok.
+
+
+

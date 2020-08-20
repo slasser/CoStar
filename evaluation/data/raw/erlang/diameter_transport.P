@@ -1,0 +1,19 @@
+-file("test/lib/diameter/src/transport/diameter_transport.erl", 1).
+
+-module(diameter_transport).
+
+-export([start/3,select/3,eval/3]).
+
+start(T, Svc, {F,A}) ->
+    start(T, Svc, {diameter_transport,F,[A]});
+start(T, Svc, F) ->
+    diameter_lib:eval([F,T,Svc]).
+
+select(T, Svc, F) ->
+    start(T, Svc, diameter_lib:eval([F,T,Svc])).
+
+eval(_, _, F) ->
+    diameter_lib:eval(F).
+
+
+

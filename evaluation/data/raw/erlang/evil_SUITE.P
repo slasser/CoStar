@@ -1,0 +1,332 @@
+-file("test/erts/emulator/test/evil_SUITE.erl", 1).
+
+-module(evil_SUITE).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2,
+         init_per_testcase/2,
+         end_per_testcase/2,
+         heap_frag/1,
+         encode_decode_ext/1,
+         decode_integer_ext/1,
+         decode_small_big_ext/1,
+         decode_large_big_ext/1,
+         decode_small_big_ext_neg/1,
+         decode_large_big_ext_neg/1,
+         decode_too_small/1,
+         decode_pos_neg_zero/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/erts/emulator/test/evil_SUITE.erl", 36).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    [heap_frag,
+     encode_decode_ext,
+     decode_integer_ext,
+     decode_small_big_ext,
+     decode_large_big_ext,
+     decode_small_big_ext_neg,
+     decode_large_big_ext_neg,
+     decode_too_small,
+     decode_pos_neg_zero].
+
+groups() ->
+    [].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+init_per_testcase(_Case, Config) ->
+    Dog = test_server:timetrap(test_server:minutes(0.5)),
+    [{watchdog,Dog}|Config].
+
+end_per_testcase(_Case, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog),
+    ok.
+
+heap_frag(Config) when is_list(Config) ->
+    N = 512,
+    Self = self(),
+    Pid =
+        spawn_link(fun() ->
+                          appender(Self, N)
+                   end),
+    receive
+        {Pid,Res} ->
+            Res = my_appender(N);
+        Garbage ->
+            io:format("Garbage: ~p\n", [Garbage]),
+            test_server:fail(got_garbage)
+    end.
+
+encode_decode_ext(Config) when is_list(Config) ->
+    enc_dec(2, 0),
+    enc_dec(2, 255),
+    enc_dec(5, 256),
+    enc_dec(5, - 1),
+    enc_dec(5, 134217727),
+    enc_dec(5, - 134217728),
+    enc_dec(7, 134217728),
+    enc_dec(7, - 134217729),
+    enc_dec(7, 2147483647),
+    enc_dec(7, - 2147483648),
+    enc_dec(7, 2147483648),
+    enc_dec(7, 4294967295),
+    enc_dec(9, 140737488355327),
+    enc_dec(9, - 140737488355328),
+    enc_dec(9, 281474976710655),
+    enc_dec(11, 9223372036854775807),
+    enc_dec(11, - 9223372036854775808),
+    enc_dec(11, 18446744073709551615),
+    ok.
+
+decode_integer_ext(Config) when is_list(Config) ->
+    decode(0, <<131,98,0:32>>),
+    decode(42, <<131,98,42:32>>),
+    decode(255, <<131,98,255:32>>),
+    decode(134217728, <<131,98,134217728:32>>),
+    decode(- 134217729, <<131,98,(- 134217729):32>>),
+    decode(2147483647, <<131,98,2147483647:32>>),
+    decode(- 2147483648, <<131,98,(- 2147483648):32>>),
+    ok.
+
+decode_small_big_ext(Config) when is_list(Config) ->
+    decode(256, <<131,110,2,0,0,1>>),
+    decode(134217727, <<131,110,4,0,255,255,255,7>>),
+    decode(2147483647, <<131,110,4,0,255,255,255,127>>),
+    decode(42, <<131,110,1,0,42>>),
+    decode(42, <<131,110,2,0,42,0>>),
+    decode(42, <<131,110,3,0,42,0,0>>),
+    decode(42, <<131,110,4,0,42,0,0,0>>),
+    decode(42, <<131,110,5,0,42,0,0,0,0>>),
+    decode(42, <<131,110,6,0,42,0,0,0,0,0>>),
+    decode(42, <<131,110,7,0,42,0,0,0,0,0,0>>),
+    decode(42, <<131,110,8,0,42,0,0,0,0,0,0,0>>),
+    ok.
+
+decode_large_big_ext(Config) when is_list(Config) ->
+    decode(256, <<131,111,2:32,0,0,1>>),
+    decode(134217727, <<131,111,4:32,0,255,255,255,7>>),
+    decode(2147483647, <<131,111,4:32,0,255,255,255,127>>),
+    decode(4294967295, <<131,111,4:32,0,255,255,255,255>>),
+    N = largest_small_big(),
+    decode(N, <<131,111,255:32,0,N:2040/little>>),
+    decode(42, <<131,111,1:32,0,42>>),
+    decode(42, <<131,111,2:32,0,42,0>>),
+    decode(42, <<131,111,3:32,0,42,0,0>>),
+    decode(42, <<131,111,4:32,0,42,0,0,0>>),
+    decode(42, <<131,111,5:32,0,42,0,0,0,0>>),
+    decode(42, <<131,111,6:32,0,42,0,0,0,0,0>>),
+    decode(42, <<131,111,7:32,0,42,0,0,0,0,0,0>>),
+    decode(42, <<131,111,8:32,0,42,0,0,0,0,0,0,0>>),
+    ok.
+
+decode_small_big_ext_neg(Config) when is_list(Config) ->
+    decode(- 1, <<131,110,1,1,1>>),
+    decode(- 134217728, <<131,110,4,1,0,0,0,8>>),
+    decode(- 2147483648, <<131,110,4,1,0,0,0,128>>),
+    decode(- 4294967295, <<131,110,4,1,255,255,255,255>>),
+    N = largest_small_big(),
+    decode(- N, <<131,111,255:32,1,N:2040/little>>),
+    decode(- 42, <<131,110,1,1,42>>),
+    decode(- 42, <<131,110,2,1,42,0>>),
+    decode(- 42, <<131,110,3,1,42,0,0>>),
+    decode(- 42, <<131,110,4,1,42,0,0,0>>),
+    decode(- 42, <<131,110,5,1,42,0,0,0,0>>),
+    decode(- 42, <<131,110,6,1,42,0,0,0,0,0>>),
+    decode(- 42, <<131,110,7,1,42,0,0,0,0,0,0>>),
+    decode(- 42, <<131,110,8,1,42,0,0,0,0,0,0,0>>),
+    ok.
+
+decode_large_big_ext_neg(Config) when is_list(Config) ->
+    decode(- 1, <<131,111,1:32,1,1>>),
+    decode(- 134217728, <<131,111,4:32,1,0,0,0,8>>),
+    decode(- 2147483648, <<131,111,4:32,1,0,0,0,128>>),
+    decode(- 42, <<131,111,1:32,1,42>>),
+    decode(- 42, <<131,111,2:32,1,42,0>>),
+    decode(- 42, <<131,111,3:32,1,42,0,0>>),
+    decode(- 42, <<131,111,4:32,1,42,0,0,0>>),
+    decode(- 42, <<131,111,5:32,1,42,0,0,0,0>>),
+    decode(- 42, <<131,111,6:32,1,42,0,0,0,0,0>>),
+    decode(- 42, <<131,111,7:32,1,42,0,0,0,0,0,0>>),
+    decode(- 42, <<131,111,8:32,1,42,0,0,0,0,0,0,0>>),
+    ok.
+
+decode_pos_neg_zero(Config) when is_list(Config) ->
+    decode(0, <<131,110,0,0>>),
+    decode(0, <<131,110,1,0,0>>),
+    decode(0, <<131,110,0,1>>),
+    decode(0, <<131,110,1,1,0>>),
+    decode(0, <<131,111,0:32,0>>),
+    decode(0, <<131,111,1:32,0,0>>),
+    decode(0, <<131,111,0:32,1>>),
+    decode(0, <<131,111,1:32,1,0>>),
+    N = largest_small_big(),
+    decode(N, <<131,110,255,0,N:2040/little>>),
+    decode(- N, <<131,110,255,1,N:2040/little>>),
+    ok.
+
+decode_too_small(Config) when is_list(Config) ->
+    decode_badarg(<<131,97>>),
+    decode_badarg(<<131,98>>),
+    decode_badarg(<<131,98,0>>),
+    decode_badarg(<<131,98,0,0>>),
+    decode_badarg(<<131,98,0,0,0>>),
+    decode_badarg(<<131,99>>),
+    decode_badarg(<<131,99,0>>),
+    decode_badarg(<<131,99,0:240>>),
+    decode_badarg(<<131,100>>),
+    decode_badarg(<<131,100,1:16/big>>),
+    decode_badarg(<<131,100,2:16/big>>),
+    decode_badarg(<<131,100,2:16/big,"A">>),
+    decode_badarg(<<131,101>>),
+    decode_badarg(<<131,101,106>>),
+    decode_badarg(<<131,101,255>>),
+    decode_badarg(<<131,101,106,42:8/big>>),
+    decode_badarg(<<131,101,106,42:16/big>>),
+    decode_badarg(<<131,101,255,42:24/big>>),
+    decode_badarg(<<131,101,255,42:32/big,0>>),
+    decode_badarg(<<131,101,100,1:16/big,"A">>),
+    decode_badarg(<<131,101,100,1:16/big,"A",42:32/big>>),
+    decode_badarg(<<131,102>>),
+    decode_badarg(<<131,102,106,42:32/big,0>>),
+    decode_badarg(<<131,102,255,42:32/big,0>>),
+    decode_badarg(<<131,102,100,1:16/big,"A">>),
+    decode_badarg(<<131,102,100,1:16/big,"A",42:32/big>>),
+    decode_badarg(<<131,103>>),
+    decode_badarg(<<131,103,106,42:32/big,0>>),
+    decode_badarg(<<131,103,255,42:32/big,0>>),
+    decode_badarg(<<131,103,100,1:16/big,"A">>),
+    decode_badarg(<<131,103,100,1:16/big,"A",42:32/big>>),
+    decode_badarg(<<131,103,100,1:16/big,"A",4:32/big,2:32/big>>),
+    decode_badarg(<<131,104>>),
+    decode_badarg(<<131,104,1>>),
+    decode_badarg(<<131,104,2,106>>),
+    decode_badarg(<<131,105,1:32/big>>),
+    decode_badarg(<<131,105,2:32/big,106>>),
+    decode_badarg(<<131,107>>),
+    decode_badarg(<<131,107,1:16/big>>),
+    decode_badarg(<<131,107,2:16/big>>),
+    decode_badarg(<<131,107,2:16/big,"A">>),
+    decode_badarg(<<131,108>>),
+    decode_badarg(<<131,108,1:32/big>>),
+    decode_badarg(<<131,108,2:32/big>>),
+    decode_badarg(<<131,108,2:32/big,106>>),
+    decode_badarg(<<131,109>>),
+    decode_badarg(<<131,109,1:32/big>>),
+    decode_badarg(<<131,109,2:32/big>>),
+    decode_badarg(<<131,109,2:32/big,42>>),
+    N = largest_small_big(),
+    decode_badarg(<<131,110>>),
+    decode_badarg(<<131,110,1>>),
+    decode_badarg(<<131,110,1,0>>),
+    decode_badarg(<<131,110,1,1>>),
+    decode_badarg(<<131,110,2,0,42>>),
+    decode_badarg(<<131,110,2,1,42>>),
+    decode_badarg(<<131,110,255,0,N:2032/little>>),
+    decode_badarg(<<131,110,255,1,N:2032/little>>),
+    decode_badarg(<<131,111>>),
+    decode_badarg(<<131,111,1:32/big>>),
+    decode_badarg(<<131,111,1:32/big,0>>),
+    decode_badarg(<<131,111,1:32/big,1>>),
+    decode_badarg(<<131,111,2:32/big,0,42>>),
+    decode_badarg(<<131,111,2:32/big,1,42>>),
+    decode_badarg(<<131,111,256:32/big,0,N:2032/little>>),
+    decode_badarg(<<131,111,256:32/big,1,N:2032/little>>),
+    decode_badarg(<<131,111,256:32/big,0,N:2040/little>>),
+    decode_badarg(<<131,111,256:32/big,1,N:2040/little>>),
+    decode_badarg(<<131,111,257:32/big,0,N:2048/little>>),
+    decode_badarg(<<131,111,257:32/big,1,N:2048/little>>),
+    decode_badarg(<<131,78>>),
+    decode_badarg(<<131,78,42>>),
+    decode_badarg(<<131,78,42,1>>),
+    decode_badarg(<<131,78,42,1:16/big>>),
+    decode_badarg(<<131,78,42,2:16/big>>),
+    decode_badarg(<<131,78,42,2:16/big,"A">>),
+    decode_badarg(<<131,67>>),
+    decode_badarg(<<131,114>>),
+    decode_badarg(<<131,114,0>>),
+    decode_badarg(<<131,114,1:16/big>>),
+    decode_badarg(<<131,114,1:16/big,100>>),
+    decode_badarg(<<131,114,1:16/big,100,1:16/big>>),
+    decode_badarg(<<131,114,1:16/big,100,1:16/big,"A">>),
+    decode_badarg(<<131,114,1:16/big,100,1:16/big,"A",0>>),
+    decode_badarg(<<131,114,1:16/big,100,1:16/big,"A",0,42:8>>),
+    decode_badarg(<<131,114,1:16/big,100,1:16/big,"A",0,42:16>>),
+    decode_badarg(<<131,114,1:16/big,100,1:16/big,"A",0,42:24>>),
+    decode_badarg(<<131,117>>),
+    ok.
+
+decode_badarg(Bin) ->
+    io:format("Trying ~w\n", [Bin]),
+    {'EXIT',{badarg,_}} = (catch binary_to_term(Bin)).
+
+enc_dec(_Size, Term) ->
+    Bin = term_to_binary(Term),
+    Term = binary_to_term(Bin),
+    ok.
+
+decode(Term, Binary) ->
+    io:format("Encoding ~w to ~w ... ", [Binary,Term]),
+    NewTerm = binary_to_term(Binary),
+    io:format("got ~w\n", [NewTerm]),
+    Term = NewTerm.
+
+largest_small_big() ->
+    List = lists:duplicate(255, 255),
+    Limbs = list_to_binary(List),
+    binary_to_term(<<131,110,255,0,Limbs/binary>>).
+
+appender(Parent, N) ->
+    seed(),
+    Res = appender_1(N, {}),
+    Parent ! {self(),Res}.
+
+appender_1(0, T) ->
+    T;
+appender_1(N, T0) ->
+    U = rnd_term(),
+    T = erlang:append_element(T0, U),
+    appender_1(N - 1, T).
+
+my_appender(N) ->
+    seed(),
+    my_appender_1(N, []).
+
+my_appender_1(0, T) ->
+    list_to_tuple(lists:reverse(T));
+my_appender_1(N, T0) ->
+    U = rnd_term(),
+    T = [U|T0],
+    my_appender_1(N - 1, T).
+
+seed() ->
+    random:seed(3172, 9815, 20129).
+
+rnd_term() ->
+    U0 = random:uniform(),
+    B = <<U0/float>>,
+    {U0,U0 * 2.5 + 3.14,[U0 * 2.3,B]}.
+
+
+

@@ -1,0 +1,874 @@
+-file("test/lib/wx/examples/demo/ex_aui.erl", 1).
+
+-module(ex_aui).
+
+-behaviour(wx_object).
+
+-export([start/1]).
+
+-export([init/1,
+         terminate/2,
+         code_change/3,
+         handle_info/2,
+         handle_call/3,
+         handle_cast/2,
+         handle_event/2]).
+
+-file("test/lib/wx/examples/demo/../../include/wx.hrl", 1).
+
+-record(wx,{id :: undefined | integer(),
+            obj :: undefined | wx:wx_object(),
+            userData :: undefined | term(),
+            event :: undefined | event()}).
+
+-type wx() :: #wx{}.
+
+-record(wxNavigationKey,{type :: undefined | wxNavigationKeyEventType(),
+                         flags :: undefined | integer(),
+                         focus :: undefined | wxWindow:wxWindow()}).
+
+-type wxNavigationKeyEventType() :: navigation_key.
+
+-type wxNavigationKey() :: #wxNavigationKey{}.
+
+-record(wxSash,{type :: undefined | wxSashEventType(),
+                edge :: undefined | wx:wx_enum(),
+                dragRect :: undefined
+                          | {X :: integer(),
+                             Y :: integer(),
+                             W :: integer(),
+                             H :: integer()},
+                dragStatus :: undefined | wx:wx_enum()}).
+
+-type wxSashEventType() :: sash_dragged.
+
+-type wxSash() :: #wxSash{}.
+
+-record(wxList,{type :: undefined | wxListEventType(),
+                code :: undefined | integer(),
+                oldItemIndex :: undefined | integer(),
+                itemIndex :: undefined | integer(),
+                col :: undefined | integer(),
+                pointDrag :: undefined
+                           | {X :: integer(), Y :: integer()}}).
+
+-type wxListEventType() :: command_list_begin_drag
+                         | command_list_begin_rdrag
+                         | command_list_begin_label_edit
+                         | command_list_end_label_edit
+                         | command_list_delete_item
+                         | command_list_delete_all_items
+                         | command_list_key_down
+                         | command_list_insert_item
+                         | command_list_col_click
+                         | command_list_col_right_click
+                         | command_list_col_begin_drag
+                         | command_list_col_dragging
+                         | command_list_col_end_drag
+                         | command_list_item_selected
+                         | command_list_item_deselected
+                         | command_list_item_right_click
+                         | command_list_item_middle_click
+                         | command_list_item_activated
+                         | command_list_item_focused
+                         | command_list_cache_hint.
+
+-type wxList() :: #wxList{}.
+
+-record(wxNotebook,{type :: undefined | wxNotebookEventType()}).
+
+-type wxNotebookEventType() :: command_notebook_page_changed
+                             | command_notebook_page_changing.
+
+-type wxNotebook() :: #wxNotebook{}.
+
+-record(wxDisplayChanged,{type :: undefined
+                                | wxDisplayChangedEventType()}).
+
+-type wxDisplayChangedEventType() :: display_changed.
+
+-type wxDisplayChanged() :: #wxDisplayChanged{}.
+
+-record(wxErase,{type :: undefined | wxEraseEventType(),
+                 dc :: undefined | wxDC:wxDC()}).
+
+-type wxEraseEventType() :: erase_background.
+
+-type wxErase() :: #wxErase{}.
+
+-record(wxKey,{type :: undefined | wxKeyEventType(),
+               x :: undefined | integer(),
+               y :: undefined | integer(),
+               keyCode :: undefined | integer(),
+               controlDown :: undefined | boolean(),
+               shiftDown :: undefined | boolean(),
+               altDown :: undefined | boolean(),
+               metaDown :: undefined | boolean(),
+               scanCode :: undefined | boolean(),
+               uniChar :: undefined | integer(),
+               rawCode :: undefined | integer(),
+               rawFlags :: undefined | integer()}).
+
+-type wxKeyEventType() :: char | char_hook | key_down | key_up.
+
+-type wxKey() :: #wxKey{}.
+
+-record(wxWindowDestroy,{type :: undefined | wxWindowDestroyEventType()}).
+
+-type wxWindowDestroyEventType() :: destroy.
+
+-type wxWindowDestroy() :: #wxWindowDestroy{}.
+
+-record(wxCalendar,{type :: undefined | wxCalendarEventType()}).
+
+-type wxCalendarEventType() :: calendar_sel_changed
+                             | calendar_day_changed
+                             | calendar_month_changed
+                             | calendar_year_changed
+                             | calendar_doubleclicked
+                             | calendar_weekday_clicked.
+
+-type wxCalendar() :: #wxCalendar{}.
+
+-record(wxSplitter,{type :: undefined | wxSplitterEventType()}).
+
+-type wxSplitterEventType() :: command_splitter_sash_pos_changed
+                             | command_splitter_sash_pos_changing
+                             | command_splitter_doubleclicked
+                             | command_splitter_unsplit.
+
+-type wxSplitter() :: #wxSplitter{}.
+
+-record(wxScroll,{type :: undefined | wxScrollEventType(),
+                  commandInt :: undefined | integer(),
+                  extraLong :: undefined | integer()}).
+
+-type wxScrollEventType() :: scroll_top
+                           | scroll_bottom
+                           | scroll_lineup
+                           | scroll_linedown
+                           | scroll_pageup
+                           | scroll_pagedown
+                           | scroll_thumbtrack
+                           | scroll_thumbrelease
+                           | scroll_changed.
+
+-type wxScroll() :: #wxScroll{}.
+
+-record(wxMenu,{type :: undefined | wxMenuEventType()}).
+
+-type wxMenuEventType() :: menu_open | menu_close | menu_highlight.
+
+-type wxMenu() :: #wxMenu{}.
+
+-record(wxContextMenu,{type :: undefined | wxContextMenuEventType()}).
+
+-type wxContextMenuEventType() :: context_menu.
+
+-type wxContextMenu() :: #wxContextMenu{}.
+
+-record(wxShow,{type :: undefined | wxShowEventType()}).
+
+-type wxShowEventType() :: show.
+
+-type wxShow() :: #wxShow{}.
+
+-record(wxSpin,{type :: undefined | wxSpinEventType(),
+                commandInt :: undefined | integer()}).
+
+-type wxSpinEventType() :: command_spinctrl_updated
+                         | spin_up
+                         | spin_down
+                         | spin.
+
+-type wxSpin() :: #wxSpin{}.
+
+-record(wxSetCursor,{type :: undefined | wxSetCursorEventType()}).
+
+-type wxSetCursorEventType() :: set_cursor.
+
+-type wxSetCursor() :: #wxSetCursor{}.
+
+-record(wxFontPicker,{type :: undefined | wxFontPickerEventType(),
+                      font :: undefined | wxFont:wxFont()}).
+
+-type wxFontPickerEventType() :: command_fontpicker_changed.
+
+-type wxFontPicker() :: #wxFontPicker{}.
+
+-record(wxScrollWin,{type :: undefined | wxScrollWinEventType()}).
+
+-type wxScrollWinEventType() :: scrollwin_top
+                              | scrollwin_bottom
+                              | scrollwin_lineup
+                              | scrollwin_linedown
+                              | scrollwin_pageup
+                              | scrollwin_pagedown
+                              | scrollwin_thumbtrack
+                              | scrollwin_thumbrelease.
+
+-type wxScrollWin() :: #wxScrollWin{}.
+
+-record(wxPaint,{type :: undefined | wxPaintEventType()}).
+
+-type wxPaintEventType() :: paint.
+
+-type wxPaint() :: #wxPaint{}.
+
+-record(wxChildFocus,{type :: undefined | wxChildFocusEventType()}).
+
+-type wxChildFocusEventType() :: child_focus.
+
+-type wxChildFocus() :: #wxChildFocus{}.
+
+-record(wxMaximize,{type :: undefined | wxMaximizeEventType()}).
+
+-type wxMaximizeEventType() :: maximize.
+
+-type wxMaximize() :: #wxMaximize{}.
+
+-record(wxFileDirPicker,{type :: undefined | wxFileDirPickerEventType(),
+                         path :: undefined | unicode:chardata()}).
+
+-type wxFileDirPickerEventType() :: command_filepicker_changed
+                                  | command_dirpicker_changed.
+
+-type wxFileDirPicker() :: #wxFileDirPicker{}.
+
+-record(wxFocus,{type :: undefined | wxFocusEventType()}).
+
+-type wxFocusEventType() :: set_focus | kill_focus.
+
+-type wxFocus() :: #wxFocus{}.
+
+-record(wxDate,{type :: undefined | wxDateEventType(),
+                date :: undefined | wx:wx_datetime()}).
+
+-type wxDateEventType() :: date_changed.
+
+-type wxDate() :: #wxDate{}.
+
+-record(wxHtmlLink,{type :: undefined | wxHtmlLinkEventType(),
+                    linkInfo :: undefined | wx:wx_wxHtmlLinkInfo()}).
+
+-type wxHtmlLinkEventType() :: command_html_link_clicked.
+
+-type wxHtmlLink() :: #wxHtmlLink{}.
+
+-record(wxHelp,{type :: undefined | wxHelpEventType()}).
+
+-type wxHelpEventType() :: help | detailed_help.
+
+-type wxHelp() :: #wxHelp{}.
+
+-record(wxStyledText,{type :: undefined | wxStyledTextEventType(),
+                      position :: undefined | integer(),
+                      key :: undefined | integer(),
+                      modifiers :: undefined | integer(),
+                      modificationType :: undefined | integer(),
+                      text :: undefined | unicode:chardata(),
+                      length :: undefined | integer(),
+                      linesAdded :: undefined | integer(),
+                      line :: undefined | integer(),
+                      foldLevelNow :: undefined | integer(),
+                      foldLevelPrev :: undefined | integer(),
+                      margin :: undefined | integer(),
+                      message :: undefined | integer(),
+                      wParam :: undefined | integer(),
+                      lParam :: undefined | integer(),
+                      listType :: undefined | integer(),
+                      x :: undefined | integer(),
+                      y :: undefined | integer(),
+                      dragText :: undefined | unicode:chardata(),
+                      dragAllowMove :: undefined | boolean(),
+                      dragResult :: undefined | wx:wx_enum()}).
+
+-type wxStyledTextEventType() :: stc_change
+                               | stc_styleneeded
+                               | stc_charadded
+                               | stc_savepointreached
+                               | stc_savepointleft
+                               | stc_romodifyattempt
+                               | stc_key
+                               | stc_doubleclick
+                               | stc_updateui
+                               | stc_modified
+                               | stc_macrorecord
+                               | stc_marginclick
+                               | stc_needshown
+                               | stc_painted
+                               | stc_userlistselection
+                               | stc_uridropped
+                               | stc_dwellstart
+                               | stc_dwellend
+                               | stc_start_drag
+                               | stc_drag_over
+                               | stc_do_drop
+                               | stc_zoom
+                               | stc_hotspot_click
+                               | stc_hotspot_dclick
+                               | stc_calltip_click
+                               | stc_autocomp_selection.
+
+-type wxStyledText() :: #wxStyledText{}.
+
+-record(wxSysColourChanged,{type :: undefined
+                                  | wxSysColourChangedEventType()}).
+
+-type wxSysColourChangedEventType() :: sys_colour_changed.
+
+-type wxSysColourChanged() :: #wxSysColourChanged{}.
+
+-record(wxGrid,{type :: undefined | wxGridEventType(),
+                row :: undefined | integer(),
+                col :: undefined | integer(),
+                x :: undefined | integer(),
+                y :: undefined | integer(),
+                selecting :: undefined | boolean(),
+                control :: undefined | boolean(),
+                meta :: undefined | boolean(),
+                shift :: undefined | boolean(),
+                alt :: undefined | boolean()}).
+
+-type wxGridEventType() :: grid_cell_left_click
+                         | grid_cell_right_click
+                         | grid_cell_left_dclick
+                         | grid_cell_right_dclick
+                         | grid_label_left_click
+                         | grid_label_right_click
+                         | grid_label_left_dclick
+                         | grid_label_right_dclick
+                         | grid_row_size
+                         | grid_col_size
+                         | grid_range_select
+                         | grid_cell_change
+                         | grid_select_cell
+                         | grid_editor_shown
+                         | grid_editor_hidden
+                         | grid_editor_created
+                         | grid_cell_begin_drag.
+
+-type wxGrid() :: #wxGrid{}.
+
+-record(wxPaletteChanged,{type :: undefined
+                                | wxPaletteChangedEventType()}).
+
+-type wxPaletteChangedEventType() :: palette_changed.
+
+-type wxPaletteChanged() :: #wxPaletteChanged{}.
+
+-record(wxUpdateUI,{type :: undefined | wxUpdateUIEventType()}).
+
+-type wxUpdateUIEventType() :: update_ui.
+
+-type wxUpdateUI() :: #wxUpdateUI{}.
+
+-record(wxSize,{type :: undefined | wxSizeEventType(),
+                size :: undefined | {W :: integer(), H :: integer()},
+                rect :: undefined
+                      | {X :: integer(),
+                         Y :: integer(),
+                         W :: integer(),
+                         H :: integer()}}).
+
+-type wxSizeEventType() :: size.
+
+-type wxSize() :: #wxSize{}.
+
+-record(wxIconize,{type :: undefined | wxIconizeEventType()}).
+
+-type wxIconizeEventType() :: iconize.
+
+-type wxIconize() :: #wxIconize{}.
+
+-record(wxAuiNotebook,{type :: undefined | wxAuiNotebookEventType(),
+                       old_selection :: undefined | integer(),
+                       selection :: undefined | integer(),
+                       drag_source :: undefined
+                                    | wxAuiNotebook:wxAuiNotebook()}).
+
+-type wxAuiNotebookEventType() :: command_auinotebook_page_close
+                                | command_auinotebook_page_changed
+                                | command_auinotebook_page_changing
+                                | command_auinotebook_button
+                                | command_auinotebook_begin_drag
+                                | command_auinotebook_end_drag
+                                | command_auinotebook_drag_motion
+                                | command_auinotebook_allow_dnd
+                                | command_auinotebook_tab_middle_down
+                                | command_auinotebook_tab_middle_up
+                                | command_auinotebook_tab_right_down
+                                | command_auinotebook_tab_right_up
+                                | command_auinotebook_page_closed
+                                | command_auinotebook_drag_done
+                                | command_auinotebook_bg_dclick.
+
+-type wxAuiNotebook() :: #wxAuiNotebook{}.
+
+-record(wxClose,{type :: undefined | wxCloseEventType()}).
+
+-type wxCloseEventType() :: close_window
+                          | end_session
+                          | query_end_session.
+
+-type wxClose() :: #wxClose{}.
+
+-record(wxMouseCaptureChanged,{type :: undefined
+                                     | wxMouseCaptureChangedEventType()}).
+
+-type wxMouseCaptureChangedEventType() :: mouse_capture_changed.
+
+-type wxMouseCaptureChanged() :: #wxMouseCaptureChanged{}.
+
+-record(wxMouse,{type :: undefined | wxMouseEventType(),
+                 x :: undefined | integer(),
+                 y :: undefined | integer(),
+                 leftDown :: undefined | boolean(),
+                 middleDown :: undefined | boolean(),
+                 rightDown :: undefined | boolean(),
+                 controlDown :: undefined | boolean(),
+                 shiftDown :: undefined | boolean(),
+                 altDown :: undefined | boolean(),
+                 metaDown :: undefined | boolean(),
+                 wheelRotation :: undefined | integer(),
+                 wheelDelta :: undefined | integer(),
+                 linesPerAction :: undefined | integer()}).
+
+-type wxMouseEventType() :: left_down
+                          | left_up
+                          | middle_down
+                          | middle_up
+                          | right_down
+                          | right_up
+                          | motion
+                          | enter_window
+                          | leave_window
+                          | left_dclick
+                          | middle_dclick
+                          | right_dclick
+                          | mousewheel.
+
+-type wxMouse() :: #wxMouse{}.
+
+-record(wxClipboardText,{type :: undefined | wxClipboardTextEventType()}).
+
+-type wxClipboardTextEventType() :: command_text_copy
+                                  | command_text_cut
+                                  | command_text_paste.
+
+-type wxClipboardText() :: #wxClipboardText{}.
+
+-record(wxWindowCreate,{type :: undefined | wxWindowCreateEventType()}).
+
+-type wxWindowCreateEventType() :: create.
+
+-type wxWindowCreate() :: #wxWindowCreate{}.
+
+-record(wxAuiManager,{type :: undefined | wxAuiManagerEventType(),
+                      manager :: undefined | wxAuiManager:wxAuiManager(),
+                      pane :: undefined | wxAuiPaneInfo:wxAuiPaneInfo(),
+                      button :: undefined | integer(),
+                      veto_flag :: undefined | boolean(),
+                      canveto_flag :: undefined | boolean(),
+                      dc :: undefined | wxDC:wxDC()}).
+
+-type wxAuiManagerEventType() :: aui_pane_button
+                               | aui_pane_close
+                               | aui_pane_maximize
+                               | aui_pane_restore
+                               | aui_render
+                               | aui_find_manager.
+
+-type wxAuiManager() :: #wxAuiManager{}.
+
+-record(wxCommand,{type :: undefined | wxCommandEventType(),
+                   cmdString :: undefined | unicode:chardata(),
+                   commandInt :: undefined | integer(),
+                   extraLong :: undefined | integer()}).
+
+-type wxCommandEventType() :: command_button_clicked
+                            | command_checkbox_clicked
+                            | command_choice_selected
+                            | command_listbox_selected
+                            | command_listbox_doubleclicked
+                            | command_text_updated
+                            | command_text_enter
+                            | command_menu_selected
+                            | command_slider_updated
+                            | command_radiobox_selected
+                            | command_radiobutton_selected
+                            | command_scrollbar_updated
+                            | command_vlbox_selected
+                            | command_combobox_selected
+                            | command_tool_rclicked
+                            | command_tool_enter
+                            | command_checklistbox_toggled
+                            | command_togglebutton_clicked
+                            | command_left_click
+                            | command_left_dclick
+                            | command_right_click
+                            | command_set_focus
+                            | command_kill_focus
+                            | command_enter.
+
+-type wxCommand() :: #wxCommand{}.
+
+-record(wxJoystick,{type :: undefined | wxJoystickEventType()}).
+
+-type wxJoystickEventType() :: joy_button_down
+                             | joy_button_up
+                             | joy_move
+                             | joy_zmove.
+
+-type wxJoystick() :: #wxJoystick{}.
+
+-record(wxQueryNewPalette,{type :: undefined
+                                 | wxQueryNewPaletteEventType()}).
+
+-type wxQueryNewPaletteEventType() :: query_new_palette.
+
+-type wxQueryNewPalette() :: #wxQueryNewPalette{}.
+
+-record(wxMove,{type :: undefined | wxMoveEventType()}).
+
+-type wxMoveEventType() :: move.
+
+-type wxMove() :: #wxMove{}.
+
+-record(wxIdle,{type :: undefined | wxIdleEventType()}).
+
+-type wxIdleEventType() :: idle.
+
+-type wxIdle() :: #wxIdle{}.
+
+-record(wxColourPicker,{type :: undefined | wxColourPickerEventType(),
+                        colour :: undefined | wx:wx_colour()}).
+
+-type wxColourPickerEventType() :: command_colourpicker_changed.
+
+-type wxColourPicker() :: #wxColourPicker{}.
+
+-record(wxTaskBarIcon,{type :: undefined | wxTaskBarIconEventType()}).
+
+-type wxTaskBarIconEventType() :: taskbar_move
+                                | taskbar_left_down
+                                | taskbar_left_up
+                                | taskbar_right_down
+                                | taskbar_right_up
+                                | taskbar_left_dclick
+                                | taskbar_right_dclick.
+
+-type wxTaskBarIcon() :: #wxTaskBarIcon{}.
+
+-record(wxTree,{type :: undefined | wxTreeEventType(),
+                item :: undefined | integer(),
+                itemOld :: undefined | integer(),
+                pointDrag :: undefined
+                           | {X :: integer(), Y :: integer()}}).
+
+-type wxTreeEventType() :: command_tree_begin_drag
+                         | command_tree_begin_rdrag
+                         | command_tree_begin_label_edit
+                         | command_tree_end_label_edit
+                         | command_tree_delete_item
+                         | command_tree_get_info
+                         | command_tree_set_info
+                         | command_tree_item_expanded
+                         | command_tree_item_expanding
+                         | command_tree_item_collapsed
+                         | command_tree_item_collapsing
+                         | command_tree_sel_changed
+                         | command_tree_sel_changing
+                         | command_tree_key_down
+                         | command_tree_item_activated
+                         | command_tree_item_right_click
+                         | command_tree_item_middle_click
+                         | command_tree_end_drag
+                         | command_tree_state_image_click
+                         | command_tree_item_gettooltip
+                         | command_tree_item_menu.
+
+-type wxTree() :: #wxTree{}.
+
+-type event() :: wxAuiManager()
+               | wxAuiNotebook()
+               | wxCalendar()
+               | wxChildFocus()
+               | wxClipboardText()
+               | wxClose()
+               | wxColourPicker()
+               | wxCommand()
+               | wxContextMenu()
+               | wxDate()
+               | wxDisplayChanged()
+               | wxErase()
+               | wxFileDirPicker()
+               | wxFocus()
+               | wxFontPicker()
+               | wxGrid()
+               | wxHelp()
+               | wxHtmlLink()
+               | wxIconize()
+               | wxIdle()
+               | wxJoystick()
+               | wxKey()
+               | wxList()
+               | wxMaximize()
+               | wxMenu()
+               | wxMouse()
+               | wxMouseCaptureChanged()
+               | wxMove()
+               | wxNavigationKey()
+               | wxNotebook()
+               | wxPaint()
+               | wxPaletteChanged()
+               | wxQueryNewPalette()
+               | wxSash()
+               | wxScroll()
+               | wxScrollWin()
+               | wxSetCursor()
+               | wxShow()
+               | wxSize()
+               | wxSpin()
+               | wxSplitter()
+               | wxStyledText()
+               | wxSysColourChanged()
+               | wxTaskBarIcon()
+               | wxTree()
+               | wxUpdateUI()
+               | wxWindowCreate()
+               | wxWindowDestroy().
+
+-type wxEventType() :: wxAuiManagerEventType()
+                     | wxAuiNotebookEventType()
+                     | wxCalendarEventType()
+                     | wxChildFocusEventType()
+                     | wxClipboardTextEventType()
+                     | wxCloseEventType()
+                     | wxColourPickerEventType()
+                     | wxCommandEventType()
+                     | wxContextMenuEventType()
+                     | wxDateEventType()
+                     | wxDisplayChangedEventType()
+                     | wxEraseEventType()
+                     | wxFileDirPickerEventType()
+                     | wxFocusEventType()
+                     | wxFontPickerEventType()
+                     | wxGridEventType()
+                     | wxHelpEventType()
+                     | wxHtmlLinkEventType()
+                     | wxIconizeEventType()
+                     | wxIdleEventType()
+                     | wxJoystickEventType()
+                     | wxKeyEventType()
+                     | wxListEventType()
+                     | wxMaximizeEventType()
+                     | wxMenuEventType()
+                     | wxMouseCaptureChangedEventType()
+                     | wxMouseEventType()
+                     | wxMoveEventType()
+                     | wxNavigationKeyEventType()
+                     | wxNotebookEventType()
+                     | wxPaintEventType()
+                     | wxPaletteChangedEventType()
+                     | wxQueryNewPaletteEventType()
+                     | wxSashEventType()
+                     | wxScrollEventType()
+                     | wxScrollWinEventType()
+                     | wxSetCursorEventType()
+                     | wxShowEventType()
+                     | wxSizeEventType()
+                     | wxSpinEventType()
+                     | wxSplitterEventType()
+                     | wxStyledTextEventType()
+                     | wxSysColourChangedEventType()
+                     | wxTaskBarIconEventType()
+                     | wxTreeEventType()
+                     | wxUpdateUIEventType()
+                     | wxWindowCreateEventType()
+                     | wxWindowDestroyEventType().
+
+-record(wxMouseState,{x :: undefined | integer(),
+                      y :: undefined | integer(),
+                      leftDown :: undefined | boolean(),
+                      middleDown :: undefined | boolean,
+                      rightDown :: undefined | boolean,
+                      controlDown :: undefined | boolean(),
+                      shiftDown :: undefined | boolean(),
+                      altDown :: undefined | boolean(),
+                      metaDown :: undefined | boolean(),
+                      cmdDown :: undefined | boolean()}).
+
+-record(wxHtmlLinkInfo,{href :: undefined | unicode:chardata(),
+                        target :: undefined | unicode:chardata()}).
+
+-file("test/lib/wx/examples/demo/ex_aui.erl", 31).
+
+-record(state,{parent,config,aui}).
+
+start(Config) ->
+    wx_object:start_link(ex_aui, Config, []).
+
+init(Config) ->
+    wx:batch(fun() ->
+                    do_init(Config)
+             end).
+
+do_init(Config) ->
+    Parent = proplists:get_value(parent, Config),
+    Panel = wxPanel:new(Parent, []),
+    MainSizer = wxBoxSizer:new(8),
+    Manager = wxAuiManager:new([{managed_wnd,Panel}]),
+    Pane = wxAuiPaneInfo:new(),
+    wxAuiPaneInfo:closeButton(Pane),
+    wxAuiPaneInfo:right(Pane),
+    wxAuiPaneInfo:dockable(Pane, [{b,true}]),
+    wxAuiPaneInfo:floatingSize(Pane, 300, 200),
+    wxAuiPaneInfo:minSize(Pane, {50,50}),
+    wxAuiPaneInfo:paneBorder(Pane),
+    wxAuiPaneInfo:floatable(Pane, [{b,true}]),
+    create_pane(Panel, Manager, Pane),
+    create_pane(Panel,
+                Manager,
+                wxAuiPaneInfo:caption(wxAuiPaneInfo:top(wxAuiPaneInfo:new(Pane)),
+                                      "One")),
+    create_pane(Panel,
+                Manager,
+                wxAuiPaneInfo:caption(wxAuiPaneInfo:left(wxAuiPaneInfo:new(Pane)),
+                                      "two")),
+    create_pane(Panel,
+                Manager,
+                wxAuiPaneInfo:caption(wxAuiPaneInfo:bottom(wxAuiPaneInfo:new(Pane)),
+                                      "Three")),
+    Pane2 = wxAuiPaneInfo:new(Pane),
+    wxAuiPaneInfo:centrePane(Pane2),
+    create_notebook(Panel, Manager, wxAuiPaneInfo:new(Pane2)),
+    wxPanel:setSizer(Panel, MainSizer),
+    wxAuiManager:connect(Manager, aui_pane_button, [{skip,true}]),
+    wxAuiManager:connect(Manager, aui_pane_maximize, [{skip,true}]),
+    wxAuiManager:update(Manager),
+    process_flag(trap_exit, true),
+    {Panel,#state{parent = Panel,config = Config,aui = Manager}}.
+
+handle_info(Msg, State) ->
+    demo:format(State#state.config, "Got Info ~p\n", [Msg]),
+    {noreply,State}.
+
+handle_call(shutdown,
+            _From,
+            State = #state{parent = Panel,aui = Manager}) ->
+    wxAuiManager:unInit(Manager),
+    wxAuiManager:destroy(Manager),
+    wxPanel:destroy(Panel),
+    {stop,normal,ok,State};
+handle_call(Msg, _From, State) ->
+    demo:format(State#state.config, "Got Call ~p\n", [Msg]),
+    {reply,{error,nyi},State}.
+
+handle_cast(Msg, State) ->
+    io:format("Got cast ~p~n", [Msg]),
+    {noreply,State}.
+
+handle_event(#wx{obj = Notebook,
+                 event = #wxCommand{type = command_button_clicked}},
+             State) ->
+    Tab = wxPanel:new(Notebook, []),
+    wxButton:new(Tab, - 1, [{label,"New tab"}]),
+    wxAuiNotebook:insertPage(Notebook,
+                             1,
+                             Tab,
+                             "OMG TAB!! ",
+                             [{select,false}]),
+    {noreply,State};
+handle_event(#wx{obj = Notebook,
+                 event =
+                     #wxAuiNotebook{type =
+                                        command_auinotebook_page_changed,
+                                    selection = Sel}},
+             State) ->
+    demo:format(State#state.config,
+                "You have changed page to ~p.\n",
+                [wxAuiNotebook:getPageText(Notebook, Sel)]),
+    {noreply,State};
+handle_event(#wx{event =
+                     #wxAuiNotebook{type =
+                                        command_auinotebook_page_close}},
+             State) ->
+    demo:format(State#state.config, "You have closed a page.\n", []),
+    {noreply,State};
+handle_event(#wx{event =
+                     #wxAuiManager{type = aui_pane_button,
+                                   button = Button}},
+             State) ->
+    case Button of
+        101 ->
+            demo:format(State#state.config,
+                        "You have closed a pane.\n",
+                        []);
+        102 ->
+            ok;
+        104 ->
+            demo:format(State#state.config,
+                        "You have pinned a pane.\n",
+                        [])
+    end,
+    {noreply,State};
+handle_event(#wx{event = #wxAuiManager{type = aui_pane_maximize}},
+             State) ->
+    demo:format(State#state.config, "You have maximized a pane.\n", []),
+    {noreply,State};
+handle_event(#wx{event = #wxAuiManager{type = aui_pane_restore}}, State) ->
+    demo:format(State#state.config, "You have restored a pane.\n", []),
+    {noreply,State};
+handle_event(Ev = #wx{}, State) ->
+    io:format("~p\n", [Ev]),
+    {noreply,State}.
+
+code_change(_, _, State) ->
+    {stop,ignore,State}.
+
+terminate(_Reason, _) ->
+    ok.
+
+create_notebook(Parent, Manager, Pane) ->
+    Style =
+        0 bor (1 bor 16 bor 32 bor 256 bor 2048 bor 8192) bor 1 bor 512
+        bor
+        2048
+        bor
+        32
+        bor
+        256,
+    Notebook = wxAuiNotebook:new(Parent, [{style,Style}]),
+    Tab1 = wxPanel:new(Notebook, []),
+    wxPanel:setBackgroundColour(Tab1, wxe_util:get_const(wxBLACK)),
+    wxButton:new(Tab1, - 1, [{label,"New tab"}]),
+    wxAuiNotebook:addPage(Notebook, Tab1, "You can", []),
+    Tab2 = wxPanel:new(Notebook, []),
+    wxPanel:setBackgroundColour(Tab2, wxe_util:get_const(wxRED)),
+    wxButton:new(Tab2, - 1, [{label,"New tab"}]),
+    wxAuiNotebook:addPage(Notebook, Tab2, "rearrange", []),
+    Tab3 = wxPanel:new(Notebook, []),
+    wxPanel:setBackgroundColour(Tab3, wxe_util:get_const(wxGREEN)),
+    wxButton:new(Tab3, - 1, [{label,"New tab"}]),
+    wxAuiNotebook:addPage(Notebook, Tab3, "these tabs", []),
+    wxAuiManager:addPane(Manager, Notebook, Pane),
+    wxAuiNotebook:connect(Notebook, command_button_clicked),
+    wxAuiNotebook:connect(Notebook,
+                          command_auinotebook_page_close,
+                          [{skip,false}]),
+    wxAuiNotebook:connect(Notebook, command_auinotebook_page_changed),
+    Notebook.
+
+create_pane(Parent, Manager, Pane) ->
+    TextCtrl =
+        wxTextCtrl:new(Parent,
+                       - 1,
+                       [{size,{300,200}},
+                        {value,"An empty pane"},
+                        {style,0 bor 70 bor 32}]),
+    wxAuiManager:addPane(Manager, TextCtrl, Pane),
+    TextCtrl.
+
+
+

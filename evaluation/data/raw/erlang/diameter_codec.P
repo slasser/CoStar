@@ -1,0 +1,504 @@
+-file("test/lib/diameter/src/base/diameter_codec.erl", 1).
+
+-module(diameter_codec).
+
+-export([encode/2,
+         decode/2,
+         decode/3,
+         collect_avps/1,
+         decode_header/1,
+         sequence_numbers/1,
+         hop_by_hop_id/2,
+         msg_name/2,
+         msg_id/1]).
+
+-export([pack_avp/1,pack_avp/2]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/diameter-1.3/include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options = [{answer_errors,report}]}).
+
+-file("test/lib/diameter/src/base/diameter_codec.erl", 37).
+
+-file("test/lib/diameter/src/base/diameter_internal.hrl", 1).
+
+-record(diameter_peer,{host_id,
+                       statusT,
+                       is_dynamic,
+                       expiration,
+                       tls_enabled}).
+
+-record(diameter_realm,{name,
+                        app_id,
+                        local_action,
+                        server_id,
+                        is_dynamic,
+                        expiration}).
+
+-file("test/lib/diameter/src/base/diameter_codec.erl", 38).
+
+-type u32() :: 0..4294967295.
+
+-type u24() :: 0..16777215.
+
+-type u1() :: 0..1.
+
+-spec encode(module(), Msg :: term()) ->
+                #diameter_packet{} | no_return().
+
+encode(Mod, #diameter_packet{} = Pkt) ->
+    try
+        e(Mod, Pkt)
+    catch
+        error:Reason ->
+            X = {diameter_codec,encode,{Reason,erlang:get_stacktrace()}},
+            diameter_lib:error_report(X,
+                                      {diameter_codec,encode,[Mod,Pkt]}),
+            exit(X)
+    end;
+encode(Mod, Msg) ->
+    Seq = diameter_session:sequence(),
+    Hdr =
+        #diameter_header{version = 1,
+                         end_to_end_id = Seq,
+                         hop_by_hop_id = Seq},
+    encode(Mod, #diameter_packet{header = Hdr,msg = Msg}).
+
+e(_, #diameter_packet{msg = [#diameter_header{} = Hdr|As]} = Pkt) ->
+    Avps = encode_avps(As),
+    Length = size(Avps) + 20,
+    #diameter_header{version = Vsn,
+                     cmd_code = Code,
+                     application_id = Aid,
+                     hop_by_hop_id = Hid,
+                     end_to_end_id = Eid} =
+        Hdr,
+    Flags = make_flags(0, Hdr),
+    Pkt#diameter_packet{header = Hdr,
+                        bin =
+                            <<Vsn:8,
+                              Length:24,
+                              Flags:8,
+                              Code:24,
+                              Aid:32,
+                              Hid:32,
+                              Eid:32,
+                              Avps/binary>>};
+e(Mod, #diameter_packet{header = Hdr,msg = Msg} = Pkt) ->
+    #diameter_header{version = Vsn,
+                     hop_by_hop_id = Hid,
+                     end_to_end_id = Eid} =
+        Hdr,
+    MsgName = rec2msg(Mod, Msg),
+    {Code,Flags0,Aid} = msg_header(Mod, MsgName, Hdr),
+    Flags = make_flags(Flags0, Hdr),
+    Avps = encode_avps(Mod, MsgName, values(Msg)),
+    Length = size(Avps) + 20,
+    Pkt#diameter_packet{header =
+                            Hdr#diameter_header{length = Length,
+                                                cmd_code = Code,
+                                                application_id = Aid,
+                                                is_request =
+                                                    0
+                                                    /=
+                                                    Flags band (1 bsl 7),
+                                                is_proxiable =
+                                                    0
+                                                    /=
+                                                    Flags band (1 bsl 6),
+                                                is_error =
+                                                    0
+                                                    /=
+                                                    Flags band (1 bsl 5),
+                                                is_retransmitted =
+                                                    0
+                                                    /=
+                                                    Flags band (1 bsl 4)},
+                        bin =
+                            <<Vsn:8,
+                              Length:24,
+                              Flags:8,
+                              Code:24,
+                              Aid:32,
+                              Hid:32,
+                              Eid:32,
+                              Avps/binary>>}.
+
+make_flags(Flags0,
+           #diameter_header{is_request = R,
+                            is_proxiable = P,
+                            is_error = E,
+                            is_retransmitted = T}) ->
+    {Flags,3} =
+        lists:foldl(fun(B, {F,N}) ->
+                           {mf(B, F, N),N - 1}
+                    end,
+                    {Flags0,7},
+                    [R,P,E,T]),
+    Flags.
+
+mf(undefined, F, _) ->
+    F;
+mf(B, F, N) ->
+    F bxor F band (1 bsl N) bor bit(B, N).
+
+bit(true, N) ->
+    1 bsl N;
+bit(false, _) ->
+    0.
+
+values([H|T]) when is_atom(H) ->
+    T;
+values(Avps) ->
+    Avps.
+
+encode_avps(_, _, [#diameter_avp{}|_] = Avps) ->
+    encode_avps(reorder(Avps, [], Avps));
+encode_avps(Mod, MsgName, Values) ->
+    Mod:encode_avps(MsgName, Values).
+
+reorder([#diameter_avp{index = 0}|_] = Avps, Acc, _) ->
+    Avps ++ Acc;
+reorder([#diameter_avp{index = N} = A|Avps], Acc, _) when is_integer(N) ->
+    lists:reverse(Avps, [A|Acc]);
+reorder([H|T], Acc, Avps) ->
+    reorder(T, [H|Acc], Avps);
+reorder([], Acc, _) ->
+    Acc.
+
+encode_avps(Avps) ->
+    list_to_binary(lists:map(fun pack_avp/1, Avps)).
+
+msg_header(Mod, 'answer-message' = MsgName, Header) ->
+    0 = Mod:id(),
+    #diameter_header{application_id = Aid,cmd_code = Code} = Header,
+    {- 1,Flags,0} = Mod:msg_header(MsgName),
+    {Code,Flags,Aid};
+msg_header(Mod, MsgName, _) ->
+    Mod:msg_header(MsgName).
+
+rec2msg(_, [Name|_]) when is_atom(Name) ->
+    Name;
+rec2msg(Mod, Rec) ->
+    Mod:rec2msg(element(1, Rec)).
+
+-spec decode(module(), #diameter_packet{} | bitstring()) ->
+                #diameter_packet{}.
+
+decode(Mod, Pkt) ->
+    decode(Mod:id(), Mod, Pkt).
+
+decode(4294967295, _, #diameter_packet{} = Pkt) ->
+    case collect_avps(Pkt) of
+        {E,As} ->
+            Pkt#diameter_packet{avps = As,errors = [E]};
+        As ->
+            Pkt#diameter_packet{avps = As}
+    end;
+decode(_, Mod, #diameter_packet{header = Hdr} = Pkt) ->
+    #diameter_header{cmd_code = CmdCode,
+                     is_request = IsRequest,
+                     is_error = IsError} =
+        Hdr,
+    MsgName =
+        if
+            IsError
+            andalso
+            not IsRequest ->
+                'answer-message';
+            true ->
+                Mod:msg_name(CmdCode, IsRequest)
+        end,
+    decode_avps(MsgName, Mod, Pkt, collect_avps(Pkt));
+decode(Id, Mod, Bin) when is_bitstring(Bin) ->
+    decode(Id,
+           Mod,
+           #diameter_packet{header = decode_header(Bin),bin = Bin}).
+
+decode_avps(MsgName, Mod, Pkt, {E,Avps}) ->
+    diameter_lib:log(invalid,
+                     diameter_codec,
+                     266,
+                     Pkt#diameter_packet.bin),
+    #diameter_packet{errors = Failed} =
+        P = decode_avps(MsgName, Mod, Pkt, Avps),
+    P#diameter_packet{errors = [E|Failed]};
+decode_avps('', Mod, Pkt, Avps) ->
+    diameter_lib:log(unknown,
+                     diameter_codec,
+                     273,
+                     {Mod,Pkt#diameter_packet.header}),
+    Pkt#diameter_packet{avps = lists:reverse(Avps),errors = [3001]};
+decode_avps(MsgName, Mod, Pkt, Avps) ->
+    {Rec,As,Failed} = Mod:decode_avps(MsgName, Avps),
+    [] /= Failed
+    andalso
+    diameter_lib:log(failed, diameter_codec, 280, {Mod,Failed}),
+    Pkt#diameter_packet{msg = Rec,errors = Failed,avps = As}.
+
+-spec decode_header(bitstring()) -> #diameter_header{} | false.
+
+decode_header(<<Version:8,
+                MsgLength:24,
+                CmdFlags:1/binary,
+                CmdCode:24,
+                ApplicationId:32,
+                HopByHopId:32,
+                EndToEndId:32,
+                _/bitstring>>) ->
+    <<R:1,P:1,E:1,T:1,_:4>> = CmdFlags,
+    #diameter_header{version = Version,
+                     length = MsgLength,
+                     cmd_code = CmdCode,
+                     application_id = ApplicationId,
+                     hop_by_hop_id = HopByHopId,
+                     end_to_end_id = EndToEndId,
+                     is_request = 1 == R,
+                     is_proxiable = 1 == P,
+                     is_error = 1 == E,
+                     is_retransmitted = 1 == T};
+decode_header(_) ->
+    false.
+
+-spec sequence_numbers(#diameter_packet{} |
+                       #diameter_header{} |
+                       binary() |
+                       Seq) ->
+                          Seq
+                          when
+                              is_subtype(Seq,
+                                         {HopByHopId :: u32(),
+                                          EndToEndId :: u32()}).
+
+sequence_numbers({_,_} = T) ->
+    T;
+sequence_numbers(#diameter_packet{bin = Bin}) when is_binary(Bin) ->
+    sequence_numbers(Bin);
+sequence_numbers(#diameter_packet{header = #diameter_header{} = H}) ->
+    sequence_numbers(H);
+sequence_numbers(#diameter_header{hop_by_hop_id = H,end_to_end_id = E}) ->
+    {H,E};
+sequence_numbers(<<_:12/binary,H:32,E:32,_/binary>>) ->
+    {H,E}.
+
+-spec hop_by_hop_id(u32(), binary()) -> binary().
+
+hop_by_hop_id(Id, <<H:12/binary,_:32,T/binary>>) ->
+    <<H/binary,Id:32,T/binary>>.
+
+-spec msg_name(module(), #diameter_header{}) ->
+                  atom() |
+                  {ApplicationId :: u32(),
+                   CommandCode :: u24(),
+                   Rbit :: u1()}.
+
+msg_name(Dict0,
+         #diameter_header{application_id = 0,
+                          cmd_code = C,
+                          is_request = R}) ->
+    Dict0:msg_name(C, R);
+msg_name(_, Hdr) ->
+    msg_id(Hdr).
+
+-spec msg_id(#diameter_packet{} | #diameter_header{}) ->
+                {ApplicationId :: u32(),
+                 CommandCode :: u24(),
+                 Rbit :: u1()}.
+
+msg_id(#diameter_packet{msg = [#diameter_header{} = Hdr|_]}) ->
+    msg_id(Hdr);
+msg_id(#diameter_packet{header = #diameter_header{} = Hdr}) ->
+    msg_id(Hdr);
+msg_id(#diameter_header{application_id = A,cmd_code = C,is_request = R}) ->
+    {A,
+     C,
+     if
+         R ->
+             1;
+         true ->
+             0
+     end};
+msg_id(<<_:32,Rbit:1,_:7,CmdCode:24,ApplId:32,_/bitstring>>) ->
+    {ApplId,CmdCode,Rbit}.
+
+-spec collect_avps(#diameter_packet{} | bitstring()) ->
+                      [Avp] | {Error, [Avp]}
+                      when
+                          is_subtype(Avp, #diameter_avp{}),
+                          is_subtype(Error, {5014, #diameter_avp{}}).
+
+collect_avps(#diameter_packet{bin = Bin}) ->
+    <<_:20/binary,Avps/bitstring>> = Bin,
+    collect_avps(Avps);
+collect_avps(Bin) ->
+    collect_avps(Bin, 0, []).
+
+collect_avps(<<>>, _, Acc) ->
+    Acc;
+collect_avps(Bin, N, Acc) ->
+    try split_avp(Bin) of
+        {Rest,AVP} ->
+            collect_avps(Rest, N + 1, [AVP#diameter_avp{index = N}|Acc])
+    catch
+        {{diameter_codec},{Error}} ->
+            {Error,Acc}
+    end.
+
+split_avp(Bin) ->
+    {Code,V,M,P,Len,HdrLen} = split_head(Bin),
+    {Data,B} = split_data(Bin, HdrLen, Len - HdrLen),
+    {B,
+     #diameter_avp{code = Code,
+                   vendor_id = V,
+                   is_mandatory = 1 == M,
+                   need_encryption = 1 == P,
+                   data = Data}}.
+
+split_head(<<Code:32,1:1,M:1,P:1,_:5,Len:24,V:32,_/bitstring>>) ->
+    {Code,V,M,P,Len,12};
+split_head(<<Code:32,0:1,M:1,P:1,_:5,Len:24,_/bitstring>>) ->
+    {Code,undefined,M,P,Len,8};
+split_head(Bin) ->
+    throw({{diameter_codec},{{5014,#diameter_avp{data = Bin}}}}).
+
+split_data(Bin, HdrLen, Len) when 0 =< Len ->
+    split_data(Bin, HdrLen, Len, (4 - Len rem 4) rem 4);
+split_data(_, _, _) ->
+    invalid_avp_length().
+
+split_data(Bin, HdrLen, Len, Pad) ->
+    <<_:HdrLen/binary,T/bitstring>> = Bin,
+    case T of
+        <<Data:Len/binary,_:Pad/binary,Rest/bitstring>> ->
+            {Data,Rest};
+        _ ->
+            invalid_avp_length()
+    end.
+
+invalid_avp_length() ->
+    {<<0:1>>,<<>>}.
+
+pack_avp(#diameter_avp{data = [#diameter_avp{}|_] = Avps} = A) ->
+    pack_avp(A#diameter_avp{data = encode_avps(Avps)});
+pack_avp(#diameter_avp{data = {Type,Value}} = A) when is_atom(Type) ->
+    pack_avp(A#diameter_avp{data = diameter_types:Type(encode, Value)});
+pack_avp(#diameter_avp{data = {{_,_,_} = T,{Type,Value}}}) ->
+    pack_avp(T, iolist_to_binary(diameter_types:Type(encode, Value)));
+pack_avp(#diameter_avp{data = {{_,_,_} = T,Bin}}) when is_binary(Bin) ->
+    pack_avp(T, Bin);
+pack_avp(#diameter_avp{data = {Dict,Name,Value}} = A) ->
+    {Code,_Flags,Vid} = Hdr = Dict:avp_header(Name),
+    {Name,Type} = Dict:avp_name(Code, Vid),
+    pack_avp(A#diameter_avp{data = {Hdr,{Type,Value}}});
+pack_avp(#diameter_avp{code = undefined,data = Bin}) when is_binary(Bin) ->
+    Pad = 8 * header_length(Bin) - bit_size(Bin),
+    Len = size(<<H:5/binary,_:24,T/binary>> = <<Bin/bitstring,0:Pad>>),
+    <<H/binary,Len:24,T/binary>>;
+pack_avp(#diameter_avp{code = Code,
+                       vendor_id = V,
+                       is_mandatory = M,
+                       need_encryption = P,
+                       data = Data}) ->
+    Flags =
+        lists:foldl(fun flag_avp/2,
+                    0,
+                    [{V /= undefined,128},{M,64},{P,32}]),
+    pack_avp({Code,Flags,V}, iolist_to_binary(Data)).
+
+header_length(<<_:32,1:1,_/bitstring>>) ->
+    12;
+header_length(_) ->
+    8.
+
+flag_avp({true,B}, F) ->
+    F bor B;
+flag_avp({false,_}, F) ->
+    F.
+
+pack_avp({Code,Flags,VendorId}, Bin) when is_binary(Bin) ->
+    Sz = size(Bin),
+    pack_avp(Code, Flags, VendorId, Sz, pad(Sz rem 4, Bin)).
+
+pad(0, Bin) ->
+    Bin;
+pad(N, Bin) ->
+    P = 8 * (4 - N),
+    <<Bin/binary,0:P>>.
+
+pack_avp(Code, Flags, Vid, Sz, Bin) when 0 == Flags band 128 ->
+    undefined = Vid,
+    pack_avp(Code, Flags, Sz, Bin);
+pack_avp(Code, Flags, Vid, Sz, Bin) ->
+    pack_avp(Code, Flags, Sz + 4, <<Vid:32,Bin/binary>>).
+
+pack_avp(Code, Flags, Sz, Bin) ->
+    Length = Sz + 8,
+    <<Code:32,Flags:8,Length:24,Bin/binary>>.
+
+
+

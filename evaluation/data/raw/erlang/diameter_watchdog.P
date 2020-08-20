@@ -1,0 +1,580 @@
+-file("test/lib/diameter/src/base/diameter_watchdog.erl", 1).
+
+-module(diameter_watchdog).
+
+-behaviour(gen_server).
+
+-export([start/2]).
+
+-export([init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         terminate/2,
+         code_change/3]).
+
+-export([start_link/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/diameter-1.3/include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options = [{answer_errors,report}]}).
+
+-file("test/lib/diameter/src/base/diameter_watchdog.erl", 43).
+
+-file("test/lib/diameter/src/base/diameter_internal.hrl", 1).
+
+-record(diameter_peer,{host_id,
+                       statusT,
+                       is_dynamic,
+                       expiration,
+                       tls_enabled}).
+
+-record(diameter_realm,{name,
+                        app_id,
+                        local_action,
+                        server_id,
+                        is_dynamic,
+                        expiration}).
+
+-file("test/lib/diameter/src/base/diameter_watchdog.erl", 44).
+
+-record(config,{suspect = 1 :: non_neg_integer(),
+                okay = 3 :: non_neg_integer()}).
+
+-record(watchdog,{status =
+                      initial :: initial
+                               | okay
+                               | suspect
+                               | down
+                               | reopen,
+                  pending = false :: boolean(),
+                  tw :: undefined
+                      | 6000..4294967295
+                      | {module(), atom(), list()},
+                  num_dwa = 0 :: - 1 | non_neg_integer(),
+                  parent = self() :: pid(),
+                  transport :: pid() | undefined,
+                  tref :: undefined | reference(),
+                  dictionary :: undefined | module(),
+                  receive_data :: undefined | term(),
+                  sequence :: undefined | diameter:sequence(),
+                  restrict :: undefined
+                            | {diameter:restriction(), boolean()},
+                  shutdown = false :: boolean(),
+                  config :: undefined | #config{}}).
+
+-spec start(Type, {RecvData, [Opt], SvcOpts, #diameter_service{}}) ->
+               {reference(), pid()}
+               when
+                   is_subtype(Type,
+                              {connect | accept,
+                               diameter:transport_ref()}),
+                   is_subtype(RecvData, term()),
+                   is_subtype(Opt, diameter:transport_opt()),
+                   is_subtype(SvcOpts, [diameter:service_opt()]).
+
+start({_,_} = Type, T) ->
+    Ack = make_ref(),
+    {ok,Pid} = diameter_watchdog_sup:start_child({Ack,Type,self(),T}),
+    try {monitor(process, Pid),Pid} after send(Pid, Ack) end.
+
+start_link(T) ->
+    {ok,_} =
+        proc_lib:start_link(diameter_watchdog,
+                            init,
+                            [T],
+                            infinity,
+                            diameter_lib:spawn_opts(server, [])).
+
+init(T) ->
+    proc_lib:init_ack({ok,self()}),
+    gen_server:enter_loop(diameter_watchdog, [], i(T)).
+
+i({Ack,
+   T,
+   Pid,
+   {RecvData,
+    Opts,
+    SvcOpts,
+    #diameter_service{applications = Apps,capabilities = Caps} = Svc}}) ->
+    monitor(process, Pid),
+    wait(Ack, Pid),
+    random:seed(now()),
+    putr(restart, {T,Opts,Svc}),
+    putr(dwr, dwr(Caps)),
+    {_,_} = Mask = proplists:get_value(sequence, SvcOpts),
+    Restrict = proplists:get_value(restrict_connections, SvcOpts),
+    Nodes = restrict_nodes(Restrict),
+    Dict0 = common_dictionary(Apps),
+    #watchdog{parent = Pid,
+              transport = start(T, Opts, Mask, Nodes, Dict0, Svc),
+              tw = proplists:get_value(watchdog_timer, Opts, 30000),
+              receive_data = RecvData,
+              dictionary = Dict0,
+              sequence = Mask,
+              restrict = {Restrict,lists:member(node(), Nodes)},
+              config = config(Opts)}.
+
+wait(Ref, Pid) ->
+    receive
+        Ref ->
+            ok;
+        {'DOWN',_,process,Pid,_} = D ->
+            exit({shutdown,D})
+    end.
+
+config(Opts) ->
+    Config = proplists:get_value(watchdog_config, Opts, []),
+    is_list(Config)
+    orelse
+    config_error({watchdog_config,Config}),
+    lists:foldl(fun config/2, #config{}, Config).
+
+config({suspect,N}, Rec)
+    when
+        is_integer(N)
+        andalso
+        0 =< N ->
+    Rec#config{suspect = N};
+config({okay,N}, Rec)
+    when
+        is_integer(N)
+        andalso
+        0 =< N ->
+    Rec#config{okay = N};
+config(T, _) ->
+    config_error(T).
+
+start(T, Opts, Mask, Nodes, Dict0, Svc) ->
+    {_MRef,Pid} =
+        diameter_peer_fsm:start(T, Opts, {Mask,Nodes,Dict0,Svc}),
+    Pid.
+
+common_dictionary(Apps) ->
+    case
+        orddict:fold(fun dict0/3,
+                     false,
+                     lists:foldl(fun(#diameter_app{dictionary = M}, D) ->
+                                        orddict:append(M:id(), M, D)
+                                 end,
+                                 orddict:new(),
+                                 Apps))
+    of
+        {value,Mod} ->
+            Mod;
+        false ->
+            diameter_gen_base_rfc3588
+    end.
+
+dict0(Id, [_,_|_] = Ms, _) ->
+    config_error({multiple_dictionaries,Ms,{application_id,Id}});
+dict0(0, [Mod], _) ->
+    {value,Mod};
+dict0(4294967295, _, false) ->
+    {value,diameter_gen_base_rfc3588};
+dict0(_, _, Acc) ->
+    Acc.
+
+config_error(T) ->
+    diameter_lib:error_report(configuration_error, T),
+    exit({shutdown,{configuration_error,T}}).
+
+handle_call(_, _, State) ->
+    {reply,nok,State}.
+
+handle_cast(_, State) ->
+    {noreply,State}.
+
+handle_info(T, #watchdog{} = State) ->
+    case transition(T, State) of
+        ok ->
+            {noreply,State};
+        #watchdog{} = S ->
+            close(T, State),
+            event(T, State, S),
+            {noreply,S};
+        stop ->
+            diameter_lib:log(stop, diameter_watchdog, 252, T),
+            event(T, State, State#watchdog{status = down}),
+            {stop,{shutdown,T},State}
+    end;
+handle_info(T, State) ->
+    handle_info(T, upgrade(State)).
+
+upgrade(State) ->
+    case erlang:append_element(State, #config{}) of
+        #watchdog{status = okay,config = #config{suspect = OS}} = S ->
+            S#watchdog{num_dwa = OS};
+        #watchdog{} = S ->
+            S
+    end.
+
+close({'DOWN',_,process,TPid,{shutdown,Reason}},
+      #watchdog{transport = TPid,parent = Pid}) ->
+    send(Pid, {close,self(),Reason});
+close(_, _) ->
+    ok.
+
+event(_, #watchdog{status = T}, #watchdog{status = T}) ->
+    ok;
+event(_,
+      #watchdog{transport = undefined},
+      #watchdog{transport = undefined}) ->
+    ok;
+event(Msg,
+      #watchdog{status = From,transport = F,parent = Pid},
+      #watchdog{status = To,transport = T}) ->
+    TPid = tpid(F, T),
+    E = {[TPid|data(Msg, TPid, From, To)],From,To},
+    send(Pid, {watchdog,self(),E}),
+    diameter_lib:log(transition, diameter_watchdog, 288, {self(),E}).
+
+data(Msg, TPid, reopen, okay) ->
+    {recv,TPid,'DWA',_Pkt} = Msg,
+    {TPid,T} = eraser(open),
+    [T];
+data({open,TPid,_Hosts,T}, TPid, _From, To)
+    when To == okay; To == reopen ->
+    [T];
+data(_, _, _, _) ->
+    [].
+
+tpid(_, Pid) when is_pid(Pid) ->
+    Pid;
+tpid(Pid, _) ->
+    Pid.
+
+send(Pid, T) ->
+    Pid ! T.
+
+terminate(_, _) ->
+    ok.
+
+code_change(_, State, _) ->
+    {ok,State}.
+
+transition(close, #watchdog{status = down}) ->
+    {{accept,_},_,_} = getr(restart),
+    stop;
+transition(close, #watchdog{}) ->
+    ok;
+transition({shutdown,Pid,_},
+           #watchdog{parent = Pid,transport = undefined}) ->
+    stop;
+transition({shutdown = T,Pid,Reason},
+           #watchdog{parent = Pid,transport = TPid} = S) ->
+    send(TPid, {T,self(),Reason}),
+    S#watchdog{shutdown = true};
+transition({'DOWN',_,process,Pid,_Reason}, #watchdog{parent = Pid}) ->
+    stop;
+transition({accepted = T,TPid},
+           #watchdog{transport = TPid,parent = Pid}) ->
+    send(Pid, {T,self(),TPid}),
+    ok;
+transition({open,TPid,Hosts,_} = Open,
+           #watchdog{transport = TPid,
+                     status = initial,
+                     restrict = {_,R},
+                     config = #config{suspect = OS}} =
+               S) ->
+    case okay(getr(restart), Hosts, R) of
+        okay ->
+            set_watchdog(S#watchdog{status = okay,num_dwa = OS});
+        reopen ->
+            transition(Open, S#watchdog{status = down})
+    end;
+transition({open = Key,TPid,_Hosts,T},
+           #watchdog{transport = TPid,
+                     status = down,
+                     config = #config{suspect = OS,okay = RO}} =
+               S) ->
+    case RO of
+        0 ->
+            set_watchdog(S#watchdog{status = okay,num_dwa = OS});
+        _ ->
+            putr(Key, {TPid,T}),
+            set_watchdog(send_watchdog(S#watchdog{status = reopen,
+                                                  num_dwa = 0}))
+    end;
+transition({'DOWN',_,process,TPid,_Reason},
+           #watchdog{transport = TPid,shutdown = true}) ->
+    stop;
+transition({'DOWN',_,process,TPid,_Reason},
+           #watchdog{transport = TPid,status = T} = S) ->
+    set_watchdog(S#watchdog{status =
+                                if
+                                    initial == T ->
+                                        T;
+                                    true ->
+                                        down
+                                end,
+                            pending = false,
+                            transport = undefined});
+transition({recv,TPid,Name,Pkt}, #watchdog{transport = TPid} = S) ->
+    recv(Name, Pkt, S);
+transition({timeout,TRef,tw}, #watchdog{tref = TRef} = S) ->
+    set_watchdog(timeout(S));
+transition({timeout,_,tw}, #watchdog{}) ->
+    ok;
+transition({state,Pid}, #watchdog{status = S}) ->
+    send(Pid, {self(),S}),
+    ok.
+
+putr(Key, Val) ->
+    put({diameter_watchdog,Key}, Val).
+
+getr(Key) ->
+    get({diameter_watchdog,Key}).
+
+eraser(Key) ->
+    erase({diameter_watchdog,Key}).
+
+encode(Msg, Mask, Dict) ->
+    Seq = diameter_session:sequence(Mask),
+    Hdr =
+        #diameter_header{version = 1,
+                         end_to_end_id = Seq,
+                         hop_by_hop_id = Seq},
+    Pkt = #diameter_packet{header = Hdr,msg = Msg},
+    #diameter_packet{bin = Bin} = diameter_codec:encode(Dict, Pkt),
+    Bin.
+
+okay({{accept,Ref},_,_}, Hosts, Restrict) ->
+    T = {diameter_watchdog,connection,Ref,Hosts},
+    diameter_reg:add(T),
+    if
+        Restrict ->
+            okay(diameter_reg:match(T));
+        true ->
+            okay
+    end;
+okay({{connect,_},_,_}, _, _) ->
+    okay.
+
+okay([{_,P}]) ->
+    P = self(),
+    okay;
+okay(C) ->
+    [_|_] =
+        [ 
+         send(P, close) ||
+             {_,P} <- C,
+             self() /= P
+        ],
+    reopen.
+
+set_watchdog(#watchdog{tw = TwInit,tref = TRef} = S) ->
+    cancel(TRef),
+    S#watchdog{tref = erlang:start_timer(tw(TwInit), self(), tw)};
+set_watchdog(stop = No) ->
+    No.
+
+cancel(undefined) ->
+    ok;
+cancel(TRef) ->
+    erlang:cancel_timer(TRef).
+
+tw(T) when is_integer(T), T >= 6000 ->
+    T - 2000 + (random:uniform(4001) - 1);
+tw({M,F,A}) ->
+    apply(M, F, A).
+
+send_watchdog(#watchdog{pending = false,
+                        transport = TPid,
+                        dictionary = Dict0,
+                        sequence = Mask} =
+                  S) ->
+    send(TPid, {send,encode(getr(dwr), Mask, Dict0)}),
+    diameter_lib:log(send, diameter_watchdog, 531, 'DWR'),
+    S#watchdog{pending = true}.
+
+recv(Name, Pkt, S) ->
+    try rcv(Name, S) of
+        #watchdog{} = NS ->
+            rcv(Name, Pkt, S),
+            NS
+    catch
+        {diameter_watchdog,throwaway,#watchdog{} = NS} ->
+            NS
+    end.
+
+rcv('DWR',
+    Pkt,
+    #watchdog{transport = TPid,dictionary = Dict0,sequence = Mask}) ->
+    send(TPid, {send,encode(dwa(Pkt), Mask, Dict0)}),
+    diameter_lib:log(send, diameter_watchdog, 552, 'DWA');
+rcv(N, _, _)
+    when N == 'CER'; N == 'CEA'; N == 'DWA'; N == 'DPR'; N == 'DPA' ->
+    false;
+rcv(_,
+    Pkt,
+    #watchdog{transport = TPid,dictionary = Dict0,receive_data = T}) ->
+    diameter_traffic:receive_message(TPid, Pkt, Dict0, T).
+
+throwaway(S) ->
+    throw({diameter_watchdog,throwaway,S}).
+
+rcv('DWA', #watchdog{status = initial} = S) ->
+    throwaway(S#watchdog{pending = false});
+rcv(_, #watchdog{status = initial} = S) ->
+    throwaway(S);
+rcv('DWA', #watchdog{status = down} = S) ->
+    throwaway(S#watchdog{pending = false});
+rcv(_, #watchdog{status = down} = S) ->
+    throwaway(S);
+rcv('DWA', #watchdog{status = okay} = S) ->
+    set_watchdog(S#watchdog{pending = false});
+rcv(_, #watchdog{status = okay} = S) ->
+    set_watchdog(S);
+rcv('DWA',
+    #watchdog{status = suspect,config = #config{suspect = OS}} = S) ->
+    set_watchdog(S#watchdog{status = okay,num_dwa = OS,pending = false});
+rcv(_, #watchdog{status = suspect,config = #config{suspect = OS}} = S) ->
+    set_watchdog(S#watchdog{status = okay,num_dwa = OS});
+rcv('DWA',
+    #watchdog{status = reopen,
+              num_dwa = N,
+              config = #config{suspect = OS,okay = RO}} =
+        S)
+    when N + 1 == RO ->
+    S#watchdog{status = okay,num_dwa = OS,pending = false};
+rcv('DWA', #watchdog{status = reopen,num_dwa = N} = S) ->
+    S#watchdog{num_dwa = N + 1,pending = false};
+rcv('DWR', #watchdog{status = reopen} = S) ->
+    S;
+rcv(_, #watchdog{status = reopen} = S) ->
+    throwaway(S).
+
+timeout(#watchdog{status = T,pending = false} = S)
+    when T == okay; T == reopen ->
+    send_watchdog(S);
+timeout(#watchdog{status = okay,pending = true,num_dwa = N} = S) ->
+    case N of
+        1 ->
+            S#watchdog{status = suspect};
+        0 ->
+            S;
+        N ->
+            S#watchdog{num_dwa = N - 1}
+    end;
+timeout(#watchdog{status = T,pending = P,num_dwa = N,transport = TPid} =
+            S)
+    when T == suspect; T == reopen, P, N < 0 ->
+    exit(TPid, {shutdown,watchdog_timeout}),
+    S#watchdog{status = down};
+timeout(#watchdog{status = reopen,pending = true,num_dwa = N} = S)
+    when 0 =< N ->
+    S#watchdog{num_dwa = - 1};
+timeout(#watchdog{status = T} = S) when T == initial; T == down ->
+    restart(S).
+
+restart(#watchdog{transport = undefined} = S) ->
+    restart(getr(restart), S);
+restart(S) ->
+    S.
+
+restart({{connect,_} = T,Opts,Svc},
+        #watchdog{parent = Pid,
+                  sequence = Mask,
+                  restrict = {R,_},
+                  dictionary = Dict0} =
+            S) ->
+    send(Pid, {reconnect,self()}),
+    Nodes = restrict_nodes(R),
+    S#watchdog{transport = start(T, Opts, Mask, Nodes, Dict0, Svc),
+               restrict = {R,lists:member(node(), Nodes)}};
+restart({{accept,_},_,_}, #watchdog{restrict = {_,false}}) ->
+    stop;
+restart({{accept,_},_,_}, S) ->
+    S.
+
+dwr(#diameter_caps{origin_host = OH,
+                   origin_realm = OR,
+                   origin_state_id = OSI}) ->
+    ['DWR',
+     {'Origin-Host',OH},
+     {'Origin-Realm',OR},
+     {'Origin-State-Id',OSI}].
+
+dwa(#diameter_packet{header = H,errors = Es}) ->
+    {RC,FailedAVP} = diameter_peer_fsm:result_code(H, Es),
+    ['DWA',{'Result-Code',RC}|tl(getr(dwr)) ++ FailedAVP].
+
+restrict_nodes(false) ->
+    [];
+restrict_nodes(nodes) ->
+    [node()|nodes()];
+restrict_nodes(node) ->
+    [node()];
+restrict_nodes(Nodes) when [] == Nodes; is_atom(hd(Nodes)) ->
+    Nodes;
+restrict_nodes(F) ->
+    diameter_lib:eval(F).
+
+
+

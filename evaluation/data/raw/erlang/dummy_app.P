@@ -1,0 +1,17 @@
+-file("test/lib/sasl/test/release_handler_SUITE_data/release_handler_timeouts/dummy-0.1/src/dummy_app.erl",
+      1).
+
+-module(dummy_app).
+
+-behaviour(application).
+
+-export([start/2,stop/1]).
+
+start(_, _) ->
+    dummy_sup:start_link().
+
+stop(_) ->
+    ok.
+
+
+

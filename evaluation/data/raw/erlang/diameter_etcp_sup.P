@@ -1,0 +1,29 @@
+-file("test/lib/diameter/src/transport/diameter_etcp_sup.erl", 1).
+
+-module(diameter_etcp_sup).
+
+-behaviour(supervisor).
+
+-export([start/0,start_child/1]).
+
+-export([start_link/1,init/1]).
+
+start() ->
+    diameter_transport_sup:start_child(diameter_etcp_sup,
+                                       diameter_etcp_sup).
+
+start_child(T) ->
+    supervisor:start_child(diameter_etcp_sup, [T]).
+
+start_link(diameter_etcp_sup) ->
+    SupName = {local,diameter_etcp_sup},
+    supervisor:start_link(SupName, diameter_etcp_sup, []).
+
+init([]) ->
+    Mod = diameter_etcp,
+    Flags = {simple_one_for_one,0,1},
+    ChildSpec = {Mod,{Mod,start_link,[]},temporary,1000,worker,[Mod]},
+    {ok,{Flags,[ChildSpec]}}.
+
+
+

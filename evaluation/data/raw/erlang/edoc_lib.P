@@ -1,0 +1,1068 @@
+-file("test/lib/edoc/src/edoc_lib.erl", 1).
+
+-module(edoc_lib).
+
+-export([count/2,
+         lines/1,
+         split_at/2,
+         split_at_stop/1,
+         split_at_space/1,
+         filename/1,
+         transpose/1,
+         segment/2,
+         get_first_sentence/1,
+         is_space/1,
+         strip_space/1,
+         parse_expr/2,
+         parse_contact/2,
+         escape_uri/1,
+         join_uri/2,
+         is_relative_uri/1,
+         is_name/1,
+         to_label/1,
+         find_doc_dirs/0,
+         find_sources/2,
+         find_sources/3,
+         find_file/3,
+         try_subdir/2,
+         unique/1,
+         write_file/3,
+         write_file/4,
+         write_file/5,
+         write_info_file/4,
+         read_info_file/1,
+         get_doc_env/1,
+         get_doc_env/4,
+         copy_file/2,
+         uri_get/1,
+         run_doclet/2,
+         run_layout/2,
+         simplify_path/1,
+         timestr/1,
+         datestr/1,
+         read_encoding/2]).
+
+-import(edoc_report, [report/2,warning/2]).
+
+-file("test/lib/edoc/src/edoc.hrl", 1).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/edoc/src/../include/edoc_doclet.hrl",
+      1).
+
+-record(context,{dir = "",env,opts = []}).
+
+-record(doclet_gen,{sources = [],
+                    app = [],
+                    packages = [],
+                    modules = [],
+                    filemap}).
+
+-record(doclet_toc,{paths,indir}).
+
+-file("test/lib/edoc/src/edoc.hrl", 43).
+
+-file([], 43).
+
+-record(module,{name = [],
+                parameters = none,
+                functions = [],
+                exports = [],
+                attributes = [],
+                records = [],
+                encoding = latin1}).
+
+-record(env,{module = [],
+             package = [],
+             root = "",
+             file_suffix,
+             package_summary,
+             apps,
+             modules,
+             packages,
+             app_default,
+             macros = [],
+             includes = []}).
+
+-record(comment,{line = 0,text}).
+
+-record(entry,{name,args = [],line = 0,export,data}).
+
+-record(tag,{name,line = 0,origin = comment,data}).
+
+-file("test/lib/edoc/src/edoc_lib.erl", 42).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/xmerl-1.3.2/include/xmerl.hrl",
+      1).
+
+-record(xmlDecl,{vsn,encoding,standalone,attributes}).
+
+-record(xmlAttribute,{name,
+                      expanded_name = [],
+                      nsinfo = [],
+                      namespace = [],
+                      parents = [],
+                      pos,
+                      language = [],
+                      value,
+                      normalized}).
+
+-record(xmlNamespace,{default = [],nodes = []}).
+
+-record(xmlNsNode,{parents = [],pos,prefix,uri = []}).
+
+-record(xmlElement,{name,
+                    expanded_name = [],
+                    nsinfo = [],
+                    namespace = #xmlNamespace{},
+                    parents = [],
+                    pos,
+                    attributes = [],
+                    content = [],
+                    language = "",
+                    xmlbase = "",
+                    elementdef = undeclared}).
+
+-record(xmlText,{parents = [],pos,language = [],value,type = text}).
+
+-record(xmlComment,{parents = [],pos,language = [],value}).
+
+-record(xmlPI,{name,parents = [],pos,value}).
+
+-record(xmlDocument,{content}).
+
+-record(xmlContext,{axis_type = forward,
+                    context_node,
+                    context_position = 1,
+                    nodeset = [],
+                    bindings = [],
+                    functions = [],
+                    namespace = [],
+                    whole_document}).
+
+-record(xmlNode,{type = element,node,parents = [],pos = 1}).
+
+-record(xmlObj,{type,value}).
+
+-record(xmerl_fun_states,{event,hook,rules,fetch,cont}).
+
+-record(xmerl_scanner,{encoding = undefined,
+                       standalone = no,
+                       environment = prolog,
+                       declarations = [],
+                       doctype_name,
+                       doctype_DTD = internal,
+                       comments = true,
+                       document = false,
+                       default_attrs = false,
+                       rules,
+                       keep_rules = false,
+                       namespace_conformant = false,
+                       xmlbase,
+                       xmlbase_cache,
+                       fetch_path = [],
+                       filename = file_name_unknown,
+                       validation = off,
+                       schemaLocation = [],
+                       space = preserve,
+                       event_fun,
+                       hook_fun,
+                       acc_fun,
+                       fetch_fun,
+                       close_fun,
+                       continuation_fun,
+                       rules_read_fun,
+                       rules_write_fun,
+                       rules_delete_fun,
+                       user_state,
+                       fun_states = #xmerl_fun_states{},
+                       entity_references = [],
+                       text_decl = false,
+                       quiet = false,
+                       col = 1,
+                       line = 1,
+                       common_data = []}).
+
+-record(xmerl_event,{event,line,col,pos,data}).
+
+-file("test/lib/edoc/src/edoc_lib.erl", 43).
+
+timestr({H,M,Sec}) ->
+    lists:flatten(io_lib:fwrite("~2.2.0w:~2.2.0w:~2.2.0w", [H,M,Sec])).
+
+datestr({Y,M,D}) ->
+    Ms =
+        ["Jan",
+         "Feb",
+         "Mar",
+         "Apr",
+         "May",
+         "Jun",
+         "Jul",
+         "Aug",
+         "Sep",
+         "Oct",
+         "Nov",
+         "Dec"],
+    lists:flatten(io_lib:fwrite("~s ~w ~w", [lists:nth(M, Ms),D,Y])).
+
+read_encoding(File, Options) ->
+    case epp:read_encoding(File, Options) of
+        none ->
+            epp:default_encoding();
+        Encoding ->
+            Encoding
+    end.
+
+count(X, Xs) ->
+    count(X, Xs, 0).
+
+count(X, [X|Xs], N) ->
+    count(X, Xs, N + 1);
+count(X, [_|Xs], N) ->
+    count(X, Xs, N);
+count(_X, [], N) ->
+    N.
+
+lines(Cs) ->
+    lines(Cs, [], []).
+
+lines([$\n|Cs], As, Ls) ->
+    lines(Cs, [], [lists:reverse(As)|Ls]);
+lines([C|Cs], As, Ls) ->
+    lines(Cs, [C|As], Ls);
+lines([], As, Ls) ->
+    lists:reverse([lists:reverse(As)|Ls]).
+
+split_at(Cs, K) ->
+    split_at(Cs, K, []).
+
+split_at([K|Cs], K, As) ->
+    {lists:reverse(As),Cs};
+split_at([C|Cs], K, As) ->
+    split_at(Cs, K, [C|As]);
+split_at([], _K, As) ->
+    {lists:reverse(As),[]}.
+
+split_at_stop(Cs) ->
+    split_at_stop(Cs, []).
+
+split_at_stop([$.,$\s|Cs], As) ->
+    {lists:reverse(As),Cs};
+split_at_stop([$.,$\t|Cs], As) ->
+    {lists:reverse(As),Cs};
+split_at_stop([$.,$\n|Cs], As) ->
+    {lists:reverse(As),Cs};
+split_at_stop([$.], As) ->
+    {lists:reverse(As),[]};
+split_at_stop([C|Cs], As) ->
+    split_at_stop(Cs, [C|As]);
+split_at_stop([], As) ->
+    {lists:reverse(As),[]}.
+
+split_at_space(Cs) ->
+    split_at_space(Cs, []).
+
+split_at_space([$\s|Cs], As) ->
+    {lists:reverse(As),Cs};
+split_at_space([$\t|Cs], As) ->
+    {lists:reverse(As),Cs};
+split_at_space([$\n|Cs], As) ->
+    {lists:reverse(As),Cs};
+split_at_space([C|Cs], As) ->
+    split_at_space(Cs, [C|As]);
+split_at_space([], As) ->
+    {lists:reverse(As),[]}.
+
+is_space([$\s|Cs]) ->
+    is_space(Cs);
+is_space([$\t|Cs]) ->
+    is_space(Cs);
+is_space([$\n|Cs]) ->
+    is_space(Cs);
+is_space([_C|_Cs]) ->
+    false;
+is_space([]) ->
+    true.
+
+strip_space([$\s|Cs]) ->
+    strip_space(Cs);
+strip_space([$\t|Cs]) ->
+    strip_space(Cs);
+strip_space([$\n|Cs]) ->
+    strip_space(Cs);
+strip_space(Cs) ->
+    Cs.
+
+segment(Es, N) ->
+    segment(Es, [], [], 0, N).
+
+segment([E|Es], As, Cs, N, M) when N < M ->
+    segment(Es, [E|As], Cs, N + 1, M);
+segment([_|_] = Es, As, Cs, _N, M) ->
+    segment(Es, [], [lists:reverse(As)|Cs], 0, M);
+segment([], [], Cs, _N, _M) ->
+    lists:reverse(Cs);
+segment([], As, Cs, _N, _M) ->
+    lists:reverse([lists:reverse(As)|Cs]).
+
+transpose([]) ->
+    [];
+transpose([[]|Xss]) ->
+    transpose(Xss);
+transpose([[X|Xs]|Xss]) ->
+    [[X|
+      [ 
+       H ||
+           [H|_T] <- Xss
+      ]]|
+     transpose([Xs|
+                [ 
+                 T ||
+                     [_H|T] <- Xss
+                ]])].
+
+get_first_sentence([#xmlElement{name = p,content = Es}|_]) ->
+    get_first_sentence_1(Es);
+get_first_sentence(Es) ->
+    get_first_sentence_1(Es).
+
+get_first_sentence_1([E = #xmlText{value = Txt}|Es]) ->
+    Last =
+        case Es of
+            [#xmlElement{name = p}|_] ->
+                true;
+            [#xmlElement{name = br}|_] ->
+                true;
+            [] ->
+                true;
+            _ ->
+                false
+        end,
+    case end_of_sentence(Txt, Last) of
+        {value,Txt1} ->
+            [E#xmlText{value = Txt1}];
+        none ->
+            [E|get_first_sentence_1(Es)]
+    end;
+get_first_sentence_1([E|Es]) ->
+    [E|get_first_sentence_1(Es)];
+get_first_sentence_1([]) ->
+    [].
+
+end_of_sentence(Cs, Last) ->
+    end_of_sentence(Cs, Last, []).
+
+end_of_sentence([C = $.,$\s|_], _, As) ->
+    end_of_sentence_1(C, true, As);
+end_of_sentence([C = $.,$\t|_], _, As) ->
+    end_of_sentence_1(C, true, As);
+end_of_sentence([C = $.,$\n|_], _, As) ->
+    end_of_sentence_1(C, true, As);
+end_of_sentence([C = $.], Last, As) ->
+    end_of_sentence_1(C, Last, As);
+end_of_sentence([C = $!,$\s|_], _, As) ->
+    end_of_sentence_1(C, true, As);
+end_of_sentence([C = $!,$\t|_], _, As) ->
+    end_of_sentence_1(C, true, As);
+end_of_sentence([C = $!,$\n|_], _, As) ->
+    end_of_sentence_1(C, true, As);
+end_of_sentence([C = $!], Last, As) ->
+    end_of_sentence_1(C, Last, As);
+end_of_sentence([C|Cs], Last, As) ->
+    end_of_sentence(Cs, Last, [C|As]);
+end_of_sentence([], Last, As) ->
+    end_of_sentence_1($., Last, strip_space(As)).
+
+end_of_sentence_1(C, true, As) ->
+    {value,lists:reverse([C|As])};
+end_of_sentence_1(_, false, _) ->
+    none.
+
+is_name([C|Cs]) when C >= $a, C =< $z ->
+    is_name_1(Cs);
+is_name([C|Cs]) when C >= $ß, C =< $ÿ, C =/= $÷ ->
+    is_name_1(Cs);
+is_name(_) ->
+    false.
+
+is_name_1([C|Cs]) when C >= $a, C =< $z ->
+    is_name_1(Cs);
+is_name_1([C|Cs]) when C >= $A, C =< $Z ->
+    is_name_1(Cs);
+is_name_1([C|Cs]) when C >= $0, C =< $9 ->
+    is_name_1(Cs);
+is_name_1([C|Cs]) when C >= $À, C =< $ÿ, C =/= $×, C =/= $÷ ->
+    is_name_1(Cs);
+is_name_1([$_|Cs]) ->
+    is_name_1(Cs);
+is_name_1([]) ->
+    true;
+is_name_1(_) ->
+    false.
+
+to_atom(A) when is_atom(A) ->
+    A;
+to_atom(S) when is_list(S) ->
+    list_to_atom(S).
+
+to_list(A) when is_atom(A) ->
+    atom_to_list(A);
+to_list(S) when is_list(S) ->
+    S.
+
+unique([X|Xs]) ->
+    [X|unique(Xs, X)];
+unique([]) ->
+    [].
+
+unique([X|Xs], X) ->
+    unique(Xs, X);
+unique([X|Xs], _) ->
+    [X|unique(Xs, X)];
+unique([], _) ->
+    [].
+
+parse_expr(S, L) ->
+    case erl_scan:string(S ++ ".", L) of
+        {ok,Ts,_} ->
+            case erl_parse:parse_exprs(Ts) of
+                {ok,[Expr]} ->
+                    Expr;
+                {error,{999999,erl_parse,_}} ->
+                    throw_error(eof, L);
+                {error,E} ->
+                    throw_error(E, L)
+            end;
+        {error,E,_} ->
+            throw_error(E, L)
+    end.
+
+-record(info,{name = "" :: string(),
+              email = "" :: string(),
+              uri = "" :: string()}).
+
+parse_contact(S, L) ->
+    I = scan_name(S, L, #info{}, []),
+    {I#info.name,I#info.email,I#info.uri}.
+
+scan_name([$<|Cs], L, I, As) ->
+    case I#info.email of
+        "" ->
+            {Cs1,I1} = scan_email(Cs, L, set_name(I, As), []),
+            scan_name(Cs1, L, I1, []);
+        _ ->
+            throw_error("multiple '<...>' sections.", L)
+    end;
+scan_name([$[|Cs], L, I, As) ->
+    case I#info.uri of
+        "" ->
+            {Cs1,I1} = scan_uri(Cs, L, set_name(I, As), []),
+            scan_name(Cs1, L, I1, []);
+        _ ->
+            throw_error("multiple '[...]' sections.", L)
+    end;
+scan_name([$\n|Cs], L, I, As) ->
+    scan_name(Cs, L + 1, I, [$\n|As]);
+scan_name([C|Cs], L, I, As) ->
+    scan_name(Cs, L, I, [C|As]);
+scan_name([], _L, I, As) ->
+    set_name(I, As).
+
+scan_uri([$]|Cs], _L, I, As) ->
+    {Cs,I#info{uri = strip_and_reverse(As)}};
+scan_uri([$\n|Cs], L, I, As) ->
+    scan_uri(Cs, L + 1, I, [$\n|As]);
+scan_uri([C|Cs], L, I, As) ->
+    scan_uri(Cs, L, I, [C|As]);
+scan_uri([], L, _I, _As) ->
+    throw_error({missing,$]}, L).
+
+scan_email([$>|Cs], _L, I, As) ->
+    {Cs,I#info{email = strip_and_reverse(As)}};
+scan_email([$\n|Cs], L, I, As) ->
+    scan_email(Cs, L + 1, I, [$\n|As]);
+scan_email([C|Cs], L, I, As) ->
+    scan_email(Cs, L, I, [C|As]);
+scan_email([], L, _I, _As) ->
+    throw_error({missing,$>}, L).
+
+set_name(I, As) ->
+    case I#info.name of
+        "" ->
+            I#info{name = strip_and_reverse(As)};
+        _ ->
+            I
+    end.
+
+strip_and_reverse(As) ->
+    edoc_lib:strip_space(lists:reverse(edoc_lib:strip_space(As))).
+
+escape_uri([C|Cs]) when C >= $a, C =< $z ->
+    [C|escape_uri(Cs)];
+escape_uri([C|Cs]) when C >= $A, C =< $Z ->
+    [C|escape_uri(Cs)];
+escape_uri([C|Cs]) when C >= $0, C =< $9 ->
+    [C|escape_uri(Cs)];
+escape_uri([C = $.|Cs]) ->
+    [C|escape_uri(Cs)];
+escape_uri([C = $-|Cs]) ->
+    [C|escape_uri(Cs)];
+escape_uri([C = $_|Cs]) ->
+    [C|escape_uri(Cs)];
+escape_uri([C|Cs]) when C > 127 ->
+    escape_byte(C band 192 bsr 6 + 192)
+    ++
+    escape_byte(C band 63 + 128) ++ escape_uri(Cs);
+escape_uri([C|Cs]) ->
+    escape_byte(C) ++ escape_uri(Cs);
+escape_uri([]) ->
+    [].
+
+escape_byte(C) when C >= 0, C =< 255 ->
+    [$%,hex_digit(C bsr 4),hex_digit(C band 15)].
+
+hex_digit(N) when N >= 0, N =< 9 ->
+    N + $0;
+hex_digit(N) when N > 9, N =< 15 ->
+    N + $a - 10.
+
+join_uri(Base, "") ->
+    Base;
+join_uri("", Path) ->
+    Path;
+join_uri(Base, Path) ->
+    Base ++ "/" ++ Path.
+
+is_relative_uri([$:|_]) ->
+    false;
+is_relative_uri([$/,$/|_]) ->
+    false;
+is_relative_uri([$/|_]) ->
+    true;
+is_relative_uri([$?|_]) ->
+    true;
+is_relative_uri([$#|_]) ->
+    true;
+is_relative_uri([_|Cs]) ->
+    is_relative_uri(Cs);
+is_relative_uri([]) ->
+    true.
+
+uri_get("file:///" ++ Path) ->
+    uri_get_file(Path);
+uri_get("file://localhost/" ++ Path) ->
+    uri_get_file(Path);
+uri_get("file://" ++ Path) ->
+    Msg =
+        io_lib:format("cannot handle 'file:' scheme with nonlocal netwo"
+                      "rk-path: 'file://~ts'.",
+                      [Path]),
+    {error,Msg};
+uri_get("file:/" ++ Path) ->
+    uri_get_file(Path);
+uri_get("file:" ++ Path) ->
+    Msg = io_lib:format("ignoring malformed URI: 'file:~ts'.", [Path]),
+    {error,Msg};
+uri_get("http:" ++ Path) ->
+    uri_get_http("http:" ++ Path);
+uri_get("ftp:" ++ Path) ->
+    uri_get_ftp("ftp:" ++ Path);
+uri_get("//" ++ Path) ->
+    Msg = io_lib:format("cannot access network-path: '//~ts'.", [Path]),
+    {error,Msg};
+uri_get([C,$:,$/|_] = Path) when C >= $A, C =< $Z; C >= $a, C =< $z ->
+    uri_get_file(Path);
+uri_get([C,$:,$\s|_] = Path) when C >= $A, C =< $Z; C >= $a, C =< $z ->
+    uri_get_file(Path);
+uri_get(URI) ->
+    case is_relative_uri(URI) of
+        true ->
+            uri_get_file(URI);
+        false ->
+            Msg = io_lib:format("cannot handle URI: '~ts'.", [URI]),
+            {error,Msg}
+    end.
+
+uri_get_file(File0) ->
+    File = filename:join("/", File0),
+    case read_file(File) of
+        {ok,Text} ->
+            {ok,Text};
+        {error,R} ->
+            {error,file:format_error(R)}
+    end.
+
+uri_get_http(URI) ->
+    case
+        catch
+            {ok,httpc:request(get, {URI,[]}, [], [{full_result,false}])}
+    of
+        {'EXIT',_} ->
+            uri_get_http_r10(URI);
+        Result ->
+            uri_get_http_1(Result, URI)
+    end.
+
+uri_get_http_r10(URI) ->
+    Result = (catch {ok,httpc:request(get, {URI,[]}, [], [])}),
+    uri_get_http_1(Result, URI).
+
+uri_get_http_1(Result, URI) ->
+    case Result of
+        {ok,{ok,{200,Text}}} when is_list(Text) ->
+            {ok,Text};
+        {ok,{ok,{Status,Text}}} when is_integer(Status), is_list(Text) ->
+            Phrase = httpd_util:reason_phrase(Status),
+            {error,http_errmsg(Phrase, URI)};
+        {ok,{ok,{{_Vsn,200,_Phrase},_Hdrs,Text}}} when is_list(Text) ->
+            {ok,Text};
+        {ok,{ok,{{_Vsn,_Status,Phrase},_Hdrs,Text}}} when is_list(Text) ->
+            {error,http_errmsg(Phrase, URI)};
+        {ok,{200,_Hdrs,Text}} when is_list(Text) ->
+            {ok,Text};
+        {ok,{Status,_Hdrs,Text}} when is_list(Text) ->
+            Phrase = httpd_util:reason_phrase(Status),
+            {error,http_errmsg(Phrase, URI)};
+        {ok,{error,R}} ->
+            Reason = inet:format_error(R),
+            {error,http_errmsg(Reason, URI)};
+        {ok,R} ->
+            Reason = io_lib:format("bad return value ~P", [R,5]),
+            {error,http_errmsg(Reason, URI)};
+        {'EXIT',R} ->
+            Reason = io_lib:format("crashed with reason ~w", [R]),
+            {error,http_errmsg(Reason, URI)};
+        R ->
+            Reason = io_lib:format("uncaught throw: ~w", [R]),
+            {error,http_errmsg(Reason, URI)}
+    end.
+
+http_errmsg(Reason, URI) ->
+    io_lib:format("http error: ~ts: '~ts'", [Reason,URI]).
+
+uri_get_ftp(URI) ->
+    Msg = io_lib:format("cannot access ftp scheme yet: '~ts'.", [URI]),
+    {error,Msg}.
+
+to_label([$\s|Cs]) ->
+    to_label(Cs);
+to_label([$\t|Cs]) ->
+    to_label(Cs);
+to_label([$\n|Cs]) ->
+    to_label(Cs);
+to_label([]) ->
+    [];
+to_label(Cs) ->
+    to_label_1(Cs).
+
+to_label_1([$\s|Cs]) ->
+    to_label_2([$\s|Cs]);
+to_label_1([$\t|Cs]) ->
+    to_label_2([$\s|Cs]);
+to_label_1([$\n|Cs]) ->
+    to_label_2([$\s|Cs]);
+to_label_1([C|Cs]) ->
+    [C|to_label_1(Cs)];
+to_label_1([]) ->
+    [].
+
+to_label_2(Cs) ->
+    case to_label(Cs) of
+        [] ->
+            [];
+        Cs1 ->
+            [$_|Cs1]
+    end.
+
+filename([C|T]) when is_integer(C), C > 0 ->
+    [C|filename(T)];
+filename([H|T]) ->
+    filename(H) ++ filename(T);
+filename([]) ->
+    [];
+filename(N) when is_atom(N) ->
+    atom_to_list(N);
+filename(N) ->
+    report("bad filename: `~P'.", [N,25]),
+    exit(error).
+
+copy_file(From, To) ->
+    case file:copy(From, To) of
+        {ok,_} ->
+            ok;
+        {error,R} ->
+            R1 = file:format_error(R),
+            report("error copying '~ts' to '~ts': ~ts.", [From,To,R1]),
+            exit(error)
+    end.
+
+list_dir(Dir, Error) ->
+    case file:list_dir(Dir) of
+        {ok,Fs} ->
+            Fs;
+        {error,R} ->
+            F = case Error of
+                    false ->
+                        fun(S, As) ->
+                               warning(S, As),
+                               []
+                        end
+                end,
+            R1 = file:format_error(R),
+            F("could not read directory '~ts': ~ts.",
+              [filename(Dir),R1])
+    end.
+
+simplify_path(P) ->
+    case filename:basename(P) of
+        "." ->
+            simplify_path(filename:dirname(P));
+        ".." ->
+            simplify_path(filename:dirname(filename:dirname(P)));
+        _ ->
+            P
+    end.
+
+try_subdir(Dir, Subdir) ->
+    D = filename:join(Dir, Subdir),
+    case filelib:is_dir(D) of
+        true ->
+            D;
+        false ->
+            Dir
+    end.
+
+write_file(Text, Dir, Name) ->
+    write_file(Text, Dir, Name, '').
+
+write_file(Text, Dir, Name, Package) ->
+    write_file(Text, Dir, Name, Package, [{encoding,latin1}]).
+
+write_file(Text, Dir, Name, Package, Options) ->
+    File = filename:join([Dir,to_list(Package),Name]),
+    ok = filelib:ensure_dir(File),
+    case file:open(File, [write] ++ Options) of
+        {ok,FD} ->
+            io:put_chars(FD, Text),
+            ok = file:close(FD);
+        {error,R} ->
+            R1 = file:format_error(R),
+            report("could not write file '~ts': ~ts.", [File,R1]),
+            exit(error)
+    end.
+
+write_info_file(App, Packages, Modules, Dir) ->
+    Ts = [{packages,Packages},{modules,Modules}],
+    Ts1 =
+        if
+            App =:= [] ->
+                Ts;
+            true ->
+                [{application,App}|Ts]
+        end,
+    S0 =
+        [ 
+         io_lib:fwrite("~p.\n", [T]) ||
+             T <- Ts1
+        ],
+    S = ["%% encoding: UTF-8\n"|S0],
+    write_file(S, Dir, "edoc-info", '', [{encoding,unicode}]).
+
+read_file(File) ->
+    case file:read_file(File) of
+        {ok,Bin} ->
+            Enc = edoc_lib:read_encoding(File, []),
+            case catch unicode:characters_to_list(Bin, Enc) of
+                String when is_list(String) ->
+                    {ok,String};
+                _ ->
+                    {error,invalid_unicode}
+            end;
+        {error,Reason} ->
+            {error,Reason}
+    end.
+
+info_file_data(Ts) ->
+    App = proplists:get_value(application, Ts, []),
+    Ps = proplists:append_values(packages, Ts),
+    Ms = proplists:append_values(modules, Ts),
+    {App,Ps,Ms}.
+
+read_info_file(Dir) ->
+    File = filename:join(Dir, "edoc-info"),
+    case filelib:is_file(File) of
+        true ->
+            case read_file(File) of
+                {ok,Text} ->
+                    parse_info_file(Text, File);
+                {error,R} ->
+                    R1 = file:format_error(R),
+                    warning("could not read '~ts': ~ts.", [File,R1]),
+                    {[],[],[]}
+            end;
+        false ->
+            {[],[],[]}
+    end.
+
+uri_get_info_file(Base) ->
+    URI = join_uri(Base, "edoc-info"),
+    case uri_get(URI) of
+        {ok,Text} ->
+            parse_info_file(Text, URI);
+        {error,Msg} ->
+            warning("could not read '~ts': ~ts.", [URI,Msg]),
+            {[],[],[]}
+    end.
+
+parse_info_file(Text, Name) ->
+    case parse_terms(Text) of
+        {ok,Vs} ->
+            info_file_data(Vs);
+        {error,eof} ->
+            warning("unexpected end of file in '~ts'.", [Name]),
+            {[],[],[]};
+        {error,{_Line,Module,R}} ->
+            warning("~ts: ~ts.", [Module:format_error(R),Name]),
+            {[],[],[]}
+    end.
+
+parse_terms(Text) ->
+    case erl_scan:string(Text) of
+        {ok,Ts,_Line} ->
+            parse_terms_1(Ts, [], []);
+        {error,R,_Line} ->
+            {error,R}
+    end.
+
+parse_terms_1([T = {dot,_L}|Ts], As, Vs) ->
+    case erl_parse:parse_term(lists:reverse([T|As])) of
+        {ok,V} ->
+            parse_terms_1(Ts, [], [V|Vs]);
+        {error,R} ->
+            {error,R}
+    end;
+parse_terms_1([T|Ts], As, Vs) ->
+    parse_terms_1(Ts, [T|As], Vs);
+parse_terms_1([], [], Vs) ->
+    {ok,lists:reverse(Vs)};
+parse_terms_1([], _As, _Vs) ->
+    {error,eof}.
+
+find_sources(Path, Opts) ->
+    find_sources(Path, "", Opts).
+
+find_sources(Path, Pkg, Opts) ->
+    Rec = proplists:get_bool(subpackages, Opts),
+    Ext = proplists:get_value(source_suffix, Opts, ".erl"),
+    find_sources(Path, Pkg, Rec, Ext, Opts).
+
+find_sources(Path, Pkg, Rec, Ext, Opts) ->
+    Skip = proplists:get_value(exclude_packages, Opts, []),
+    lists:flatten(find_sources_1(Path, to_atom(Pkg), Rec, Ext, Skip)).
+
+find_sources_1([P|Ps], Pkg, Rec, Ext, Skip) ->
+    Dir = filename:join(P, atom_to_list(Pkg)),
+    Fs1 = find_sources_1(Ps, Pkg, Rec, Ext, Skip),
+    case filelib:is_dir(Dir) of
+        true ->
+            [find_sources_2(Dir, Pkg, Rec, Ext, Skip)|Fs1];
+        false ->
+            Fs1
+    end;
+find_sources_1([], _Pkg, _Rec, _Ext, _Skip) ->
+    [].
+
+find_sources_2(Dir, Pkg, Rec, Ext, Skip) ->
+    case lists:member(Pkg, Skip) of
+        false ->
+            Es = list_dir(Dir, false),
+            Es1 =
+                [ 
+                 {Pkg,E,Dir} ||
+                     E <- Es,
+                     is_source_file(E, Ext)
+                ],
+            case Rec of
+                true ->
+                    [find_sources_3(Es, Dir, Pkg, Rec, Ext, Skip)|Es1];
+                false ->
+                    Es1
+            end;
+        true ->
+            []
+    end.
+
+find_sources_3(Es, Dir, Pkg, Rec, Ext, Skip) ->
+    [ 
+     find_sources_2(filename:join(Dir, E),
+                    to_atom(join(Pkg, E)),
+                    Rec,
+                    Ext,
+                    Skip) ||
+         E <- Es,
+         is_package_dir(E, Dir)
+    ].
+
+join('', E) ->
+    E;
+join(Pkg, E) ->
+    filename:join(Pkg, E).
+
+is_source_file(Name, Ext) ->
+    filename:extension(Name) == Ext
+    andalso
+    is_name(filename:rootname(Name, Ext)).
+
+is_package_dir(Name, Dir) ->
+    is_name(filename:rootname(filename:basename(Name)))
+    andalso
+    filelib:is_dir(filename:join(Dir, Name)).
+
+find_file([P|Ps], [] = Pkg, Name) ->
+    Pkg = [],
+    File = filename:join(P, Name),
+    case filelib:is_file(File) of
+        true ->
+            File;
+        false ->
+            find_file(Ps, Pkg, Name)
+    end;
+find_file([], [], _Name) ->
+    "".
+
+find_doc_dirs() ->
+    find_doc_dirs(code:get_path()).
+
+find_doc_dirs([P0|Ps]) ->
+    P = filename:absname(P0),
+    P1 =
+        case filename:basename(P) of
+            "ebin" ->
+                filename:dirname(P);
+            _ ->
+                P
+        end,
+    Dir = try_subdir(P1, "doc"),
+    File = filename:join(Dir, "edoc-info"),
+    case filelib:is_file(File) of
+        true ->
+            [Dir|find_doc_dirs(Ps)];
+        false ->
+            find_doc_dirs(Ps)
+    end;
+find_doc_dirs([]) ->
+    [].
+
+get_doc_links(App, Packages, Modules, Opts) ->
+    Path = proplists:append_values(doc_path, Opts) ++ find_doc_dirs(),
+    Ds =
+        [ 
+         {P,uri_get_info_file(P)} ||
+             P <- Path
+        ],
+    Ds1 = [{"",{App,Packages,Modules}}|Ds],
+    D = dict:new(),
+    make_links(Ds1, D, D, D).
+
+make_links([{Dir,{App,Ps,Ms}}|Ds], A, P, M) ->
+    A1 =
+        if
+            App == [] ->
+                A;
+            true ->
+                add_new(App, Dir, A)
+        end,
+    F = fun(K, D) ->
+               add_new(K, Dir, D)
+        end,
+    P1 = lists:foldl(F, P, Ps),
+    M1 = lists:foldl(F, M, Ms),
+    make_links(Ds, A1, P1, M1);
+make_links([], A, P, M) ->
+    F = fun(D) ->
+               fun(K) ->
+                      case dict:find(K, D) of
+                          {ok,V} ->
+                              V;
+                          error ->
+                              ""
+                      end
+               end
+        end,
+    {F(A),F(P),F(M)}.
+
+add_new(K, V, D) ->
+    case dict:is_key(K, D) of
+        true ->
+            D;
+        false ->
+            dict:store(K, V, D)
+    end.
+
+get_doc_env(Opts) ->
+    get_doc_env([], [], [], Opts).
+
+get_doc_env(App, Packages, Modules, Opts) ->
+    Suffix = proplists:get_value(file_suffix, Opts, ".html"),
+    AppDefault =
+        proplists:get_value(app_default,
+                            Opts,
+                            "http://www.erlang.org/edoc/doc"),
+    Includes = proplists:append_values(includes, Opts),
+    {A,P,M} = get_doc_links(App, Packages, Modules, Opts),
+    #env{file_suffix = Suffix,
+         package_summary = "package-summary" ++ Suffix,
+         apps = A,
+         packages = P,
+         modules = M,
+         app_default = AppDefault,
+         includes = Includes}.
+
+run_doclet(Fun, Opts) ->
+    run_plugin(doclet, edoc_doclet, Fun, Opts).
+
+run_layout(Fun, Opts) ->
+    run_plugin(layout, edoc_layout, Fun, Opts).
+
+run_plugin(Name, Default, Fun, Opts) ->
+    run_plugin(Name, Name, Default, Fun, Opts).
+
+run_plugin(Name, Key, Default, Fun, Opts) when is_atom(Name) ->
+    Module = get_plugin(Key, Default, Opts),
+    case catch {ok,Fun(Module)} of
+        {ok,Value} ->
+            Value;
+        R ->
+            report("error in ~ts '~w': ~W.", [Name,Module,R,20]),
+            exit(error)
+    end.
+
+get_plugin(Key, Default, Opts) ->
+    case proplists:get_value(Key, Opts, Default) of
+        M when is_atom(M) ->
+            M;
+        Other ->
+            report("bad value for option '~w': ~P.", [Key,Other,10]),
+            exit(error)
+    end.
+
+-type line() :: erl_scan:line().
+
+-type err() :: eof
+             | {missing, char()}
+             | {line(), atom(), string()}
+             | string().
+
+-spec throw_error(err(), line()) -> no_return().
+
+throw_error({missing,C}, L) ->
+    throw_error({"missing '~c'.",[C]}, L);
+throw_error(eof, L) ->
+    throw({error,L,"unexpected end of expression."});
+throw_error({L,M,D}, _L) ->
+    throw({error,L,{format_error,M,D}});
+throw_error(D, L) ->
+    throw({error,L,D}).
+
+
+

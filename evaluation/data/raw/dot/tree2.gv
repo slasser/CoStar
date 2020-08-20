@@ -1,0 +1,54 @@
+/* 
+  Huffman Tree DOT graph.
+
+  DOT Reference :  http://www.graphviz.org/doc/info/lang.html
+                   http://en.wikipedia.org/wiki/DOT_language
+  Timestamp     :  1381273661 
+  Phrase        :  'GRAPHVIZ IS A COLLECTION OF TOOLS FOR MANIPULATING GRAPH STRUCTURES'
+
+  Generated on http://huffman.ooz.ie/
+*/
+
+digraph G {
+    edge [label=0];
+    graph [ranksep=0];
+    C [shape=record, label="{{C|3}|0000}"];
+    G [shape=record, label="{{G|3}|0001}"];
+    O [shape=record, label="{{O|6}|001}"];
+    U [shape=record, label="{{U|3}|0100}"];
+    E [shape=record, label="{{E|2}|01010}"];
+    H [shape=record, label="{{H|2}|01011}"];
+    L [shape=record, label="{{L|4}|0110}"];
+    S [shape=record, label="{{S|4}|0111}"];
+    SPACE [shape=record, label="{{SPACE|9}|100}"];
+    I [shape=record, label="{{I|5}|1010}"];
+    R [shape=record, label="{{R|5}|1011}"];
+    F [shape=record, label="{{F|2}|11000}"];
+    Z [shape=record, label="{{Z|1}|110010}"];
+    M [shape=record, label="{{M|1}|1100110}"];
+    V [shape=record, label="{{V|1}|1100111}"];
+    A [shape=record, label="{{A|5}|1101}"];
+    FZMVA [label=10];
+    T [shape=record, label="{{T|5}|1110}"];
+    N [shape=record, label="{{N|3}|11110}"];
+    P [shape=record, label="{{P|3}|11111}"];
+    NP [label=6];
+    67 -> 27 -> 12 -> 6 -> C;
+    15 -> 7 -> U;
+    4 -> E;
+    8 -> L;
+    40 -> 19 -> SPACE;
+    10 -> I;
+    21 -> FZMVA -> 5 -> F;
+    3 -> Z;
+    2 -> M;
+    11 -> T;
+    NP -> N;6 -> G [label=1];
+    12 -> O [label=1];
+    7 -> 4 -> H [label=1];
+    27 -> 15 -> 8 -> S [label=1];
+    19 -> 10 -> R [label=1];
+    5 -> 3 -> 2 -> V [label=1];
+    FZMVA -> A [label=1];
+    67 -> 40 -> 21 -> 11 -> NP -> P [label=1];
+}

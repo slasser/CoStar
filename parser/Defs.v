@@ -353,6 +353,26 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Definition forest := list tree.
 
+  (* The next two functions are used to validate 
+     the output of extracted parsers *)
+  Fixpoint countNodes (t : tree) : nat :=
+    match t with
+    | Leaf _ _   => 1
+    | Node _ sts =>
+      let fix countNodes' (f : forest) : nat :=
+          match f with
+          | []      => 0
+          | t :: f' => countNodes t + countNodes' f'
+          end
+      in  countNodes' sts
+    end.
+
+  Fixpoint flatten (t : tree) : list token :=
+    match t with
+    | Leaf t l   => [(t,l)]
+    | Node _ sts => flat_map flatten sts
+    end.
+
   (* Parser stacks *)
   Inductive prefix_frame :=
   | PF : list symbol -> forest -> prefix_frame.

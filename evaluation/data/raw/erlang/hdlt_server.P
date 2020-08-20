@@ -1,0 +1,163 @@
+-file("test/lib/inets/examples/httpd_load_test/hdlt_server.erl", 1).
+
+-module(hdlt_server).
+
+-export([start/1,stop/0,start_inets/0,start_service/1]).
+
+-export([proxy/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/kernel-2.15.3/include/file.hrl",
+      1).
+
+-record(file_info,{size :: undefined | non_neg_integer(),
+                   type :: undefined
+                         | device
+                         | directory
+                         | other
+                         | regular
+                         | symlink,
+                   access :: undefined
+                           | read
+                           | write
+                           | read_write
+                           | none,
+                   atime :: undefined | file:date_time() | integer(),
+                   mtime :: undefined | file:date_time() | integer(),
+                   ctime :: undefined | file:date_time() | integer(),
+                   mode :: undefined | integer(),
+                   links :: undefined | non_neg_integer(),
+                   major_device :: undefined | integer(),
+                   minor_device :: undefined | integer(),
+                   inode :: undefined | integer(),
+                   uid :: undefined | integer(),
+                   gid :: undefined | integer()}).
+
+-record(file_descriptor,{module :: undefined | module(),
+                         data :: undefined | term()}).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_server.erl", 33).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_logger.hrl", 1).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_server.erl", 34).
+
+start(Debug) ->
+    proc_lib:start(hdlt_server, proxy, [Debug]).
+
+stop() ->
+    hdlt_proxy ! stop.
+
+start_inets() ->
+    hdlt_proxy ! start_inets.
+
+start_service(Config) ->
+    hdlt_proxy ! {server_start,Config,self()},
+    receive
+        {server_start_result,Result} ->
+            Result
+    after
+        15000 -> {error,timeout}
+    end.
+
+proxy(Debug) ->
+    process_flag(trap_exit, true),
+    register(hdlt_proxy, self()),
+    hdlt_logger:set_name("HDLT PROXY"),
+    hdlt_logger:set_level(Debug),
+    hdlt_logger:log("starting", []),
+    Ref = await_for_controller(10),
+    CtrlNode = node(Ref),
+    monitor_node(CtrlNode, true),
+    proc_lib:init_ack({ok,self()}),
+    hdlt_logger:debug("started", []),
+    proxy_loop(Ref, CtrlNode).
+
+await_for_controller(N) when N > 0 ->
+    case global:whereis_name(hdlt_ctrl) of
+        Pid when is_pid(Pid) ->
+            monitor(process, Pid);
+        _ ->
+            timer:sleep(1000),
+            await_for_controller(N - 1)
+    end;
+await_for_controller(_) ->
+    proc_lib:init_ack({error,controller_not_found,nodes()}),
+    timer:sleep(500),
+    halt().
+
+proxy_loop(Ref, CtrlNode) ->
+    hdlt_logger:debug("await command", []),
+    receive
+        stop ->
+            hdlt_logger:log("received stop", []),
+            halt();
+        start_inets ->
+            hdlt_logger:log("start the inets service framework", []),
+            case catch inets:start() of
+                ok ->
+                    hdlt_logger:log("framework started", []),
+                    proxy_loop(Ref, CtrlNode);
+                Error ->
+                    hdlt_logger:log("failed starting inets service fram"
+                                    "ework: ~n   Error: ~p",
+                                    [Error]),
+                    halt()
+            end;
+        {server_start,Config,From} ->
+            hdlt_logger:log("start-server", []),
+            maybe_start_crypto_and_ssl(Config),
+            case catch inets:start(httpd, Config) of
+                {ok,_} ->
+                    hdlt_logger:log("server started when~n   which(inet"
+                                    "s): ~p~n   RootDir:      ~p~n   Sy"
+                                    "stem info:  ~p",
+                                    [code:which(inets),
+                                     code:root_dir(),
+                                     get_node_info()]),
+                    From ! {server_start_result,ok},
+                    proxy_loop(Ref, CtrlNode);
+                Error ->
+                    hdlt_logger:info("server start failed~n   Error: ~p",
+                                     [Error]),
+                    From ! {server_start_result,Error},
+                    halt()
+            end;
+        {nodedown,CtrlNode} ->
+            hdlt_logger:log("received nodedown for controller node - te"
+                            "rminate",
+                            []),
+            halt();
+        {'DOWN',Ref,process,_,_} ->
+            hdlt_logger:log("received DOWN message for controller - ter"
+                            "minate",
+                            []),
+            halt()
+    end.
+
+maybe_start_crypto_and_ssl(Config) ->
+    case lists:keysearch(socket_type, 1, Config) of
+        {value,{socket_type,SocketType}}
+            when
+                SocketType =:= ssl
+                orelse
+                SocketType =:= ossl
+                orelse
+                SocketType =:= essl ->
+            hdlt_logger:log("maybe start crypto and ssl", []),
+            catch crypto:start(),
+            ssl:start();
+        _ ->
+            ok
+    end.
+
+get_node_info() ->
+    [{cpu_topology,erlang:system_info(cpu_topology)},
+     {heap_type,erlang:system_info(heap_type)},
+     {nof_schedulers,erlang:system_info(schedulers)},
+     {otp_release,erlang:system_info(otp_release)},
+     {version,erlang:system_info(version)},
+     {system_version,erlang:system_info(system_version)},
+     {system_architecture,erlang:system_info(system_architecture)}].
+
+
+

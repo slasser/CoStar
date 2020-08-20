@@ -1,0 +1,161 @@
+-file("test/lib/cosEvent/test/event_test_PullS_impl.erl", 1).
+
+-module(event_test_PullS_impl).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/orber-3.6.24/include/corba.hrl",
+      1).
+
+-record(orb_ImplDef,{node,module,typename,start = start,args = [[]],pid}).
+
+-record(any,{typecode,value}).
+
+-record(fixed,{digits,scale,value}).
+
+-record('IOP_ServiceContext',{context_id,context_data}).
+
+-record('InvalidName',{'OE_ID' = "IDL:omg.org/CORBA/ORB/InvalidName:1.0"}).
+
+-record('UNKNOWN',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_PARAM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_MEMORY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('IMP_LIMIT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('COMM_FAILURE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('INV_OBJREF',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_PERMISSION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('INTERNAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('MARSHAL',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INITIALIZE',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('NO_IMPLEMENT',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_TYPECODE',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('BAD_OPERATION',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('NO_RESOURCES',{'OE_ID' = "",
+                        minor = 1163001856,
+                        completion_status}).
+
+-record('NO_RESPONSE',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('PERSIST_STORE',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('BAD_INV_ORDER',{'OE_ID' = "",
+                         minor = 1163001856,
+                         completion_status}).
+
+-record('TRANSIENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('FREE_MEM',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_IDENT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INV_FLAG',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('INTF_REPOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('BAD_CONTEXT',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('OBJ_ADAPTER',{'OE_ID' = "",
+                       minor = 1163001856,
+                       completion_status}).
+
+-record('DATA_CONVERSION',{'OE_ID' = "",
+                           minor = 1163001856,
+                           completion_status}).
+
+-record('OBJECT_NOT_EXIST',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('TRANSACTION_REQUIRED',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('TRANSACTION_ROLLEDBACK',{'OE_ID' = "",
+                                  minor = 1163001856,
+                                  completion_status}).
+
+-record('INVALID_TRANSACTION',{'OE_ID' = "",
+                               minor = 1163001856,
+                               completion_status}).
+
+-record('INV_POLICY',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('CODESET_INCOMPATIBLE',{'OE_ID' = "",
+                                minor = 1163001856,
+                                completion_status}).
+
+-record('REBIND',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TIMEOUT',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-record('TRANSACTION_UNAVAILABLE',{'OE_ID' = "",
+                                   minor = 1163001856,
+                                   completion_status}).
+
+-record('TRANSACTION_MODE',{'OE_ID' = "",
+                            minor = 1163001856,
+                            completion_status}).
+
+-record('BAD_QOS',{'OE_ID' = "",minor = 1163001856,completion_status}).
+
+-file("test/lib/cosEvent/test/event_test_PullS_impl.erl", 27).
+
+-export([init/1,
+         terminate/2,
+         pull/1,
+         try_pull/1,
+         disconnect_pull_supplier/1,
+         add_event/2]).
+
+init(_) ->
+    {ok,[]}.
+
+terminate(_From, _Reason) ->
+    ok.
+
+pull([]) ->
+    corba:raise(#'INTERNAL'{completion_status = 'COMPLETED_NO'});
+pull([Event|Events]) ->
+    {reply,Event,Events}.
+
+try_pull([]) ->
+    {reply,{#any{typecode = tk_null,value = null},false},[]};
+try_pull([Event|Events]) ->
+    {reply,{Event,true},Events}.
+
+disconnect_pull_supplier(Events) ->
+    io:format("event_test_PullS terminates ~p~n", [Events]),
+    {stop,normal,ok,Events}.
+
+add_event(Events, Event) ->
+    {reply,ok,Events ++ [Event]}.
+
+
+

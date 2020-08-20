@@ -1,0 +1,361 @@
+-file("test/lib/debugger/test/fun_SUITE.erl", 1).
+
+-module(fun_SUITE).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_group/2,
+         end_per_group/2,
+         init_per_testcase/2,
+         end_per_testcase/2,
+         init_per_suite/1,
+         end_per_suite/1,
+         good_call/1,
+         bad_apply/1,
+         bad_fun_call/1,
+         badarity/1,
+         ext_badarity/1,
+         otp_6061/1,
+         external/1]).
+
+-export([nothing/0,call_me/1]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/debugger/test/fun_SUITE.erl", 33).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    cases().
+
+groups() ->
+    [].
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+cases() ->
+    [good_call,
+     bad_apply,
+     bad_fun_call,
+     badarity,
+     ext_badarity,
+     otp_6061,
+     external].
+
+init_per_testcase(_Case, Config) ->
+    test_lib:interpret(fun_SUITE),
+    Dog = test_server:timetrap(test_server:minutes(1)),
+    [{watchdog,Dog}|Config].
+
+end_per_testcase(_Case, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog),
+    ok.
+
+init_per_suite(Config) when is_list(Config) ->
+    test_lib:interpret(fun_SUITE),
+    true = lists:member(fun_SUITE, int:interpreted()),
+    Config.
+
+end_per_suite(Config) when is_list(Config) ->
+    ok.
+
+good_call(Config) when is_list(Config) ->
+    F = fun() ->
+               ok
+        end,
+    ok = F(),
+    FF = fun fun_SUITE:nothing/0,
+    ok = FF(),
+    ok.
+
+bad_apply(doc) ->
+    "Test that the correct EXIT code is returned for all types of bad f"
+    "uns.";
+bad_apply(suite) ->
+    [];
+bad_apply(Config) when is_list(Config) ->
+    bad_apply_fc(42, [0]),
+    bad_apply_fc(xx, [1]),
+    bad_apply_fc({}, [2]),
+    bad_apply_fc({1}, [3]),
+    bad_apply_fc({1,2,3}, [4]),
+    bad_apply_fc({1,2,3}, [5]),
+    bad_apply_fc({1,2,3,4}, [6]),
+    bad_apply_fc({1,2,3,4,5,6}, [7]),
+    bad_apply_fc({1,2,3,4,5}, [8]),
+    bad_apply_badarg({1,2}, [9]),
+    ok.
+
+bad_apply_fc(Fun, Args) ->
+    Res = (catch apply(Fun, Args)),
+    garbage_collect(),
+    erlang:yield(),
+    case Res of
+        {'EXIT',{{badfun,Fun},_Where}} ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res]);
+        Other ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res]),
+            test_server:fail({bad_result,Other})
+    end.
+
+bad_apply_badarg(Fun, Args) ->
+    Res = (catch apply(Fun, Args)),
+    garbage_collect(),
+    erlang:yield(),
+    case Res of
+        {'EXIT',{{badfun,Fun},_Where}} ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res]);
+        Other ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res]),
+            test_server:fail({bad_result,Other})
+    end.
+
+bad_fun_call(doc) ->
+    "Try directly calling bad funs.";
+bad_fun_call(suite) ->
+    [];
+bad_fun_call(Config) when is_list(Config) ->
+    bad_call_fc(42),
+    bad_call_fc(xx),
+    bad_call_fc({}),
+    bad_call_fc({1}),
+    bad_call_fc({1,2,3}),
+    bad_call_fc({1,2,3}),
+    bad_call_fc({1,2,3,4}),
+    bad_call_fc({1,2,3,4,5,6}),
+    bad_call_fc({1,2,3,4,5}),
+    bad_call_fc({1,2}),
+    ok.
+
+bad_call_fc(Fun) ->
+    Args = [some,stupid,args],
+    Res = (catch Fun(Args)),
+    case Res of
+        {'EXIT',{{badfun,Fun},_Where}} ->
+            ok = io:format("~p(~p) -> ~p\n", [Fun,Args,Res]);
+        Other ->
+            ok = io:format("~p(~p) -> ~p\n", [Fun,Args,Res]),
+            test_server:fail({bad_result,Other})
+    end.
+
+badarity(Config) when is_list(Config) ->
+    Fun =
+        fun() ->
+               ok
+        end,
+    Stupid = {stupid,arguments},
+    Args = [some,{stupid,arguments},here],
+    Res = (catch Fun(some, Stupid, here)),
+    garbage_collect(),
+    erlang:yield(),
+    case Res of
+        {'EXIT',{{badarity,{Fun,Args}},[_|_]}} ->
+            ok = io:format("~p(~p) -> ~p\n", [Fun,Args,Res]);
+        _ ->
+            ok = io:format("~p(~p) -> ~p\n", [Fun,Args,Res]),
+            test_server:fail({bad_result,Res})
+    end,
+    Res2 = (catch apply(Fun, Args)),
+    garbage_collect(),
+    erlang:yield(),
+    case Res2 of
+        {'EXIT',{{badarity,{Fun,Args}},[_|_]}} ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res2]);
+        _ ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res2]),
+            test_server:fail({bad_result,Res2})
+    end,
+    ok.
+
+ext_badarity(Config) when is_list(Config) ->
+    Fun = fun fun_SUITE:nothing/0,
+    Stupid = {stupid,arguments},
+    Args = [some,{stupid,arguments},here],
+    Res = (catch Fun(some, Stupid, here)),
+    garbage_collect(),
+    erlang:yield(),
+    case Res of
+        {'EXIT',{{badarity,{Fun,Args}},_}} ->
+            ok = io:format("~p(~p) -> ~p\n", [Fun,Args,Res]);
+        _ ->
+            ok = io:format("~p(~p) -> ~p\n", [Fun,Args,Res]),
+            test_server:fail({bad_result,Res})
+    end,
+    Res2 = (catch apply(Fun, Args)),
+    garbage_collect(),
+    erlang:yield(),
+    case Res2 of
+        {'EXIT',{{badarity,{Fun,Args}},_}} ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res2]);
+        _ ->
+            ok = io:format("apply(~p, ~p) -> ~p\n", [Fun,Args,Res2]),
+            test_server:fail({bad_result,Res2})
+    end,
+    ok.
+
+nothing() ->
+    ok.
+
+otp_6061(suite) ->
+    [];
+otp_6061(doc) ->
+    ["Test handling of fun expression referring to uninterpreted code"];
+otp_6061(Config) when is_list(Config) ->
+    OrigFlag = process_flag(trap_exit, true),
+    Self = self(),
+    Pid =
+        spawn_link(fun() ->
+                          test_otp_6061(Self)
+                   end),
+    receive
+        working ->
+            ok;
+        not_working ->
+            test_server:fail(not_working);
+        {'EXIT',Pid,Reason} ->
+            test_server:fail({crash,Reason})
+    after
+        5000 -> test_server:fail(timeout)
+    end,
+    process_flag(trap_exit, OrigFlag),
+    ok.
+
+test_otp_6061(Starter) ->
+    Passes = [2],
+    PassesF =
+        [fun() ->
+                Starter ! not_working
+         end,
+         fun() ->
+                Starter ! working
+         end,
+         fun() ->
+                Starter ! not_working
+         end],
+    lists:foreach(fun(P) ->
+                         (lists:nth(P, PassesF))()
+                  end,
+                  Passes).
+
+external(Config) when is_list(Config) ->
+    Mod = id(fun_SUITE),
+    Func = id(call_me),
+    Arity = id(1),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun fun_SUITE:call_me/1),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun fun_SUITE:call_me/Arity),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun fun_SUITE:Func/1),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun fun_SUITE:Func/Arity),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun Mod:call_me/1),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun Mod:call_me/Arity),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun Mod:Func/1),
+    fun(Fun) ->
+           {ok,{a,b}} = Fun({a,b})
+    end(fun Mod:Func/Arity),
+    ListsMod = id(lists),
+    ListsMap = id(map),
+    ListsArity = id(2),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun lists:map/2),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun lists:map/ListsArity),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun lists:ListsMap/2),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun lists:ListsMap/ListsArity),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun ListsMod:map/2),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun ListsMod:map/ListsArity),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun ListsMod:ListsMap/2),
+    fun(Map) ->
+           Id =
+               fun(I) ->
+                      I
+               end,
+           List = [x,y],
+           List = Map(Id, List),
+           {type,external} = erlang:fun_info(Map, type)
+    end(fun ListsMod:ListsMap/ListsArity),
+    ok.
+
+call_me(I) ->
+    {ok,I}.
+
+id(I) ->
+    I.
+
+
+

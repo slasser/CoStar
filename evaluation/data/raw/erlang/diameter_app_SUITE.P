@@ -1,0 +1,216 @@
+-file("test/lib/diameter/test/diameter_app_SUITE.erl", 1).
+
+-module(diameter_app_SUITE).
+
+-export([suite/0,all/0,init_per_suite/1,end_per_suite/1]).
+
+-export([keys/1,vsn/1,modules/1,exports/1,release/1,xref/1,relup/1]).
+
+-file("test/lib/diameter/test/diameter_ct.hrl", 1).
+
+-file("test/lib/diameter/test/diameter_app_SUITE.erl", 41).
+
+suite() ->
+    [{timetrap,{seconds,60}}].
+
+all() ->
+    [keys,vsn,modules,exports,release,xref,relup].
+
+init_per_suite(Config) ->
+    [{application,diameter,App}] = diameter_util:consult(diameter, app),
+    [{app,App}|Config].
+
+end_per_suite(_Config) ->
+    ok.
+
+keys(Config) ->
+    App = fetch(app, Config),
+    [] =
+        lists:filter(fun(K) ->
+                            not lists:keymember(K, 1, App)
+                     end,
+                     [vsn,description,modules,registered,applications]).
+
+vsn(Config) ->
+    true = is_vsn(fetch(vsn, fetch(app, Config))).
+
+modules(Config) ->
+    Mods = fetch(modules, fetch(app, Config)),
+    Installed = code_mods(),
+    Help =
+        lists:sort([diameter_dbg,diameter_info]
+                   ++
+                   [diameter_codegen,
+                    diameter_dict_scanner,
+                    diameter_dict_parser,
+                    diameter_dict_util,
+                    diameter_exprecs,
+                    diameter_make]),
+    {[],Help} = {Mods -- Installed,lists:sort(Installed -- Mods)}.
+
+code_mods() ->
+    Dir = code:lib_dir(diameter, ebin),
+    {ok,Files} = file:list_dir(Dir),
+    [ 
+     list_to_atom(lists:reverse(R)) ||
+         N <- Files,
+         "maeb." ++ R <- [lists:reverse(N)]
+    ].
+
+exports(Config) ->
+    Mods = fetch(modules, fetch(app, Config)),
+    [] =
+        [ 
+         M ||
+             M <- Mods,
+             exports_all(M)
+        ].
+
+exports_all(Mod) ->
+    Opts = fetch(options, Mod:module_info(compile)),
+    is_list(Opts)
+    andalso
+    lists:member(export_all, Opts).
+
+release(Config) ->
+    App = fetch(app, Config),
+    Rel =
+        {release,
+         {"diameter test release",fetch(vsn, App)},
+         {erts,erlang:system_info(version)},
+         [ 
+          {A,appvsn(A)} ||
+              A <- [sasl|fetch(applications, App)]
+         ]},
+    Dir = fetch(priv_dir, Config),
+    ok = write_file(filename:join([Dir,"diameter_test.rel"]), Rel),
+    {ok,_,[]} =
+        systools:make_script("diameter_test",
+                             [{path,[Dir]},{outdir,Dir},silent]).
+
+appvsn(Name) ->
+    [{application,Name,App}] = diameter_util:consult(Name, app),
+    fetch(vsn, App).
+
+xref(Config) ->
+    App = fetch(app, Config),
+    Mods = fetch(modules, App),
+    {ok,XRef} = xref:start(make_name(xref_test_name)),
+    ok = xref:set_default(XRef, [{verbose,false},{warnings,false}]),
+    ok =
+        lists:foreach(fun(A) ->
+                             add_application(XRef, A)
+                      end,
+                      [diameter,erts|fetch(applications, App)]),
+    {ok,Undefs} = xref:analyze(XRef, undefined_function_calls),
+    {ok,Called} =
+        xref:analyze(XRef,
+                     {module_call,
+                      [diameter_codegen,
+                       diameter_dict_scanner,
+                       diameter_dict_parser,
+                       diameter_dict_util,
+                       diameter_exprecs,
+                       diameter_make]}),
+    xref:stop(XRef),
+    [] =
+        lists:filter(fun({{F,_,_},{T,_,_}}) ->
+                            lists:member(F, Mods)
+                            andalso
+                            {F,T} /= {diameter_tcp,ssl}
+                     end,
+                     Undefs),
+    [] = lists:filter(fun is_bad_dependency/1, Called).
+
+is_bad_dependency(Mod) ->
+    lists:prefix("diameter", atom_to_list(Mod))
+    andalso
+    not lists:member(Mod,
+                     [diameter_codegen,
+                      diameter_dict_scanner,
+                      diameter_dict_parser,
+                      diameter_dict_util,
+                      diameter_exprecs,
+                      diameter_make]).
+
+add_application(XRef, App) ->
+    add_application(XRef, App, code:lib_dir(App)).
+
+add_application(XRef, erts, {error,_}) ->
+    Dir = filename:join([code:root_dir(),"erts","preloaded","ebin"]),
+    {ok,_} = xref:add_directory(XRef, Dir, []);
+add_application(XRef, App, Dir) when is_list(Dir) ->
+    {ok,App} = xref:add_application(XRef, Dir, []).
+
+make_name(Suf) ->
+    list_to_atom(atom_to_list(diameter) ++ "_" ++ atom_to_list(Suf)).
+
+relup(Config) ->
+    [{Vsn,Up,Down}] = diameter_util:consult(diameter, appup),
+    true = is_vsn(Vsn),
+    App = fetch(app, Config),
+    Rel =
+        [{erts,erlang:system_info(version)}|
+         [ 
+          {A,appvsn(A)} ||
+              A <- [sasl|fetch(applications, App)]
+         ]],
+    Dir = fetch(priv_dir, Config),
+    Name = write_rel(Dir, Rel, Vsn),
+    UpFrom = acc_rel(Dir, Rel, Up),
+    DownTo = acc_rel(Dir, Rel, Down),
+    {[Name],[Name],[],[]} =
+        {[Name] -- UpFrom,
+         [Name] -- DownTo,
+         UpFrom -- DownTo,
+         DownTo -- UpFrom},
+    [[],[]] =
+        [ 
+         S -- sets:to_list(sets:from_list(S)) ||
+             S <- [UpFrom,DownTo]
+        ],
+    {ok,_,_,[]} =
+        systools:make_relup(Name,
+                            UpFrom,
+                            DownTo,
+                            [{path,[Dir]},{outdir,Dir},silent]).
+
+acc_rel(Dir, Rel, List) ->
+    lists:foldl(fun(T, A) ->
+                       acc_rel(Dir, Rel, T, A)
+                end,
+                [],
+                List).
+
+acc_rel(Dir, Rel, {Vsn,_}, Acc) ->
+    [write_rel(Dir, Rel, Vsn)|Acc].
+
+write_rel(Dir, [Erts|Apps], Vsn) ->
+    true = is_vsn(Vsn),
+    Name = "diameter_test_" ++ Vsn,
+    ok =
+        write_file(filename:join([Dir,Name ++ ".rel"]),
+                   {release,
+                    {"diameter " ++ Vsn ++ " test release",Vsn},
+                    Erts,
+                    Apps}),
+    Name.
+
+fetch(Key, List) ->
+    {Key,{Key,Val}} = {Key,lists:keyfind(Key, 1, List)},
+    Val.
+
+write_file(Path, T) ->
+    file:write_file(Path, io_lib:format("~p.", [T])).
+
+is_vsn(V) ->
+    is_list(V)
+    andalso
+    length(V) == string:span(V, "0123456789.")
+    andalso
+    V == string:join(string:tokens(V, [$.]), ".")
+    orelse
+    {error,V}.
+
+
+

@@ -1,0 +1,71 @@
+digraph RiSE
+{
+  Agl [fillcolor=gray, fontcolor=white, color=gray]
+  Bek [fillcolor=gray, fontcolor=white, color=gray]
+  Boogie [fillcolor=gray, fontcolor=white, color=gray]
+  Chalice [fillcolor=gray, fontcolor=white, color=gray]
+  CodeContractsVerifier [fillcolor=gray, fontcolor=white, color=gray]
+  ConcurrentRevisions [fillcolor=gray, fontcolor=white, color=gray]
+  Dafny [fillcolor=gray, fontcolor=white, color=gray]
+  Dkal [fillcolor=gray, fontcolor=white, color=gray]
+  F [fillcolor=gray, fontcolor=white, color=gray]
+  Formula [fillcolor=gray, fontcolor=white, color=gray]
+  HeapDbg [fillcolor=gray, fontcolor=white, color=gray]
+  Koka [fillcolor=gray, fontcolor=white, color=gray]
+  Pex [fillcolor=gray, fontcolor=white, color=gray]
+  Pex4fun [fillcolor=gray, fontcolor=white, color=gray]
+  Poirot [fillcolor=gray, fontcolor=white, color=gray]
+  Rex [fillcolor=gray, fontcolor=white, color=gray]
+  Seal [fillcolor=gray, fontcolor=white, color=gray]
+  SLayer [fillcolor=gray, fontcolor=white, color=gray]
+  SpecSharp [fillcolor=gray, fontcolor=white, color=gray]
+  TouchDevelop [fillcolor=gray, fontcolor=white, color=gray]
+  Vcc [fillcolor=gray, fontcolor=white, color=gray]
+  Z3 [fillcolor=gray, fontcolor=white, color=gray]
+  Z3Py [fillcolor=gray, fontcolor=white, color=gray]
+  Z3-4Biology [fillcolor=gray, fontcolor=white, color=gray]
+
+  DGML -> Agl;
+  Rex -> Agl;
+  Rex -> Automata;
+  Bek -> Automata;
+  Bek -> DGML;
+  Automata -> Z3;
+  Boogie -> Z3;
+  Boogie -> CCI;
+  Dafny -> Boogie;
+  Chalice -> Boogie;
+  Vcc -> Boogie;
+  Vcc -> CCI;
+  CodeContracts -> CCI;
+  CodeContractsVerifier -> CCI;
+  CodeContractsVerifier -> CodeContracts;
+  HeapDbg -> CCI;
+  HeapDbg -> Agl;
+  Pex -> Z3;
+  Pex -> ER;
+  Pex -> Moles;
+  Pex -> Rex;
+  Moles -> ER;
+  CHESS -> ER;
+  CHESS -> CAP;
+  Cuzz -> CAP;
+  ConcurrentRevisions -> CCI;
+  F -> Z3;
+  SymDiff -> Boogie
+  SymDiff -> Havoc
+  SLAM -> Z3;
+  Poirot -> Boogie;
+  Poirot -> Havoc;
+  Havoc -> Boogie
+  LineUp -> CHESS
+  RaceKit -> ER
+  SpecSharp -> Boogie
+  SpecSharp -> CCI
+  Formula -> Z3
+  Formula -> Agl
+  SLayer -> Z3;
+  Z3Py -> Z3;
+  Z3-4Biology -> Z3;
+  Pex4fun -> Pex;
+}

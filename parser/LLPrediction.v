@@ -36,6 +36,12 @@ Module LLPredictionFn (Import D : Defs.T).
   | SpInvalidState  : prediction_error
   | SpLeftRecursion : nonterminal -> prediction_error.
 
+  Definition showPredictionError (e : prediction_error) : string :=
+    match e with
+    | SpInvalidState    => "SpInvalidState"
+    | SpLeftRecursion x => "SpLeftRecursion " ++ showNT x
+    end.
+
   (* "move" operation *)
 
   Inductive subparser_move_result :=

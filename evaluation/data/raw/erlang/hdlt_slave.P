@@ -1,0 +1,249 @@
+-file("test/lib/inets/examples/httpd_load_test/hdlt_slave.erl", 1).
+
+-module(hdlt_slave).
+
+-export([start_link/4,start_link/5,start_link/6,stop/1]).
+
+-export([wait_for_slave/9,slave_start/1,wait_for_master_to_die/3]).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_logger.hrl", 1).
+
+-file("test/lib/inets/examples/httpd_load_test/hdlt_slave.erl", 28).
+
+start_link(Host, Name, ErlPath, Paths) ->
+    start_link(Host, Name, ErlPath, Paths, [], silence).
+
+start_link(Host, Name, ErlPath, Paths, DebugLevel)
+    when is_atom(DebugLevel) ->
+    start_link(Host, Name, ErlPath, Paths, [], DebugLevel);
+start_link(Host, Name, ErlPath, Paths, Args) when is_list(Args) ->
+    start_link(Host, Name, ErlPath, Paths, Args, silence).
+
+start_link(Host, Name, ErlPath, Paths, Args, DebugLevel) ->
+    Node = list_to_atom(lists:concat([Name,"@",Host])),
+    case net_adm:ping(Node) of
+        pang ->
+            start_it(Host, Name, Node, ErlPath, Paths, Args, DebugLevel);
+        pong ->
+            {error,{already_running,Node}}
+    end.
+
+stop(Node) ->
+    rpc:call(Node, erlang, halt, []),
+    ok.
+
+start_it(Host, Name, Node, ErlPath, Paths, Args, DebugLevel) ->
+    Prog = filename:join([ErlPath,"erl"]),
+    spawn(hdlt_slave,
+          wait_for_slave,
+          [self(),Host,Name,Node,Paths,Args,self(),Prog,DebugLevel]),
+    receive
+        {result,Result} ->
+            Result
+    end.
+
+wait_for_slave(Parent,
+               Host,
+               Name,
+               Node,
+               Paths,
+               Args,
+               LinkTo,
+               Prog,
+               DebugLevel) ->
+    hdlt_logger:set_name("HDLT SLAVE STARTER"),
+    hdlt_logger:set_level(DebugLevel),
+    hdlt_logger:debug("begin", []),
+    Waiter = register_unique_name(0),
+    case mk_cmd(Host, Name, Paths, Args, Waiter, Prog) of
+        {ok,Cmd} ->
+            hdlt_logger:debug("command generated: ~n~s", [Cmd]),
+            case catch ssh_slave_start(Host, Cmd) of
+                {ok,Conn,_Chan} ->
+                    hdlt_logger:debug("ssh channel created", []),
+                    receive
+                        {SlavePid,slave_started} ->
+                            hdlt_logger:debug("slave started: ~p",
+                                              [SlavePid]),
+                            unregister(Waiter),
+                            slave_started(Parent,
+                                          LinkTo,
+                                          SlavePid,
+                                          Conn,
+                                          DebugLevel)
+                    after
+                        32000 ->
+                            hdlt_logger:info("slave node failed to repo"
+                                             "rt in on time",
+                                             []),
+                            case net_adm:ping(Node) of
+                                pong ->
+                                    spawn(Node, erlang, halt, []),
+                                    ok;
+                                _ ->
+                                    ok
+                            end,
+                            Parent ! {result,{error,timeout}}
+                    end;
+                {error,Reason} = Error ->
+                    hdlt_logger:info("FAILED starting node: ~n   ~p~n  "
+                                     " ~p",
+                                     [Reason,Cmd]),
+                    Parent ! {result,Error}
+            end;
+        Other ->
+            hdlt_logger:info("FAILED creating node command string: ~n  "
+                             " ~p",
+                             [Other]),
+            Parent ! {result,Other}
+    end.
+
+ssh_slave_start(Host, ErlCmd) ->
+    hdlt_logger:debug("ssh_slave_start -> try connect to ~p", [Host]),
+    Connection =
+        case
+            catch ssh:connect(Host, 22, [{silently_accept_hosts,true}])
+        of
+            {ok,Conn} ->
+                hdlt_logger:debug("ssh_exec_erl -> connected: ~p",
+                                  [Conn]),
+                Conn;
+            Error1 ->
+                hdlt_logger:log("failed connecting to ~p: ~p",
+                                [Host,Error1]),
+                throw({error,{ssh_connect_failed,Error1}})
+        end,
+    hdlt_logger:debug("ssh_exec_erl -> connected - now create channel",
+                      []),
+    Channel =
+        case catch ssh_connection:session_channel(Connection, 60000) of
+            {ok,Chan} ->
+                hdlt_logger:debug("ssh_exec_erl -> channel ~p created",
+                                  [Chan]),
+                Chan;
+            Error2 ->
+                hdlt_logger:log("failed creating channel: ~p", [Error2]),
+                throw({error,{ssh_channel_create_failed,Error2}})
+        end,
+    hdlt_logger:debug("ssh_exec_erl -> channel created - now exec comma"
+                      "nd: ~n   ~p",
+                      [ErlCmd]),
+    case
+        catch ssh_connection:exec(Connection, Channel, ErlCmd, infinity)
+    of
+        success ->
+            hdlt_logger:debug("ssh_exec_erl -> command exec'ed - clean "
+                              "ssh msg",
+                              []),
+            clean_ssh_msg(),
+            hdlt_logger:debug("ssh_exec_erl -> done", []),
+            {ok,Connection,Channel};
+        Error3 ->
+            hdlt_logger:log("failed exec comand: ~p", [Error3]),
+            throw({error,{ssh_exec_failed,Error3}})
+    end.
+
+clean_ssh_msg() ->
+    receive
+        {ssh_cm,_X,_Y} ->
+            clean_ssh_msg()
+    after
+        1000 -> ok
+    end.
+
+slave_started(ReplyTo, Master, Slave, Conn, Level)
+    when
+        is_pid(Master)
+        andalso
+        is_pid(Slave) ->
+    process_flag(trap_exit, true),
+    SName =
+        lists:flatten(io_lib:format("HDLT SLAVE CTRL[~p,~p]",
+                                    [self(),node(Slave)])),
+    hdlt_logger:set_name(SName),
+    hdlt_logger:set_level(Level),
+    hdlt_logger:log("initiating", []),
+    MasterRef = monitor(process, Master),
+    SlaveRef = monitor(process, Slave),
+    ReplyTo ! {result,{ok,node(Slave)}},
+    slave_running(Master, MasterRef, Slave, SlaveRef, Conn).
+
+slave_running(Master, MasterRef, Slave, SlaveRef, Conn) ->
+    hdlt_logger:debug("await message", []),
+    receive
+        {'DOWN',MasterRef,process,_Object,_Info} ->
+            hdlt_logger:log("received DOWN from master", []),
+            demonitor(SlaveRef, [flush]),
+            Slave ! {nodedown,node()},
+            ssh:close(Conn);
+        {'DOWN',SlaveRef,process,Object,_Info} ->
+            hdlt_logger:log("received DOWN from slave (~p)", [Object]),
+            demonitor(MasterRef, [flush]),
+            ssh:close(Conn);
+        Other ->
+            hdlt_logger:debug("received unknown: ~n~p", [Other]),
+            slave_running(Master, MasterRef, Slave, SlaveRef, Conn)
+    end.
+
+register_unique_name(Number) ->
+    Name = list_to_atom(lists:concat([hdlt_slave,"_waiter_",Number])),
+    case catch register(Name, self()) of
+        true ->
+            Name;
+        {'EXIT',{badarg,_}} ->
+            register_unique_name(Number + 1)
+    end.
+
+mk_cmd(Host, Name, Paths, Args, Waiter, Prog) ->
+    PaPaths =
+        [ 
+         [" -pa ",Path] ||
+             Path <- Paths
+        ],
+    {ok,
+     lists:flatten(lists:concat([Prog,
+                                 " -detached -nopinput ",
+                                 Args,
+                                 " ",
+                                 " -sname ",
+                                 Name,
+                                 "@",
+                                 Host,
+                                 " -s ",
+                                 hdlt_slave,
+                                 " slave_start ",
+                                 node(),
+                                 " ",
+                                 Waiter,
+                                 " ",
+                                 PaPaths]))}.
+
+slave_start([Master,Waiter]) ->
+    spawn(hdlt_slave, wait_for_master_to_die, [Master,Waiter,silence]);
+slave_start([Master,Waiter,Level]) ->
+    spawn(hdlt_slave, wait_for_master_to_die, [Master,Waiter,Level]).
+
+wait_for_master_to_die(Master, Waiter, Level) ->
+    process_flag(trap_exit, true),
+    SName =
+        lists:flatten(io_lib:format("HDLT-SLAVE MASTER MONITOR[~p,~p,~p"
+                                    "]",
+                                    [self(),node(),Master])),
+    hdlt_logger:set_name(SName),
+    hdlt_logger:set_level(Level),
+    monitor_node(Master, true),
+    {Waiter,Master} ! {self(),slave_started},
+    wloop(Master).
+
+wloop(Master) ->
+    hdlt_logger:debug("await message", []),
+    receive
+        {nodedown,Master} ->
+            hdlt_logger:info("received master nodedown", []),
+            halt();
+        _Other ->
+            wloop(Master)
+    end.
+
+
+

@@ -1,0 +1,282 @@
+-file("test/lib/diameter/src/base/diameter_stats.erl", 1).
+
+-module(diameter_stats).
+
+-behaviour(gen_server).
+
+-export([reg/2,reg/1,incr/3,incr/1,read/1,sum/1,flush/1]).
+
+-export([start_link/0]).
+
+-export([init/1,
+         terminate/2,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         code_change/3]).
+
+-export([state/0,uptime/0]).
+
+-file("test/lib/diameter/src/base/diameter_internal.hrl", 1).
+
+-record(diameter_peer,{host_id,
+                       statusT,
+                       is_dynamic,
+                       expiration,
+                       tls_enabled}).
+
+-record(diameter_realm,{name,
+                        app_id,
+                        local_action,
+                        server_id,
+                        is_dynamic,
+                        expiration}).
+
+-file("test/lib/diameter/src/base/diameter_stats.erl", 50).
+
+-record(state,{id = now()}).
+
+-type counter() :: any().
+
+-type ref() :: any().
+
+-spec reg(pid(), ref()) -> boolean().
+
+reg(Pid, Ref) when is_pid(Pid) ->
+    try
+        call({reg,Pid,Ref})
+    catch
+        exit:_ ->
+            false
+    end.
+
+-spec reg(ref()) -> boolean().
+
+reg(Ref) ->
+    reg(self(), Ref).
+
+-spec incr(counter(), ref(), integer()) -> integer() | false.
+
+incr(Ctr, Ref, N) when is_integer(N) ->
+    update_counter({Ctr,Ref}, N).
+
+incr(Ctr) ->
+    incr(Ctr, self(), 1).
+
+-spec read([ref()]) -> [{ref(), [{counter(), integer()}]}].
+
+read(Refs) when is_list(Refs) ->
+    try call({read,Refs,false}) of
+        L ->
+            to_refdict(L)
+    catch
+        exit:_ ->
+            []
+    end.
+
+read(Refs, B) ->
+    MatchSpec =
+        [{{{'_','$1'},'_'},
+          [list_to_tuple(['orelse',
+                          false|
+                          [ 
+                           {'=:=','$1',{const,R}} ||
+                               R <- Refs
+                          ]])],
+          ['$_']}],
+    L = ets:select(diameter_stats, MatchSpec),
+    B
+    andalso
+    delete(L),
+    L.
+
+to_refdict(L) ->
+    lists:foldl(fun({{C,R},N}, D) ->
+                       orddict:append(R, {C,N}, D)
+                end,
+                orddict:new(),
+                L).
+
+-spec sum([ref()]) -> [{ref(), [{counter(), integer()}]}].
+
+sum(Refs) when is_list(Refs) ->
+    try call({read,Refs}) of
+        L ->
+            [ 
+             {R,to_ctrdict(Cs)} ||
+                 {R,[_|_] = Cs} <- L
+            ]
+    catch
+        exit:_ ->
+            []
+    end.
+
+read_refs(Refs) ->
+    [ 
+     {R,readr(R)} ||
+         R <- Refs
+    ].
+
+readr(Ref) ->
+    MatchSpec =
+        [{{{'_','$1'},'_'},
+          [list_to_tuple(['orelse',
+                          false|
+                          [ 
+                           {'=:=','$1',{const,R}} ||
+                               R <- [Ref|pids(Ref)]
+                          ]])],
+          ['$_']}],
+    ets:select(diameter_stats, MatchSpec).
+
+pids(Ref) ->
+    MatchSpec = [{{'$1','$2'},[{'=:=','$2',{const,Ref}}],['$1']}],
+    ets:select(diameter_stats, MatchSpec).
+
+to_ctrdict(L) ->
+    lists:foldl(fun({{C,_},N}, D) ->
+                       orddict:update_counter(C, N, D)
+                end,
+                orddict:new(),
+                L).
+
+-spec flush([ref()]) -> [{ref(), {counter(), integer()}}].
+
+flush(Refs) ->
+    try call({read,Refs,true}) of
+        L ->
+            to_refdict(L)
+    catch
+        exit:_ ->
+            []
+    end.
+
+start_link() ->
+    ServerName = {local,diameter_stats},
+    Module = diameter_stats,
+    Args = [],
+    Options = [{spawn_opt,diameter_lib:spawn_opts(server, [])}],
+    gen_server:start_link(ServerName, Module, Args, Options).
+
+state() ->
+    call(state).
+
+uptime() ->
+    call(uptime).
+
+init([]) ->
+    ets:new(diameter_stats, [named_table,ordered_set,public]),
+    {ok,#state{}}.
+
+handle_call(state, _, State) ->
+    {reply,State,State};
+handle_call(uptime, _, #state{id = Time} = State) ->
+    {reply,diameter_lib:now_diff(Time),State};
+handle_call({incr,T}, _, State) ->
+    {reply,update_counter(T),State};
+handle_call({reg,Pid,Ref}, _From, State) ->
+    B = ets:insert_new(diameter_stats, {Pid,Ref}),
+    B
+    andalso
+    monitor(process, Pid),
+    {reply,B,State};
+handle_call({read,Refs,Del}, _From, State) ->
+    {reply,read(Refs, Del),State};
+handle_call({read,Refs}, _, State) ->
+    {reply,read_refs(Refs),State};
+handle_call({flush,Refs}, _From, State) ->
+    {reply,to_refdict(read(Refs, true)),State};
+handle_call(Req, From, State) ->
+    diameter_lib:warning_report(unexpected,
+                                {diameter_stats,
+                                 element(2,
+                                         element(2,
+                                                 process_info(self(),
+                                                              current_function))),
+                                 [Req,From]}),
+    {reply,nok,State}.
+
+handle_cast(Msg, State) ->
+    diameter_lib:warning_report(unexpected,
+                                {diameter_stats,
+                                 element(2,
+                                         element(2,
+                                                 process_info(self(),
+                                                              current_function))),
+                                 [Msg]}),
+    {noreply,State}.
+
+handle_info({'DOWN',_MRef,process,Pid,_}, State) ->
+    down(Pid),
+    {noreply,State};
+handle_info(Info, State) ->
+    diameter_lib:warning_report(unexpected,
+                                {diameter_stats,
+                                 element(2,
+                                         element(2,
+                                                 process_info(self(),
+                                                              current_function))),
+                                 [Info]}),
+    {noreply,State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok,State}.
+
+down(Pid) ->
+    down(lookup(Pid), ets:match_object(diameter_stats, {{'_',Pid},'_'})).
+
+down([{_,Ref} = T], L) ->
+    fold(Ref, L),
+    delete([T|L]);
+down([], L) ->
+    delete(L).
+
+fold(Ref, L) ->
+    lists:foreach(fun({{K,_},V}) ->
+                         update_counter({{K,Ref},V})
+                  end,
+                  L).
+
+update_counter(Key, N) ->
+    try
+        ets:update_counter(diameter_stats, Key, N)
+    catch
+        error:badarg ->
+            call({incr,{Key,N}})
+    end.
+
+update_counter({{_Ctr,Ref} = Key,N} = T) ->
+    try
+        ets:update_counter(diameter_stats, Key, N)
+    catch
+        error:badarg ->
+            (not is_pid(Ref)
+             orelse
+             ets:member(diameter_stats, Ref))
+            andalso
+            begin
+                insert(T),
+                N
+            end
+    end.
+
+insert(T) ->
+    ets:insert(diameter_stats, T).
+
+lookup(Key) ->
+    ets:lookup(diameter_stats, Key).
+
+delete(Objs) ->
+    lists:foreach(fun({K,_}) ->
+                         ets:delete(diameter_stats, K)
+                  end,
+                  Objs).
+
+call(Request) ->
+    gen_server:call(diameter_stats, Request, infinity).
+
+
+

@@ -1,0 +1,62 @@
+-file("test/lib/stdlib/test/format_SUITE.erl", 1).
+
+-module(format_SUITE).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2]).
+
+-export([hang_1/1]).
+
+-export([init_per_testcase/2,end_per_testcase/2]).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/lib/stdlib/test/format_SUITE.erl", 28).
+
+init_per_testcase(_Case, Config) ->
+    Dog = test_server:timetrap(test_server:minutes(1)),
+    [{watchdog,Dog}|Config].
+
+end_per_testcase(_Case, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog),
+    ok.
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    [hang_1].
+
+groups() ->
+    [].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+hang_1(doc) ->
+    ["Bad args can hang (OTP-2400)"];
+hang_1(suite) ->
+    [];
+hang_1(Config) when is_list(Config) ->
+    _ = (catch io:format(a, "", [])),
+    _ = (catch io:format({}, "", [])),
+    ok.
+
+
+

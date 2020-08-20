@@ -1,0 +1,19 @@
+-file("test/lib/dialyzer/test/small_SUITE_data/src/flatten.erl", 1).
+
+-module(flatten).
+
+-export([t/1]).
+
+t(Dir) ->
+    case file:list_dir(Dir) of
+        {ok,FileList} ->
+            FileList;
+        {error,Reason} ->
+            {error,
+             lists:flatten("Can't open directory "
+                           ++
+                           Dir ++ ": " ++ Reason)}
+    end.
+
+
+

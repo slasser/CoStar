@@ -1,0 +1,19 @@
+-file("test/lib/compiler/test/inline_SUITE_data/fname.erl", 1).
+
+-module(fname).
+
+-export([fname/0]).
+
+fname() ->
+    F = fun bar/1,
+    G = lists:last([fun(X) when F =:= X ->
+                           X
+                    end]),
+    F = G(F),
+    ok.
+
+bar(X) ->
+    X.
+
+
+

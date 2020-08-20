@@ -1,0 +1,16 @@
+-file("test/lib/diameter/src/base/diameter_app.erl", 1).
+
+-module(diameter_app).
+
+-behaviour(application).
+
+-export([start/2,stop/1]).
+
+start(_Type, _Args) ->
+    diameter_sup:start_link().
+
+stop(_) ->
+    ok.
+
+
+

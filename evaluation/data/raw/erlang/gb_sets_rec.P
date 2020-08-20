@@ -1,0 +1,21 @@
+-file("test/lib/dialyzer/test/opaque_SUITE_data/src/gb_sets/gb_sets_rec.erl",
+      1).
+
+-module(gb_sets_rec).
+
+-export([new/0,get_g/1]).
+
+-record(rec,{g :: undefined | gb_set()}).
+
+-spec new() -> #rec{}.
+
+new() ->
+    #rec{g = gb_sets:empty()}.
+
+-spec get_g(#rec{}) -> gb_set().
+
+get_g(R) ->
+    R#rec.g.
+
+
+

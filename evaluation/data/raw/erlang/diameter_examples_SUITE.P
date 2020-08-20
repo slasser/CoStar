@@ -1,0 +1,404 @@
+-file("test/lib/diameter/test/diameter_examples_SUITE.erl", 1).
+
+-module(diameter_examples_SUITE).
+
+-export([suite/0,all/0]).
+
+-export([dict/1,
+         dict/0,
+         code/1,
+         slave/1,
+         slave/0,
+         enslave/1,
+         start/1,
+         traffic/1,
+         stop/1]).
+
+-export([install/1,call/1]).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/diameter/test/../include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options =
+                          [{answer_errors,report},
+                           {request_errors,answer_3xxx}]}).
+
+-file("test/lib/diameter/test/diameter_examples_SUITE.erl", 42).
+
+suite() ->
+    [{timetrap,{minutes,2}}].
+
+all() ->
+    [dict,code,slave,enslave,start,traffic,stop].
+
+dict() ->
+    [{timetrap,{minutes,10}}].
+
+dict(_Config) ->
+    Dirs =
+        [ 
+         filename:join(H ++ ["examples","dict"]) ||
+             H <- [[code:lib_dir(diameter)],[here(),".."]]
+        ],
+    [] =
+        [ 
+         {F,D,RC} ||
+             {_,F} <- sort(find_files(Dirs, ".*\\.dia")),
+             D <- [rfc3588_base,rfc6733_base],
+             RC <- [make(F, D)],
+             RC /= ok
+        ].
+
+sort([{_,_}|_] = Files) ->
+    lists:sort(fun({A,_}, {B,_}) ->
+                      sort([ 
+                            filename:rootname(F) ||
+                                F <- [A,B]
+                           ])
+               end,
+               Files);
+sort([A,B] = L) ->
+    [DA,DB] =
+        [ 
+         dep([D], []) ||
+             D <- L
+        ],
+    case {[A] -- DB,[B] -- DA} of
+        {[],[_]} ->
+            true;
+        {[_],[]} ->
+            false;
+        {[_],[_]} ->
+            length(DA) < length(DB)
+    end.
+
+dep([D|Rest], Acc) ->
+    dep(dep(D), Rest, Acc);
+dep([], Acc) ->
+    Acc.
+
+dep([{Dict,_}|T], Rest, Acc) ->
+    dep(T, [Dict|Rest], [Dict|Acc]);
+dep([], Rest, Acc) ->
+    dep(Rest, Acc).
+
+make(Path, Dict0) when is_atom(Dict0) ->
+    make(Path, atom_to_list(Dict0));
+make(Path, Dict0) ->
+    Dict = filename:rootname(filename:basename(Path)),
+    {Mod,Pre} = make_name(Dict),
+    {"diameter_gen_base" ++ Suf = Mod0,_} = make_name(Dict0),
+    Name = Mod ++ Suf,
+    try
+        ok =
+            to_erl(Path,
+                   [{name,Name},
+                    {prefix,Pre},
+                    {inherits,"rfc3588_base/" ++ Mod0}|
+                    [ 
+                     {inherits,D ++ "/" ++ M ++ Suf} ||
+                         {D,M} <- dep(Dict)
+                    ]]),
+        ok = to_beam(Name)
+    catch
+        {_,_} = E ->
+            E
+    end.
+
+to_erl(File, Opts) ->
+    case diameter_make:codec(File, Opts) of
+        ok ->
+            ok;
+        No ->
+            throw({make,No})
+    end.
+
+to_beam(Name) ->
+    case compile:file(Name ++ ".erl", [return]) of
+        {ok,_,_} ->
+            ok;
+        No ->
+            throw({compile,No})
+    end.
+
+dep(Dict) ->
+    case
+        lists:keyfind(list_to_atom(Dict),
+                      1,
+                      [{rfc4006_cc,[rfc4005_nas]},
+                       {rfc4072_eap,[rfc4005_nas]},
+                       {rfc4740_sip,[rfc4590_digest]}])
+    of
+        {_,Is} ->
+            lists:map(fun inherits/1, Is);
+        false ->
+            []
+    end.
+
+inherits(Dict) when is_atom(Dict) ->
+    inherits(atom_to_list(Dict));
+inherits(Dict) ->
+    {Name,_} = make_name(Dict),
+    {Dict,Name}.
+
+make_name(Dict) ->
+    {R,[$_|N]} =
+        lists:splitwith(fun(C) ->
+                               C /= $_
+                        end,
+                        Dict),
+    {string:join(["diameter_gen",N,R], "_"),"diameter_" ++ N}.
+
+code(Config) ->
+    Node = slave(hd([compile,server,client]), here()),
+    [] =
+        rpc:call(Node,
+                 diameter_examples_SUITE,
+                 install,
+                 [proplists:get_value(priv_dir, Config)]).
+
+install(PrivDir) ->
+    Top = install(here(), PrivDir),
+    Src = filename:join([Top,"examples","code"]),
+    Files = find_files([Src], ".*\\.erl"),
+    [] =
+        [ 
+         {F,E} ||
+             {_,F} <- Files,
+             {error,_,_} = E <-
+                 [compile:file(F, [warnings_as_errors,return_errors])]
+        ].
+
+install(Dir, PrivDir) ->
+    [Ebin|_] = code:get_path(),
+    true = code:del_path(Ebin),
+    Top = top(Dir, code:lib_dir(diameter)),
+    Tmp = filename:join([PrivDir,"diameter"]),
+    TmpInc = filename:join([PrivDir,"diameter","include"]),
+    TmpEbin = filename:join([PrivDir,"diameter","ebin"]),
+    [] =
+        [ 
+         {T,E} ||
+             T <- [Tmp,TmpInc,TmpEbin],
+             {error,E} <- [file:make_dir(T)]
+        ],
+    Inc = filename:join([Top,"include"]),
+    Gen = filename:join([Top,"src","gen"]),
+    Files = find_files([Inc,Gen], ".*\\.hrl"),
+    [] =
+        [ 
+         {F,E} ||
+             {_,F} <- Files,
+             B <- [filename:basename(F)],
+             D <- [filename:join([TmpInc,B])],
+             {error,E} <- [file:copy(F, D)]
+        ],
+    true = code:add_patha(TmpEbin),
+    Tmp = code:lib_dir(diameter),
+    Top.
+
+find_files(Dirs, RE) ->
+    lists:foldl(fun(D, A) ->
+                       fold_files(D, RE, A)
+                end,
+                orddict:new(),
+                Dirs).
+
+fold_files(Dir, RE, Acc) ->
+    filelib:fold_files(Dir, RE, false, fun store/2, Acc).
+
+store(Path, Dict) ->
+    orddict:store(filename:basename(Path), Path, Dict).
+
+slave() ->
+    [{timetrap,{minutes,10}}].
+
+slave(_) ->
+    T0 = now(),
+    {ok,Node} =
+        ct_slave:start(diameter_examples_SUITE,
+                       [ 
+                        {T,15000} ||
+                            T <-
+                                [boot_timeout,
+                                 init_timeout,
+                                 start_timeout]
+                       ]),
+    T1 = now(),
+    T2 = rpc:call(Node, erlang, now, []),
+    {ok,Node} = ct_slave:stop(diameter_examples_SUITE),
+    now_diff([T0,T1,T2,now()]).
+
+now_diff([T1,T2|_] = Ts) ->
+    [timer:now_diff(T2, T1)|now_diff(tl(Ts))];
+now_diff(_) ->
+    [].
+
+enslave(Config) ->
+    Dir = here(),
+    Nodes =
+        [ 
+         {N,slave(N, Dir)} ||
+             N <- tl([compile,server,client])
+        ],
+    diameter_util:write_priv(Config, nodes, Nodes).
+
+slave(Name, Dir) ->
+    {ok,Node} =
+        ct_slave:start(Name,
+                       [ 
+                        {T,15000} ||
+                            T <-
+                                [boot_timeout,
+                                 init_timeout,
+                                 start_timeout]
+                       ]),
+    ok =
+        rpc:call(Node,
+                 code,
+                 add_pathsa,
+                 [[Dir,filename:join([Dir,"..","ebin"])]]),
+    Node.
+
+here() ->
+    filename:dirname(code:which(diameter_examples_SUITE)).
+
+top(Dir, LibDir) ->
+    File = filename:join([Dir,"depend.sed"]),
+    case filelib:is_regular(File) of
+        true ->
+            filename:join([Dir,".."]);
+        false ->
+            LibDir
+    end.
+
+start(server) ->
+    ok = diameter:start(),
+    ok = server:start(),
+    {ok,Ref} = server:listen(tcp),
+    [_] = diameter_util:lport(tcp, Ref),
+    ok;
+start(client) ->
+    ok = diameter:start(),
+    true = diameter:subscribe(client),
+    ok = client:start(),
+    {ok,Ref} = client:connect(tcp),
+    receive
+        #diameter_event{info = {up,Ref,_,_,_}} ->
+            ok
+    end;
+start(Config) ->
+    Nodes = diameter_util:read_priv(Config, nodes),
+    [] =
+        [ 
+         RC ||
+             {T,N} <- Nodes,
+             RC <- [rpc:call(N, diameter_examples_SUITE, start, [T])],
+             RC /= ok
+        ].
+
+traffic(server) ->
+    ok;
+traffic(client) ->
+    {_,MRef} =
+        spawn_monitor(fun() ->
+                             call(100)
+                      end),
+    receive
+        {'DOWN',MRef,process,_,Reason} ->
+            Reason
+    end;
+traffic(Config) ->
+    Nodes = diameter_util:read_priv(Config, nodes),
+    [] =
+        [ 
+         RC ||
+             {T,N} <- Nodes,
+             RC <- [rpc:call(N, diameter_examples_SUITE, traffic, [T])],
+             RC /= ok
+        ].
+
+call(0) ->
+    exit(ok);
+call(N) ->
+    {ok,_} = client:call(),
+    call(N - 1).
+
+stop(Name) when is_atom(Name) ->
+    {ok,_Node} = ct_slave:stop(Name),
+    ok;
+stop(_Config) ->
+    [] =
+        [ 
+         RC ||
+             N <- [compile,server,client],
+             RC <- [stop(N)],
+             RC /= ok
+        ].
+
+
+

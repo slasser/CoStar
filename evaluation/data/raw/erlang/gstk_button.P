@@ -1,0 +1,114 @@
+-file("test/lib/gs/src/gstk_button.erl", 1).
+
+-module(gstk_button).
+
+-export([create/3,
+         config/3,
+         read/3,
+         delete/2,
+         event/5,
+         option/5,
+         read_option/5]).
+
+-file("test/lib/gs/src/gstk.hrl", 1).
+
+-record(gstkid,{id = undefined,widget,widget_data,owner,parent,objtype}).
+
+-record(so,{main,object,hscroll,vscroll,misc}).
+
+-file("test/lib/gs/src/gstk_button.erl", 89).
+
+create(DB, GstkId, Opts) ->
+    TkW = gstk_generic:mk_tkw_child(DB, GstkId),
+    NGstkId = GstkId#gstkid{widget = TkW},
+    PlacePreCmd = [";place ",TkW],
+    case
+        gstk_generic:make_command(Opts,
+                                  NGstkId,
+                                  TkW,
+                                  "",
+                                  PlacePreCmd,
+                                  DB)
+    of
+        {error,Reason} ->
+            {error,Reason};
+        Cmd when is_list(Cmd) ->
+            gstk:exec(["button ",TkW," -rel raised -bo 2 ",Cmd]),
+            NGstkId
+    end.
+
+config(DB, Gstkid, Opts) ->
+    TkW = Gstkid#gstkid.widget,
+    SimplePreCmd = [TkW," conf"],
+    gstk_generic:mk_cmd_and_exec(Opts, Gstkid, SimplePreCmd, DB).
+
+read(DB, Gstkid, Opt) ->
+    gstk_generic:read_option(DB, Gstkid, Opt).
+
+delete(DB, Gstkid) ->
+    gstk_db:delete_widget(DB, Gstkid),
+    Gstkid#gstkid.widget.
+
+event(DB, Gstkid, Etype, Edata, Args) ->
+    gstk_generic:event(DB, Gstkid, Etype, Edata, Args).
+
+option(Option, Gstkid, TkW, DB, _) ->
+    case Option of
+        {bitmap,Bitmap} ->
+            {s,[" -bi @",Bitmap]};
+        {disabledfg,Color} ->
+            {s,[" -disabledf ",gstk:to_color(Color)]};
+        {underline,Int} ->
+            {s,[" -un ",gstk:to_ascii(Int)]};
+        {wraplength,Int} ->
+            {s,[" -wr ",gstk:to_ascii(Int)]};
+        invoke ->
+            {c,[TkW," i;"]};
+        flash ->
+            {c,[TkW," f;"]};
+        {click,On} ->
+            cbind(DB, Gstkid, click, On);
+        _ ->
+            invalid_option
+    end.
+
+read_option(Option, Gstkid, TkW, DB, _) ->
+    case Option of
+        disabledfg ->
+            tcl2erl:ret_color([TkW," cg -disabledf"]);
+        underline ->
+            tcl2erl:ret_int([TkW," cg -un"]);
+        wraplength ->
+            tcl2erl:ret_int([TkW," cg -wr"]);
+        click ->
+            gstk_db:is_inserted(DB, Gstkid, click);
+        _ ->
+            {bad_result,{Gstkid#gstkid.objtype,invalid_option,Option}}
+    end.
+
+cbind(DB, Gstkid, Etype, On) ->
+    TkW = Gstkid#gstkid.widget,
+    Cmd =
+        case On of
+            {true,Edata} ->
+                Eref = gstk_db:insert_event(DB, Gstkid, Etype, Edata),
+                [" -command {erlsend ",
+                 Eref,
+                 " \\\"[",
+                 TkW,
+                 " cg -text]\\\"}"];
+            true ->
+                Eref = gstk_db:insert_event(DB, Gstkid, Etype, ""),
+                [" -command {erlsend ",
+                 Eref,
+                 " \\\"[",
+                 TkW,
+                 " cg -text]\\\"}"];
+            _Other ->
+                gstk_db:delete_event(DB, Gstkid, Etype),
+                " -command {}"
+        end,
+    {s,Cmd}.
+
+
+

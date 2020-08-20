@@ -1,0 +1,41 @@
+-file("test/lib/inets/examples/httpd_load_test/hdlt.erl", 1).
+
+-module(hdlt).
+
+-export([start/0,start/1,stop/0,help/0]).
+
+start() ->
+    ConfigFile = "hdlt.config",
+    case file:consult(ConfigFile) of
+        {ok,Config} when is_list(Config) ->
+            start(Config);
+        Error ->
+            Error
+    end.
+
+start(Config) ->
+    Flag = process_flag(trap_exit, true),
+    Result =
+        case hdlt_ctrl:start(Config) of
+            {ok,Pid} ->
+                receive
+                    {'EXIT',Pid,normal} ->
+                        ok;
+                    {'EXIT',Pid,Reason} ->
+                        io:format("HDLT failed: ~n   ~p~n", [Reason]),
+                        {error,Reason}
+                end;
+            Error ->
+                Error
+        end,
+    process_flag(trap_exit, Flag),
+    Result.
+
+stop() ->
+    hdlt_ctrl:stop().
+
+help() ->
+    hdlt_ctrl:help().
+
+
+

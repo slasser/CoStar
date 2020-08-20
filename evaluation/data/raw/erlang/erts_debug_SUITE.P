@@ -1,0 +1,147 @@
+-file("test/erts/emulator/test/erts_debug_SUITE.erl", 1).
+
+-module(erts_debug_SUITE).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/test_server-3.5.3/include/test_server.hrl",
+      1).
+
+-file("test/erts/emulator/test/erts_debug_SUITE.erl", 22).
+
+-export([all/0,
+         suite/0,
+         groups/0,
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_group/2,
+         end_per_group/2,
+         init_per_testcase/2,
+         end_per_testcase/2,
+         test_size/1,
+         flat_size_big/1,
+         df/1,
+         instructions/1]).
+
+suite() ->
+    [{ct_hooks,[ts_install_cth]}].
+
+all() ->
+    [test_size,flat_size_big,df,instructions].
+
+groups() ->
+    [].
+
+init_per_suite(Config) ->
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(_GroupName, Config) ->
+    Config.
+
+end_per_group(_GroupName, Config) ->
+    Config.
+
+init_per_testcase(Func, Config) when is_atom(Func), is_list(Config) ->
+    Dog = test_server:timetrap(test_server:minutes(2)),
+    [{watchdog,Dog}|Config].
+
+end_per_testcase(_Func, Config) ->
+    Dog = test_server:lookup_config(watchdog, Config),
+    test_server:timetrap_cancel(Dog).
+
+test_size(Config) when is_list(Config) ->
+    ConsCell1 = id([a|b]),
+    ConsCell2 = id(ConsCell1),
+    ConsCellSz = 2,
+    0 = do_test_size([]),
+    0 = do_test_size(42),
+    ConsCellSz = do_test_size(ConsCell1),
+    1 = do_test_size({}),
+    2 = do_test_size({[]}),
+    3 = do_test_size({a,b}),
+    7 = do_test_size({a,[b,c]}),
+    Const = id(42),
+    AnotherConst = id(7),
+    SimplestFun =
+        fun() ->
+               ok
+        end,
+    FunSz0 = do_test_size(SimplestFun),
+    FunSz1 =
+        do_test_size(fun() ->
+                            Const
+                     end),
+    FunSz1 = FunSz0 + 1,
+    FunSz2 =
+        do_test_size(fun() ->
+                            Const + AnotherConst
+                     end),
+    FunSz2 = FunSz1 + 1,
+    FunSz1 =
+        do_test_size(fun() ->
+                            ConsCell1
+                     end)
+        -
+        do_test_size(ConsCell1),
+    do_test_size([ConsCell1|ConsCell1], 3 * ConsCellSz, 2 * ConsCellSz),
+    do_test_size(fun() ->
+                        {ConsCell1,ConsCell2}
+                 end,
+                 FunSz2 + 2 * ConsCellSz,
+                 FunSz2 + ConsCellSz),
+    do_test_size({SimplestFun,SimplestFun},
+                 2 * FunSz0 + do_test_size({a,b}),
+                 FunSz0 + do_test_size({a,b})),
+    ok.
+
+do_test_size(Term) ->
+    Sz = erts_debug:flat_size(Term),
+    Sz = erts_debug:size(Term).
+
+do_test_size(Term, FlatSz, Sz) ->
+    FlatSz = erts_debug:flat_size(Term),
+    Sz = erts_debug:size(Term).
+
+flat_size_big(Config) when is_list(Config) ->
+    flat_size_big_1(1558935079819629779924324061655326981569590630809,
+                    0,
+                    268435455).
+
+flat_size_big_1(Term, Size0, Limit) when Size0 < Limit ->
+    case erts_debug:flat_size(Term) of
+        Size when is_integer(Size), Size0 < Size ->
+            io:format("~p", [Size]),
+            flat_size_big_1([Term|Term], Size, Limit)
+    end;
+flat_size_big_1(_, _, _) ->
+    ok.
+
+df(Config) when is_list(Config) ->
+    P0 = pps(),
+    PrivDir = test_server:lookup_config(priv_dir, Config),
+    ok = file:set_cwd(PrivDir),
+    erts_debug:df(erts_debug_SUITE),
+    Beam = filename:join(PrivDir, "erts_debug_SUITE" ++ ".dis"),
+    {ok,Bin} = file:read_file(Beam),
+    ok = io:put_chars(binary_to_list(Bin)),
+    ok = file:delete(Beam),
+    true = P0 == pps(),
+    ok.
+
+pps() ->
+    {erlang:ports()}.
+
+instructions(Config) when is_list(Config) ->
+    Is = erts_debug:instructions(),
+    _ = [ 
+         list_to_atom(I) ||
+             I <- Is
+        ],
+    ok.
+
+id(I) ->
+    I.
+
+
+

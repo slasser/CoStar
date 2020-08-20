@@ -18,6 +18,7 @@ def get_rhss(diag):
     assert isinstance(choice, Choice)
     seqs = choice.items
     for seq in seqs:
+        print seq
         assert isinstance(seq, Sequence)
     return seqs
 
@@ -30,6 +31,7 @@ def eltstr(elt):
     elif isinstance(elt, OneOrMore):
         return "OneOrMore"
     elif isinstance(elt, Terminal):
+
         return "Terminal"
     elif isinstance(elt, NonTerminal):
         return "NonTerminal"
@@ -86,6 +88,7 @@ def get_ocaml_productions(dsl_file):
     with open(dsl_file, "r") as fh:
         for line in fh:
             lhs, diag = eval(line)
+            print lhs
             rhss = get_rhss(diag)
             for rhs in rhss:
                 prods.append(str_of_production(lhs, rhs))

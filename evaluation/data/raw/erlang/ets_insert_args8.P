@@ -1,0 +1,20 @@
+-file("test/lib/dialyzer/test/race_SUITE_data/src/ets_insert_args8.erl",
+      1).
+
+-module(ets_insert_args8).
+
+-export([test/1]).
+
+test(Foo) ->
+    ets:new(Foo, [named_table,public]),
+    race(Foo).
+
+race(Tab) ->
+    [{_,N}] = ets:lookup(Tab, counter),
+    aux(Tab, N).
+
+aux(Table, N) ->
+    ets:insert(Table, [{counter,N + 1}]).
+
+
+

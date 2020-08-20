@@ -13,9 +13,6 @@ with open(datafile, "r") as fh:
     token_counts = [int(tr["num_tokens"])   for tr in test_results]
     parse_times  = [float(tr["parse_time"]) for tr in test_results]
 
-print token_counts
-print parse_times
-
 plt.figure(figsize=(13.5, 5))
 
 width = max(token_counts) / len(token_counts) / 2
@@ -25,6 +22,7 @@ plt.xlabel("Number of tokens")
 plt.ylabel("Time (s)")
 
 plt.savefig(plotfile, format="eps", dpi=1000)
+print ("results saved to " + plotfile)
 
 """with open(datafile, "r") as fh:
     d = json.load(fh)

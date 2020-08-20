@@ -1,0 +1,910 @@
+-file("test/lib/wx/src/gen/glu.erl", 1).
+
+-module(glu).
+
+-compile(inline).
+
+-type vertex() :: {float(), float(), float()}.
+
+-type enum() :: non_neg_integer().
+
+-type matrix() ::
+          {float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float(),
+           float()}.
+
+-type mem() :: binary() | tuple().
+
+-export([tesselate/2,
+         build1DMipmapLevels/9,
+         build1DMipmaps/6,
+         build2DMipmapLevels/10,
+         build2DMipmaps/7,
+         build3DMipmapLevels/11,
+         build3DMipmaps/8,
+         checkExtension/2,
+         cylinder/6,
+         deleteQuadric/1,
+         disk/5,
+         errorString/1,
+         getString/1,
+         lookAt/9,
+         newQuadric/0,
+         ortho2D/4,
+         partialDisk/7,
+         perspective/4,
+         pickMatrix/5,
+         project/6,
+         quadricDrawStyle/2,
+         quadricNormals/2,
+         quadricOrientation/2,
+         quadricTexture/2,
+         scaleImage/9,
+         sphere/4,
+         unProject/6,
+         unProject4/9]).
+
+-import(gl, [call/2,cast/2,send_bin/1]).
+
+-spec tesselate(Normal, [Vs]) -> {Triangles, VertexPos}
+                   when
+                       is_subtype(Normal, vertex()),
+                       is_subtype(Vs, vertex()),
+                       is_subtype(Triangles, [integer()]),
+                       is_subtype(VertexPos, binary()).
+
+tesselate({Nx,Ny,Nz}, Vs) ->
+    call(5000,
+         <<(length(Vs)):32/native,
+           0:32,
+           Nx:64/native-float,
+           Ny:64/native-float,
+           Nz:64/native-float,
+           << 
+             <<Vx:64/native-float,Vy:64/native-float,Vz:64/native-float>> ||
+                 {Vx,Vy,Vz} <- Vs
+           >>/binary>>).
+
+-spec build1DMipmapLevels(Target,
+                          InternalFormat,
+                          Width,
+                          Format,
+                          Type,
+                          Level,
+                          Base,
+                          Max,
+                          Data) ->
+                             integer()
+                             when
+                                 is_subtype(Target, enum()),
+                                 is_subtype(InternalFormat, integer()),
+                                 is_subtype(Width, integer()),
+                                 is_subtype(Format, enum()),
+                                 is_subtype(Type, enum()),
+                                 is_subtype(Level, integer()),
+                                 is_subtype(Base, integer()),
+                                 is_subtype(Max, integer()),
+                                 is_subtype(Data, binary()).
+
+build1DMipmapLevels(Target,
+                    InternalFormat,
+                    Width,
+                    Format,
+                    Type,
+                    Level,
+                    Base,
+                    Max,
+                    Data) ->
+    send_bin(Data),
+    call(5010,
+         <<Target:32/native-unsigned,
+           InternalFormat:32/native-signed,
+           Width:32/native-signed,
+           Format:32/native-unsigned,
+           Type:32/native-unsigned,
+           Level:32/native-signed,
+           Base:32/native-signed,
+           Max:32/native-signed>>).
+
+-spec build1DMipmaps(Target, InternalFormat, Width, Format, Type, Data) ->
+                        integer()
+                        when
+                            is_subtype(Target, enum()),
+                            is_subtype(InternalFormat, integer()),
+                            is_subtype(Width, integer()),
+                            is_subtype(Format, enum()),
+                            is_subtype(Type, enum()),
+                            is_subtype(Data, binary()).
+
+build1DMipmaps(Target, InternalFormat, Width, Format, Type, Data) ->
+    send_bin(Data),
+    call(5011,
+         <<Target:32/native-unsigned,
+           InternalFormat:32/native-signed,
+           Width:32/native-signed,
+           Format:32/native-unsigned,
+           Type:32/native-unsigned>>).
+
+-spec build2DMipmapLevels(Target,
+                          InternalFormat,
+                          Width,
+                          Height,
+                          Format,
+                          Type,
+                          Level,
+                          Base,
+                          Max,
+                          Data) ->
+                             integer()
+                             when
+                                 is_subtype(Target, enum()),
+                                 is_subtype(InternalFormat, integer()),
+                                 is_subtype(Width, integer()),
+                                 is_subtype(Height, integer()),
+                                 is_subtype(Format, enum()),
+                                 is_subtype(Type, enum()),
+                                 is_subtype(Level, integer()),
+                                 is_subtype(Base, integer()),
+                                 is_subtype(Max, integer()),
+                                 is_subtype(Data, binary()).
+
+build2DMipmapLevels(Target,
+                    InternalFormat,
+                    Width,
+                    Height,
+                    Format,
+                    Type,
+                    Level,
+                    Base,
+                    Max,
+                    Data) ->
+    send_bin(Data),
+    call(5012,
+         <<Target:32/native-unsigned,
+           InternalFormat:32/native-signed,
+           Width:32/native-signed,
+           Height:32/native-signed,
+           Format:32/native-unsigned,
+           Type:32/native-unsigned,
+           Level:32/native-signed,
+           Base:32/native-signed,
+           Max:32/native-signed>>).
+
+-spec build2DMipmaps(Target,
+                     InternalFormat,
+                     Width,
+                     Height,
+                     Format,
+                     Type,
+                     Data) ->
+                        integer()
+                        when
+                            is_subtype(Target, enum()),
+                            is_subtype(InternalFormat, integer()),
+                            is_subtype(Width, integer()),
+                            is_subtype(Height, integer()),
+                            is_subtype(Format, enum()),
+                            is_subtype(Type, enum()),
+                            is_subtype(Data, binary()).
+
+build2DMipmaps(Target,
+               InternalFormat,
+               Width,
+               Height,
+               Format,
+               Type,
+               Data) ->
+    send_bin(Data),
+    call(5013,
+         <<Target:32/native-unsigned,
+           InternalFormat:32/native-signed,
+           Width:32/native-signed,
+           Height:32/native-signed,
+           Format:32/native-unsigned,
+           Type:32/native-unsigned>>).
+
+-spec build3DMipmapLevels(Target,
+                          InternalFormat,
+                          Width,
+                          Height,
+                          Depth,
+                          Format,
+                          Type,
+                          Level,
+                          Base,
+                          Max,
+                          Data) ->
+                             integer()
+                             when
+                                 is_subtype(Target, enum()),
+                                 is_subtype(InternalFormat, integer()),
+                                 is_subtype(Width, integer()),
+                                 is_subtype(Height, integer()),
+                                 is_subtype(Depth, integer()),
+                                 is_subtype(Format, enum()),
+                                 is_subtype(Type, enum()),
+                                 is_subtype(Level, integer()),
+                                 is_subtype(Base, integer()),
+                                 is_subtype(Max, integer()),
+                                 is_subtype(Data, binary()).
+
+build3DMipmapLevels(Target,
+                    InternalFormat,
+                    Width,
+                    Height,
+                    Depth,
+                    Format,
+                    Type,
+                    Level,
+                    Base,
+                    Max,
+                    Data) ->
+    send_bin(Data),
+    call(5014,
+         <<Target:32/native-unsigned,
+           InternalFormat:32/native-signed,
+           Width:32/native-signed,
+           Height:32/native-signed,
+           Depth:32/native-signed,
+           Format:32/native-unsigned,
+           Type:32/native-unsigned,
+           Level:32/native-signed,
+           Base:32/native-signed,
+           Max:32/native-signed>>).
+
+-spec build3DMipmaps(Target,
+                     InternalFormat,
+                     Width,
+                     Height,
+                     Depth,
+                     Format,
+                     Type,
+                     Data) ->
+                        integer()
+                        when
+                            is_subtype(Target, enum()),
+                            is_subtype(InternalFormat, integer()),
+                            is_subtype(Width, integer()),
+                            is_subtype(Height, integer()),
+                            is_subtype(Depth, integer()),
+                            is_subtype(Format, enum()),
+                            is_subtype(Type, enum()),
+                            is_subtype(Data, binary()).
+
+build3DMipmaps(Target,
+               InternalFormat,
+               Width,
+               Height,
+               Depth,
+               Format,
+               Type,
+               Data) ->
+    send_bin(Data),
+    call(5015,
+         <<Target:32/native-unsigned,
+           InternalFormat:32/native-signed,
+           Width:32/native-signed,
+           Height:32/native-signed,
+           Depth:32/native-signed,
+           Format:32/native-unsigned,
+           Type:32/native-unsigned>>).
+
+-spec checkExtension(ExtName, ExtString) -> 0 | 1
+                        when
+                            is_subtype(ExtName, string()),
+                            is_subtype(ExtString, string()).
+
+checkExtension(ExtName, ExtString) ->
+    call(5016,
+         <<(list_to_binary([ExtName,0]))/binary,
+           0:((8 - (length(ExtName) + 1) rem 8) rem 8),
+           (list_to_binary([ExtString,0]))/binary,
+           0:((8 - (length(ExtString) + 1) rem 8) rem 8)>>).
+
+-spec cylinder(Quad, Base, Top, Height, Slices, Stacks) -> ok
+                  when
+                      is_subtype(Quad, integer()),
+                      is_subtype(Base, float()),
+                      is_subtype(Top, float()),
+                      is_subtype(Height, float()),
+                      is_subtype(Slices, integer()),
+                      is_subtype(Stacks, integer()).
+
+cylinder(Quad, Base, Top, Height, Slices, Stacks) ->
+    cast(5017,
+         <<Quad:64/native-unsigned,
+           Base:64/native-float,
+           Top:64/native-float,
+           Height:64/native-float,
+           Slices:32/native-signed,
+           Stacks:32/native-signed>>).
+
+-spec deleteQuadric(Quad) -> ok when is_subtype(Quad, integer()).
+
+deleteQuadric(Quad) ->
+    cast(5018, <<Quad:64/native-unsigned>>).
+
+-spec disk(Quad, Inner, Outer, Slices, Loops) -> ok
+              when
+                  is_subtype(Quad, integer()),
+                  is_subtype(Inner, float()),
+                  is_subtype(Outer, float()),
+                  is_subtype(Slices, integer()),
+                  is_subtype(Loops, integer()).
+
+disk(Quad, Inner, Outer, Slices, Loops) ->
+    cast(5019,
+         <<Quad:64/native-unsigned,
+           Inner:64/native-float,
+           Outer:64/native-float,
+           Slices:32/native-signed,
+           Loops:32/native-signed>>).
+
+-spec errorString(Error) -> string() when is_subtype(Error, enum()).
+
+errorString(Error) ->
+    call(5020, <<Error:32/native-unsigned>>).
+
+-spec getString(Name) -> string() when is_subtype(Name, enum()).
+
+getString(Name) ->
+    call(5021, <<Name:32/native-unsigned>>).
+
+-spec lookAt(EyeX, EyeY, EyeZ, CenterX, CenterY, CenterZ, UpX, UpY, UpZ) ->
+                ok
+                when
+                    is_subtype(EyeX, float()),
+                    is_subtype(EyeY, float()),
+                    is_subtype(EyeZ, float()),
+                    is_subtype(CenterX, float()),
+                    is_subtype(CenterY, float()),
+                    is_subtype(CenterZ, float()),
+                    is_subtype(UpX, float()),
+                    is_subtype(UpY, float()),
+                    is_subtype(UpZ, float()).
+
+lookAt(EyeX, EyeY, EyeZ, CenterX, CenterY, CenterZ, UpX, UpY, UpZ) ->
+    cast(5022,
+         <<EyeX:64/native-float,
+           EyeY:64/native-float,
+           EyeZ:64/native-float,
+           CenterX:64/native-float,
+           CenterY:64/native-float,
+           CenterZ:64/native-float,
+           UpX:64/native-float,
+           UpY:64/native-float,
+           UpZ:64/native-float>>).
+
+-spec newQuadric() -> integer().
+
+newQuadric() ->
+    call(5023, <<>>).
+
+-spec ortho2D(Left, Right, Bottom, Top) -> ok
+                 when
+                     is_subtype(Left, float()),
+                     is_subtype(Right, float()),
+                     is_subtype(Bottom, float()),
+                     is_subtype(Top, float()).
+
+ortho2D(Left, Right, Bottom, Top) ->
+    cast(5024,
+         <<Left:64/native-float,
+           Right:64/native-float,
+           Bottom:64/native-float,
+           Top:64/native-float>>).
+
+-spec partialDisk(Quad, Inner, Outer, Slices, Loops, Start, Sweep) -> ok
+                     when
+                         is_subtype(Quad, integer()),
+                         is_subtype(Inner, float()),
+                         is_subtype(Outer, float()),
+                         is_subtype(Slices, integer()),
+                         is_subtype(Loops, integer()),
+                         is_subtype(Start, float()),
+                         is_subtype(Sweep, float()).
+
+partialDisk(Quad, Inner, Outer, Slices, Loops, Start, Sweep) ->
+    cast(5025,
+         <<Quad:64/native-unsigned,
+           Inner:64/native-float,
+           Outer:64/native-float,
+           Slices:32/native-signed,
+           Loops:32/native-signed,
+           Start:64/native-float,
+           Sweep:64/native-float>>).
+
+-spec perspective(Fovy, Aspect, ZNear, ZFar) -> ok
+                     when
+                         is_subtype(Fovy, float()),
+                         is_subtype(Aspect, float()),
+                         is_subtype(ZNear, float()),
+                         is_subtype(ZFar, float()).
+
+perspective(Fovy, Aspect, ZNear, ZFar) ->
+    cast(5026,
+         <<Fovy:64/native-float,
+           Aspect:64/native-float,
+           ZNear:64/native-float,
+           ZFar:64/native-float>>).
+
+-spec pickMatrix(X, Y, DelX, DelY, Viewport) -> ok
+                    when
+                        is_subtype(X, float()),
+                        is_subtype(Y, float()),
+                        is_subtype(DelX, float()),
+                        is_subtype(DelY, float()),
+                        is_subtype(Viewport,
+                                   {integer(),
+                                    integer(),
+                                    integer(),
+                                    integer()}).
+
+pickMatrix(X, Y, DelX, DelY, {V1,V2,V3,V4}) ->
+    cast(5027,
+         <<X:64/native-float,
+           Y:64/native-float,
+           DelX:64/native-float,
+           DelY:64/native-float,
+           V1:32/native-signed,
+           V2:32/native-signed,
+           V3:32/native-signed,
+           V4:32/native-signed>>).
+
+-spec project(ObjX, ObjY, ObjZ, Model, Proj, View) ->
+                 {integer(),
+                  WinX :: float(),
+                  WinY :: float(),
+                  WinZ :: float()}
+                 when
+                     is_subtype(ObjX, float()),
+                     is_subtype(ObjY, float()),
+                     is_subtype(ObjZ, float()),
+                     is_subtype(Model, matrix()),
+                     is_subtype(Proj, matrix()),
+                     is_subtype(View,
+                                {integer(),
+                                 integer(),
+                                 integer(),
+                                 integer()}).
+
+project(ObjX,
+        ObjY,
+        ObjZ,
+        {M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12,M13,M14,M15,M16},
+        {P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12,P13,P14,P15,P16},
+        {V1,V2,V3,V4}) ->
+    call(5028,
+         <<ObjX:64/native-float,
+           ObjY:64/native-float,
+           ObjZ:64/native-float,
+           M1:64/native-float,
+           M2:64/native-float,
+           M3:64/native-float,
+           M4:64/native-float,
+           M5:64/native-float,
+           M6:64/native-float,
+           M7:64/native-float,
+           M8:64/native-float,
+           M9:64/native-float,
+           M10:64/native-float,
+           M11:64/native-float,
+           M12:64/native-float,
+           M13:64/native-float,
+           M14:64/native-float,
+           M15:64/native-float,
+           M16:64/native-float,
+           P1:64/native-float,
+           P2:64/native-float,
+           P3:64/native-float,
+           P4:64/native-float,
+           P5:64/native-float,
+           P6:64/native-float,
+           P7:64/native-float,
+           P8:64/native-float,
+           P9:64/native-float,
+           P10:64/native-float,
+           P11:64/native-float,
+           P12:64/native-float,
+           P13:64/native-float,
+           P14:64/native-float,
+           P15:64/native-float,
+           P16:64/native-float,
+           V1:32/native-signed,
+           V2:32/native-signed,
+           V3:32/native-signed,
+           V4:32/native-signed>>);
+project(ObjX,
+        ObjY,
+        ObjZ,
+        {M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12},
+        {P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12},
+        {V1,V2,V3,V4}) ->
+    call(5028,
+         <<ObjX:64/native-float,
+           ObjY:64/native-float,
+           ObjZ:64/native-float,
+           M1:64/native-float,
+           M2:64/native-float,
+           M3:64/native-float,
+           0:64/native-float,
+           M4:64/native-float,
+           M5:64/native-float,
+           M6:64/native-float,
+           0:64/native-float,
+           M7:64/native-float,
+           M8:64/native-float,
+           M9:64/native-float,
+           0:64/native-float,
+           M10:64/native-float,
+           M11:64/native-float,
+           M12:64/native-float,
+           1:64/native-float,
+           P1:64/native-float,
+           P2:64/native-float,
+           P3:64/native-float,
+           0:64/native-float,
+           P4:64/native-float,
+           P5:64/native-float,
+           P6:64/native-float,
+           0:64/native-float,
+           P7:64/native-float,
+           P8:64/native-float,
+           P9:64/native-float,
+           0:64/native-float,
+           P10:64/native-float,
+           P11:64/native-float,
+           P12:64/native-float,
+           1:64/native-float,
+           V1:32/native-signed,
+           V2:32/native-signed,
+           V3:32/native-signed,
+           V4:32/native-signed>>).
+
+-spec quadricDrawStyle(Quad, Draw) -> ok
+                          when
+                              is_subtype(Quad, integer()),
+                              is_subtype(Draw, enum()).
+
+quadricDrawStyle(Quad, Draw) ->
+    cast(5029, <<Quad:64/native-unsigned,Draw:32/native-unsigned>>).
+
+-spec quadricNormals(Quad, Normal) -> ok
+                        when
+                            is_subtype(Quad, integer()),
+                            is_subtype(Normal, enum()).
+
+quadricNormals(Quad, Normal) ->
+    cast(5030, <<Quad:64/native-unsigned,Normal:32/native-unsigned>>).
+
+-spec quadricOrientation(Quad, Orientation) -> ok
+                            when
+                                is_subtype(Quad, integer()),
+                                is_subtype(Orientation, enum()).
+
+quadricOrientation(Quad, Orientation) ->
+    cast(5031,
+         <<Quad:64/native-unsigned,Orientation:32/native-unsigned>>).
+
+-spec quadricTexture(Quad, Texture) -> ok
+                        when
+                            is_subtype(Quad, integer()),
+                            is_subtype(Texture, 0 | 1).
+
+quadricTexture(Quad, Texture) ->
+    cast(5032, <<Quad:64/native-unsigned,Texture:8/native-unsigned>>).
+
+-spec scaleImage(Format,
+                 WIn,
+                 HIn,
+                 TypeIn,
+                 DataIn,
+                 WOut,
+                 HOut,
+                 TypeOut,
+                 DataOut) ->
+                    integer()
+                    when
+                        is_subtype(Format, enum()),
+                        is_subtype(WIn, integer()),
+                        is_subtype(HIn, integer()),
+                        is_subtype(TypeIn, enum()),
+                        is_subtype(DataIn, binary()),
+                        is_subtype(WOut, integer()),
+                        is_subtype(HOut, integer()),
+                        is_subtype(TypeOut, enum()),
+                        is_subtype(DataOut, mem()).
+
+scaleImage(Format,
+           WIn,
+           HIn,
+           TypeIn,
+           DataIn,
+           WOut,
+           HOut,
+           TypeOut,
+           DataOut) ->
+    send_bin(DataIn),
+    send_bin(DataOut),
+    call(5033,
+         <<Format:32/native-unsigned,
+           WIn:32/native-signed,
+           HIn:32/native-signed,
+           TypeIn:32/native-unsigned,
+           WOut:32/native-signed,
+           HOut:32/native-signed,
+           TypeOut:32/native-unsigned>>).
+
+-spec sphere(Quad, Radius, Slices, Stacks) -> ok
+                when
+                    is_subtype(Quad, integer()),
+                    is_subtype(Radius, float()),
+                    is_subtype(Slices, integer()),
+                    is_subtype(Stacks, integer()).
+
+sphere(Quad, Radius, Slices, Stacks) ->
+    cast(5034,
+         <<Quad:64/native-unsigned,
+           Radius:64/native-float,
+           Slices:32/native-signed,
+           Stacks:32/native-signed>>).
+
+-spec unProject(WinX, WinY, WinZ, Model, Proj, View) ->
+                   {integer(),
+                    ObjX :: float(),
+                    ObjY :: float(),
+                    ObjZ :: float()}
+                   when
+                       is_subtype(WinX, float()),
+                       is_subtype(WinY, float()),
+                       is_subtype(WinZ, float()),
+                       is_subtype(Model, matrix()),
+                       is_subtype(Proj, matrix()),
+                       is_subtype(View,
+                                  {integer(),
+                                   integer(),
+                                   integer(),
+                                   integer()}).
+
+unProject(WinX,
+          WinY,
+          WinZ,
+          {M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12,M13,M14,M15,M16},
+          {P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12,P13,P14,P15,P16},
+          {V1,V2,V3,V4}) ->
+    call(5035,
+         <<WinX:64/native-float,
+           WinY:64/native-float,
+           WinZ:64/native-float,
+           M1:64/native-float,
+           M2:64/native-float,
+           M3:64/native-float,
+           M4:64/native-float,
+           M5:64/native-float,
+           M6:64/native-float,
+           M7:64/native-float,
+           M8:64/native-float,
+           M9:64/native-float,
+           M10:64/native-float,
+           M11:64/native-float,
+           M12:64/native-float,
+           M13:64/native-float,
+           M14:64/native-float,
+           M15:64/native-float,
+           M16:64/native-float,
+           P1:64/native-float,
+           P2:64/native-float,
+           P3:64/native-float,
+           P4:64/native-float,
+           P5:64/native-float,
+           P6:64/native-float,
+           P7:64/native-float,
+           P8:64/native-float,
+           P9:64/native-float,
+           P10:64/native-float,
+           P11:64/native-float,
+           P12:64/native-float,
+           P13:64/native-float,
+           P14:64/native-float,
+           P15:64/native-float,
+           P16:64/native-float,
+           V1:32/native-signed,
+           V2:32/native-signed,
+           V3:32/native-signed,
+           V4:32/native-signed>>);
+unProject(WinX,
+          WinY,
+          WinZ,
+          {M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12},
+          {P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12},
+          {V1,V2,V3,V4}) ->
+    call(5035,
+         <<WinX:64/native-float,
+           WinY:64/native-float,
+           WinZ:64/native-float,
+           M1:64/native-float,
+           M2:64/native-float,
+           M3:64/native-float,
+           0:64/native-float,
+           M4:64/native-float,
+           M5:64/native-float,
+           M6:64/native-float,
+           0:64/native-float,
+           M7:64/native-float,
+           M8:64/native-float,
+           M9:64/native-float,
+           0:64/native-float,
+           M10:64/native-float,
+           M11:64/native-float,
+           M12:64/native-float,
+           1:64/native-float,
+           P1:64/native-float,
+           P2:64/native-float,
+           P3:64/native-float,
+           0:64/native-float,
+           P4:64/native-float,
+           P5:64/native-float,
+           P6:64/native-float,
+           0:64/native-float,
+           P7:64/native-float,
+           P8:64/native-float,
+           P9:64/native-float,
+           0:64/native-float,
+           P10:64/native-float,
+           P11:64/native-float,
+           P12:64/native-float,
+           1:64/native-float,
+           V1:32/native-signed,
+           V2:32/native-signed,
+           V3:32/native-signed,
+           V4:32/native-signed>>).
+
+-spec unProject4(WinX,
+                 WinY,
+                 WinZ,
+                 ClipW,
+                 Model,
+                 Proj,
+                 View,
+                 NearVal,
+                 FarVal) ->
+                    {integer(),
+                     ObjX :: float(),
+                     ObjY :: float(),
+                     ObjZ :: float(),
+                     ObjW :: float()}
+                    when
+                        is_subtype(WinX, float()),
+                        is_subtype(WinY, float()),
+                        is_subtype(WinZ, float()),
+                        is_subtype(ClipW, float()),
+                        is_subtype(Model, matrix()),
+                        is_subtype(Proj, matrix()),
+                        is_subtype(View,
+                                   {integer(),
+                                    integer(),
+                                    integer(),
+                                    integer()}),
+                        is_subtype(NearVal, float()),
+                        is_subtype(FarVal, float()).
+
+unProject4(WinX,
+           WinY,
+           WinZ,
+           ClipW,
+           {M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12,M13,M14,M15,M16},
+           {P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12,P13,P14,P15,P16},
+           {V1,V2,V3,V4},
+           NearVal,
+           FarVal) ->
+    call(5036,
+         <<WinX:64/native-float,
+           WinY:64/native-float,
+           WinZ:64/native-float,
+           ClipW:64/native-float,
+           M1:64/native-float,
+           M2:64/native-float,
+           M3:64/native-float,
+           M4:64/native-float,
+           M5:64/native-float,
+           M6:64/native-float,
+           M7:64/native-float,
+           M8:64/native-float,
+           M9:64/native-float,
+           M10:64/native-float,
+           M11:64/native-float,
+           M12:64/native-float,
+           M13:64/native-float,
+           M14:64/native-float,
+           M15:64/native-float,
+           M16:64/native-float,
+           P1:64/native-float,
+           P2:64/native-float,
+           P3:64/native-float,
+           P4:64/native-float,
+           P5:64/native-float,
+           P6:64/native-float,
+           P7:64/native-float,
+           P8:64/native-float,
+           P9:64/native-float,
+           P10:64/native-float,
+           P11:64/native-float,
+           P12:64/native-float,
+           P13:64/native-float,
+           P14:64/native-float,
+           P15:64/native-float,
+           P16:64/native-float,
+           V1:32/native-signed,
+           V2:32/native-signed,
+           V3:32/native-signed,
+           V4:32/native-signed,
+           NearVal:64/native-float,
+           FarVal:64/native-float>>);
+unProject4(WinX,
+           WinY,
+           WinZ,
+           ClipW,
+           {M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12},
+           {P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12},
+           {V1,V2,V3,V4},
+           NearVal,
+           FarVal) ->
+    call(5036,
+         <<WinX:64/native-float,
+           WinY:64/native-float,
+           WinZ:64/native-float,
+           ClipW:64/native-float,
+           M1:64/native-float,
+           M2:64/native-float,
+           M3:64/native-float,
+           0:64/native-float,
+           M4:64/native-float,
+           M5:64/native-float,
+           M6:64/native-float,
+           0:64/native-float,
+           M7:64/native-float,
+           M8:64/native-float,
+           M9:64/native-float,
+           0:64/native-float,
+           M10:64/native-float,
+           M11:64/native-float,
+           M12:64/native-float,
+           1:64/native-float,
+           P1:64/native-float,
+           P2:64/native-float,
+           P3:64/native-float,
+           0:64/native-float,
+           P4:64/native-float,
+           P5:64/native-float,
+           P6:64/native-float,
+           0:64/native-float,
+           P7:64/native-float,
+           P8:64/native-float,
+           P9:64/native-float,
+           0:64/native-float,
+           P10:64/native-float,
+           P11:64/native-float,
+           P12:64/native-float,
+           1:64/native-float,
+           V1:32/native-signed,
+           V2:32/native-signed,
+           V3:32/native-signed,
+           V4:32/native-signed,
+           NearVal:64/native-float,
+           FarVal:64/native-float>>).
+
+
+

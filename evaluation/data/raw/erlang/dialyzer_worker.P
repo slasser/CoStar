@@ -1,0 +1,285 @@
+-file("test/lib/dialyzer/src/dialyzer_worker.erl", 1).
+
+-module(dialyzer_worker).
+
+-export([launch/4,sequential/4]).
+
+-export_type([{worker,0}]).
+
+-type worker() :: pid().
+
+-type mode() :: dialyzer_coordinator:mode().
+
+-type coordinator() :: dialyzer_coordinator:coordinator().
+
+-type init_data() :: dialyzer_coordinator:init_data().
+
+-type result() :: dialyzer_coordinator:result().
+
+-record(state,{mode :: undefined | mode(),
+               job :: undefined | mfa_or_funlbl() | file:filename(),
+               coordinator :: undefined | coordinator(),
+               init_data :: undefined | init_data(),
+               depends_on = [] :: list()}).
+
+-file("test/lib/dialyzer/src/dialyzer.hrl", 1).
+
+-type dial_ret() :: 0 | 1 | 2.
+
+-type dial_warn_tag() :: warn_return_no_exit
+                       | warn_return_only_exit
+                       | warn_not_called
+                       | warn_non_proper_list
+                       | warn_matching
+                       | warn_opaque
+                       | warn_fun_app
+                       | warn_failing_call
+                       | warn_bin_construction
+                       | warn_contract_types
+                       | warn_contract_syntax
+                       | warn_contract_not_equal
+                       | warn_contract_subtype
+                       | warn_contract_supertype
+                       | warn_callgraph
+                       | warn_umatched_return
+                       | warn_race_condition
+                       | warn_behaviour
+                       | warn_contract_range
+                       | warn_undefined_callbacks.
+
+-type file_line() :: {file:filename(), non_neg_integer()}.
+
+-type dial_warning() ::
+          {dial_warn_tag(), file_line(), {atom(), [term()]}}.
+
+-type dial_error() :: any().
+
+-type ordset(T) :: [T].
+
+-type anal_type() :: succ_typings | plt_build.
+
+-type anal_type1() :: anal_type() | plt_add | plt_check | plt_remove.
+
+-type contr_constr() ::
+          {subtype, erl_types:erl_type(), erl_types:erl_type()}.
+
+-type contract_pair() :: {erl_types:erl_type(), [contr_constr()]}.
+
+-type dial_define() :: {atom(), term()}.
+
+-type dial_option() :: {atom(), term()}.
+
+-type dial_options() :: [dial_option()].
+
+-type fopt() :: basename | fullpath.
+
+-type format() :: formatted | raw.
+
+-type label() :: non_neg_integer().
+
+-type rep_mode() :: quiet | normal | verbose.
+
+-type start_from() :: byte_code | src_code.
+
+-type mfa_or_funlbl() :: label() | mfa().
+
+-type solver() :: v1 | v2.
+
+-record(analysis,{analysis_pid :: undefined | pid(),
+                  type = succ_typings :: anal_type(),
+                  defines = [] :: [dial_define()],
+                  doc_plt :: undefined | dialyzer_plt:plt(),
+                  files = [] :: [file:filename()],
+                  include_dirs = [] :: [file:filename()],
+                  start_from = byte_code :: start_from(),
+                  plt :: undefined | dialyzer_plt:plt(),
+                  use_contracts = true :: boolean(),
+                  race_detection = false :: boolean(),
+                  behaviours_chk = false :: boolean(),
+                  timing = false :: boolean() | debug,
+                  timing_server :: undefined
+                                 | dialyzer_timing:timing_server(),
+                  callgraph_file = "" :: file:filename(),
+                  solvers :: undefined | [solver()]}).
+
+-record(options,{files = [] :: [file:filename()],
+                 files_rec = [] :: [file:filename()],
+                 analysis_type = succ_typings :: anal_type1(),
+                 timing = false :: boolean() | debug,
+                 defines = [] :: [dial_define()],
+                 from = byte_code :: start_from(),
+                 get_warnings = maybe :: boolean() | maybe,
+                 init_plts = [] :: [file:filename()],
+                 include_dirs = [] :: [file:filename()],
+                 output_plt = none :: none | file:filename(),
+                 legal_warnings =
+                     ordsets:new() :: ordset(dial_warn_tag()),
+                 report_mode = normal :: rep_mode(),
+                 erlang_mode = false :: boolean(),
+                 use_contracts = true :: boolean(),
+                 output_file = none :: none | file:filename(),
+                 output_format = formatted :: format(),
+                 filename_opt = basename :: fopt(),
+                 callgraph_file = "" :: file:filename(),
+                 check_plt = true :: boolean(),
+                 solvers = [] :: [solver()]}).
+
+-record(contract,{contracts = [] :: [contract_pair()],
+                  args = [] :: [erl_types:erl_type()],
+                  forms = [] :: [{_, _}]}).
+
+-file("test/lib/dialyzer/src/dialyzer_worker.erl", 43).
+
+-spec launch(mode(), [mfa_or_funlbl()], init_data(), coordinator()) ->
+                worker().
+
+launch(Mode, Job, InitData, Coordinator) ->
+    State =
+        #state{mode = Mode,
+               job = Job,
+               init_data = InitData,
+               coordinator = Coordinator},
+    InitState =
+        case Mode of
+            X when X =:= typesig; X =:= dataflow ->
+                initializing;
+            X when X =:= compile; X =:= warnings ->
+                running
+        end,
+    spawn_link(fun() ->
+                      loop(InitState, State)
+               end).
+
+loop(updating, State) ->
+    ok,
+    NextStatus =
+        case waits_more_success_typings(State) of
+            true ->
+                waiting;
+            false ->
+                running
+        end,
+    loop(NextStatus, State);
+loop(initializing, #state{job = SCC,init_data = InitData} = State) ->
+    DependsOn = dialyzer_succ_typings:find_depends_on(SCC, InitData),
+    ok,
+    loop(updating, State#state{depends_on = DependsOn});
+loop(waiting, State) ->
+    ok,
+    NewState = wait_for_success_typings(State),
+    loop(updating, NewState);
+loop(running, #state{mode = compile} = State) ->
+    dialyzer_coordinator:wait_activation(),
+    ok,
+    Result =
+        case start_compilation(State) of
+            {ok,EstimatedSize,Data} ->
+                Label = ask_coordinator_for_label(EstimatedSize, State),
+                continue_compilation(Label, Data);
+            {error,_Reason} = Error ->
+                Error
+        end,
+    report_to_coordinator(Result, State);
+loop(running, #state{mode = warnings} = State) ->
+    dialyzer_coordinator:wait_activation(),
+    ok,
+    Result = collect_warnings(State),
+    report_to_coordinator(Result, State);
+loop(running, #state{mode = Mode} = State)
+    when Mode =:= typesig; Mode =:= dataflow ->
+    request_activation(State),
+    ok,
+    NotFixpoint = do_work(State),
+    ok = broadcast_done(State),
+    report_to_coordinator(NotFixpoint, State).
+
+waits_more_success_typings(#state{depends_on = Depends}) ->
+    Depends =/= [].
+
+broadcast_done(#state{job = SCC,
+                      init_data = InitData,
+                      coordinator = Coordinator}) ->
+    RequiredBy = dialyzer_succ_typings:find_required_by(SCC, InitData),
+    {Callers,Unknown} =
+        dialyzer_coordinator:sccs_to_pids(RequiredBy, Coordinator),
+    send_done(Callers, SCC),
+    continue_broadcast_done(Unknown, SCC, Coordinator).
+
+send_done(Callers, SCC) ->
+    ok,
+    SendSTFun =
+        fun(PID) ->
+               PID ! {done,SCC}
+        end,
+    lists:foreach(SendSTFun, Callers).
+
+continue_broadcast_done([], _SCC, _Coordinator) ->
+    ok;
+continue_broadcast_done(Rest, SCC, Coordinator) ->
+    timer:sleep(500),
+    {Callers,Unknown} =
+        dialyzer_coordinator:sccs_to_pids(Rest, Coordinator),
+    send_done(Callers, SCC),
+    continue_broadcast_done(Unknown, SCC, Coordinator).
+
+wait_for_success_typings(#state{depends_on = DependsOn} = State) ->
+    receive
+        {done,SCC} ->
+            ok,
+            State#state{depends_on = DependsOn -- [SCC]}
+    after
+        5000 ->
+            ok,
+            State
+    end.
+
+request_activation(#state{coordinator = Coordinator}) ->
+    dialyzer_coordinator:request_activation(Coordinator).
+
+do_work(#state{mode = Mode,job = Job,init_data = InitData}) ->
+    case Mode of
+        typesig ->
+            dialyzer_succ_typings:find_succ_types_for_scc(Job, InitData);
+        dataflow ->
+            dialyzer_succ_typings:refine_one_module(Job, InitData)
+    end.
+
+report_to_coordinator(Result,
+                      #state{job = Job,coordinator = Coordinator}) ->
+    ok,
+    dialyzer_coordinator:job_done(Job, Result, Coordinator).
+
+start_compilation(#state{job = Job,init_data = InitData}) ->
+    dialyzer_analysis_callgraph:start_compilation(Job, InitData).
+
+ask_coordinator_for_label(EstimatedSize,
+                          #state{coordinator = Coordinator}) ->
+    dialyzer_coordinator:get_next_label(EstimatedSize, Coordinator).
+
+continue_compilation(Label, Data) ->
+    dialyzer_analysis_callgraph:continue_compilation(Label, Data).
+
+collect_warnings(#state{job = Job,init_data = InitData}) ->
+    dialyzer_succ_typings:collect_warnings(Job, InitData).
+
+-type extra() :: label() | unused.
+
+-spec sequential(mode(), [mfa_or_funlbl()], init_data(), extra()) ->
+                    result().
+
+sequential(compile, Job, InitData, Extra) ->
+    case dialyzer_analysis_callgraph:start_compilation(Job, InitData) of
+        {ok,EstimatedSize,Data} ->
+            {EstimatedSize,continue_compilation(Extra, Data)};
+        {error,_Reason} = Error ->
+            {0,Error}
+    end;
+sequential(typesig, Job, InitData, _Extra) ->
+    dialyzer_succ_typings:find_succ_types_for_scc(Job, InitData);
+sequential(dataflow, Job, InitData, _Extra) ->
+    dialyzer_succ_typings:refine_one_module(Job, InitData);
+sequential(warnings, Job, InitData, _Extra) ->
+    dialyzer_succ_typings:collect_warnings(Job, InitData).
+
+
+

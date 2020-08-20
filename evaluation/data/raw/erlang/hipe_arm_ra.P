@@ -1,0 +1,48 @@
+-file("test/lib/hipe/arm/hipe_arm_ra.erl", 1).
+
+-module(hipe_arm_ra).
+
+-export([ra/2]).
+
+ra(Defun0, Options) ->
+    {Defun1,Coloring_fp,SpillIndex} =
+        case proplists:get_bool(inline_fp, Options) of
+            false ->
+                {Defun0,[],0}
+        end,
+    {Defun2,Coloring} =
+        case proplists:get_value(regalloc, Options, coalescing) of
+            coalescing ->
+                ra(Defun1,
+                   SpillIndex,
+                   Options,
+                   hipe_coalescing_regalloc);
+            optimistic ->
+                ra(Defun1,
+                   SpillIndex,
+                   Options,
+                   hipe_optimistic_regalloc);
+            graph_color ->
+                ra(Defun1,
+                   SpillIndex,
+                   Options,
+                   hipe_graph_coloring_regalloc);
+            linear_scan ->
+                hipe_arm_ra_ls:ra(Defun1, SpillIndex, Options);
+            naive ->
+                hipe_arm_ra_naive:ra(Defun1, Coloring_fp, Options);
+            _ ->
+                exit({unknown_regalloc_compiler_option,
+                      proplists:get_value(regalloc, Options)})
+        end,
+    hipe_arm_ra_finalise:finalise(Defun2, Coloring, Coloring_fp).
+
+ra(Defun, SpillIndex, Options, RegAllocMod) ->
+    hipe_regalloc_loop:ra(Defun,
+                          SpillIndex,
+                          Options,
+                          RegAllocMod,
+                          hipe_arm_specific).
+
+
+

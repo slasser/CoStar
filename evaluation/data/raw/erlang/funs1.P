@@ -1,0 +1,136 @@
+-file("test/system/doc/programming_examples/funs1.erl", 1).
+
+-module(funs1).
+
+-compile(export_all).
+
+-import(lists, [reverse/1]).
+
+map(F, [H|T]) ->
+    [F(H)|map(F, T)];
+map(F, []) ->
+    [].
+
+foreach(F, [H|T]) ->
+    F(H),
+    foreach(F, T);
+foreach(F, []) ->
+    ok.
+
+all(Pred, [H|T]) ->
+    case Pred(H) of
+        true ->
+            all(Pred, T);
+        false ->
+            false
+    end;
+all(Pred, []) ->
+    true.
+
+any(Pred, [H|T]) ->
+    case Pred(H) of
+        true ->
+            true;
+        false ->
+            any(Pred, T)
+    end;
+any(Pred, []) ->
+    false.
+
+takewhile(Pred, [H|T]) ->
+    case Pred(H) of
+        true ->
+            [H|takewhile(Pred, T)];
+        false ->
+            []
+    end;
+takewhile(Pred, []) ->
+    [].
+
+dropwhile(Pred, [H|T]) ->
+    case Pred(H) of
+        true ->
+            dropwhile(Pred, T);
+        false ->
+            [H|T]
+    end;
+dropwhile(Pred, []) ->
+    [].
+
+splitwith(Pred, L) ->
+    splitwith(Pred, L, []).
+
+splitwith(Pred, [H|T], L) ->
+    case Pred(H) of
+        true ->
+            splitwith(Pred, T, [H|L]);
+        false ->
+            {reverse(L),[H|T]}
+    end;
+splitwith(Pred, [], L) ->
+    {reverse(L),[]}.
+
+flatmap(F, [Hd|Tail]) ->
+    F(Hd) ++ flatmap(F, Tail);
+flatmap(F, []) ->
+    [].
+
+foldl(F, Accu, [Hd|Tail]) ->
+    foldl(F, F(Hd, Accu), Tail);
+foldl(F, Accu, []) ->
+    Accu.
+
+foldr(F, Accu, [Hd|Tail]) ->
+    F(Hd, foldr(F, Accu, Tail));
+foldr(F, Accu, []) ->
+    Accu.
+
+filter(F, [H|T]) ->
+    case F(H) of
+        true ->
+            [H|filter(F, T)];
+        false ->
+            filter(F, T)
+    end;
+filter(F, []) ->
+    [].
+
+mapfoldl(F, Accu0, [Hd|Tail]) ->
+    {R,Accu1} = F(Hd, Accu0),
+    {Rs,Accu2} = mapfoldl(F, Accu1, Tail),
+    {[R|Rs],Accu2};
+mapfoldl(F, Accu, []) ->
+    {[],Accu}.
+
+mapfoldr(F, Accu0, [Hd|Tail]) ->
+    {Rs,Accu1} = mapfoldr(F, Accu0, Tail),
+    {R,Accu2} = F(Hd, Accu1),
+    {[R|Rs],Accu2};
+mapfoldr(F, Accu, []) ->
+    {[],Accu}.
+
+first(Pred, [H|T]) ->
+    case Pred(H) of
+        true ->
+            {true,H};
+        false ->
+            first(Pred, T)
+    end;
+first(Pred, []) ->
+    false.
+
+compose(F, G) ->
+    fun(X) ->
+           F(G(X))
+    end.
+
+iterate(N, F) ->
+    iterate(N, N + 1, F).
+
+iterate(Stop, Stop, _) ->
+    [];
+iterate(N, Stop, Fun) ->
+    [Fun(N)|iterate(N + 1, Stop, Fun)].
+
+
+

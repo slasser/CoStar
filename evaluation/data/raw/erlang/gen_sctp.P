@@ -1,0 +1,602 @@
+-file("test/lib/kernel/src/gen_sctp.erl", 1).
+
+-module(gen_sctp).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/kernel/src/../include/inet_sctp.hrl",
+      1).
+
+-record(sctp_initmsg,{num_ostreams,
+                      max_instreams,
+                      max_attempts,
+                      max_init_timeo}).
+
+-record(sctp_sndrcvinfo,{stream,
+                         ssn,
+                         flags,
+                         ppid,
+                         context,
+                         timetolive,
+                         tsn,
+                         cumtsn,
+                         assoc_id}).
+
+-record(sctp_assoc_change,{state = cant_assoc,
+                           error = 0,
+                           outbound_streams = 0,
+                           inbound_streams = 0,
+                           assoc_id = 0}).
+
+-record(sctp_paddr_change,{addr = [0,0,0,0],
+                           state = addr_available,
+                           error = 0,
+                           assoc_id = 0}).
+
+-record(sctp_remote_error,{error = 0,assoc_id = 0,data = []}).
+
+-record(sctp_send_failed,{flags = false,
+                          error = 0,
+                          info = #sctp_sndrcvinfo{},
+                          assoc_id = 0,
+                          data = <<>>}).
+
+-record(sctp_shutdown_event,{assoc_id = 0}).
+
+-record(sctp_adaptation_event,{adaptation_ind = 0,assoc_id = 0}).
+
+-record(sctp_pdapi_event,{indication = partial_delivery_aborted,
+                          assoc_id = 0}).
+
+-record(sctp_rtoinfo,{assoc_id,initial,max,min}).
+
+-record(sctp_assocparams,{assoc_id,
+                          asocmaxrxt,
+                          number_peer_destinations,
+                          peer_rwnd,
+                          local_rwnd,
+                          cookie_life}).
+
+-record(sctp_prim,{assoc_id,addr}).
+
+-record(sctp_setpeerprim,{assoc_id,addr}).
+
+-record(sctp_setadaptation,{adaptation_ind}).
+
+-record(sctp_paddrparams,{assoc_id,
+                          address,
+                          hbinterval,
+                          pathmaxrxt,
+                          pathmtu,
+                          sackdelay,
+                          flags}).
+
+-record(sctp_event_subscribe,{data_io_event,
+                              association_event,
+                              address_event,
+                              send_failure_event,
+                              peer_error_event,
+                              shutdown_event,
+                              partial_delivery_event,
+                              adaptation_layer_event,
+                              authentication_event}).
+
+-record(sctp_assoc_value,{assoc_id,assoc_value}).
+
+-record(sctp_paddrinfo,{assoc_id,address,state,cwnd,srtt,rto,mtu}).
+
+-record(sctp_status,{assoc_id,
+                     state,
+                     rwnd,
+                     unackdata,
+                     penddata,
+                     instrms,
+                     outstrms,
+                     fragmentation_point,
+                     primary}).
+
+-file("test/lib/kernel/src/gen_sctp.erl", 28).
+
+-export([open/0,open/1,open/2,close/1]).
+
+-export([listen/2,peeloff/2]).
+
+-export([connect/4,connect/5,connect_init/4,connect_init/5]).
+
+-export([eof/2,abort/2]).
+
+-export([send/3,send/4,recv/1,recv/2]).
+
+-export([error_string/1]).
+
+-export([controlling_process/2]).
+
+-type assoc_id() :: term().
+
+-type option() :: {active, true | false | once}
+                | {buffer, non_neg_integer()}
+                | {dontroute, boolean()}
+                | {high_msgq_watermark, pos_integer()}
+                | {linger, {boolean(), non_neg_integer()}}
+                | {low_msgq_watermark, pos_integer()}
+                | {mode, list | binary}
+                | list
+                | binary
+                | {priority, non_neg_integer()}
+                | {recbuf, non_neg_integer()}
+                | {reuseaddr, boolean()}
+                | {ipv6_v6only, boolean()}
+                | {sctp_adaptation_layer, #sctp_setadaptation{}}
+                | {sctp_associnfo, #sctp_assocparams{}}
+                | {sctp_autoclose, non_neg_integer()}
+                | {sctp_default_send_param, #sctp_sndrcvinfo{}}
+                | {sctp_delayed_ack_time, #sctp_assoc_value{}}
+                | {sctp_disable_fragments, boolean()}
+                | {sctp_events, #sctp_event_subscribe{}}
+                | {sctp_get_peer_addr_info, #sctp_paddrinfo{}}
+                | {sctp_i_want_mapped_v4_addr, boolean()}
+                | {sctp_initmsg, #sctp_initmsg{}}
+                | {sctp_maxseg, non_neg_integer()}
+                | {sctp_nodelay, boolean()}
+                | {sctp_peer_addr_params, #sctp_paddrparams{}}
+                | {sctp_primary_addr, #sctp_prim{}}
+                | {sctp_rtoinfo, #sctp_rtoinfo{}}
+                | {sctp_set_peer_primary_addr, #sctp_setpeerprim{}}
+                | {sctp_status, #sctp_status{}}
+                | {sndbuf, non_neg_integer()}
+                | {tos, non_neg_integer()}.
+
+-type option_name() :: active
+                     | buffer
+                     | dontroute
+                     | high_msgq_watermark
+                     | linger
+                     | low_msgq_watermark
+                     | mode
+                     | priority
+                     | recbuf
+                     | reuseaddr
+                     | ipv6_v6only
+                     | sctp_adaptation_layer
+                     | sctp_associnfo
+                     | sctp_autoclose
+                     | sctp_default_send_param
+                     | sctp_delayed_ack_time
+                     | sctp_disable_fragments
+                     | sctp_events
+                     | sctp_get_peer_addr_info
+                     | sctp_i_want_mapped_v4_addr
+                     | sctp_initmsg
+                     | sctp_maxseg
+                     | sctp_nodelay
+                     | sctp_peer_addr_params
+                     | sctp_primary_addr
+                     | sctp_rtoinfo
+                     | sctp_set_peer_primary_addr
+                     | sctp_status
+                     | sndbuf
+                     | tos.
+
+-type sctp_socket() :: port().
+
+-export_type([{assoc_id,0},{option,0},{option_name,0},{sctp_socket,0}]).
+
+-spec open() -> {ok, Socket} | {error, inet:posix()}
+              when is_subtype(Socket, sctp_socket()).
+
+open() ->
+    open([]).
+
+-spec open(Port) -> {ok, Socket} | {error, inet:posix()}
+              when
+                  is_subtype(Port, inet:port_number()),
+                  is_subtype(Socket, sctp_socket());
+          (Opts) -> {ok, Socket} | {error, inet:posix()}
+              when
+                  is_subtype(Opts, [Opt]),
+                  is_subtype(Opt,
+                             {ip, IP} |
+                             {ifaddr, IP} |
+                             inet:address_family() |
+                             {port, Port} |
+                             {type, SockType} |
+                             option()),
+                  is_subtype(IP, inet:ip_address() | any | loopback),
+                  is_subtype(Port, inet:port_number()),
+                  is_subtype(SockType, seqpacket | stream),
+                  is_subtype(Socket, sctp_socket()).
+
+open(Opts) when is_list(Opts) ->
+    Mod = mod(Opts, undefined),
+    case Mod:open(Opts) of
+        {error,badarg} ->
+            error(badarg, [Opts]);
+        {error,einval} ->
+            error(badarg, [Opts]);
+        Result ->
+            Result
+    end;
+open(Port) when is_integer(Port) ->
+    open([{port,Port}]);
+open(X) ->
+    error(badarg, [X]).
+
+-spec open(Port, Opts) -> {ok, Socket} | {error, inet:posix()}
+              when
+                  is_subtype(Opts, [Opt]),
+                  is_subtype(Opt,
+                             {ip, IP} |
+                             {ifaddr, IP} |
+                             inet:address_family() |
+                             {port, Port} |
+                             {type, SockType} |
+                             option()),
+                  is_subtype(IP, inet:ip_address() | any | loopback),
+                  is_subtype(Port, inet:port_number()),
+                  is_subtype(SockType, seqpacket | stream),
+                  is_subtype(Socket, sctp_socket()).
+
+open(Port, Opts) when is_integer(Port), is_list(Opts) ->
+    open([{port,Port}|Opts]);
+open(Port, Opts) ->
+    error(badarg, [Port,Opts]).
+
+-spec close(Socket) -> ok | {error, inet:posix()}
+               when is_subtype(Socket, sctp_socket()).
+
+close(S) when is_port(S) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:close(S);
+        {error,closed} ->
+            ok
+    end;
+close(S) ->
+    error(badarg, [S]).
+
+-spec listen(Socket, IsServer) -> ok | {error, Reason}
+                when
+                    is_subtype(Socket, sctp_socket()),
+                    is_subtype(IsServer, boolean()),
+                    is_subtype(Reason, term());
+            (Socket, Backlog) -> ok | {error, Reason}
+                when
+                    is_subtype(Socket, sctp_socket()),
+                    is_subtype(Backlog, integer()),
+                    is_subtype(Reason, term()).
+
+listen(S, Backlog)
+    when
+        is_port(S), is_boolean(Backlog); is_port(S), is_integer(Backlog) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:listen(S, Backlog);
+        Error ->
+            Error
+    end;
+listen(S, Flag) ->
+    error(badarg, [S,Flag]).
+
+-spec peeloff(Socket, Assoc) -> {ok, NewSocket} | {error, Reason}
+                 when
+                     is_subtype(Socket, sctp_socket()),
+                     is_subtype(Assoc,
+                                #sctp_assoc_change{} | assoc_id()),
+                     is_subtype(NewSocket, sctp_socket()),
+                     is_subtype(Reason, term()).
+
+peeloff(S, #sctp_assoc_change{assoc_id = AssocId}) when is_port(S) ->
+    peeloff(S, AssocId);
+peeloff(S, AssocId) when is_port(S), is_integer(AssocId) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:peeloff(S, AssocId);
+        Error ->
+            Error
+    end.
+
+-spec connect(Socket, Addr, Port, Opts) ->
+                 {ok, Assoc} | {error, inet:posix()}
+                 when
+                     is_subtype(Socket, sctp_socket()),
+                     is_subtype(Addr,
+                                inet:ip_address() | inet:hostname()),
+                     is_subtype(Port, inet:port_number()),
+                     is_subtype(Opts, [Opt :: option()]),
+                     is_subtype(Assoc, #sctp_assoc_change{}).
+
+connect(S, Addr, Port, Opts) ->
+    connect(S, Addr, Port, Opts, infinity).
+
+-spec connect(Socket, Addr, Port, Opts, Timeout) ->
+                 {ok, Assoc} | {error, inet:posix()}
+                 when
+                     is_subtype(Socket, sctp_socket()),
+                     is_subtype(Addr,
+                                inet:ip_address() | inet:hostname()),
+                     is_subtype(Port, inet:port_number()),
+                     is_subtype(Opts, [Opt :: option()]),
+                     is_subtype(Timeout, timeout()),
+                     is_subtype(Assoc, #sctp_assoc_change{}).
+
+connect(S, Addr, Port, Opts, Timeout) ->
+    case do_connect(S, Addr, Port, Opts, Timeout, true) of
+        badarg ->
+            error(badarg, [S,Addr,Port,Opts,Timeout]);
+        Result ->
+            Result
+    end.
+
+-spec connect_init(Socket, Addr, Port, Opts) ->
+                      ok | {error, inet:posix()}
+                      when
+                          is_subtype(Socket, sctp_socket()),
+                          is_subtype(Addr,
+                                     inet:ip_address() | inet:hostname()),
+                          is_subtype(Port, inet:port_number()),
+                          is_subtype(Opts, [option()]).
+
+connect_init(S, Addr, Port, Opts) ->
+    connect_init(S, Addr, Port, Opts, infinity).
+
+-spec connect_init(Socket, Addr, Port, Opts, Timeout) ->
+                      ok | {error, inet:posix()}
+                      when
+                          is_subtype(Socket, sctp_socket()),
+                          is_subtype(Addr,
+                                     inet:ip_address() | inet:hostname()),
+                          is_subtype(Port, inet:port_number()),
+                          is_subtype(Opts, [option()]),
+                          is_subtype(Timeout, timeout()).
+
+connect_init(S, Addr, Port, Opts, Timeout) ->
+    case do_connect(S, Addr, Port, Opts, Timeout, false) of
+        badarg ->
+            error(badarg, [S,Addr,Port,Opts,Timeout]);
+        Result ->
+            Result
+    end.
+
+do_connect(S, Addr, Port, Opts, Timeout, ConnWait)
+    when is_port(S), is_list(Opts) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            case Mod:getserv(Port) of
+                {ok,Port} ->
+                    try inet:start_timer(Timeout) of
+                        Timer ->
+                            try Mod:getaddr(Addr, Timer) of
+                                {ok,IP} ->
+                                    ConnectTimer =
+                                        if
+                                            ConnWait == false ->
+                                                nowait;
+                                            true ->
+                                                Timer
+                                        end,
+                                    Mod:connect(S,
+                                                IP,
+                                                Port,
+                                                Opts,
+                                                ConnectTimer);
+                                Error ->
+                                    Error
+                            after
+                                inet:stop_timer(Timer)
+                            end
+                    catch
+                        error:badarg ->
+                            badarg
+                    end;
+                Error ->
+                    Error
+            end;
+        Error ->
+            Error
+    end;
+do_connect(_S, _Addr, _Port, _Opts, _Timeout, _ConnWait) ->
+    badarg.
+
+-spec eof(Socket, Assoc) -> ok | {error, Reason}
+             when
+                 is_subtype(Socket, sctp_socket()),
+                 is_subtype(Assoc, #sctp_assoc_change{}),
+                 is_subtype(Reason, term()).
+
+eof(S, #sctp_assoc_change{assoc_id = AssocId}) when is_port(S) ->
+    eof_or_abort(S, AssocId, eof);
+eof(S, Assoc) ->
+    error(badarg, [S,Assoc]).
+
+-spec abort(Socket, Assoc) -> ok | {error, inet:posix()}
+               when
+                   is_subtype(Socket, sctp_socket()),
+                   is_subtype(Assoc, #sctp_assoc_change{}).
+
+abort(S, #sctp_assoc_change{assoc_id = AssocId}) when is_port(S) ->
+    eof_or_abort(S, AssocId, abort);
+abort(S, Assoc) ->
+    error(badarg, [S,Assoc]).
+
+eof_or_abort(S, AssocId, Action) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:sendmsg(S,
+                        #sctp_sndrcvinfo{assoc_id = AssocId,
+                                         flags = [Action]},
+                        <<>>);
+        Error ->
+            Error
+    end.
+
+-spec send(Socket, SndRcvInfo, Data) -> ok | {error, Reason}
+              when
+                  is_subtype(Socket, sctp_socket()),
+                  is_subtype(SndRcvInfo, #sctp_sndrcvinfo{}),
+                  is_subtype(Data, binary() | iolist()),
+                  is_subtype(Reason, term()).
+
+send(S, #sctp_sndrcvinfo{} = SRI, Data) when is_port(S) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:sendmsg(S, SRI, Data);
+        Error ->
+            Error
+    end;
+send(S, SRI, Data) ->
+    error(badarg, [S,SRI,Data]).
+
+-spec send(Socket, Assoc, Stream, Data) -> ok | {error, Reason}
+              when
+                  is_subtype(Socket, sctp_socket()),
+                  is_subtype(Assoc, #sctp_assoc_change{} | assoc_id()),
+                  is_subtype(Stream, integer()),
+                  is_subtype(Data, binary() | iolist()),
+                  is_subtype(Reason, term()).
+
+send(S, #sctp_assoc_change{assoc_id = AssocId}, Stream, Data)
+    when is_port(S), is_integer(Stream) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:send(S, AssocId, Stream, Data);
+        Error ->
+            Error
+    end;
+send(S, AssocId, Stream, Data)
+    when is_port(S), is_integer(AssocId), is_integer(Stream) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:send(S, AssocId, Stream, Data);
+        Error ->
+            Error
+    end;
+send(S, AssocChange, Stream, Data) ->
+    error(badarg, [S,AssocChange,Stream,Data]).
+
+-spec recv(Socket) ->
+              {ok, {FromIP, FromPort, AncData, Data}} | {error, Reason}
+              when
+                  is_subtype(Socket, sctp_socket()),
+                  is_subtype(FromIP, inet:ip_address()),
+                  is_subtype(FromPort, inet:port_number()),
+                  is_subtype(AncData, [#sctp_sndrcvinfo{}]),
+                  is_subtype(Data,
+                             binary() |
+                             string() |
+                             #sctp_sndrcvinfo{} |
+                             #sctp_assoc_change{} |
+                             #sctp_paddr_change{} |
+                             #sctp_adaptation_event{}),
+                  is_subtype(Reason,
+                             inet:posix() |
+                             #sctp_send_failed{} |
+                             #sctp_paddr_change{} |
+                             #sctp_pdapi_event{} |
+                             #sctp_remote_error{} |
+                             #sctp_shutdown_event{}).
+
+recv(S) ->
+    recv(S, infinity).
+
+-spec recv(Socket, Timeout) ->
+              {ok, {FromIP, FromPort, AncData, Data}} | {error, Reason}
+              when
+                  is_subtype(Socket, sctp_socket()),
+                  is_subtype(Timeout, timeout()),
+                  is_subtype(FromIP, inet:ip_address()),
+                  is_subtype(FromPort, inet:port_number()),
+                  is_subtype(AncData, [#sctp_sndrcvinfo{}]),
+                  is_subtype(Data,
+                             binary() |
+                             string() |
+                             #sctp_sndrcvinfo{} |
+                             #sctp_assoc_change{} |
+                             #sctp_paddr_change{} |
+                             #sctp_adaptation_event{}),
+                  is_subtype(Reason,
+                             inet:posix() |
+                             #sctp_send_failed{} |
+                             #sctp_paddr_change{} |
+                             #sctp_pdapi_event{} |
+                             #sctp_remote_error{} |
+                             #sctp_shutdown_event{}).
+
+recv(S, Timeout) when is_port(S) ->
+    case inet_db:lookup_socket(S) of
+        {ok,Mod} ->
+            Mod:recv(S, Timeout);
+        Error ->
+            Error
+    end;
+recv(S, Timeout) ->
+    error(badarg, [S,Timeout]).
+
+-spec error_string(ErrorNumber) -> ok | string() | unknown_error
+                      when is_subtype(ErrorNumber, integer()).
+
+error_string(0) ->
+    ok;
+error_string(1) ->
+    "Invalid Stream Identifier";
+error_string(2) ->
+    "Missing Mandatory Parameter";
+error_string(3) ->
+    "Stale Cookie Error";
+error_string(4) ->
+    "Out of Resource";
+error_string(5) ->
+    "Unresolvable Address";
+error_string(6) ->
+    "Unrecognized Chunk Type";
+error_string(7) ->
+    "Invalid Mandatory Parameter";
+error_string(8) ->
+    "Unrecognized Parameters";
+error_string(9) ->
+    "No User Data";
+error_string(10) ->
+    "Cookie Received While Shutting Down";
+error_string(11) ->
+    "User Initiated Abort";
+error_string(N) when is_integer(N) ->
+    unknown_error;
+error_string(X) ->
+    error(badarg, [X]).
+
+-spec controlling_process(Socket, Pid) -> ok | {error, Reason}
+                             when
+                                 is_subtype(Socket, sctp_socket()),
+                                 is_subtype(Pid, pid()),
+                                 is_subtype(Reason,
+                                            closed |
+                                            not_owner |
+                                            inet:posix()).
+
+controlling_process(S, Pid) when is_port(S), is_pid(Pid) ->
+    inet:udp_controlling_process(S, Pid);
+controlling_process(S, Pid) ->
+    error(badarg, [S,Pid]).
+
+mod(Address) ->
+    case inet_db:sctp_module() of
+        inet_sctp when tuple_size(Address) =:= 8 ->
+            inet6_sctp;
+        Mod ->
+            Mod
+    end.
+
+mod([{sctp_module,Mod}|_], _Address) ->
+    Mod;
+mod([inet|_], _Address) ->
+    inet_sctp;
+mod([inet6|_], _Address) ->
+    inet6_sctp;
+mod([{ip,Address}|Opts], _) ->
+    mod(Opts, Address);
+mod([{ifaddr,Address}|Opts], _) ->
+    mod(Opts, Address);
+mod([_|Opts], Address) ->
+    mod(Opts, Address);
+mod([], Address) ->
+    mod(Address).
+
+
+

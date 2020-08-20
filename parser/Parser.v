@@ -7,6 +7,7 @@ Require Import GallStar.Termination.
 Require Import GallStar.Utils.
 Import ListNotations.
 Open Scope list_scope.
+Open Scope string_scope.
 
 Module ParserFn (Import D : Defs.T).
 
@@ -17,12 +18,29 @@ Module ParserFn (Import D : Defs.T).
   | LeftRecursion   : nonterminal -> parse_error
   | PredictionError : prediction_error -> parse_error.
 
+  (* For validation *)
+  Definition showParseError (e : parse_error) : string :=
+    match e with
+    | InvalidState      => "InvalidState"
+    | LeftRecursion x   => "LeftRecursion " ++ showNT x
+    | PredictionError e => "PredictionError (" ++ showPredictionError e ++ ")"
+    end.
+
   (* to do : move this lower *)
   Inductive parse_result := Accept : tree -> parse_result
                           | Ambig  : tree -> parse_result
                           | Reject : string -> parse_result
                           | Error  : parse_error -> parse_result.
 
+  (* For validation *)
+  Definition showResult (pr : parse_result) : string :=
+    match pr with
+    | Accept tr => "Accept"
+    | Ambig tr  => "Ambig"
+    | Reject s  => "Reject: " ++ s
+    | Error e   => "Error:  " ++ showParseError e
+    end.
+  
   Inductive step_result :=
   | StepAccept : tree -> step_result
   | StepReject : string -> step_result

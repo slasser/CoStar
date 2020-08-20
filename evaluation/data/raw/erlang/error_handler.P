@@ -1,0 +1,119 @@
+-file("test/lib/kernel/src/error_handler.erl", 1).
+
+-module(error_handler).
+
+-compile(no_native).
+
+-export([undefined_function/3,undefined_lambda/3,breakpoint/3]).
+
+-export([raise_undef_exception/3]).
+
+-export([stub_function/3]).
+
+-spec undefined_function(Module, Function, Args) -> any()
+                            when
+                                is_subtype(Module, atom()),
+                                is_subtype(Function, atom()),
+                                is_subtype(Args, list()).
+
+undefined_function(Module, Func, Args) ->
+    case ensure_loaded(Module) of
+        {module,Module} ->
+            case erlang:function_exported(Module, Func, length(Args)) of
+                true ->
+                    apply(Module, Func, Args);
+                false ->
+                    call_undefined_function_handler(Module, Func, Args)
+            end;
+        {module,_} ->
+            crash(Module, Func, Args);
+        _Other ->
+            crash(Module, Func, Args)
+    end.
+
+-spec undefined_lambda(Module, Fun, Args) -> term()
+                          when
+                              is_subtype(Module, atom()),
+                              is_subtype(Fun, fun()),
+                              is_subtype(Args, list()).
+
+undefined_lambda(Module, Fun, Args) ->
+    case ensure_loaded(Module) of
+        {module,Module} ->
+            apply(Fun, Args);
+        {module,_} ->
+            crash(Fun, Args);
+        _Other ->
+            crash(Fun, Args)
+    end.
+
+-spec breakpoint(Module :: atom(), Function :: atom(), Args :: [_]) ->
+                    any().
+
+breakpoint(Module, Func, Args) ->
+    (int()):eval(Module, Func, Args).
+
+-spec raise_undef_exception(Module, Function, Args) -> no_return()
+                               when
+                                   is_subtype(Module, atom()),
+                                   is_subtype(Function, atom()),
+                                   is_subtype(Args, list()).
+
+raise_undef_exception(Module, Func, Args) ->
+    crash({Module,Func,Args,[]}).
+
+int() ->
+    int.
+
+-spec crash(atom(), [term()]) -> no_return().
+
+crash(Fun, Args) ->
+    crash({Fun,Args,[]}).
+
+-spec crash(atom(), atom(), arity() | [term()]) -> no_return().
+
+crash(M, F, A) ->
+    crash({M,F,A,[]}).
+
+-spec crash(tuple()) -> no_return().
+
+crash(Tuple) ->
+    try
+        error(undef)
+    catch
+        error:undef ->
+            Stk = [Tuple|tl(erlang:get_stacktrace())],
+            erlang:raise(error, undef, Stk)
+    end.
+
+ensure_loaded(Module) ->
+    Self = self(),
+    case whereis(code_server) of
+        Self ->
+            Error =
+                "The code server called the unloaded module `"
+                ++
+                atom_to_list(Module) ++ "'",
+            halt(Error);
+        Pid when is_pid(Pid) ->
+            code:ensure_loaded(Module);
+        _ ->
+            init:ensure_loaded(Module)
+    end.
+
+-spec stub_function(atom(), atom(), [_]) -> no_return().
+
+stub_function(Mod, Func, Args) ->
+    exit({undef,[{Mod,Func,Args,[]}]}).
+
+call_undefined_function_handler(Module, Func, Args) ->
+    Handler = '$handle_undefined_function',
+    case erlang:function_exported(Module, Handler, 2) of
+        false ->
+            crash(Module, Func, Args);
+        true ->
+            Module:Handler(Func, Args)
+    end.
+
+
+

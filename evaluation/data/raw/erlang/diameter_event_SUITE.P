@@ -1,0 +1,216 @@
+-file("test/lib/diameter/test/diameter_event_SUITE.erl", 1).
+
+-module(diameter_event_SUITE).
+
+-export([suite/0,all/0,init_per_testcase/2,end_per_testcase/2]).
+
+-export([start/1,start_server/1,up/1,down/1,cea_timeout/1,stop/1]).
+
+-file("/Users/parrt/Downloads/fenollp-erlang-grammar-c1db83d09307/test/lib/diameter/test/../include/diameter.hrl",
+      1).
+
+-record(diameter_event,{service,info}).
+
+-record(diameter_packet,{header,avps,msg,bin,errors = [],transport_data}).
+
+-record(diameter_header,{version,
+                         length,
+                         cmd_code,
+                         application_id,
+                         hop_by_hop_id,
+                         end_to_end_id,
+                         is_request,
+                         is_proxiable,
+                         is_error,
+                         is_retransmitted}).
+
+-record(diameter_avp,{code,
+                      vendor_id,
+                      is_mandatory = false,
+                      need_encryption = false,
+                      data,
+                      name,
+                      value,
+                      type,
+                      index}).
+
+-record(diameter_caps,{origin_host,
+                       origin_realm,
+                       host_ip_address = [],
+                       vendor_id,
+                       product_name,
+                       origin_state_id = [],
+                       supported_vendor_id = [],
+                       auth_application_id = [],
+                       inband_security_id = [],
+                       acct_application_id = [],
+                       vendor_specific_application_id = [],
+                       firmware_revision = [],
+                       avp = []}).
+
+-record(diameter_uri,{type,
+                      fqdn,
+                      port = 3868,
+                      transport = sctp,
+                      protocol = diameter}).
+
+-record(diameter_callback,{peer_up,
+                           peer_down,
+                           pick_peer,
+                           prepare_request,
+                           prepare_retransmit,
+                           handle_request,
+                           handle_answer,
+                           handle_error,
+                           default,
+                           extra = []}).
+
+-record(diameter_service,{pid,capabilities,applications = []}).
+
+-record(diameter_app,{alias,
+                      dictionary,
+                      module,
+                      init_state,
+                      id,
+                      mutable = false,
+                      options =
+                          [{answer_errors,report},
+                           {request_errors,answer_3xxx}]}).
+
+-file("test/lib/diameter/test/diameter_event_SUITE.erl", 42).
+
+suite() ->
+    [{timetrap,{seconds,60}}].
+
+all() ->
+    [start,start_server,up,down,cea_timeout,stop].
+
+init_per_testcase(Name, Config) ->
+    [{name,Name}|Config].
+
+end_per_testcase(_, _) ->
+    ok.
+
+start(_Config) ->
+    ok = diameter:start().
+
+start_server(Config) ->
+    diameter:subscribe("SERVER.SERVER-REALM"),
+    ok =
+        diameter:start_service("SERVER.SERVER-REALM",
+                               [{'Origin-Host',"SERVER.SERVER-REALM"},
+                                {'Origin-Realm',
+                                 realm("SERVER.SERVER-REALM")},
+                                {'Host-IP-Address',[{127,0,0,1}]},
+                                {'Vendor-Id',12345},
+                                {'Product-Name',"OTP/diameter"},
+                                {'Acct-Application-Id',
+                                 [ 
+                                  D:id() ||
+                                      D <- [diameter_gen_base_rfc3588]
+                                 ]}|
+                                [ 
+                                 {application,
+                                  [{dictionary,D},
+                                   {module,#diameter_callback{}}]} ||
+                                     D <- [diameter_gen_base_rfc3588]
+                                ]]),
+    LRef =
+        diameter_util:listen("SERVER.SERVER-REALM",
+                             tcp,
+                             [{capabilities_cb,fun capx_cb/2},
+                              {capx_timeout,6000}]),
+    [PortNr] = diameter_util:lport(tcp, LRef),
+    diameter_util:write_priv(Config, portnr, PortNr),
+    start = event("SERVER.SERVER-REALM").
+
+up(Config) ->
+    {Svc,Ref} = connect(Config, []),
+    start = event(Svc),
+    {up,Ref,{_,_Caps},_Config,#diameter_packet{}} = event(Svc),
+    {watchdog,Ref,_,{initial,okay},_} = event(Svc).
+
+down(Config) ->
+    {Svc,Ref} =
+        connect(Config,
+                [{capabilities,
+                  [{'Acct-Application-Id',
+                    [diameter_gen_base_accounting:id()]}]},
+                 {applications,[diameter_gen_base_accounting]},
+                 {reconnect_timer,5000}]),
+    start = event(Svc),
+    {closed,Ref,{'CEA',5010,_,#diameter_packet{}},_} = event(Svc),
+    {reconnect,Ref,_} = event(Svc).
+
+cea_timeout(Config) ->
+    {Svc,Ref} =
+        connect(Config,
+                [{capx_timeout,6000 div 2},{reconnect_timer,2 * 6000}]),
+    start = event(Svc),
+    {closed,Ref,{'CEA',timeout},_} = event(Svc).
+
+stop(_Config) ->
+    ok = diameter:stop().
+
+capx_cb(_, #diameter_caps{origin_host = {_,"cea_timeout-" ++ _}}) ->
+    receive after 6000 -> ok end;
+capx_cb(_, _Caps) ->
+    ok.
+
+connect(Config, Opts) ->
+    Pre = atom_to_list(proplists:get_value(name, Config)),
+    Name = Pre ++ uniq() ++ "CLIENT.CLIENT-REALM",
+    diameter:subscribe(Name),
+    ok =
+        start_service(Name,
+                      [{'Origin-Host',Name},
+                       {'Origin-Realm',realm(Name)},
+                       {'Host-IP-Address',[{127,0,0,1}]},
+                       {'Vendor-Id',12345},
+                       {'Product-Name',"OTP/diameter"},
+                       {'Acct-Application-Id',
+                        [ 
+                         D:id() ||
+                             D <-
+                                 [diameter_gen_base_rfc3588,
+                                  diameter_gen_base_accounting]
+                        ]}|
+                       [ 
+                        {application,
+                         [{dictionary,D},{module,#diameter_callback{}}]} ||
+                            D <-
+                                [diameter_gen_base_rfc3588,
+                                 diameter_gen_base_accounting]
+                       ]]),
+    {ok,Ref} = diameter:add_transport(Name, opts(Config, Opts)),
+    {Name,Ref}.
+
+uniq() ->
+    {MS,S,US} = now(),
+    lists:flatten(io_lib:format("-~p-~p-~p-", [MS,S,US])).
+
+event(Name) ->
+    receive
+        #diameter_event{service = Name,info = T} ->
+            T
+    end.
+
+start_service(Name, Opts) ->
+    diameter:start_service(Name, [{monitor,self()}|Opts]).
+
+opts(Config, Opts) ->
+    PortNr = diameter_util:read_priv(Config, portnr),
+    {connect,
+     [{transport_module,diameter_tcp},
+      {transport_config,
+       [{ip,{127,0,0,1}},{port,0},{raddr,{127,0,0,1}},{rport,PortNr}]}|
+      Opts]}.
+
+realm(Host) ->
+    tl(lists:dropwhile(fun(C) ->
+                              C /= $.
+                       end,
+                       Host)).
+
+
+

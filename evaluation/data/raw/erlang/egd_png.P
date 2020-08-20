@@ -1,0 +1,73 @@
+-file("test/lib/percept/src/egd_png.erl", 1).
+
+-module(egd_png).
+
+-export([binary/3]).
+
+-file("test/lib/percept/src/egd.hrl", 1).
+
+-type rgba_float() :: {float(), float(), float(), float()}.
+
+-type rgba_byte() :: {byte(), byte(), byte(), byte()}.
+
+-type rgb() :: {byte(), byte(), byte()}.
+
+-record(image_object,{type,points = [],span,internals,intervals,color}).
+
+-record(image,{width,
+               height,
+               objects = [],
+               background = {1.0,1.0,1.0,1.0},
+               image}).
+
+-file("test/lib/percept/src/egd_png.erl", 31).
+
+binary(W, H, Bitmap) when is_binary(Bitmap) ->
+    Z = zlib:open(),
+    Binary = bitmap2png(W, H, Bitmap, Z),
+    zlib:close(Z),
+    Binary.
+
+bitmap2png(W, H, Bitmap, Z) ->
+    HDR =
+        create_chunk(<<"IHDR",
+                       W:32,
+                       H:32,
+                       8:8,
+                       (png_type(r8g8b8)):8,
+                       0:8,
+                       0:8,
+                       0:8>>,
+                     Z),
+    DATA =
+        create_chunk(["IDAT",compress_image(0, 3 * W, Bitmap, [])], Z),
+    END = create_chunk(<<"IEND">>, Z),
+    list_to_binary([137,$P,$N,$G,$\r,$\n,26,$\n,HDR,DATA,END]).
+
+compress_image(I, RowLen, Bin, Acc) ->
+    Pos = I * RowLen,
+    case Bin of
+        <<_:Pos/binary,Row:RowLen/binary,_/binary>> ->
+            Filtered = filter_row(Row, RowLen),
+            compress_image(I + 1, RowLen, Bin, [Filtered|Acc]);
+        _ when Pos == size(Bin) ->
+            Filtered = list_to_binary(lists:reverse(Acc)),
+            Compressed = zlib:compress(Filtered),
+            Compressed
+    end.
+
+filter_row(Row, _RowLen) ->
+    [0,Row].
+
+png_type(r8g8b8) ->
+    2.
+
+create_chunk(Bin, Z) when is_list(Bin) ->
+    create_chunk(list_to_binary(Bin), Z);
+create_chunk(Bin, Z) when is_binary(Bin) ->
+    Sz = size(Bin) - 4,
+    Crc = zlib:crc32(Z, Bin),
+    <<Sz:32,Bin/binary,Crc:32>>.
+
+
+

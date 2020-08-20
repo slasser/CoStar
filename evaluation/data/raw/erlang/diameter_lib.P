@@ -1,0 +1,169 @@
+-file("test/lib/diameter/src/base/diameter_lib.erl", 1).
+
+-module(diameter_lib).
+
+-export([info_report/2,
+         error_report/2,
+         warning_report/2,
+         now_diff/1,
+         time/1,
+         eval/1,
+         ipaddr/1,
+         spawn_opts/2,
+         wait/1,
+         fold_tuple/3,
+         log/4]).
+
+-spec info_report(Reason :: term(), T :: term()) -> true.
+
+info_report(Reason, T) ->
+    report(fun error_logger:info_report/1, Reason, T),
+    true.
+
+-spec error_report(Reason :: term(), T :: term()) -> false.
+
+error_report(Reason, T) ->
+    report(fun error_logger:error_report/1, Reason, T).
+
+-spec warning_report(Reason :: term(), T :: term()) -> false.
+
+warning_report(Reason, T) ->
+    report(fun error_logger:warning_report/1, Reason, T).
+
+report(Fun, Reason, T) ->
+    Fun([{why,Reason},{who,self()},{what,T}]),
+    false.
+
+-spec now_diff(NowT) -> {Hours, Mins, Secs, MicroSecs}
+                  when
+                      is_subtype(NowT,
+                                 {non_neg_integer(),
+                                  0..999999,
+                                  0..999999}),
+                      is_subtype(Hours, non_neg_integer()),
+                      is_subtype(Mins, 0..59),
+                      is_subtype(Secs, 0..59),
+                      is_subtype(MicroSecs, 0..999999).
+
+now_diff({_,_,_} = Time) ->
+    time(timer:now_diff(now(), Time)).
+
+-spec time(NowT | Diff) -> {Hours, Mins, Secs, MicroSecs}
+              when
+                  is_subtype(NowT,
+                             {non_neg_integer(), 0..999999, 0..999999}),
+                  is_subtype(Diff, non_neg_integer()),
+                  is_subtype(Hours, non_neg_integer()),
+                  is_subtype(Mins, 0..59),
+                  is_subtype(Secs, 0..59),
+                  is_subtype(MicroSecs, 0..999999).
+
+time({_,_,_} = NowT) ->
+    time(timer:now_diff(NowT, {0,0,0}) rem 86400000000);
+time(Micro) ->
+    Seconds = Micro div 1000000,
+    H = Seconds div 3600,
+    M = Seconds rem 3600 div 60,
+    S = Seconds rem 60,
+    {H,M,S,Micro rem 1000000}.
+
+-type f() :: {module(), atom(), list()}
+           | nonempty_maybe_improper_list(fun(), list())
+           | fun().
+
+-spec eval(Fun) -> term()
+              when
+                  is_subtype(Fun,
+                             f() |
+                             {f()} |
+                             nonempty_maybe_improper_list(f(), list())).
+
+eval({M,F,A}) ->
+    apply(M, F, A);
+eval([{M,F,A}|X]) ->
+    apply(M, F, X ++ A);
+eval([[F|A]|X]) ->
+    eval([F|X ++ A]);
+eval([F|A]) ->
+    apply(F, A);
+eval({F}) ->
+    eval(F);
+eval(F) ->
+    F().
+
+-spec ipaddr([byte()] | tuple()) -> inet:ip_address() | none().
+
+ipaddr(Addr) ->
+    try
+        ip(Addr)
+    catch
+        error:_ ->
+            error({invalid_address,erlang:get_stacktrace()})
+    end.
+
+ip(T) when size(T) == 4; size(T) == 8 ->
+    Bs = 2 * size(T),
+    [] =
+        lists:filter(fun(N) when 0 =< N ->
+                            0 < N bsr Bs
+                     end,
+                     tuple_to_list(T)),
+    T;
+ip(Addr) ->
+    {ok,A} = inet_parse:address(Addr),
+    A.
+
+-spec spawn_opts(server | worker, list()) -> list().
+
+spawn_opts(server, Opts) ->
+    opts(75000, Opts);
+spawn_opts(worker, Opts) ->
+    opts(5000, Opts).
+
+opts(HeapSize, Opts) ->
+    [{min_heap_size,HeapSize}|lists:keydelete(min_heap_size, 1, Opts)].
+
+-spec wait([pid()]) -> ok.
+
+wait(L) ->
+    down([ 
+          monitor(process, P) ||
+              P <- L
+         ]).
+
+down([]) ->
+    ok;
+down([MRef|T]) ->
+    receive
+        {'DOWN',MRef,process,_,_} ->
+            ok
+    end,
+    down(T).
+
+-spec fold_tuple(N, T0, T) -> tuple()
+                    when
+                        is_subtype(N, pos_integer()),
+                        is_subtype(T0, tuple()),
+                        is_subtype(T, tuple() | undefined).
+
+fold_tuple(_, T, undefined) ->
+    T;
+fold_tuple(N, T0, T1) ->
+    {_,T} =
+        lists:foldl(fun(V, {I,_} = IT) ->
+                           {I + 1,ft(V, IT)}
+                    end,
+                    {N,T0},
+                    lists:nthtail(N - 1, tuple_to_list(T1))),
+    T.
+
+ft(undefined, {_,T}) ->
+    T;
+ft(Value, {Idx,T}) ->
+    setelement(Idx, T, Value).
+
+log(_Slogan, _Mod, _Line, _Details) ->
+    ok.
+
+
+

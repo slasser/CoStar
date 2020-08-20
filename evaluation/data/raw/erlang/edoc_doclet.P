@@ -1,0 +1,549 @@
+-file("test/lib/edoc/src/edoc_doclet.erl", 1).
+
+-module(edoc_doclet).
+
+-export([run/2]).
+
+-import(edoc_report, [report/2,warning/2]).
+
+-file("test/lib/edoc/src/../include/edoc_doclet.hrl", 1).
+
+-record(context,{dir = "",env,opts = []}).
+
+-record(doclet_gen,{sources = [],
+                    app = [],
+                    packages = [],
+                    modules = [],
+                    filemap}).
+
+-record(doclet_toc,{paths,indir}).
+
+-file("test/lib/edoc/src/edoc_doclet.erl", 40).
+
+-file("/usr/local/Cellar/erlang/R15B03-1/lib/erlang/lib/xmerl-1.3.2/include/xmerl.hrl",
+      1).
+
+-record(xmlDecl,{vsn,encoding,standalone,attributes}).
+
+-record(xmlAttribute,{name,
+                      expanded_name = [],
+                      nsinfo = [],
+                      namespace = [],
+                      parents = [],
+                      pos,
+                      language = [],
+                      value,
+                      normalized}).
+
+-record(xmlNamespace,{default = [],nodes = []}).
+
+-record(xmlNsNode,{parents = [],pos,prefix,uri = []}).
+
+-record(xmlElement,{name,
+                    expanded_name = [],
+                    nsinfo = [],
+                    namespace = #xmlNamespace{},
+                    parents = [],
+                    pos,
+                    attributes = [],
+                    content = [],
+                    language = "",
+                    xmlbase = "",
+                    elementdef = undeclared}).
+
+-record(xmlText,{parents = [],pos,language = [],value,type = text}).
+
+-record(xmlComment,{parents = [],pos,language = [],value}).
+
+-record(xmlPI,{name,parents = [],pos,value}).
+
+-record(xmlDocument,{content}).
+
+-record(xmlContext,{axis_type = forward,
+                    context_node,
+                    context_position = 1,
+                    nodeset = [],
+                    bindings = [],
+                    functions = [],
+                    namespace = [],
+                    whole_document}).
+
+-record(xmlNode,{type = element,node,parents = [],pos = 1}).
+
+-record(xmlObj,{type,value}).
+
+-record(xmerl_fun_states,{event,hook,rules,fetch,cont}).
+
+-record(xmerl_scanner,{encoding = undefined,
+                       standalone = no,
+                       environment = prolog,
+                       declarations = [],
+                       doctype_name,
+                       doctype_DTD = internal,
+                       comments = true,
+                       document = false,
+                       default_attrs = false,
+                       rules,
+                       keep_rules = false,
+                       namespace_conformant = false,
+                       xmlbase,
+                       xmlbase_cache,
+                       fetch_path = [],
+                       filename = file_name_unknown,
+                       validation = off,
+                       schemaLocation = [],
+                       space = preserve,
+                       event_fun,
+                       hook_fun,
+                       acc_fun,
+                       fetch_fun,
+                       close_fun,
+                       continuation_fun,
+                       rules_read_fun,
+                       rules_write_fun,
+                       rules_delete_fun,
+                       user_state,
+                       fun_states = #xmerl_fun_states{},
+                       entity_references = [],
+                       text_decl = false,
+                       quiet = false,
+                       col = 1,
+                       line = 1,
+                       common_data = []}).
+
+-record(xmerl_event,{event,line,col,pos,data}).
+
+-file("test/lib/edoc/src/edoc_doclet.erl", 54).
+
+run(#doclet_gen{} = Cmd, Ctxt) ->
+    gen(Cmd#doclet_gen.sources,
+        Cmd#doclet_gen.app,
+        Cmd#doclet_gen.packages,
+        Cmd#doclet_gen.modules,
+        Cmd#doclet_gen.filemap,
+        Ctxt);
+run(#doclet_toc{} = Cmd, Ctxt) ->
+    toc(Cmd#doclet_toc.paths, Ctxt).
+
+gen(Sources, App, Packages, Modules, FileMap, Ctxt) ->
+    Dir = Ctxt#context.dir,
+    Env = Ctxt#context.env,
+    Options = Ctxt#context.opts,
+    Title = title(App, Options),
+    CSS = stylesheet(Options),
+    {Modules1,Error} = sources(Sources, Dir, Modules, Env, Options),
+    modules_frame(Dir, Modules1, Title, CSS),
+    packages(Packages, Dir, FileMap, Env, Options),
+    packages_frame(Dir, Packages, Title, CSS),
+    overview(Dir, Title, Env, Options),
+    index_file(Dir, length(Packages) > 1, Title),
+    edoc_lib:write_info_file(App, Packages, Modules1, Dir),
+    copy_stylesheet(Dir, Options),
+    copy_image(Dir),
+    case Error of
+        true ->
+            exit(error);
+        false ->
+            ok
+    end.
+
+title(App, Options) ->
+    proplists:get_value(title,
+                        Options,
+                        if
+                            App == [] ->
+                                "Overview";
+                            true ->
+                                io_lib:fwrite("Application: ~s", [App])
+                        end).
+
+sources(Sources, Dir, Modules, Env, Options) ->
+    Suffix = proplists:get_value(file_suffix, Options, ".html"),
+    Private = proplists:get_bool(private, Options),
+    Hidden = proplists:get_bool(hidden, Options),
+    {Ms,E} =
+        lists:foldl(fun(Src, {Set,Error}) ->
+                           source(Src,
+                                  Dir,
+                                  Suffix,
+                                  Env,
+                                  Set,
+                                  Private,
+                                  Hidden,
+                                  Error,
+                                  Options)
+                    end,
+                    {sets:new(),false},
+                    Sources),
+    {[ 
+      M ||
+          M <- Modules,
+          sets:is_element(M, Ms)
+     ],
+     E}.
+
+source({M,P,Name,Path},
+       Dir,
+       Suffix,
+       Env,
+       Set,
+       Private,
+       Hidden,
+       Error,
+       Options) ->
+    File = filename:join(Path, Name),
+    case catch {ok,edoc:get_doc(File, Env, Options)} of
+        {ok,{Module,Doc}} ->
+            check_name(Module, M, P, File),
+            case
+                (not is_private(Doc)
+                 orelse
+                 Private)
+                andalso
+                (not is_hidden(Doc)
+                 orelse
+                 Hidden)
+            of
+                true ->
+                    Text = edoc:layout(Doc, Options),
+                    Name1 = atom_to_list(M) ++ Suffix,
+                    Encoding = [{encoding,encoding(Doc)}],
+                    edoc_lib:write_file(Text, Dir, Name1, P, Encoding),
+                    {sets:add_element(Module, Set),Error};
+                false ->
+                    {Set,Error}
+            end;
+        R ->
+            report("skipping source file '~ts': ~W.", [File,R,15]),
+            {Set,true}
+    end.
+
+check_name(M, M0, P0, File) ->
+    P = '',
+    N = M,
+    N0 = M0,
+    case N of
+        [$?|_] ->
+            ok;
+        _ ->
+            if
+                N =/= N0 ->
+                    warning("file '~ts' actually contains module '~s'.",
+                            [File,M]);
+                true ->
+                    ok
+            end
+    end,
+    if
+        P =/= P0 ->
+            warning("file '~ts' belongs to package '~s', not '~s'.",
+                    [File,P,P0]);
+        true ->
+            ok
+    end.
+
+packages(Packages, Dir, FileMap, Env, Options) ->
+    lists:foreach(fun(P) ->
+                         package(P, Dir, FileMap, Env, Options)
+                  end,
+                  Packages).
+
+package(P, Dir, FileMap, Env, Opts) ->
+    Tags =
+        case FileMap(P) of
+            "" ->
+                [];
+            File ->
+                read_file(File, package, Env, Opts)
+        end,
+    Data = edoc_data:package(P, Tags, Env, Opts),
+    F = fun(M) ->
+               M:package(Data, Opts)
+        end,
+    Text = edoc_lib:run_layout(F, Opts),
+    edoc_lib:write_file(Text, Dir, "package-summary.html", P).
+
+index_file(Dir, Packages, Title) ->
+    Frame1 =
+        {frame,
+         [{src,"packages-frame.html"},{name,"packagesFrame"},{title,""}],
+         []},
+    Frame2 =
+        {frame,
+         [{src,"modules-frame.html"},{name,"modulesFrame"},{title,""}],
+         []},
+    Frame3 =
+        {frame,
+         [{src,"overview-summary.html"},
+          {name,"overviewFrame"},
+          {title,""}],
+         []},
+    Frameset =
+        {frameset,
+         [{cols,"20%,80%"}],
+         case Packages of
+             true ->
+                 ["\n",
+                  {frameset,
+                   [{rows,"30%,70%"}],
+                   ["\n",Frame1,"\n",Frame2,"\n"]}];
+             false ->
+                 ["\n",Frame2,"\n"]
+         end
+         ++
+         ["\n",
+          Frame3,
+          "\n",
+          {noframes,
+           ["\n",
+            {h2,["This page uses frames"]},
+            "\n",
+            {p,
+             ["Your browser does not accept frames.",
+              "\n",
+              br,
+              "You should go to the ",
+              {a,[{href,"overview-summary.html"}],["non-frame version"]},
+              " instead.",
+              "\n"]},
+            "\n"]},
+          "\n"]},
+    XML = xhtml_1(Title, [], Frameset),
+    Text = xmerl:export_simple([XML], xmerl_html, []),
+    edoc_lib:write_file(Text, Dir, "index.html").
+
+packages_frame(Dir, Ps, Title, CSS) ->
+    Body =
+        ["\n",
+         {h2,[{class,"indextitle"}],["Packages"]},
+         "\n",
+         {table,
+          [{width,"100%"},{border,0},{summary,"list of packages"}],
+          lists:concat([ 
+                        ["\n",
+                         {tr,
+                          [{td,
+                            [],
+                            [{a,
+                              [{href,package_ref(P)},
+                               {target,"overviewFrame"},
+                               {class,"package"}],
+                              [atom_to_list(P)]}]}]}] ||
+                            P <- Ps
+                       ])},
+         "\n"],
+    XML = xhtml(Title, CSS, Body),
+    Text = xmerl:export_simple([XML], xmerl_html, []),
+    edoc_lib:write_file(Text, Dir, "packages-frame.html").
+
+modules_frame(Dir, Ms, Title, CSS) ->
+    Body =
+        ["\n",
+         {h2,[{class,"indextitle"}],["Modules"]},
+         "\n",
+         {table,
+          [{width,"100%"},{border,0},{summary,"list of modules"}],
+          lists:concat([ 
+                        ["\n",
+                         {tr,
+                          [{td,
+                            [],
+                            [{a,
+                              [{href,module_ref(M)},
+                               {target,"overviewFrame"},
+                               {class,"module"}],
+                              [atom_to_list(M)]}]}]}] ||
+                            M <- Ms
+                       ])},
+         "\n"],
+    XML = xhtml(Title, CSS, Body),
+    Text = xmerl:export_simple([XML], xmerl_html, []),
+    edoc_lib:write_file(Text, Dir, "modules-frame.html").
+
+module_ref(M) ->
+    edoc_refs:relative_package_path(M, '') ++ ".html".
+
+package_ref(P) ->
+    edoc_lib:join_uri(edoc_refs:relative_package_path(P, ''),
+                      "package-summary.html").
+
+xhtml(Title, CSS, Content) ->
+    xhtml_1(Title, CSS, {body,[{bgcolor,"white"}],Content}).
+
+xhtml_1(Title, CSS, Body) ->
+    {html,
+     ["\n",{head,["\n",{title,[Title]},"\n"] ++ CSS},"\n",Body,"\n"]}.
+
+overview(Dir, Title, Env, Opts) ->
+    File =
+        proplists:get_value(overview,
+                            Opts,
+                            filename:join(Dir, "overview.edoc")),
+    Encoding = edoc_lib:read_encoding(File, [{in_comment_only,false}]),
+    Tags = read_file(File, overview, Env, Opts),
+    Data0 = edoc_data:overview(Title, Tags, Env, Opts),
+    EncodingAttribute =
+        #xmlAttribute{name = encoding,value = atom_to_list(Encoding)},
+    #xmlElement{attributes = As} = Data0,
+    Data = Data0#xmlElement{attributes = [EncodingAttribute|As]},
+    F = fun(M) ->
+               M:overview(Data, Opts)
+        end,
+    Text = edoc_lib:run_layout(F, Opts),
+    EncOpts = [{encoding,Encoding}],
+    edoc_lib:write_file(Text, Dir, "overview-summary.html", '', EncOpts).
+
+copy_image(Dir) ->
+    case code:priv_dir(edoc) of
+        PrivDir when is_list(PrivDir) ->
+            From = filename:join(PrivDir, "erlang.png"),
+            edoc_lib:copy_file(From, filename:join(Dir, "erlang.png"));
+        _ ->
+            report("cannot find default image file.", []),
+            exit(error)
+    end.
+
+copy_stylesheet(Dir, Options) ->
+    case proplists:get_value(stylesheet, Options) of
+        undefined ->
+            From =
+                case proplists:get_value(stylesheet_file, Options) of
+                    File when is_list(File) ->
+                        File;
+                    _ ->
+                        case code:priv_dir(edoc) of
+                            PrivDir when is_list(PrivDir) ->
+                                filename:join(PrivDir, "stylesheet.css");
+                            _ ->
+                                report("cannot find default stylesheet "
+                                       "file.",
+                                       []),
+                                exit(error)
+                        end
+                end,
+            edoc_lib:copy_file(From,
+                               filename:join(Dir, "stylesheet.css"));
+        _ ->
+            ok
+    end.
+
+stylesheet(Options) ->
+    case proplists:get_value(stylesheet, Options) of
+        "" ->
+            [];
+        S ->
+            Ref =
+                case S of
+                    undefined ->
+                        "stylesheet.css";
+                    "" ->
+                        "";
+                    S when is_list(S) ->
+                        S;
+                    _ ->
+                        report("bad value for option 'stylesheet'.", []),
+                        exit(error)
+                end,
+            [{link,
+              [{rel,"stylesheet"},
+               {type,"text/css"},
+               {href,Ref},
+               {title,"EDoc"}],
+              []},
+             "\n"]
+    end.
+
+is_private(E) ->
+    case get_attrval(private, E) of
+        "yes" ->
+            true;
+        _ ->
+            false
+    end.
+
+is_hidden(E) ->
+    case get_attrval(hidden, E) of
+        "yes" ->
+            true;
+        _ ->
+            false
+    end.
+
+encoding(E) ->
+    case get_attrval(encoding, E) of
+        "latin1" ->
+            latin1;
+        _ ->
+            utf8
+    end.
+
+get_attrval(Name, #xmlElement{attributes = As}) ->
+    case get_attr(Name, As) of
+        [#xmlAttribute{value = V}] ->
+            V;
+        [] ->
+            ""
+    end.
+
+get_attr(Name, [#xmlAttribute{name = Name} = A|As]) ->
+    [A|get_attr(Name, As)];
+get_attr(Name, [_|As]) ->
+    get_attr(Name, As);
+get_attr(_, []) ->
+    [].
+
+read_file(File, Context, Env, Opts) ->
+    case edoc_extract:file(File, Context, Env, Opts) of
+        {ok,Tags} ->
+            Tags;
+        {error,_} ->
+            []
+    end.
+
+toc(Paths, Ctxt) ->
+    Opts = Ctxt#context.opts,
+    Dir = Ctxt#context.dir,
+    Env = Ctxt#context.env,
+    app_index_file(Paths, Dir, Env, Opts).
+
+app_index_file(Paths, Dir, Env, Options) ->
+    Title = proplists:get_value(title, Options, "Overview"),
+    CSS = stylesheet(Options),
+    Apps1 =
+        [ 
+         {filename:dirname(A),filename:basename(A)} ||
+             A <- Paths
+        ],
+    index_file(Dir, false, Title),
+    application_frame(Dir, Apps1, Title, CSS),
+    modules_frame(Dir, [], Title, CSS),
+    overview(Dir, Title, Env, Options),
+    copy_stylesheet(Dir, Options).
+
+application_frame(Dir, Apps, Title, CSS) ->
+    Body =
+        ["\n",
+         {h2,["Applications"]},
+         "\n",
+         {table,
+          [{width,"100%"},{border,0}],
+          lists:concat([ 
+                        [{tr,
+                          [{td,
+                            [],
+                            [{a,
+                              [{href,app_ref(Path, App)},
+                               {target,"_top"}],
+                              [App]}]}]}] ||
+                            {Path,App} <- Apps
+                       ])},
+         "\n"],
+    XML = xhtml(Title, CSS, Body),
+    Text = xmerl:export_simple([XML], xmerl_html, []),
+    edoc_lib:write_file(Text, Dir, "modules-frame.html").
+
+app_ref(Path, M) ->
+    filename:join([Path,M,"doc","index.html"]).
+
+
+

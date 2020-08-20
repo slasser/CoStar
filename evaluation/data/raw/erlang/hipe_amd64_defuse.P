@@ -1,0 +1,278 @@
+-file("test/lib/hipe/amd64/hipe_amd64_defuse.erl", 1).
+
+-file("test/lib/hipe/amd64/../x86/hipe_x86_defuse.erl", 1).
+
+-module(hipe_x86_defuse).
+
+-export([insn_def/1,insn_use/1]).
+
+-file("test/lib/hipe/amd64/../x86/../x86/hipe_x86.hrl", 1).
+
+-record(x86_temp,{reg,type,allocatable}).
+
+-record(x86_imm,{value}).
+
+-record(x86_mem,{base,off,type}).
+
+-record(x86_fpreg,{reg,pseudo}).
+
+-record(x86_mfa,{m :: undefined | atom(),
+                 f :: undefined | atom(),
+                 a :: undefined | arity()}).
+
+-record(x86_prim,{prim}).
+
+-record(x86_sdesc,{exnlab,
+                   fsize,
+                   arity :: undefined | arity(),
+                   live :: undefined | tuple()}).
+
+-record(alu,{aluop,src,dst}).
+
+-record(call,{'fun',sdesc,linkage}).
+
+-record(cmovcc,{cc,src,dst}).
+
+-record(cmp,{src,dst}).
+
+-record(comment,{term}).
+
+-record(fmove,{src,dst}).
+
+-record(fp_binop,{op,src,dst}).
+
+-record(fp_unop,{op,arg}).
+
+-record(imul,{imm_opt,src,temp}).
+
+-record(jcc,{cc,label}).
+
+-record(jmp_fun,{'fun',linkage}).
+
+-record(jmp_label,{label}).
+
+-record(jmp_switch,{temp,jtab,labels}).
+
+-record(label,{label}).
+
+-record(lea,{mem,temp}).
+
+-record(move,{src,dst}).
+
+-record(move64,{imm,dst}).
+
+-record(movsx,{src,dst}).
+
+-record(movzx,{src,dst}).
+
+-record(pseudo_call,{'fun',sdesc,contlab,linkage}).
+
+-record(pseudo_jcc,{cc,true_label,false_label,pred}).
+
+-record(pseudo_spill,{args = []}).
+
+-record(pseudo_tailcall,{'fun',arity,stkargs,linkage}).
+
+-record(pseudo_tailcall_prepare,{}).
+
+-record(push,{src}).
+
+-record(pop,{dst}).
+
+-record(ret,{npop}).
+
+-record(shift,{shiftop,src,dst}).
+
+-record(test,{src,dst}).
+
+-file("test/lib/hipe/amd64/../x86/../x86/../misc/hipe_consttab.hrl", 1).
+
+-type ct_alignment() :: 4 | 8.
+
+-type hipe_constlbl() :: non_neg_integer().
+
+-type hipe_consttab() :: {dict(), [hipe_constlbl()], hipe_constlbl()}.
+
+-file("test/lib/hipe/amd64/../x86/../x86/hipe_x86.hrl", 111).
+
+-file([], 111).
+
+-record(defun,{mfa :: undefined | mfa(),
+               formals,
+               code,
+               data :: undefined | hipe_consttab(),
+               isclosure :: undefined | boolean(),
+               isleaf :: undefined | boolean(),
+               var_range,
+               label_range}).
+
+-file("test/lib/hipe/amd64/../x86/hipe_x86_defuse.erl", 39).
+
+-file([], 39).
+
+insn_def(I) ->
+    case I of
+        #alu{dst = Dst} ->
+            dst_def(Dst);
+        #cmovcc{dst = Dst} ->
+            dst_def(Dst);
+        #fmove{dst = Dst} ->
+            dst_def(Dst);
+        #fp_binop{dst = Dst} ->
+            dst_def(Dst);
+        #fp_unop{arg = Arg} ->
+            dst_def(Arg);
+        #imul{temp = Temp} ->
+            [Temp];
+        #lea{temp = Temp} ->
+            [Temp];
+        #move{dst = Dst} ->
+            dst_def(Dst);
+        #move64{dst = Dst} ->
+            dst_def(Dst);
+        #movsx{dst = Dst} ->
+            dst_def(Dst);
+        #movzx{dst = Dst} ->
+            dst_def(Dst);
+        #pseudo_call{} ->
+            call_clobbered();
+        #pseudo_spill{} ->
+            [];
+        #pseudo_tailcall_prepare{} ->
+            tailcall_clobbered();
+        #shift{dst = Dst} ->
+            dst_def(Dst);
+        _ ->
+            []
+    end.
+
+dst_def(Dst) ->
+    case Dst of
+        #x86_temp{} ->
+            [Dst];
+        #x86_fpreg{} ->
+            [Dst];
+        _ ->
+            []
+    end.
+
+call_clobbered() ->
+    [ 
+     hipe_x86:mk_temp(R, T) ||
+         {R,T} <- hipe_x86_registers:call_clobbered()
+    ].
+
+tailcall_clobbered() ->
+    [ 
+     hipe_x86:mk_temp(R, T) ||
+         {R,T} <- hipe_x86_registers:tailcall_clobbered()
+    ].
+
+insn_use(I) ->
+    case I of
+        #alu{src = Src,dst = Dst} ->
+            addtemp(Src, addtemp(Dst, []));
+        #call{'fun' = Fun} ->
+            addtemp(Fun, []);
+        #cmovcc{src = Src,dst = Dst} ->
+            addtemp(Src, dst_use(Dst));
+        #cmp{src = Src,dst = Dst} ->
+            addtemp(Src, addtemp(Dst, []));
+        #fmove{src = Src,dst = Dst} ->
+            addtemp(Src, dst_use(Dst));
+        #fp_unop{arg = Arg} ->
+            addtemp(Arg, []);
+        #fp_binop{src = Src,dst = Dst} ->
+            addtemp(Src, addtemp(Dst, []));
+        #imul{imm_opt = ImmOpt,src = Src,temp = Temp} ->
+            addtemp(Src,
+                    case ImmOpt of
+                        [] ->
+                            addtemp(Temp, []);
+                        _ ->
+                            []
+                    end);
+        #jmp_fun{'fun' = Fun} ->
+            addtemp(Fun, []);
+        #jmp_switch{temp = Temp,jtab = JTab} ->
+            addtemp(Temp, addtemp(JTab, []));
+        #lea{mem = Mem} ->
+            addtemp(Mem, []);
+        #move{src = Src,dst = Dst} ->
+            addtemp(Src, dst_use(Dst));
+        #move64{} ->
+            [];
+        #movsx{src = Src,dst = Dst} ->
+            addtemp(Src, dst_use(Dst));
+        #movzx{src = Src,dst = Dst} ->
+            addtemp(Src, dst_use(Dst));
+        #pseudo_call{'fun' = Fun,sdesc = #x86_sdesc{arity = Arity}} ->
+            addtemp(Fun, arity_use(Arity));
+        #pseudo_spill{args = Args} ->
+            Args;
+        #pseudo_tailcall{'fun' = Fun,arity = Arity,stkargs = StkArgs} ->
+            addtemp(Fun,
+                    addtemps(StkArgs,
+                             addtemps(tailcall_clobbered(),
+                                      arity_use(Arity))));
+        #push{src = Src} ->
+            addtemp(Src, []);
+        #ret{} ->
+            [hipe_x86:mk_temp(hipe_x86_registers:eax(), tagged)];
+        #shift{src = Src,dst = Dst} ->
+            addtemp(Src, addtemp(Dst, []));
+        _ ->
+            []
+    end.
+
+arity_use(Arity) ->
+    [ 
+     hipe_x86:mk_temp(R, tagged) ||
+         R <- hipe_x86_registers:args(Arity)
+    ].
+
+dst_use(Dst) ->
+    case Dst of
+        #x86_mem{base = Base,off = Off} ->
+            addbase(Base, addtemp(Off, []));
+        _ ->
+            []
+    end.
+
+addtemps([Arg|Args], Set) ->
+    addtemps(Args, addtemp(Arg, Set));
+addtemps([], Set) ->
+    Set.
+
+addtemp(Arg, Set) ->
+    case Arg of
+        #x86_temp{} ->
+            add(Arg, Set);
+        #x86_mem{base = Base,off = Off} ->
+            addtemp(Off, addbase(Base, Set));
+        #x86_fpreg{} ->
+            add(Arg, Set);
+        _ ->
+            Set
+    end.
+
+addbase(Base, Set) ->
+    case Base of
+        [] ->
+            Set;
+        _ ->
+            addtemp(Base, Set)
+    end.
+
+add(Arg, Set) ->
+    case lists:member(Arg, Set) of
+        false ->
+            [Arg|Set];
+        _ ->
+            Set
+    end.
+
+-file("test/lib/hipe/amd64/hipe_amd64_defuse.erl", 21).
+
+
+
