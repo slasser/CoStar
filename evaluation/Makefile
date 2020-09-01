@@ -6,43 +6,22 @@ all: run_eval.exe
 GRAMMARS := grammars
 # directories for each stage of the pipeline
 ANTLR4      := antlr4
-PYTHON_EBNF := python_ebnf
-OCAML_EBNF  := ocaml_ebnf
+SEXP        := sexp
 COQ_BNF     := coq_bnf
 OCAML_BNF   := ocaml_bnf
-# Unused directory that rrd-antlr4 creates -- we can safely remove it
-RRDANTLR4_OUTPUT := output
 
-GRAMMAR_NAMES := C #Json DOT Erlang
+GRAMMAR_NAMES := Lua Json Dot Erlang
 
-$(GRAMMARS)/GrammarConverter.class:
-	cd $(GRAMMARS) && javac -cp ../resources/rrd-antlr4-0.1.2.jar GrammarConverter.java
+$(GRAMMARS)/normalize_rules.exe: $(GRAMMARS)/normalize_rules.ml
+	cd $(GRAMMARS) && dune build --profile release normalize_rules.exe \
+                       && cp -f _build/default/normalize_rules.exe .
 
-$(GRAMMARS)/$(PYTHON_EBNF): $(GRAMMARS)/GrammarConverter.class $(GRAMMARS)/$(ANTLR4)
-	cd $(GRAMMARS) \
-	&& mkdir -p $(PYTHON_EBNF) \
-        && for G in $(GRAMMAR_NAMES); do \
-             java -cp .:../resources/rrd-antlr4-0.1.2.jar GrammarConverter $(ANTLR4)/$${G}.g4 $(PYTHON_EBNF); \
-           done \
-        #&& rm -rf $(RRDANTLR4_OUTPUT)
-
-$(GRAMMARS)/$(OCAML_EBNF): $(GRAMMARS)/$(PYTHON_EBNF)
-	mkdir -p $(GRAMMARS)/$(OCAML_EBNF)
-	cd $(GRAMMARS) \
-        && for G in $(GRAMMAR_NAMES); do    \
-	     python process_railroad_dsl.py $(PYTHON_EBNF)/$${G}.py $(OCAML_EBNF); \
-           done
-
-$(GRAMMARS)/$(COQ_BNF): $(GRAMMARS)/$(OCAML_EBNF)
+$(GRAMMARS)/$(COQ_BNF): $(GRAMMARS)/normalize_rules.exe $(GRAMMARS)/$(SEXP)
 	mkdir -p $(GRAMMARS)/$(COQ_BNF)
-	cd $(GRAMMARS) && \
-        for G in $(GRAMMAR_NAMES); do                                                     \
-          echo "#require \"str\"                                              ;; \n       \
-                #require \"yojson\"                                           ;; \n       \
-                #use \"normalize_rules.ml\"                                   ;; \n       \
-                #use \"$(OCAML_EBNF)/$${G}.ml\"                               ;; \n       \
-                write_coq_grammar_file rules \"$${G}\" \"$(COQ_BNF)/$${G}.v\" ;;" | utop; \
-        done
+	cd $(GRAMMARS)                                                   \
+	&& for G in $(GRAMMAR_NAMES); do                                 \
+             ./normalize_rules.exe $(SEXP)/$${G}.sxp $(COQ_BNF)/$${G}.v; \
+           done
 
 $(GRAMMARS)/$(OCAML_BNF): $(GRAMMARS)/$(COQ_BNF)
 	mkdir -p $(GRAMMARS)/$(OCAML_BNF)
@@ -97,7 +76,7 @@ $(DATA)/$(TOKENIZED)/$(DOT): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(DOT
 	cd $(DATA) \
         && mkdir -p $(TOKENIZED)/$(DOT) \
         && java -Xmx6g -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
-           TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/DOT.g4 $(RAW)/$(DOT) $(TOKENIZED)/$(DOT)
+           TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/Dot.g4 $(RAW)/$(DOT) $(TOKENIZED)/$(DOT)
 
 # Tokenize Erlang data from Terence Parr
 
@@ -109,6 +88,14 @@ $(DATA)/$(TOKENIZED)/$(ERLANG): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(
         && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
            TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/Erlang.g4 $(RAW)/$(ERLANG) $(TOKENIZED)/$(ERLANG)
 
+ERLANG_MINIMAL := erlang_minimal
+
+$(DATA)/$(TOKENIZED)/$(ERLANG_MINIMAL): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(ERLANG_MINIMAL)
+	cd $(DATA) \
+        && mkdir -p $(TOKENIZED)/$(ERLANG_MINIMAL) \
+        && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
+           TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/Erlang.g4 $(RAW)/$(ERLANG_MINIMAL) $(TOKENIZED)/$(ERLANG_MINIMAL)
+
 # Tokenize C data from Terence Parr
 
 C_PYTHON := c_python
@@ -119,13 +106,19 @@ $(DATA)/$(TOKENIZED)/$(C_PYTHON): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/
         && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
            TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/C.g4 $(RAW)/$(C_PYTHON) $(TOKENIZED)/$(C_PYTHON)
 
+# Tokenize Lua data from Terence Parr
+
+LUA := lua
+
+$(DATA)/$(TOKENIZED)/$(LUA): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(LUA)
+	cd $(DATA) \
+        && mkdir -p $(TOKENIZED)/$(LUA) \
+        && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
+           TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/Lua.g4 $(RAW)/$(LUA) $(TOKENIZED)/$(LUA)
+
 # RUN BENCHMARKS AND PLOT RESULTS
 
 RESULTS := results
-
-bench-c-python: run_eval.exe $(DATA)/$(TOKENIZED)/$(C_PYTHON) $(RESULTS)/plot.py
-	./run_eval.exe -c $(DATA)/$(TOKENIZED)/$(C_PYTHON) $(RESULTS)/$(C_PYTHON).json
-	cd $(RESULTS) && python plot.py $(C_PYTHON).json $(C_PYTHON).eps
 
 bench-json-cities: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_CITIES) $(RESULTS)/plot.py
 	./run_eval.exe -json $(DATA)/$(TOKENIZED)/$(JSON_CITIES) $(RESULTS)/$(JSON_CITIES).json
@@ -143,10 +136,22 @@ bench-erlang: run_eval.exe $(DATA)/$(TOKENIZED)/$(ERLANG)
 	./run_eval.exe -erlang $(DATA)/$(TOKENIZED)/$(ERLANG) $(RESULTS)/$(ERLANG).json
 	cd $(RESULTS) && python plot.py $(ERLANG).json $(ERLANG).eps
 
+bench-erlang-minimal: run_eval.exe $(DATA)/$(TOKENIZED)/$(ERLANG_MINIMAL)
+	./run_eval.exe -erlang $(DATA)/$(TOKENIZED)/$(ERLANG_MINIMAL) $(RESULTS)/$(ERLANG_MINIMAL).json
+	cd $(RESULTS) && python plot.py $(ERLANG_MINIMAL).json $(ERLANG_MINIMAL).eps
+
+bench-c-python: run_eval.exe $(DATA)/$(TOKENIZED)/$(C_PYTHON) $(RESULTS)/plot.py
+	./run_eval.exe -c $(DATA)/$(TOKENIZED)/$(C_PYTHON) $(RESULTS)/$(C_PYTHON).json
+	cd $(RESULTS) && python plot.py $(C_PYTHON).json $(C_PYTHON).eps
+
+bench-lua: run_eval.exe $(DATA)/$(TOKENIZED)/$(LUA) $(RESULTS)/plot.py
+	./run_eval.exe -lua $(DATA)/$(TOKENIZED)/$(LUA) $(RESULTS)/$(LUA).json
+	cd $(RESULTS) && python plot.py $(LUA).json $(LUA).eps
+
 clean:
 	rm -f  $(GRAMMARS)/GrammarConverter.class
-	rm -rf $(GRAMMARS)/$(PYTHON_EBNF)
-	rm -rf $(GRAMMARS)/$(OCAML_EBNF)
+	rm -rf $(GRAMMARS)/_build
+	rm -f  $(GRAMMARS)/normalize_rules.exe
 	rm -rf $(GRAMMARS)/$(COQ_BNF)
 	rm -rf $(GRAMMARS)/$(OCAML_BNF)
 	rm -rf $(BENCHMARKING)/_build

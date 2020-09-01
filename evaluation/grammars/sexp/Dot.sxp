@@ -1,0 +1,20 @@
+(COMBINED_GRAMMAR dot
+  (RULES (RULE graph (BLOCK
+                       (ALT (? (BLOCK (ALT STRICT)))
+		            (SET GRAPH DIGRAPH)
+			    (? (BLOCK (ALT id)))
+			    '{' stmt_list '}')))
+         (RULE stmt_list (BLOCK (ALT (* (BLOCK (ALT stmt (? (BLOCK (ALT "';'")))))))))
+	 (RULE stmt (BLOCK (ALT node_stmt) (ALT edge_stmt) (ALT attr_stmt) (ALT id '=' id) (ALT subgraph)))
+	 (RULE attr_stmt (BLOCK (ALT (SET GRAPH NODE EDGE) attr_list)))
+	 (RULE attr_list (BLOCK (ALT (+ (BLOCK (ALT '[' (? (BLOCK (ALT a_list))) ']'))))))
+	 (RULE a_list (BLOCK (ALT (+ (BLOCK (ALT id (? (BLOCK (ALT '=' id))) (? (BLOCK (ALT ',')))))))))
+	 (RULE edge_stmt (BLOCK (ALT (BLOCK (ALT node_id) (ALT subgraph)) edgeRHS (? (BLOCK (ALT attr_list))))))
+	 (RULE edgeRHS (BLOCK (ALT (+ (BLOCK (ALT edgeop
+	                                          (BLOCK (ALT node_id) (ALT subgraph))))))))
+	 (RULE edgeop (BLOCK (ALT (SET '->' '--'))))
+	 (RULE node_stmt (BLOCK (ALT node_id (? (BLOCK (ALT attr_list))))))
+	 (RULE node_id (BLOCK (ALT id (? (BLOCK (ALT port))))))
+	 (RULE port (BLOCK (ALT ':' id (? (BLOCK (ALT ':' id))))))
+	 (RULE subgraph (BLOCK (ALT (? (BLOCK (ALT SUBGRAPH (? (BLOCK (ALT id)))))) '{' stmt_list '}')))
+	 (RULE id (BLOCK (ALT (SET ID STRING HTML_STRING NUMBER))))))

@@ -56,5 +56,6 @@
     "=<"  : "equal_lt",
     "=:=" : "equal_colon_equal",
     "=/=" : "equal_div_equal",
-    ":-"  : "colon_minus"
+    ":-"  : "colon_minus",
+    "~="  : "tilde_equal"
 }

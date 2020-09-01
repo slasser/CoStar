@@ -55,7 +55,6 @@ let erlang_data_dir  = "tokenized_data/erlang"
  *)
 (* Functions for parsing various formats.
    Each is partially applied to a grammar and start symbol. *)
-let parse_json = Json.PG.ParserAndProofs.PEF.PS.P.parse Json.coq_JsonGrammar Coq_json
 (*let parse_xml  = XMLParser.PG.ParserAndProofs.PEF.PS.P.parse XMLParser.xMLGrammar Document
 let parse_dot  = DOTParser.PG.ParserAndProofs.PEF.PS.P.parse DOTParser.dOTGrammar Graph
 let parse_erlang = ErlangParser.PG.ParserAndProofs.PEF.PS.P.parse ErlangParser.erlangGrammar Coq_forms*)
@@ -178,20 +177,42 @@ let main () =
   let outfile  = Sys.argv.(3) in
   let results  =
     (match lang with
-     | "-c" ->
+     | "-json" ->
+        benchmark_parser_on_dataset Json.PG.ParserAndProofs.PEF.PS.P.parse
+                                    Json.jsonGrammar
+                                    Coq_json
+                                    Json.D.SymTy.terminalOfString
+                                    Json.PG.ParserAndProofs.PEF.PS.P.showResult
+                                    data_dir
+     | "-dot" ->
+        benchmark_parser_on_dataset Dot.PG.ParserAndProofs.PEF.PS.P.parse
+                                    Dot.dotGrammar
+                                    Coq_graph
+                                    Dot.D.SymTy.terminalOfString
+                                    Dot.PG.ParserAndProofs.PEF.PS.P.showResult
+                                    data_dir
+     | "-erlang" ->
+        benchmark_parser_on_dataset Erlang.PG.ParserAndProofs.PEF.PS.P.parse
+                                    Erlang.coq_ErlangGrammar
+                                    Coq_forms
+                                    Erlang.D.SymTy.terminalOfString
+                                    Erlang.PG.ParserAndProofs.PEF.PS.P.showResult
+                                    data_dir
+     | "-lua" ->
+        benchmark_parser_on_dataset Lua.PG.ParserAndProofs.PEF.PS.P.parse
+                                    Lua.coq_LuaGrammar
+                                    Coq_chunk
+                                    Lua.D.SymTy.terminalOfString
+                                    Lua.PG.ParserAndProofs.PEF.PS.P.showResult
+                                    data_dir
+(*     | "-c" ->
         benchmark_parser_on_dataset C.PG.ParserAndProofs.PEF.PS.P.parse
                                     C.coq_JsonGrammar
                                     Coq_json
                                     Json.D.SymTy.terminalOfString
                                     Json.PG.ParserAndProofs.PEF.PS.P.showResult
                                     data_dir
-     | "-json" ->
-        benchmark_parser_on_dataset Json.PG.ParserAndProofs.PEF.PS.P.parse
-                                    Json.coq_JsonGrammar
-                                    Coq_json
-                                    Json.D.SymTy.terminalOfString
-                                    Json.PG.ParserAndProofs.PEF.PS.P.showResult
-                                    data_dir
+
      | "-dot" ->
         benchmark_parser_on_dataset DOT.PG.ParserAndProofs.PEF.PS.P.parse
                                     DOT.coq_DOTGrammar
@@ -205,8 +226,8 @@ let main () =
                                     Coq_forms
                                     Erlang.D.SymTy.terminalOfString
                                     Erlang.PG.ParserAndProofs.PEF.PS.P.showResult
-                                    data_dir
-     | _ -> failwith "unrecognized lang argument")
+                                    data_dir*)
+     | _ -> failwith ("unrecognized lang argument: " ^ lang))
   in
   write_test_results results outfile
 

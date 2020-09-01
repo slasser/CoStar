@@ -261,3 +261,10 @@ Proof.
   - inv hi.
   - destruct hi as [hh | ht]; subst; dm; auto; inv hf.
 Qed.
+
+Lemma fold_right_unroll :
+  forall X Y (f : X -> Y -> Y) (y : Y) (x : X) (xs : list X),
+    fold_right f y (x :: xs) = f x (fold_right f y xs).
+Proof.
+  auto.
+Qed.

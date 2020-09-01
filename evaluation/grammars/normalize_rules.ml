@@ -1,34 +1,115 @@
-open List
-                                  
-type elt = Terminal of string
-         | NonTerminal of string
-         | Optional of elt
-         | ZeroOrMore of elt
-         | OneOrMore of elt
-         | Choice of elt list
-         | Sequence of elt list
+module Sexp       = Core_kernel.Sexp
+module In_channel = Core_kernel.In_channel
+(****************************************************************************************)  
+(* CONVERT AN S-EXPRESSION REPRESENTATION OF AN ANTLR GRAMMAR TO AN EBNF DATA STRUCTURE *)
+(****************************************************************************************)  
+let sexp_from_file (fname : string) : Sexp.t =
+  Sexp.of_string (In_channel.read_all fname)
+                   
+let get_name_and_rules_from_sexp_grammar (s : Sexp.t) : string * Sexp.t list =
+  match s with
+  | Sexp.List [ Sexp.Atom "COMBINED_GRAMMAR"
+              ; Sexp.Atom name
+              ; Sexp.List (Sexp.Atom "RULES" :: rules)
+              ] -> (name, rules)
+  | _ -> failwith "unrecognized grammar format"
 
-type ebnf_rule    = string * elt list
-type ebnf_grammar = ebnf_rule list
+let get_rule_lhs_and_alts (s : Sexp.t) : string * Sexp.t list =
+  match s with
+  | Sexp.List [ Sexp.Atom "RULE"
+              ; Sexp.Atom lhs
+              ; Sexp.List (Sexp.Atom "BLOCK" :: alts)
+              ] -> (lhs, alts)
+  | _ -> failwith "couldn't extract rule lhs and rhss"
 
-type symbol = T of string
-            | NT of string
+type ebnf_elt    = Terminal of string
+                 | NonTerminal of string
+                 | Set of string list
+                 | Block of ebnf_alt list
+                 | Optional of ebnf_alt list
+                 | ZeroOrMore of ebnf_alt list
+                 | OneOrMore of ebnf_alt list
+and ebnf_alt     = ebnf_elt list
+and ebnf_rule    = string * ebnf_alt
+and ebnf_grammar = ebnf_rule list
 
-type bnf_rule    = string * symbol list
-                                   
-type bnf_grammar = bnf_rule list
+let is_upper (s : string) : bool =
+  let fst = Char.escaped (String.get s 0) in
+  let r   = Str.regexp {|[A-Z]|}          in
+  Str.string_match r fst 0
 
-let explode (s : string) : char list = List.init (String.length s) (String.get s)
+(* to do: refactor symbol case *)
+let rec ebnf_elt_of (s : Sexp.t) : ebnf_elt =
+  match s with
+  | Sexp.Atom symbol_name ->
+     let r = Str.regexp {|^'\(.*\)'$|} in
+     if Str.string_match r symbol_name 0 then
+       (* the terminal is a literal in the grammar *)
+       let literal = Str.matched_group 1 symbol_name in
+       Terminal ("Lit_" ^ literal)
+     else if is_upper symbol_name then
+       Terminal symbol_name
+     else
+       NonTerminal symbol_name
+  | Sexp.List (Sexp.Atom "SET" :: ss) ->
+     Set (List.map terminal_name_of ss)
+  | Sexp.List (Sexp.Atom "BLOCK" :: alts) ->
+     Block (List.map ebnf_alt_of alts)
+  | Sexp.List [Sexp.Atom "*" ; Sexp.List (Sexp.Atom "BLOCK" :: alts)] ->
+     ZeroOrMore (List.map ebnf_alt_of alts)
+  | Sexp.List [Sexp.Atom "+" ; Sexp.List (Sexp.Atom "BLOCK" :: alts)] ->
+     OneOrMore (List.map ebnf_alt_of alts)
+  | Sexp.List [Sexp.Atom "?" ; Sexp.List (Sexp.Atom "BLOCK" :: alts)] ->
+     Optional (List.map ebnf_alt_of alts)
+  | _ -> failwith ("unrecognized s-exp pattern in ebnf_elt_of: " ^ Sexp.to_string s)
+and terminal_name_of (s : Sexp.t) : string =
+  match s with
+  | Sexp.Atom symbol_name ->
+     let r = Str.regexp {|^'\(.*\)'$|} in
+     if Str.string_match r symbol_name 0 then
+       (* the terminal is a literal in the grammar *)
+       let literal = Str.matched_group 1 symbol_name in
+       "Lit_" ^ literal
+     else if is_upper symbol_name then
+       symbol_name
+     else
+       failwith ("invalid terminal name in set: " ^ symbol_name)
+  | _ -> failwith ("unrecognized s-exp pattern in terminal_name_of: " ^ Sexp.to_string s)
+and ebnf_alt_of (s : Sexp.t) : ebnf_alt =
+  match s with
+  | Sexp.List (Sexp.Atom "ALT" :: ss) ->
+     List.map ebnf_elt_of ss
+  | _ -> failwith ("unrecognized s-exp pattern in ebnf_alt_of: " ^ Sexp.to_string s)
+
+let ebnf_rules_of_sexp_rule (s : Sexp.t) : ebnf_rule list =
+  match get_rule_lhs_and_alts s with
+  | (lhs, alts) ->
+     List.map (fun a -> (lhs, ebnf_alt_of a)) alts
+
+let ebnf_grammar_of_rules (rules : Sexp.t list) : ebnf_grammar =
+  List.concat (List.map ebnf_rules_of_sexp_rule rules)
+(****************************************************************************************)  
+(* CONVERT AN EBNF GRAMMAR TO BNF                                                       *)
+(****************************************************************************************)
+type symbol     = T of string
+                | NT of string
+and bnf_rule    = string * symbol list
+and bnf_grammar = bnf_rule list
+
+let explode (s : string) : char list =
+  List.init (String.length s) (String.get s)
 
 let is_alpha = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
+
 let is_digit = function '0' .. '9' -> true | _ -> false
+
 let is_coq_char c = is_alpha c || is_digit c || Char.equal c '_'
 
-let legal_coq_constr s = for_all is_coq_char (explode s)
+let legal_coq_constr s = List.for_all is_coq_char (explode s)
 
 let legal_coq_equiv (k : string) : string =
-  let open Yojson.Basic                          in
-  let open Yojson.Basic.Util                     in
+  let open Yojson.Basic                                       in
+  let open Yojson.Basic.Util                                  in
   let subs = from_file "../resources/name_substitutions.json" in
   match member k subs with
   | `String v -> v
@@ -39,53 +120,61 @@ let normalize_terminal_name (s : string) : string =
   if Str.string_match r s 0 then
     (* the terminal is a literal in the grammar *)
     let literal = Str.matched_group 1 s in
-    if legal_coq_constr literal then
-      s
-    else
-      "Lit_" ^ legal_coq_equiv literal
-  else
-    s
+    if legal_coq_constr literal then s else "Lit_" ^ legal_coq_equiv literal
+  else s
 
-let coq_keywords = ["type"]
+let coq_keywords = ["type"; "string"]
 
 let normalize_nonterminal_name (s : string) : string =
-  if mem s coq_keywords
-  then s ^ "'"
-  else s
+  if List.mem s coq_keywords then s ^ "'" else s
     
 let optional_count = ref 0
 let star_count     = ref 0
 let plus_count     = ref 0
-let group_count    = ref 0
+let block_count    = ref 0
+
+let incr (ir : int ref) : unit =
+  ir := !ir + 1
+
+let fresh_name (base : string) (ir : int ref) : string =
+  let s  = base ^ "_" ^ string_of_int !ir in
+  let () = incr ir                        in
+  s
+
+let fresh_optional_name () = fresh_name "optional" optional_count
+let fresh_star_name     () = fresh_name "star" star_count
+let fresh_plus_name     () = fresh_name "plus" plus_count
+let fresh_block_name    () = fresh_name "block" block_count
                                  
-let normalize_ebnf_elt (e : elt) : symbol * ebnf_rule list =
+let normalize_ebnf_elt (e : ebnf_elt) : symbol * ebnf_rule list =
   match e with
   | Terminal s    -> let s' = normalize_terminal_name s
                      in  (T s',  [])
   | NonTerminal s -> let s' = normalize_nonterminal_name s
                      in  (NT s', [])
-  | Optional e'   -> let s = "optional_" ^ string_of_int !optional_count in
-                     let _ = optional_count := !optional_count + 1       in
-                     (NT s, [(s, []); (s, [e'])])
-  | ZeroOrMore e' -> let s = "star_" ^ string_of_int !star_count in
-                     let _ = star_count := !star_count + 1       in
-                     (NT s, [(s, []); (s, [e'; NonTerminal s])])
-  | OneOrMore e'  -> let s = "plus_" ^ string_of_int !plus_count in
-                     let _ = plus_count := !plus_count + 1       in
-                     (NT s, [(s, [e']); (s, [e'; NonTerminal s])])
-  | Choice es     ->
-     let s     = "group_" ^ string_of_int !group_count   in
-     let _     = group_count := !group_count + 1         in
-     let rules = map (fun e -> match e with
-                               | Sequence es' -> (s, es')
-                               | _            -> failwith "expected Sequence") es
-     in  (NT s, rules)
-  | Sequence _    -> failwith "Sequence should have been handled in Choice rule"
+  | Set mems      ->
+     let b = fresh_block_name () in
+     (NT b, List.map (fun m -> (b, [Terminal m])) mems)
+  | Optional alts ->
+     let o = fresh_optional_name () in
+     let b = fresh_block_name ()    in
+     (NT o, (o, []) :: (o, [NonTerminal b]) :: List.map (fun a -> (b, a)) alts)
+  | Block alts ->
+     let b = fresh_block_name () in
+     (NT b, List.map (fun a -> (b, a)) alts)
+  | ZeroOrMore alts ->
+     let s = fresh_star_name ()  in
+     let b = fresh_block_name () in
+     (NT s, (s, []) :: (s, [NonTerminal b; NonTerminal s]) :: List.map (fun a -> (b, a)) alts)
+  | OneOrMore alts ->
+     let p = fresh_plus_name ()  in
+     let b = fresh_block_name () in
+     (NT p, (p, [NonTerminal b]) :: (p, [NonTerminal b; NonTerminal p]) :: List.map (fun a -> (b, a)) alts)
                               
 let normalize_ebnf_rule ((lhs, rhs) : ebnf_rule) : bnf_rule * ebnf_rule list =
-  let prs             = map normalize_ebnf_elt rhs        in
+  let prs             = List.map normalize_ebnf_elt rhs        in
   let lhs'            = normalize_nonterminal_name lhs    in
-  let rhs', new_rules = map fst prs, concat (map snd prs) in
+  let rhs', new_rules = List.map fst prs, List.concat (List.map snd prs) in
   ((lhs', rhs'), new_rules)
 
 let bnf_rules_of_ebnf_rule (e : ebnf_rule) : bnf_rule list =
@@ -98,16 +187,17 @@ let bnf_rules_of_ebnf_rule (e : ebnf_rule) : bnf_rule list =
   in  f [e] []
         
 let bnf_of (g : ebnf_grammar) : bnf_grammar =
-  concat (map bnf_rules_of_ebnf_rule g)
-
-(* Removing left recursion *)
+  List.concat (List.map bnf_rules_of_ebnf_rule g)
+(****************************************************************************************)  
+(* ELIMINATE DIRECT LEFT RECURSION FROM A BNF GRAMMAR                                   *)
+(****************************************************************************************)
 let lhss (g : bnf_grammar) : string list =
-  List.sort_uniq String.compare (map fst g)
+  List.sort_uniq String.compare (List.map fst g)
 
 let group_by_lhs (g : bnf_grammar) : (string * symbol list list) list =
-  let tbl = Hashtbl.create (length g)                         in
-  let ()  = List.iter (fun (x, ys) -> Hashtbl.add tbl x ys) g in
-  map (fun x -> (x, Hashtbl.find_all tbl x)) (lhss g)
+  let tbl = Hashtbl.create (List.length g)                         in
+  let ()  = List.iter (fun (x, ys) -> Hashtbl.add tbl x ys) g      in
+  List.map (fun x -> (x, Hashtbl.find_all tbl x)) (lhss g)
 
 (* Does the list ys start with nonterminal x? *)
 let starts_with (x : string) (ys : symbol list) : bool =
@@ -117,36 +207,38 @@ let starts_with (x : string) (ys : symbol list) : bool =
   | NT y :: _ -> String.equal x y
 
 let alphabetize_rhss (x : string) (rhss : symbol list list) : symbol list list * symbol list list =
-  let (lr_rhss, non_lr_rhss) = partition (starts_with x) rhss
-  in  (map tl lr_rhss, non_lr_rhss)
+  let (lr_rhss, non_lr_rhss) = List.partition (starts_with x) rhss
+  in  (List.map List.tl lr_rhss, non_lr_rhss)
 
 let leftrec_elim_count = ref 0
                              
 let elim_left_recursion' ((x, rhss) : string * symbol list list) : bnf_rule list =
   let (alphas, betas) = alphabetize_rhss x rhss                              in
   match alphas with
-  | []     -> map (fun rhs -> (x, rhs)) rhss (* no left-recursive right-hand sides *)
+  | []     -> List.map (fun rhs -> (x, rhs)) rhss (* no left-recursive right-hand sides *)
   | _ :: _ ->
-     let x' = "leftrec_" ^ (string_of_int !leftrec_elim_count)                  in
-     let () = leftrec_elim_count := !leftrec_elim_count + 1                     in
-     let x_rules  = map (fun beta -> (x, beta @ [NT x'])) betas                 in
-     let x'_rules = (x', []) :: map (fun alpha -> (x', alpha @ [NT x'])) alphas in
+     let x' = "leftrec_" ^ (string_of_int !leftrec_elim_count)                       in
+     let () = leftrec_elim_count := !leftrec_elim_count + 1                          in
+     let x_rules  = List.map (fun beta -> (x, beta @ [NT x'])) betas                 in
+     let x'_rules = (x', []) :: List.map (fun alpha -> (x', alpha @ [NT x'])) alphas in
      x_rules @ x'_rules
 
 let elim_left_recursion (g : bnf_grammar) : bnf_grammar =
-  concat (map elim_left_recursion' (group_by_lhs g))
-
+  List.concat (List.map elim_left_recursion' (group_by_lhs g))
+(****************************************************************************************)  
+(* CONVERT A BNF GRAMMAR TO A STRING REPRESENTING A COQ MODULE FOR THAT GRAMMAR         *)
+(****************************************************************************************)
 let rec rhs_terminals (ys : symbol list) : string list =
   match ys with
   | []          -> []
   | T s :: ys'  -> s :: rhs_terminals ys'
   | NT _ :: ys' -> rhs_terminals ys'
 
-let rule_terminals ((x, ys) : bnf_rule) : string list =
+let rule_terminals ((_, ys) : bnf_rule) : string list =
   rhs_terminals ys
 
 let terminals (g : bnf_grammar) : string list =
-  sort_uniq compare (concat (map rule_terminals g))
+  List.sort_uniq compare (List.concat (List.map rule_terminals g))
 
 let rec rhs_nonterminals (ys : symbol list) : string list =
   match ys with
@@ -158,9 +250,7 @@ let rule_nonterminals ((x, ys) : bnf_rule) : string list =
   normalize_nonterminal_name x :: rhs_nonterminals ys
 
 let nonterminals (g : bnf_grammar) : string list =
-  sort_uniq compare (concat (map rule_nonterminals g))
-
-(* Functions for creating strings that represent legal Coq source code *)
+  List.sort_uniq compare (List.concat (List.map rule_nonterminals g))
 
 let coq_list_repr (xs : string list) : string =
   "[" ^ String.concat "; " xs ^ "]"
@@ -177,7 +267,7 @@ let coq_symbol (x : symbol) : string =
   | NT s -> "NT " ^ s
 
 let coq_symbol_constructors (names : string list) : string =
-  let clauses = map (fun s -> "| " ^ s) names in
+  let clauses = List.map (fun s -> "| " ^ s) names in
   String.concat "\n" clauses
                       
 let coq_terminal_defs (g : bnf_grammar) : string =
@@ -195,7 +285,7 @@ let coq_match_clause (lhs : string) (rhs : string) : string =
 
 let coq_show_clauses (names : string list) : string =
   String.concat "\n"
-    (map (fun s -> coq_match_clause s (coq_str_lit s)) names)
+    (List.map (fun s -> coq_match_clause s (coq_str_lit s)) names)
 
 let coq_showT_def (g : bnf_grammar) : string =
   Printf.sprintf
@@ -214,9 +304,9 @@ let coq_showNT_def (g : bnf_grammar) : string =
     (coq_show_clauses (nonterminals g))
 
 let coq_terminalOfString_clauses (names : string list) : string =
-  let clauses = (map (fun s -> coq_match_clause (coq_str_lit s) s) names) in
-  let comment = "(* This clause should be unreachable *)"                 in
-  let catch_all = coq_match_clause "_" (hd (rev names))                   in
+  let clauses = (List.map (fun s -> coq_match_clause (coq_str_lit s) s) names) in
+  let comment = "(* This clause should be unreachable *)"                      in
+  let catch_all = coq_match_clause "_" (List.hd (List.rev names))              in
   String.concat "\n" (clauses @ [comment ; catch_all])
 
 let coq_terminalOfString_def (g : bnf_grammar) : string =
@@ -228,14 +318,10 @@ let coq_terminalOfString_def (g : bnf_grammar) : string =
     (coq_terminalOfString_clauses (terminals g))
 
 let coq_bnf_rule ((x, ys) : bnf_rule) : string =
-  "(" ^ x ^ ", " ^ coq_list_repr (map coq_symbol ys) ^ ")"
-                                                                    (*                
-let coq_grammar (g : bnf_grammar) : string =
-  "[\n" ^ String.concat ";\n\n" (map coq_bnf_rule g) ^ "\n]"
-                                                                     *)
+  "(" ^ x ^ ", " ^ coq_list_repr (List.map coq_symbol ys) ^ ")"
 
 let coq_grammar (g : bnf_grammar) : string =
-  "[ " ^ String.concat "\n; " (map coq_bnf_rule g) ^ "\n]"
+  "[ " ^ String.concat "\n; " (List.map coq_bnf_rule g) ^ "\n]"
                                                        
 let coq_grammar_def (name : string) (g : bnf_grammar) : string =
   Printf.sprintf "Definition %sGrammar : grammar :=\n%s." name (coq_grammar g)
@@ -441,14 +527,6 @@ let coq__terminal_ltb_trans_lemma =
                      ; "Qed."
                      ]
                 
-(*let coq__ltb_nonterminal_def g =
-  Printf.sprintf
-    ("Definition ltb_nonterminal (x x' : nonterminal) :=\n" ^^
-     "match x, x' with\n"                                   ^^
-     "%s\n"                                                 ^^
-     "end.")
-    (coq__ltb_clauses (all_pairs (nonterminals g)))
- *)             
 let coq_types_module (g : bnf_grammar) (g_name : string) : string =
   String.concat "\n\n" [ coq_types_module_start g_name
                        ; coq_terminal_defs g
@@ -498,9 +576,15 @@ let coq_grammar_file_contents (g : bnf_grammar) (g_name : string) : string =
                 ; coq_export_pg
                 ; coq_grammar_def g_name g
                 ]
-
-let write_coq_grammar_file (g : ebnf_grammar) (g_name : string) (f_name : string) : unit =
-  let g' = elim_left_recursion (bnf_of g)                         in
-  let oc = open_out f_name                                        in
-  let _  = output_string oc (coq_grammar_file_contents g' g_name) in
+(****************************************************************************************)  
+(* FULL PIPELINE: CONVERT AN S-EXPRESSION ANTLR GRAMMAR TO A COQ SOURCE FILE            *)
+(****************************************************************************************)
+let main (sexp_fname : string) (coq_fname : string) : unit =
+  let s  = sexp_from_file sexp_fname                                           in
+  let (g_name, sexp_rules) = get_name_and_rules_from_sexp_grammar s            in
+  let g = sexp_rules |> ebnf_grammar_of_rules |> bnf_of |> elim_left_recursion in
+  let oc = open_out coq_fname                                                  in
+  let _  = output_string oc (coq_grammar_file_contents g g_name)               in
   close_out oc
+
+let () = main Sys.argv.(1) Sys.argv.(2)

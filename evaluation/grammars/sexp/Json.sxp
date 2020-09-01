@@ -1,0 +1,1 @@
+(COMBINED_GRAMMAR json (RULES (RULE json (BLOCK (ALT value))) (RULE obj (BLOCK (ALT '{' pair (* (BLOCK (ALT ',' pair))) '}') (ALT '{' '}'))) (RULE pair (BLOCK (ALT STRING ':' value))) (RULE arr (BLOCK (ALT '[' value (* (BLOCK (ALT ',' value))) ']') (ALT '[' ']'))) (RULE value (BLOCK (ALT STRING) (ALT NUMBER) (ALT obj) (ALT arr) (ALT 'true') (ALT 'false') (ALT 'null')))))

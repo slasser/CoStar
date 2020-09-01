@@ -16,10 +16,18 @@ def get_rhss(diag):
     assert isinstance(diag, Diagram)
     choice = diag.items[2]
     assert isinstance(choice, Choice)
-    seqs = choice.items
+    seqs = []
+    for seq in choice.items:
+        # Sometimes a right-hand side is just a comment.
+        # In that case, treat it as an empty sequence of symbols.
+        if isinstance(seq, Comment):
+            seqs.append(Sequence())
+        else:
+            assert isinstance(seq, Sequence)
+            seqs.append(seq)
     for seq in seqs:
         print seq
-        assert isinstance(seq, Sequence)
+        print
     return seqs
 
 def eltstr(elt):
