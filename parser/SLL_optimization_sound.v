@@ -70,13 +70,13 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma approx_ll_done_simReturn_contra :
-    forall g cm av sp sp' sps'',
+    forall g pm cm av sp sp' sps'',
       suffix_stack_wf g (stack sp)
       -> approx sp' sp
-      -> cstep g av sp = CstepDone
+      -> cstep g pm av sp = CstepDone
       -> simReturn cm sp' <> Some sps''.
   Proof.
-    intros g cm av [pred (fr, frs)] [pred' (fr', frs')]sps'' hw ha hs hr.
+    intros g pm cm av [pred (fr, frs)] [pred' (fr', frs')]sps'' hw ha hs hr.
     apply approx_head_frames_eq in ha; subst.
     apply cstepDone_stable_config in hs; auto.
     apply simReturn_stack_shape in hr.
@@ -84,13 +84,13 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma approx_ll_done_sll_step_contra :
-    forall g av av' av'' sp sp' sps'',
+    forall g pm av av' av'' sp sp' sps'',
       suffix_stack_wf g (stack sp)
       -> approx sp' sp
-      -> cstep g av sp = CstepDone
-      -> cstep g av' sp' <> CstepK av'' sps''.
+      -> cstep g pm av sp = CstepDone
+      -> cstep g pm av' sp' <> CstepK av'' sps''.
   Proof.
-    intros g av av' av'' [pr (fr, frs)] [pr' (fr', frs')] sps'' hw ha hs hs'.
+    intros g pm av av' av'' [pr (fr, frs)] [pr' (fr', frs')] sps'' hw ha hs hs'.
     pose proof ha as ha'; apply approx_head_frames_eq in ha'; subst.
     apply cstepDone_stable_config in hs; auto.
     sis; dms; tc; inv hs; inv hs'.
@@ -98,27 +98,28 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma approx_ll_step_sll_done_contra :
-    forall g cm av av' av'' x y xs',
+    forall g pm cm av av' av'' x y xs',
       suffix_stack_wf g (stack x)
       -> approx y x
       -> simReturn cm y = None
-      -> cstep g av x = CstepK av' xs'
-      -> cstep g av'' y <> CstepDone.
+      -> cstep g pm av x = CstepK av' xs'
+      -> cstep g pm av'' y <> CstepDone.
   Proof.
-    intros g cm ? ? ? [pr (fr, frs)] [pr' (fr', frs')] xs' hw ha hr hs hs'.
+    intros g pm cm ? ? ? [pr (fr, frs)] [pr' (fr', frs')] xs' hw ha hr hs hs'.
     sis; dms; tc; inv hs; inv hs'; destruct ha as [? [? heq]]; inv heq; inv hw.
   Qed.
 
   Lemma approx_cstep :
-    forall g ax ax' ay ay' x x' y xs' ys',
-      approx y x
-      -> cstep g ax x = CstepK ax' xs'
-      -> cstep g ay y = CstepK ay' ys'
+    forall g pm ax ax' ay ay' x x' y xs' ys',
+      production_map_correct pm g
+      -> approx y x
+      -> cstep g pm ax x = CstepK ax' xs'
+      -> cstep g pm ay y = CstepK ay' ys'
       -> In x' xs'
       -> exists y', In y' ys' /\ approx y' x'.
   Proof.
-    intros g ax ax' ay ay' [pr (fr, frs)] x' [pr' (fr', frs')] xs' ys'
-           ha hs hs' hi.
+    intros g pm ax ax' ay ay' [pr (fr, frs)] x' [pr' (fr', frs')] xs' ys'
+           hc ha hs hs' hi.
     unfold cstep in *; dmeqs H; tc; inv hs; inv hs';
       destruct ha as [? [ctx heq]]; inv heq; try solve [inv hi].
     - apply in_singleton_eq in hi; subst; eexists; split.
@@ -128,7 +129,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       + apply in_map_iff; eauto.
       + sis; split; eauto.
     - exfalso; apply in_map_iff in hi; destruct hi as [ys [? hi]]; subst.
-      apply rhssForNt_in_iff in hi.
+      eapply rhssFor_in_iff in hi; eauto.
       apply lhs_mem_allNts_true in hi; tc.
   Qed.
 
@@ -298,16 +299,16 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   (* Interesting and complicated lemma -- make sure to write
      a note about it *)
   Lemma llc_sllc_approx_overapprox' :
-    forall g cm pr (a : Acc lex_nat_pair pr) av av' x y xs' ys' a' a'',
+    forall g pm hc cm pr (a : Acc lex_nat_pair pr) av av' x y xs' ys' a' a'',
       pr = meas g av x
       -> closure_map_complete g cm
       -> suffix_stack_wf g (stack x)
       -> approx y x
-      -> llc g av x a' = inr xs'
-      -> sllc g cm av' y a'' = inr ys'
+      -> llc hc av x a' = inr xs'
+      -> sllc g pm hc cm av' y a'' = inr ys'
       -> overapprox ys' xs'.
   Proof.
-    intros g cm pr a''; induction a'' as [pr hlt IH].
+    intros g pm hc cm pr a''; induction a'' as [pr hlt IH].
     intros avx avy x y xs''' ys''' a a' ? hm hw hx hll hsll; subst.
     apply llc_success_cases in hll.
     destruct hll as [[hs ?] | [xs' [avx' [hs [? [? ha]]]]]]; subst.
@@ -361,27 +362,27 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma llc_sllc_approx_overapprox :
-    forall g cm av av' x y xs' ys' a a',
+    forall g pm hc cm av av' x y xs' ys' a a',
       closure_map_complete g cm
       -> suffix_stack_wf g (stack x)
       -> approx y x
-      -> llc g av x a = inr xs'
-      -> sllc g cm av' y a' = inr ys'
+      -> llc hc av x a = inr xs'
+      -> sllc g pm hc cm av' y a' = inr ys'
       -> overapprox ys' xs'.
   Proof.
     intros; eapply llc_sllc_approx_overapprox' with (pr := meas _ _ x); eauto.
   Qed.
   
   Lemma closure_preserves_overapprox :
-    forall g cm xs xs' ys ys',
+    forall g pm hc cm xs xs' ys ys',
       closure_map_complete g cm
       -> all_suffix_stacks_wf g xs
       -> overapprox ys xs
-      -> llClosure g xs = inr xs'
-      -> sllClosure g cm ys = inr ys'
+      -> llClosure hc xs = inr xs'
+      -> sllClosure g pm hc cm ys = inr ys'
       -> overapprox ys' xs'.
   Proof.
-    intros g cm xs xs'' ys ys'' hm hw ho hl hc x'' hi.
+    intros g pm hpc cm xs xs'' ys ys'' hm hw ho hl hc x'' hi.
     unfold llClosure in hl.
     unfold sllClosure in hc.
     eapply aggrClosureResults_map_backwards in hi; eauto.
@@ -395,15 +396,15 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma target_preserves_overapprox :
-    forall g cm sps sps' sps'' sps''' a,
+    forall g pm hc cm sps sps' sps'' sps''' a,
       closure_map_complete g cm
       -> all_suffix_stacks_wf g sps
       -> overapprox sps' sps
-      -> llTarget g a sps = inr sps''
-      -> sllTarget g cm a sps' = inr sps'''
+      -> llTarget hc a sps = inr sps''
+      -> sllTarget g pm hc cm a sps' = inr sps'''
       -> overapprox sps''' sps''.
   Proof.
-    intros g cm xs ys xs'' ys'' a hf hw ho hl hs.
+    intros g pm hpc cm xs ys xs'' ys'' a hf hw ho hl hs.
     unfold llTarget in hl; unfold sllTarget in hs.
     destruct (move a xs) as [? | xs'] eqn:hm  ; tc.
     destruct (move a ys) as [? | ys'] eqn:hm' ; tc.
@@ -428,15 +429,15 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma overapprox_startState :
-    forall g cm fr o x suf frs sps sps',
+    forall g pm hc cm fr o x suf frs sps sps',
       fr = SF o (NT x :: suf)
       -> closure_map_complete g cm
       -> suffix_stack_wf g (fr, frs)
-      -> llStartState g x (fr, frs) = inr sps
-      -> sllStartState g cm x = inr sps'
+      -> llStartState hc x (fr, frs) = inr sps
+      -> sllStartState g pm hc cm x = inr sps'
       -> overapprox sps' sps.
   Proof.
-    intros g cm fr o x suf frs sps sps' ? hc hw hl hs; subst.
+    intros g pm hpc cm fr o x suf frs sps sps' ? hc hw hl hs; subst.
     eapply closure_preserves_overapprox; eauto.
     - eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
     - eapply overapprox_initSps; eauto.
@@ -446,19 +447,19 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
      between LL and SLL prediction *)
   
   Lemma sllPredict'_llPredict'_succ_eq :
-    forall g cm ts sps' sps ca ys ca' ys',
+    forall g pm hc cm ts sps' sps ca ys ca' ys',
       no_left_recursion g
       -> closure_map_complete g cm
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
       -> exists_successful_sp g sps ts
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> overapprox sps' sps
-      -> llPredict' g sps ts = PredSucc ys
-      -> sllPredict' g cm sps' ts ca = (PredSucc ys', ca')
+      -> llPredict' hc sps ts = PredSucc ys
+      -> sllPredict' g pm hc cm sps' ts ca = (PredSucc ys', ca')
       -> ys' = ys.
   Proof.
-    intros g cm ts; induction ts as [| (a,l) ts IH];
+    intros g pm hpc cm ts; induction ts as [| (a,l) ts IH];
       intros sps' sps ca ys ca' ys' hn hm hw hs he hc ho hll hsll;
       pose proof hll as hll'; simpl in hll, hsll.
     - inv hsll; eapply overapprox_final_subparsers_succ_eq; eauto.
@@ -490,18 +491,18 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma sllPredict_llPredict_succ_eq :
-    forall g cm cr o x suf frs w ca rhs rhs' ca',
+    forall g pm hc cm cr o x suf frs w ca rhs rhs' ca',
       cr = SF o (NT x :: suf)
       -> no_left_recursion g
       -> closure_map_complete g cm
       -> suffix_stack_wf g (cr, frs)
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
-      -> llPredict g x (cr, frs) w = PredSucc rhs
-      -> sllPredict g cm x w ca = (PredSucc rhs', ca')
+      -> llPredict hc x (cr, frs) w = PredSucc rhs
+      -> sllPredict g pm hc cm x w ca = (PredSucc rhs', ca')
       -> rhs' = rhs.
   Proof.
-    intros g cm ? o x suf frs w ca rhs rhs' ca' ? hn hm hw hc hr hl hs; subst.
+    intros g pm hpc cm ? o x suf frs w ca rhs rhs' ca' ? hn hm hw hc hr hl hs; subst.
     unfold sllPredict in hs; unfold llPredict in hl.
     destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
     destruct (llStartState _ _ _) as [? | sps] eqn:hss; tc.
@@ -513,15 +514,15 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma sllPredict'_succ__llPredict'_neq_ambig :
-    forall g cm ts sps sps' ca ca' ys ys',
+    forall g pm hc cm ts sps sps' ca ca' ys ys',
       closure_map_complete g cm
       -> all_suffix_stacks_wf g sps
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> overapprox sps' sps
-      -> sllPredict' g cm sps' ts ca = (PredSucc ys, ca')
-      -> llPredict' g sps ts <> PredAmbig ys'.
+      -> sllPredict' g pm hc cm sps' ts ca = (PredSucc ys, ca')
+      -> llPredict' hc sps ts <> PredAmbig ys'.
   Proof.
-    intros g cm ts; induction ts as [| (a, l) ts IH];
+    intros g pm hpc cm ts; induction ts as [| (a, l) ts IH];
       intros sps sps' ca ca' ys ys' hm hw hc ho hs hl; sis.
     - inv hs; eapply overapprox_handleFinalSubparsers_contra; eauto.
     - destruct sps' as [| sp' sps']; tc.
@@ -543,15 +544,15 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma sllPredict_succ__llPredict_neq_ambig :
-    forall g cm fr o x suf frs ts ca ys ca' ys',
+    forall g pm hc cm fr o x suf frs ts ca ys ca' ys',
       fr = SF o (NT x :: suf)
       -> closure_map_complete g cm
       -> suffix_stack_wf g (fr, frs)
-      -> cache_stores_target_results g cm ca
-      -> sllPredict g cm x ts ca = (PredSucc ys, ca')
-      -> llPredict g x (fr, frs) ts <> PredAmbig ys'.
+      -> cache_stores_target_results g pm hc cm ca
+      -> sllPredict g pm hc cm x ts ca = (PredSucc ys, ca')
+      -> llPredict hc x (fr, frs) ts <> PredAmbig ys'.
   Proof.
-    intros g cm fr o x suf frs ts ca ys ca' ys' ? hm hw hc hs hl; subst.
+    intros g pm hpc cm fr o x suf frs ts ca ys ca' ys' ? hm hw hc hs hl; subst.
     unfold sllPredict in hs; unfold llPredict in hl.
     destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
     destruct (llStartState _ _ _) as [? | sps]     eqn:hss ; tc.
@@ -561,17 +562,17 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma sllPredict_succ_eq_llPredict_succ :
-    forall g cm cr o x suf frs w ca rhs ca',
+    forall g pm hc cm cr o x suf frs w ca rhs ca',
       cr = SF o (NT x :: suf)
       -> no_left_recursion g
       -> closure_map_complete g cm
       -> suffix_stack_wf g (cr, frs)
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
-      -> sllPredict g cm x w ca = (PredSucc rhs, ca')
-      -> llPredict g x (cr, frs) w = PredSucc rhs.
+      -> sllPredict g pm hc cm x w ca = (PredSucc rhs, ca')
+      -> llPredict hc x (cr, frs) w = PredSucc rhs.
   Proof.
-    intros g cm ? o x suf frs w ca rhs' ca' ?
+    intros g pm hpc cm ? o x suf frs w ca rhs' ca' ?
            hn hm hw hc hr hs; subst.
     destruct (llPredict _ _ _ _) as [rhs | rhs | | e] eqn:hl.
     - symmetry; f_equal; eapply sllPredict_llPredict_succ_eq; eauto.
@@ -581,17 +582,17 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma adaptivePredict_succ_eq_llPredict_succ :
-    forall g cm cr x o suf frs w ca rhs ca',
+    forall g pm hc cm cr x o suf frs w ca rhs ca',
       cr = SF o (NT x :: suf)
       -> no_left_recursion g
       -> closure_map_complete g cm
       -> suffix_stack_wf g (cr, frs)
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
-      -> adaptivePredict g cm x (cr, frs) w ca = (PredSucc rhs, ca')
-      -> llPredict g x (cr, frs) w = PredSucc rhs.
+      -> adaptivePredict g pm hc cm x (cr, frs) w ca = (PredSucc rhs, ca')
+      -> llPredict hc x (cr, frs) w = PredSucc rhs.
   Proof.
-    intros g cm ? x o suf frs w ca rhs ca' ?
+    intros g pm hpc cm ? x o suf frs w ca rhs ca' ?
            hn hm hw hc hr ha; subst.
     unfold adaptivePredict in ha.
     destruct (sllPredict _ _ _ _ _) as ([? | ? | | ?], ?) eqn:hs; tc; inv ha.
@@ -599,18 +600,18 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Theorem adaptivePredict_succ_at_most_one_rhs_applies :
-    forall g cm cr o x suf frs w ca rhs rhs' ca',
+    forall g pm hc cm cr o x suf frs w ca rhs rhs' ca',
       cr = SF o (NT x :: suf)
       -> no_left_recursion g
       -> closure_map_complete g cm
       -> suffix_stack_wf g (cr, frs)
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> In (x, rhs) g
       -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w
-      -> adaptivePredict g cm x (cr, frs) w ca = (PredSucc rhs', ca')
+      -> adaptivePredict g pm hc cm x (cr, frs) w ca = (PredSucc rhs', ca')
       -> rhs' = rhs.
   Proof.
-    intros g cm ? o x suf frs w ca rhs rhs' ca' ?
+    intros g pm hpc cm ? o x suf frs w ca rhs rhs' ca' ?
            hn hm hw hc hi hr ha; subst.
     eapply adaptivePredict_succ_eq_llPredict_succ in ha; eauto.
     - eapply llPredict_succ_at_most_one_rhs_applies; eauto.
@@ -618,9 +619,9 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma adaptivePredict_ambig_llPredict_ambig :
-    forall g cm x ss w ca rhs ca',
-      adaptivePredict g cm x ss w ca = (PredAmbig rhs, ca')
-      -> llPredict g x ss w = PredAmbig rhs.
+    forall g pm hc cm x ss w ca rhs ca',
+      adaptivePredict g pm hc cm x ss w ca = (PredAmbig rhs, ca')
+      -> llPredict hc x ss w = PredAmbig rhs.
   Proof.
     unfold adaptivePredict; intros; dms; tc. 
   Qed.
@@ -628,6 +629,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Theorem adaptivePredict_ambig_rhs_unproc_stack_syms:
     forall (g : grammar)
            (cm : closure_map)
+           (pm : production_map)
+           (hc : production_map_correct pm g)
            (cr : suffix_frame)
            (o : option nonterminal)
            (x : nonterminal)
@@ -639,10 +642,10 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       cr = SF o (NT x :: suf) 
       -> no_left_recursion g
       -> suffix_stack_wf g (cr, frs)
-      -> adaptivePredict g cm x (cr, frs) w ca = (PredAmbig rhs, ca')
+      -> adaptivePredict g pm hc cm x (cr, frs) w ca = (PredAmbig rhs, ca')
       -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w.
   Proof.
-    intros g cm cr o x suf frs w ca ca' rhs ? hn hw hp; subst.
+    intros g pm hc cm cr o x suf frs w ca ca' rhs ? hn hw hp; subst.
     apply adaptivePredict_ambig_llPredict_ambig in hp.
     eapply llPredict_ambig_rhs_unproc_stack_syms in hp; eauto.
     sis; auto.

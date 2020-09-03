@@ -228,6 +228,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition rhss (g : grammar) : list (list symbol) :=
     map rhs g.
 
+  (* to do : delete this function after swapping in 
+     a production_map lookup *)
   Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
     match ps with
     | []                 => []
@@ -237,7 +239,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       else 
         rhssForNt ps' x
     end.
-
+  
   Lemma rhssForNt_in_iff :
     forall g x ys,
       In ys (rhssForNt g x)
@@ -267,13 +269,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     - dm; subst; auto.
       destruct Hin as [Heq | Hin]; subst; auto.
   Qed.
-
+  
   (* Finite maps with nonterminal keys *)
   Module NM  := FMapAVL.Make NT_as_UOT.
   Module NMF := FMapFacts.Facts NM.
 
   (* A production map maps each grammar nonterminal to its right-hand sides *)
   Definition production_map := NM.t (list (list symbol)).
+
+  Definition rhssFor (x : nonterminal) (pm : production_map) : list (list symbol) :=
+    match NM.find x pm with
+    | Some yss => yss
+    | None     => []
+    end.
 
   Definition production_map_sound (pm : production_map) (g : grammar) :=
     forall x ys yss,
@@ -282,9 +290,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition production_map_complete (pm : production_map) (g : grammar) :=
     forall x ys,
       In (x, ys) g -> exists yss, NM.MapsTo x yss pm /\ In ys yss.
-
-  Definition production_map_correct (pm : production_map) (g : grammar) :=
-    production_map_sound pm g /\ production_map_complete pm g.
 
   Definition addProduction (p : production) (pm : production_map) : production_map :=
     match p with
@@ -402,6 +407,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     apply fold_right_addProduction_preserves_completeness.
     apply empty_production_map_complete__empty_grammar.
   Qed.
+
+  Definition production_map_correct (pm : production_map) (g : grammar) :=
+    production_map_sound pm g /\ production_map_complete pm g.
   
   Lemma mkProductionMap_correct :
     forall (g : grammar),
@@ -411,9 +419,33 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     - apply mkProductionMap_sound.
     - apply mkProductionMap_complete.
   Qed.
-        
+
+  Lemma rhssFor_in_iff :
+    forall g pm x ys,
+      production_map_correct pm g
+      -> In ys (rhssFor x pm) <-> In (x, ys) g.
+  Proof.
+    unfold rhssFor; intros g pm x ys [hs hc]; split; intros hi.
+    - destruct (NM.find _ _) eqn:hf; try inv hi.
+      apply NMF.find_mapsto_iff in hf; eauto.
+    - apply hc in hi; destruct hi as [yss [hm hi]].
+      destruct (NM.find _ _) as [yss' |] eqn:hf;
+        apply NMF.find_mapsto_iff in hm;
+        rewrite hm in hf; inv hf; auto.
+  Qed.
+  
   Definition rhsLengths (g : grammar) : list nat :=
     map (fun rhs => List.length rhs) (rhss g).
+
+  (* The next two definitions help us use a well-founded measure that is 
+     already defined in terms of a grammar, rather than a production map *)
+  Definition getProductions' (e : nonterminal * list (list symbol)) : list production :=
+    match e with
+    | (x, yss) => map (pair x) yss
+    end.
+
+  Definition getProductions (pm : production_map) : grammar :=
+    flat_map getProductions' (NM.elements pm).
 
   Lemma rhss_rhsLengths_in :
     forall g rhs,

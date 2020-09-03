@@ -31,18 +31,18 @@ Module SllPredictionCompleteFn (Import D : Defs.T).
 
   (* to do : it might be possible to remove some assumptions here *)
   Lemma sllPredict'_reject__llPredict'_neq_succ :
-    forall g cm ts sps sps' ca ca' rhs,
+    forall g pm hc cm ts sps sps' ca ca' rhs,
       no_left_recursion g
       -> closure_map_correct g cm
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
       -> exists_successful_sp g sps ts
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> overapprox sps' sps
-      -> sllPredict' g cm sps' ts ca = (PredReject, ca')
-      -> llPredict' g sps ts <> PredSucc rhs.
+      -> sllPredict' g pm hc cm sps' ts ca = (PredReject, ca')
+      -> llPredict' hc sps ts <> PredSucc rhs.
   Proof.
-    intros g cm ts; induction ts as [| (a, l) ts IH];
+    intros g pm hpc cm ts; induction ts as [| (a, l) ts IH];
       intros sps sps' ca ca' rhs hn hmc hw hs he hc ho hsll hll;
       pose proof hll as hll'; simpl in hsll, hll.
     - injection hsll; intros heq' heq; subst.
@@ -74,31 +74,31 @@ Module SllPredictionCompleteFn (Import D : Defs.T).
 
   (* This might belong somewhere else *)
   Lemma esp_llPredict'_succ__exists_target : 
-    forall g sps a l ts ys,
+    forall g pm (hc : production_map_correct pm g) sps a l ts ys,
       no_left_recursion g
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
-      -> llPredict' g sps ((a, l) :: ts) = PredAmbig ys
+      -> llPredict' hc sps ((a, l) :: ts) = PredAmbig ys
       -> exists sps',
-          llTarget g a sps = inr sps'
-          /\ llPredict' g sps' ts = PredAmbig ys.
+          llTarget hc a sps = inr sps'
+          /\ llPredict' hc sps' ts = PredAmbig ys.
   Proof.
-    intros g sps a l ts ys hn hw hs hl; sis; dms; tc; eauto.
+    intros g pm hc sps a l ts ys hn hw hs hl; sis; dms; tc; eauto.
   Qed.
 
   (* to do : it might be possible to remove some assumptions here *)
   Lemma sllPredict'_reject__llPredict'_neq_ambig :
-    forall g cm ts sps sps' ca ca' rhs,
+    forall g pm hc cm ts sps sps' ca ca' rhs,
       no_left_recursion g
       -> closure_map_correct g cm
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> overapprox sps' sps
-      -> sllPredict' g cm sps' ts ca = (PredReject, ca')
-      -> llPredict' g sps ts <> PredAmbig rhs.
+      -> sllPredict' g pm hc cm sps' ts ca = (PredReject, ca')
+      -> llPredict' hc sps ts <> PredAmbig rhs.
   Proof.
-    intros g cm ts; induction ts as [| (a, l) ts IH];
+    intros g pm hpc cm ts; induction ts as [| (a, l) ts IH];
       intros sps sps' ca ca' rhs hn hmc hw hs hc ho hsll hll;
       pose proof hll as hll'; simpl in hsll, hll.
     - injection hsll; intros heq' heq; subst.
@@ -126,21 +126,21 @@ Module SllPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma ussr_sllPredict_neq_reject :
-    forall g cm fr o x suf frs w ca ca',
+    forall g pm hc cm fr o x suf frs w ca ca',
       no_left_recursion g
       -> closure_map_correct g cm
       -> fr = SF o (NT x :: suf)
       -> suffix_stack_wf g (fr, frs)
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) w
-      -> sllPredict g cm x w ca <> (PredReject, ca').
+      -> sllPredict g pm hc cm x w ca <> (PredReject, ca').
   Proof.
-    intros g cm fr o x suf frs w ca ca' hn hmc ? hw hc hg hp'; pose proof hmc as [hsou hcom]; subst.
+    intros g pm hpc cm fr o x suf frs w ca ca' hn hmc ? hw hc hg hp'; pose proof hmc as [hsou hcom]; subst.
     unfold sllPredict in hp'.
     destruct (sllStartState _ _ _) as [? | sps'] eqn:hss'; tc.
-    destruct (llStartState g x (SF o (NT x :: suf), frs)) as [? | sps] eqn:hs; tc.
+    destruct (llStartState hpc x (SF o (NT x :: suf), frs)) as [? | sps] eqn:hs; tc.
     - eapply llStartState_never_returns_error; eauto.
-    - destruct (llPredict' g sps w) as [rhs | rhs | | e] eqn:hp.
+    - destruct (llPredict' hpc sps w) as [rhs | rhs | | e] eqn:hp.
       + eapply sllPredict'_reject__llPredict'_neq_succ; eauto.
         * eapply llStartState_preserves_stacks_wf_invar; eauto.
         * eapply llStartState_all_stacks_stable; eauto.
@@ -161,16 +161,16 @@ Module SllPredictionCompleteFn (Import D : Defs.T).
   
   (* THE PRIZE *)
   Theorem ussr_adaptivePredict_neq_reject :
-    forall g cm fr o x suf frs w ca ca',
+    forall g pm hc cm fr o x suf frs w ca ca',
       no_left_recursion g
       -> closure_map_correct g cm
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hc cm ca
       -> fr = SF o (NT x :: suf)
       -> suffix_stack_wf g (fr, frs)
       -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> adaptivePredict g cm x (fr, frs) w ca <> (PredReject, ca').
+      -> adaptivePredict g pm hc cm x (fr, frs) w ca <> (PredReject, ca').
   Proof.
-    intros g cm fr o x suf frs w ca ca' ?
+    intros g pm hpc cm fr o x suf frs w ca ca' ?
            hn hm hc hw hr hp; subst; simpl in hr.
     unfold adaptivePredict in hp.
     dmeq hsll; dms; tc; inv hp.
