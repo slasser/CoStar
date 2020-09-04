@@ -34,18 +34,18 @@ Module ParserCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma push_succ_preserves_ussr :
-    forall g cm cr ce frs o x suf rhs w ca ca',
+    forall g pm hp cm cr ce frs o x suf rhs w ca ca',
       cr    = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
       -> closure_map_correct g cm
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hp cm ca
       -> suffix_stack_wf g (cr, frs)
-      -> adaptivePredict g cm x (cr, frs) w ca = (PredSucc rhs, ca')
+      -> adaptivePredict g pm hp cm x (cr, frs) w ca = (PredSucc rhs, ca')
       -> gamma_recognize g (unprocStackSyms (cr, frs)) w
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g cm ? ? frs o x suf rhs w ca ca'
+    intros g pm hpc cm ? ? frs o x suf rhs w ca ca'
            ? ? hn [hs hc] hc' hw hp hg; subst; sis.
     apply gamma_recognize_nonterminal_head in hg.
     destruct hg as (rhs' & wp & wms & ? & hi' & hg & hg'); subst.
@@ -56,31 +56,31 @@ Module ParserCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma push_ambig_preserves_ussr :
-    forall g cm cr ce frs o x suf rhs w ca ca',
+    forall g pm hp cm cr ce frs o x suf rhs w ca ca',
       cr    = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
       -> suffix_stack_wf g (cr, frs)
-      -> adaptivePredict g cm x (cr, frs) w ca = (PredAmbig rhs, ca')
+      -> adaptivePredict g pm hp cm x (cr, frs) w ca = (PredAmbig rhs, ca')
       -> gamma_recognize g (unprocStackSyms (cr, frs)) w
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g cm ? ? frs o x suf rhs w ca ca'
+    intros g pm hp cm ? ? frs o x suf rhs w ca ca'
            ? ? hn hw hl hg; subst; sis.
     eapply adaptivePredict_ambig_rhs_unproc_stack_syms; eauto.
   Qed.
 
   Lemma step_preserves_ussr :
-    forall g cm ps ps' ss ss' ts ts' av av' un un' ca ca',
+    forall g pm hp cm ps ps' ss ss' ts ts' av av' un un' ca ca',
       no_left_recursion g
       -> closure_map_correct g cm
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hp cm ca
       -> suffix_stack_wf g ss
       -> gamma_recognize g (unprocStackSyms ss) ts
-      -> step g cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> step g pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
       -> gamma_recognize g (unprocStackSyms ss') ts'.
   Proof.
-    intros g cm ps ps' ss ss' ts ts' av av' un un' ca ca'
+    intros g pm hp cm ps ps' ss ss' ts ts' av av' un un' ca ca'
            hn hm hc hw hr hs.
     unfold step in hs; dmeqs h; tc; inv hs.
     - eapply return_preserves_ussr; eauto.
@@ -90,15 +90,15 @@ Module ParserCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma ussr__step_neq_reject :
-    forall g cm ps ss ts av un ca s,
+    forall g pm hp cm ps ss ts av un ca s,
       no_left_recursion g
       -> closure_map_correct g cm
-      -> cache_stores_target_results g cm ca
+      -> cache_stores_target_results g pm hp cm ca
       -> stacks_wf g ps ss
       -> gamma_recognize g (unprocStackSyms ss) ts
-      -> step g cm ps ss ts av un ca <> StepReject s.
+      -> step g pm hp cm ps ss ts av un ca <> StepReject s.
   Proof.
-    intros g cm ps ss ts av un ca s
+    intros g pm hp cm ps ss ts av un ca s
            hn hm hc hw hg hs.
     unfold step in hs; dmeqs h; tc; inv hs; sis.
     - inv hg.
@@ -114,6 +114,8 @@ Module ParserCompleteFn (Import D : Defs.T).
 
   Lemma ussr__multistep_doesn't_reject' :
     forall (g      : grammar)
+           (pm     : production_map)
+           (hp     : production_map_correct pm g)
            (cm     : closure_map)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
@@ -123,7 +125,7 @@ Module ParserCompleteFn (Import D : Defs.T).
            (av     : NtSet.t)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results g cm ca)
+           (hc     : cache_stores_target_results g pm hp cm ca)
            (a'     : Acc lex_nat_triple (meas g ss ts av))
            (s      : string),
       tri = meas g ss ts av
@@ -131,8 +133,9 @@ Module ParserCompleteFn (Import D : Defs.T).
       -> closure_map_correct g cm
       -> stacks_wf g ps ss
       -> gamma_recognize g (unprocStackSyms ss ) ts
-      -> multistep g cm ps ss ts av un ca hc a' <> Reject s.  Proof.
-    intros g cm tri a'.
+      -> multistep g pm hp cm ps ss ts av un ca hc a' <> Reject s.
+  Proof.
+    intros g pm hp cm tri a'.
     induction a' as [tri hlt IH].
     intros ps ss ts av un ca hc a s ? hn hcm hw hg hm; subst. 
     apply multistep_reject_cases in hm.
@@ -147,6 +150,8 @@ Module ParserCompleteFn (Import D : Defs.T).
 
   Lemma ussr_implies_multistep_doesn't_reject :
     forall (g      : grammar)
+           (pm     : production_map)
+           (hp     : production_map_correct pm g)
            (cm     : closure_map)
            (ps     : prefix_stack)
            (ss     : suffix_stack)
@@ -154,14 +159,14 @@ Module ParserCompleteFn (Import D : Defs.T).
            (av     : NtSet.t)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results g cm ca)
+           (hc     : cache_stores_target_results g pm hp cm ca)
            (a      : Acc lex_nat_triple (meas g ss ts av))
            (s      : string),
       no_left_recursion g
       -> closure_map_correct g cm
       -> stacks_wf g ps ss
       -> gamma_recognize g (unprocStackSyms ss) ts
-      -> multistep g cm ps ss ts av un ca hc a <> Reject s.
+      -> multistep g pm hp cm ps ss ts av un ca hc a <> Reject s.
   Proof.
     intros; eapply ussr__multistep_doesn't_reject'; eauto.
   Qed.
