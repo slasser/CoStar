@@ -71,8 +71,8 @@ public class TokenizeTestData {
     
     static void tokenizeAllFiles(String lexerPath, String dataDir, String tokensDir) throws Exception {
 	for (File f : new File(dataDir).listFiles()) {
-	    System.out.println("tokenizing " + f.getName());
 	    JSONArray tokens = getJsonTokens(lexerPath, f.getPath());
+	    System.out.print("tokenizing : " + f.getName() + "\n# tokens   : " + tokens.length() + "\n***\n");
 	    String tokensPath = tokensDir + "/" + f.getName().split("\\.")[0] + ".json";
 	    PrintWriter writer = new PrintWriter(tokensPath, "UTF-8");
 	    writer.print(tokens.toString(4));

@@ -93,7 +93,7 @@ let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
   in  (time, res)
 
 let print_result (fname : string) (res : coq_string) =
-  Printf.printf "***\nFile  : %s\nResult: %s \n%!" fname (str_of_coqstr res)
+  Printf.printf "***\nFile   : %s\nResult : %s \n%!" fname (str_of_coqstr res)
         
 let benchmark_parser_on_dataset parse grammar start_sym t_of_str show_result data_dir : test_result list =
   let parse'  = parse grammar start_sym in
@@ -231,4 +231,4 @@ let main () =
   in
   write_test_results results outfile
 
-let () = main ()
+let () = let () = main () in exit 0

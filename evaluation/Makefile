@@ -96,6 +96,14 @@ $(DATA)/$(TOKENIZED)/$(ERLANG_MINIMAL): $(DATA)/TokenizeTestData.class $(DATA)/$
         && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
            TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/Erlang.g4 $(RAW)/$(ERLANG_MINIMAL) $(TOKENIZED)/$(ERLANG_MINIMAL)
 
+ERLANG_SMALL := erlang_small
+
+$(DATA)/$(TOKENIZED)/$(ERLANG_SMALL): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(ERLANG_SMALL)
+	cd $(DATA) \
+        && mkdir -p $(TOKENIZED)/$(ERLANG_SMALL) \
+        && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
+           TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/Erlang.g4 $(RAW)/$(ERLANG_SMALL) $(TOKENIZED)/$(ERLANG_SMALL)
+
 # Tokenize C data from Terence Parr
 
 C_PYTHON := c_python

@@ -1,6 +1,7 @@
-Require Import FMaps List MSets Program.Wf.
+Require Import FMaps List FSets Program.Wf.
 Require Import GallStar.GrammarAnalysis.
 Require Import GallStar.Lex.
+Require Import GallStar.Orders.
 Require Import GallStar.Tactics.
 Require Import GallStar.Utils.
 Import ListNotations.
@@ -260,16 +261,112 @@ Module SllPredictionFn (Import D : Defs.T).
   Qed.
 
   (* SLL prediction *)
+  (* Goal : replace FMapWeakList with FMapAVL *)
 
+  Module Subparser_as_UOT <: UsualOrderedType.
+
+    Module L := List_as_UOT SF_as_UOT.
+    Module P := Pair_as_UOT Gamma_as_UOT L.
+
+    Definition t := subparser.
+
+    Definition eq       := @eq t.
+    Definition eq_refl  := @eq_refl t.
+    Definition eq_sym   := @eq_sym t.
+    Definition eq_trans := @eq_trans t.
+
+    Definition lt (x y : subparser) : Prop :=
+      match x, y with
+      | Sp pred (fr, frs), Sp pred' (fr', frs') =>
+        P.lt (pred, fr :: frs) (pred', fr' :: frs')
+      end.
+
+    Lemma lt_trans :
+      forall x y z,
+        lt x y -> lt y z -> lt x z.
+    Proof.
+      unfold lt; intros [p (f, fs)] [p' (f', fs')] [p'' (f'', fs'')];
+        apply P.lt_trans.
+    Qed.
+
+    Lemma lt_not_eq :
+      forall x y, lt x y -> ~ x = y.
+    Proof.
+      unfold lt; intros [p (f, fs)] [p' (f', fs')] hl he; inv he.
+      eapply P.lt_not_eq; eauto.
+    Qed.
+
+    Definition compare (x y : subparser) : Compare lt eq x y.
+      refine (match x, y with
+              | Sp pred (fr, frs), Sp pred' (fr', frs') =>
+                match P.compare (pred, fr :: frs) (pred', fr' :: frs') with
+                | LT hl => LT _
+                | GT he => GT _
+                | EQ hl => EQ _
+                end
+              end); red; tc.
+    Defined.
+
+    Definition eq_dec (x y : subparser) : {x = y} + {x <> y}.
+      refine (match x, y with
+              | Sp pred (fr, frs), Sp pred' (fr', frs') =>
+                match P.eq_dec (pred, fr :: frs) (pred', fr' :: frs') with
+                | left he  => left _
+                | right hn => right _
+                end
+              end); tc.
+    Defined.
+
+  End Subparser_as_UOT.
+  
   Definition cache_key := (list subparser * terminal)%type.
 
-  Lemma cache_key_eq_dec : 
+  Module CacheKey_as_UOT <: UsualOrderedType.
+
+    Module L := List_as_UOT Subparser_as_UOT.
+    Module P := Pair_as_UOT L T_as_UOT.
+
+    Definition t := cache_key.
+
+    Definition eq       := @eq t.
+    Definition eq_refl  := @eq_refl t.
+    Definition eq_sym   := @eq_sym t.
+    Definition eq_trans := @eq_trans t.
+
+    (* Try flipping the order of the pair,
+       in case that leads to fail fast behavior *)
+    Definition lt (x y : cache_key) : Prop :=
+      P.lt x y.
+
+    Lemma lt_trans :
+      forall x y z,
+        lt x y -> lt y z -> lt x z.
+    Proof.
+      unfold lt; intros (sps, a) (sps', a') (sps'', a''); apply P.lt_trans.
+    Qed.
+
+    Lemma lt_not_eq :
+      forall x y, lt x y -> ~ x = y.
+    Proof.
+      unfold lt; intros (sps, a) (sps', a') hl he; inv he.
+      eapply P.lt_not_eq; eauto.
+    Qed.
+
+    Definition compare : forall x y : cache_key, Compare lt eq x y :=
+      P.compare.
+
+    Definition eq_dec : forall x y : cache_key, {x = y} + {x <> y} :=
+      P.eq_dec.
+
+  End CacheKey_as_UOT.
+
+  (*Lemma cache_key_eq_dec : 
     forall k k' : cache_key,
       {k = k'} + {k <> k'}.
   Proof.
     repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
-  Defined.
-
+  Defined.*)
+(*
   Module MDT_CacheKey.
     Definition t := cache_key.
     Definition eq_dec := cache_key_eq_dec.
@@ -277,7 +374,11 @@ Module SllPredictionFn (Import D : Defs.T).
   Module CacheKey_as_DT := Make_UDT(MDT_CacheKey).
   Module Cache := FMapWeakList.Make CacheKey_as_DT.
   Module CacheFacts := WFacts_fun CacheKey_as_DT Cache.
+ *)
 
+  Module Cache      := FMapAVL.Make CacheKey_as_UOT.
+  Module CacheFacts := FMapFacts.Facts Cache.
+  
   (* A cache is a finite map with (list subparser * terminal) keys 
      and (list subparser) values *)
   Definition cache : Type := Cache.t (list subparser).
@@ -322,7 +423,7 @@ Module SllPredictionFn (Import D : Defs.T).
       -> cache_stores_target_results gr pm hc cm (Cache.add (sps, a) sps' ca).
   Proof.
     intros gr pm hpc cm ca sps a sps' hc ht ka kb v hf.
-    destruct (cache_key_eq_dec (ka, kb) (sps, a)) as [he | hn].
+    destruct (CacheKey_as_UOT.eq_dec (ka, kb) (sps, a)) as [he | hn].
     - inv he; rewrite CacheFacts.add_eq_o in hf; inv hf; auto.
     - rewrite CacheFacts.add_neq_o in hf; auto.
   Qed.
