@@ -269,6 +269,22 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     - dm; subst; auto.
       destruct Hin as [Heq | Hin]; subst; auto.
   Qed.
+
+  Definition fromNtList (ls : list nonterminal) : NtSet.t :=
+    fold_right NtSet.add NtSet.empty ls.
+
+  Lemma fromNtList_in_iff :
+    forall (x : nonterminal)
+           (l : list nonterminal), 
+      In x l <-> NtSet.In x (fromNtList l).
+  Proof.
+    intros x l; split; intro hi; induction l as [| x' l IH]; sis; try ND.fsetdec.
+    - destruct hi as [hh | ht]; subst; auto.
+      + ND.fsetdec.
+      + apply IH in ht; ND.fsetdec.
+    - destruct (NF.eq_dec x' x); subst; auto.
+      right; apply IH; ND.fsetdec.
+  Qed.
   
   (* Finite maps with nonterminal keys *)
   Module NM  := FMapAVL.Make NT_as_UOT.
@@ -276,12 +292,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   (* A production map maps each grammar nonterminal to its right-hand sides *)
   Definition production_map := NM.t (list (list symbol)).
-
-  Definition rhssFor (x : nonterminal) (pm : production_map) : list (list symbol) :=
-    match NM.find x pm with
-    | Some yss => yss
-    | None     => []
-    end.
 
   Definition production_map_sound (pm : production_map) (g : grammar) :=
     forall x ys yss,
@@ -420,6 +430,18 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     - apply mkProductionMap_complete.
   Qed.
 
+  Definition keys (pm : production_map) : list nonterminal :=
+    fold_right (fun pr l => fst pr :: l) [] (NM.elements pm).
+
+  Definition keySet (pm : production_map) : NtSet.t :=
+    fromNtList (keys pm).
+  
+  Definition rhssFor (x : nonterminal) (pm : production_map) : list (list symbol) :=
+    match NM.find x pm with
+    | Some yss => yss
+    | None     => []
+    end.
+  
   Lemma rhssFor_in_iff :
     forall g pm x ys,
       production_map_correct pm g
@@ -433,20 +455,83 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
         apply NMF.find_mapsto_iff in hm;
         rewrite hm in hf; inv hf; auto.
   Qed.
+
+  Lemma rhssFor_keySet :
+    forall x ys pm,
+      In ys (rhssFor x pm) -> NtSet.In x (keySet pm).
+  Proof.
+    intros x ys pm hi; unfold rhssFor in hi.
+    destruct (NM.find _ _) as [yss |] eqn:hf; try solve [inv hi].
+    apply NMF.find_mapsto_iff in hf.
+    apply NMF.elements_mapsto_iff in hf.
+    apply InA_alt in hf.
+    destruct hf as [(x', yss') [heq hi']]; inv heq; sis; subst.
+    apply fromNtList_in_iff; apply in_map_iff.
+    exists (x', yss'); split; auto.
+  Qed.
   
   Definition rhsLengths (g : grammar) : list nat :=
     map (fun rhs => List.length rhs) (rhss g).
 
   (* The next two definitions help us use a well-founded measure that is 
      already defined in terms of a grammar, rather than a production map *)
-  Definition getProductions' (e : nonterminal * list (list symbol)) : list production :=
+  Definition decompress (e : nonterminal * list (list symbol)) : list production :=
     match e with
     | (x, yss) => map (pair x) yss
     end.
 
-  Definition getProductions (pm : production_map) : grammar :=
-    flat_map getProductions' (NM.elements pm).
+  Lemma decompress_nt_eq :
+    forall x x' ys yss,
+      In (x, ys) (decompress (x', yss))
+      -> x' = x.
+  Proof.
+    intros x x' ys yss hi; sis.
+    apply in_map_iff in hi; destruct hi as [? [heq hi]].
+    inv heq; auto.
+  Qed.
 
+  Definition grammarOf (pm : production_map) : grammar :=
+    flat_map decompress (NM.elements pm).
+
+  Lemma rhssFor_grammarOf :
+    forall x ys pm,
+      In ys (rhssFor x pm) -> In (x, ys) (grammarOf pm).
+  Proof.
+    unfold rhssFor, grammarOf; intros x ys pm hi.
+    destruct (NM.find _ _) as [yss |] eqn:hf; try solve [inv hi].
+    apply in_flat_map.
+    exists (x, yss); split.
+    - apply NMF.find_mapsto_iff in hf.
+      apply NMF.elements_mapsto_iff in hf.
+      apply InA_alt in hf.
+      destruct hf as [(x', yss') [heq hi']].
+      repeat red in heq; sis; destruct heq; subst; auto.
+    - apply in_map_iff; eauto.
+  Qed.
+
+  Lemma in_elements__in_fold_right_add_key :
+    forall (x   : nonterminal)
+           (yss : list (list symbol))
+           (prs : list (nonterminal * list (list symbol))),
+      In (x, yss) prs
+      -> In x (fold_right (fun pr l => fst pr :: l) [] prs).
+    intros x yss prs hi; induction prs as [| (x', yss') prs IH]; sis; auto.
+    destruct hi as [hh | ht]; auto.
+    inv hh; auto.
+  Qed.
+  
+  Lemma grammarOf_keySet :
+    forall x ys pm,
+      In (x, ys) (grammarOf pm)
+      -> NtSet.In x (keySet pm).
+  Proof.
+    intros x ys pm hi.
+    apply in_flat_map in hi; destruct hi as [(x', yss) [hi hi']].
+    apply decompress_nt_eq in hi'; subst.
+    apply fromNtList_in_iff.
+    eapply in_elements__in_fold_right_add_key; eauto.
+  Qed.
+  
   Lemma rhss_rhsLengths_in :
     forall g rhs,
       In rhs (rhss g)
@@ -478,22 +563,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Proof.
     intros g x rhs Hin.
     apply grammar_rhs_length_le_max in Hin; omega.
-  Qed.
-
-  Definition fromNtList (ls : list nonterminal) : NtSet.t :=
-    fold_right NtSet.add NtSet.empty ls.
-
-  Lemma fromNtList_in_iff :
-    forall (x : nonterminal)
-           (l : list nonterminal), 
-      In x l <-> NtSet.In x (fromNtList l).
-  Proof.
-    intros x l; split; intro hi; induction l as [| x' l IH]; sis; try ND.fsetdec.
-    - destruct hi as [hh | ht]; subst; auto.
-      + ND.fsetdec.
-      + apply IH in ht; ND.fsetdec.
-    - destruct (NF.eq_dec x' x); subst; auto.
-      right; apply IH; ND.fsetdec.
   Qed.
 
   Definition allNts (g : grammar) : NtSet.t := 
