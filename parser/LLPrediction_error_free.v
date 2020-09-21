@@ -363,24 +363,16 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
 
   (* LEFT RECURSION CASE *)
 
-  (* To do : replace keySet call in cstep with lookup *)
-  
-  Lemma keySet_allNts :
-    forall g pm x,
+  Lemma find_allNts :
+    forall g pm x ys,
       production_map_correct pm g
-      -> NtSet.In x (keySet pm)
+      -> NM.find x pm = Some ys
       -> NtSet.In x (allNts g).
   Proof.
-    intros g pm x hc hi.
+    intros g pm x ys [hs [hs' hc]] hi.
     apply allNts_lhss_iff.
-    
-    hp : production_map_correct pm g
-  o : option nonterminal
-  l0 : list symbol
-  h3 : NtSet.mem x (keySet pm) = true
-  h2 : NtSet.mem x vi = true
-  ============================
-  NtSet.In x (allNts g)
+    apply hs; apply NMF.in_find_iff; tc.
+  Qed.
 
   Lemma cstep_LeftRecursion_facts :
     forall g pm vi pred fr frs x,
@@ -395,39 +387,19 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     unfold cstep in hs; repeat dmeq h; tc; inv hs; sis.
     repeat split; eauto.
     - apply NF.mem_iff; auto. 
-    - 
-
-
-      (* to do : get rid of this eventually *)
-      apply NF.mem_iff in h3.
-      unfold keySet in h3.
-      apply fromNtList_in_iff in h3.
-      unfold keys in h3.
-      
-      
-      red in red in hp.
-      apply fromNtList_in_iff.
-      apply fromNtList_in_iff in h3.
-      unfold lhss.
-      apply in_map_iff.
-      apply in_map_iff in h3.
-      destruct h3 as [(?, ?) [heq hi]]; sis; subst.
-      exists (x, l).
-      eapply fromNtList_in_iff in h3.
-      apply NF.mem_iff.
-      unfold allNts.
-      rewrite <- h3.
+    - eapply find_allNts; eauto.
   Qed.
 
   Lemma cstep_never_finds_left_recursion :
     forall g pm vi sp x,
       no_left_recursion g
+      -> production_map_correct pm g
       -> unavailable_nts_invar g vi sp
-      -> cstep g pm vi sp <> CstepError (SpLeftRecursion x).
+      -> cstep pm vi sp <> CstepError (SpLeftRecursion x).
   Proof.
-    intros g pm vi [pred (fr, frs)] x hn hu; unfold not; intros hs.
+    intros g pm vi [pred (fr, frs)] x hn hc hu; unfold not; intros hs.
     pose proof hs as hs'.
-    apply cstep_LeftRecursion_facts in hs'.
+    eapply cstep_LeftRecursion_facts in hs'; eauto.
     destruct hs' as [hn' [hi [o [suf' heq]]]]; subst.
     apply hu in hn'; auto.
     destruct hn' as (frs_pre & fr_cr & frs_suf & ? & ? & ? & ? & hf); subst.
@@ -436,16 +408,17 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma llc_never_finds_left_recursion :
-    forall g pm (hc : production_map_correct pm g) pr (a : Acc lex_nat_pair pr) vi sp a' x,
+    forall g pm pr (a : Acc lex_nat_pair pr) vi sp hk a' x,
       no_left_recursion g
+      -> production_map_correct pm g
       -> unavailable_nts_invar g vi sp
-      -> pr = meas g vi sp
-      -> llc hc vi sp a' <> inl (SpLeftRecursion x).
+      -> pr = meas pm vi sp
+      -> llc pm vi sp hk a' <> inl (SpLeftRecursion x).
   Proof.
-    intros g pm hpc pr a'; induction a' as [pr hlt IH]. 
-    intros vi sp a x hn hu heq; unfold not; intros hs; subst.
+    intros g pm pr a'; induction a' as [pr hlt IH]. 
+    intros vi sp hk a x hn hc hu heq; unfold not; intros hs; subst.
     apply llc_error_cases in hs.
-    destruct hs as [hs | [sps [av' [hs [crs [hc ha]]]]]]; subst.
+    destruct hs as [hs | [sps [av' [hs [crs [hc' ha]]]]]]; subst.
     - eapply cstep_never_finds_left_recursion; eauto.
     - apply aggrClosureResults_error_in_input in ha.
       eapply dmap_in in ha; eauto.
@@ -456,18 +429,19 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_never_finds_left_recursion :
-    forall g pm (hc : production_map_correct pm g) x sps,
+    forall g pm sps hk x,
       no_left_recursion g
-      -> llClosure hc sps <> inl (SpLeftRecursion x).
+      -> production_map_correct pm g
+      -> llClosure pm sps hk <> inl (SpLeftRecursion x).
   Proof.
-    intros g pm hpc x sps hn; unfold not; intros hc.
+    intros g pm sps hk x hn hp; unfold not; intros hc.
     unfold llClosure in hc.
     apply aggrClosureResults_error_in_input in hc.
-    apply in_map_iff in hc.
-    destruct hc as [[pred (fr, frs)] [hs hi]].
+    eapply dmap_in in hc; eauto.
+    destruct hc as [[pred (fr, frs)] [hi [_ hs]]].
     eapply llc_never_finds_left_recursion; eauto.
     - apply lex_nat_pair_wf.
-    - eapply unavailable_nts_allNts.
+    - apply unavailable_nts_empty.
   Qed.        
 
   Lemma moveSp_never_returns_SpLeftRecursion :
@@ -491,36 +465,44 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma llTarget_never_returns_SpLeftRecursion :
-    forall g pm (hc : production_map_correct pm g) a sps x,
+    forall g pm a sps hk x,
       no_left_recursion g
-      -> llTarget hc a sps <> inl (SpLeftRecursion x).
+      -> production_map_correct pm g
+      -> llTarget pm a sps hk <> inl (SpLeftRecursion x).
   Proof.
-    intros g pm hc a sps x hn; unfold not; intros ht.
-    unfold llTarget in ht; dmeq hm; tc.
-    - inv ht; eapply move_never_returns_SpLeftRecursion; eauto.
-    - dmeq hc; tc; inv ht; eapply closure_never_finds_left_recursion; eauto.
+    intros g pm a sps hk x hn hp; unfold not; intros ht.
+    apply llTarget_cases in ht.
+    destruct ht as [hm | [sps' [hk' [hm hc]]]].
+    - eapply move_never_returns_SpLeftRecursion; eauto.
+    - eapply closure_never_finds_left_recursion; eauto.
   Qed.
   
   Lemma llPredict'_never_returns_SpLeftRecursion :
-    forall g pm (hc : production_map_correct pm g) ts sps x,
+    forall g pm ts sps hk x,
       no_left_recursion g
-      -> llPredict' hc sps ts <> PredError (SpLeftRecursion x).
+      -> production_map_correct pm g
+      -> llPredict' pm sps ts hk <> PredError (SpLeftRecursion x).
   Proof.
-    intros g pm hc ts; induction ts as [| (a,l) ts IH];
-      intros sps x hn; unfold not; intros hl; sis.
+    intros g pm ts; induction ts as [| (a,l) ts IH];
+      intros sps hk x hn hp hl; sis.
     - eapply handleFinalSubparsers_never_returns_error; eauto.
-    - destruct sps as [| sp sps']; tc; dm; tc; dmeq hm; tc.
-      + inv hl; eapply llTarget_never_returns_SpLeftRecursion; eauto.
+    - destruct sps as [| sp sps']; tc; dm; tc.
+      apply llPredict'_cont_cases in hl.
+      destruct hl as [ht | [sps'' [ht hl]]].
+      + eapply llTarget_never_returns_SpLeftRecursion; eauto.
       + eapply IH in hl; eauto.
   Qed.
 
   Lemma llPredict_never_returns_SpLeftRecursion :
-    forall g pm (hc : production_map_correct pm g) x x' fr frs ts,
+    forall g pm o x suf frs ts hk x',
       no_left_recursion g
-      -> llPredict hc x (fr, frs) ts <> PredError (SpLeftRecursion x').
+      -> production_map_correct pm g
+      -> llPredict pm o x suf frs ts hk <> PredError (SpLeftRecursion x').
   Proof.
-    intros g pm hc x x' fr frs ts hn hl; unfold llPredict in hl; dmeq hss.
-    - inv hl; eapply closure_never_finds_left_recursion; eauto. 
+    intros g pm o x suf frs ts hk x' hn hp hl.
+    apply llPredict_cases in hl.
+    destruct hl as [hs | [sps [hs hp']]].
+    - eapply closure_never_finds_left_recursion; eauto.
     - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
   Qed.
   
@@ -528,50 +510,53 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
      types of prediction errors *)
 
   Lemma llTarget_never_returns_error :
-    forall g pm (hc : production_map_correct pm g) a sps e,
+    forall g pm a sps hk e,
       no_left_recursion g
+      -> production_map_correct pm g
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
-      -> llTarget hc a sps <> inl e.
+      -> llTarget pm a sps hk <> inl e.
   Proof.
-    unfold not; intros g pm hc a sps e hn hw hs hl; destruct e.
+    unfold not; intros g pm a sps hk e hn hc hw hs hl; destruct e.
     - eapply llTarget_never_returns_SpInvalidState ; eauto.
     - eapply llTarget_never_returns_SpLeftRecursion; eauto.
   Qed.
 
   Lemma llStartState_never_returns_error :
-    forall g pm (hc : production_map_correct pm g) fr frs o x suf e,
+    forall g pm o x suf fr frs hk e,
       no_left_recursion g
+      -> production_map_correct pm g
       -> suffix_stack_wf g (fr, frs)
       -> fr = SF o (NT x :: suf)
-      -> llStartState hc x (fr, frs) <> inl e.
+      -> llStartState pm o x suf frs hk <> inl e.
   Proof.
-    intros ? ? ? ? ? ? ? ? e ? ? ?; unfold not; intros hs; subst; destruct e.
+    intros ? ? ? ? ? ? ? ? ? hn hp hw ? hs; subst; destruct e.
     - eapply llStartState_never_returns_SpInvalidState; eauto.
     - eapply closure_never_finds_left_recursion; eauto.
   Qed.
 
   Lemma llPredict'_never_returns_error :
-    forall g pm (hc : production_map_correct pm g) sps ts e,
+    forall g pm sps ts hk e,
       no_left_recursion g
+      -> production_map_correct pm g
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
-      -> llPredict' hc sps ts <> PredError e.
+      -> llPredict' pm sps ts hk <> PredError e.
   Proof.
-    intros g pm hc sps ts e hn hw hs hl; destruct e.
+    intros g pm sps ts hk e hn hp hw hs hl; destruct e.
     - eapply llPredict'_never_returns_SpInvalidState ; eauto.
     - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
   Qed.
   
   Lemma llPredict_never_returns_error :
-    forall g pm (hc : production_map_correct pm g) fr o x suf frs ts e,
+    forall g pm o x suf fr frs ts hk e,
       fr = SF o (NT x :: suf)
       -> no_left_recursion g
+      -> production_map_correct pm g
       -> suffix_stack_wf g (fr, frs)
-      -> llPredict hc x (fr, frs) ts <> PredError e.
+      -> llPredict pm o x suf frs ts hk <> PredError e.
   Proof.
-    unfold not; intros g pm hc fr o x suf frs ts e ? hn hw hl; subst.
-    destruct e as [| x'].
+    unfold not; intros g pm o x suf fr frs ts hk e ? hn hp hw hl; subst; destruct e.
     - eapply llPredict_never_returns_SpInvalidState;  eauto.
     - eapply llPredict_never_returns_SpLeftRecursion; eauto.
   Qed.

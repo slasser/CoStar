@@ -293,7 +293,11 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   (* A production map maps each grammar nonterminal to its right-hand sides *)
   Definition production_map := NM.t (list (list symbol)).
 
-  Definition production_map_sound (pm : production_map) (g : grammar) :=
+  Definition production_map_keys_sound (pm : production_map) (g : grammar) : Prop :=
+    forall x,
+      NM.In x pm -> In x (lhss g).
+
+    Definition production_map_sound (pm : production_map) (g : grammar) :=
     forall x ys yss,
       NM.MapsTo x yss pm -> In ys yss -> In (x, ys) g.
 
@@ -309,6 +313,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       | None     => NM.add x [ys] pm
       end
     end.
+
+  Lemma addProduction_preserves_keys_soundness :
+    forall pm ps p,
+      production_map_keys_sound pm ps
+      -> production_map_keys_sound (addProduction p pm) (p :: ps).
+  Proof.
+    unfold addProduction; intros pm ps (x, ys) hs x' hi; sis. 
+    destruct (NM.find _ _) as [yss |] eqn:hf;
+      destruct (nt_eq_dec x' x) as [? | hneq]; subst; auto;
+        apply NMF.add_neq_in_iff in hi; auto.
+  Qed.
 
   Lemma addProduction_preserves_soundness :
     forall pm ps p,
@@ -366,6 +381,33 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition mkProductionMap (g : grammar) : production_map :=
     fold_right addProduction (NM.empty (list (list symbol))) g.
 
+  Lemma fold_right_addProduction_preserves_keys_soundness :
+    forall pre suf pm,
+      production_map_keys_sound pm suf
+      -> production_map_keys_sound (fold_right addProduction pm pre) (pre ++ suf).
+  Proof.
+    intros pre; induction pre as [| (x', ys') pre IH]; intros suf pm hs; auto.
+    rewrite fold_right_unroll.
+    apply addProduction_preserves_keys_soundness; apply IH; auto.
+  Qed.
+
+  Lemma empty_production_map_keys_sound :
+    forall g,
+      production_map_keys_sound (NM.empty (list (list symbol))) g.
+  Proof.
+    intros g x hi.
+    exfalso; eapply NMF.empty_in_iff; eauto.
+  Qed.
+
+  Lemma mkProductionMap_keys_sound :
+    forall g,
+      production_map_keys_sound (mkProductionMap g) g.
+  Proof.
+    intros g; unfold mkProductionMap; rewrite <- app_nil_r.
+    apply fold_right_addProduction_preserves_keys_soundness.
+    apply empty_production_map_keys_sound.
+  Qed.
+
   Lemma fold_right_addProduction_preserves_soundness :
     forall pre suf pm,
       production_map_sound pm suf
@@ -419,15 +461,31 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Qed.
 
   Definition production_map_correct (pm : production_map) (g : grammar) :=
-    production_map_sound pm g /\ production_map_complete pm g.
+    production_map_keys_sound pm g
+    /\production_map_sound pm g
+    /\ production_map_complete pm g.
   
   Lemma mkProductionMap_correct :
     forall (g : grammar),
       production_map_correct (mkProductionMap g) g.
   Proof.
-    intros g; split.
+    intros g; repeat split.
+    - apply mkProductionMap_keys_sound.
     - apply mkProductionMap_sound.
     - apply mkProductionMap_complete.
+  Qed.
+
+  Lemma in_grammar_find_some :
+    forall g pm x ys,
+      production_map_correct pm g
+      -> In (x, ys) g
+      -> exists yss,
+          NM.find x pm = Some yss
+          /\ In ys yss.
+  Proof.
+    intros g pm x ys [hs [hs' hc]] hi.
+    apply hc in hi; destruct hi as [yss [hm hi]].
+    apply NMF.find_mapsto_iff in hm; eauto.
   Qed.
 
   Definition keys (pm : production_map) : list nonterminal :=
@@ -447,7 +505,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       production_map_correct pm g
       -> In ys (rhssFor x pm) <-> In (x, ys) g.
   Proof.
-    unfold rhssFor; intros g pm x ys [hs hc]; split; intros hi.
+    unfold rhssFor; intros g pm x ys [hs [hs' hc]]; split; intros hi.
     - destruct (NM.find _ _) eqn:hf; try inv hi.
       apply NMF.find_mapsto_iff in hf; eauto.
     - apply hc in hi; destruct hi as [yss [hm hi]].
@@ -468,6 +526,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     destruct hf as [(x', yss') [heq hi']]; inv heq; sis; subst.
     apply fromNtList_in_iff; apply in_map_iff.
     exists (x', yss'); split; auto.
+  Qed.
+
+  Lemma in_grammar__keySet :
+    forall g pm x ys,
+      production_map_correct pm g
+      -> In (x, ys) g
+      -> NtSet.In x (keySet pm).
+  Proof.
+    intros g pm x ys hp hi.
+    eapply rhssFor_keySet.
+    eapply rhssFor_in_iff; eauto.
   Qed.
   
   Definition rhsLengths (g : grammar) : list nat :=
@@ -530,6 +599,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     apply decompress_nt_eq in hi'; subst.
     apply fromNtList_in_iff.
     eapply in_elements__in_fold_right_add_key; eauto.
+  Qed.
+
+  Lemma in_grammar__in_grammarOf :
+    forall g pm x ys,
+      production_map_correct pm g
+      -> In (x, ys) g
+      -> In (x, ys) (grammarOf pm).
+  Proof.
+    intros g pm x ys hc hi.
+    apply rhssFor_grammarOf.
+    eapply rhssFor_in_iff; eauto.
   Qed.
   
   Lemma rhss_rhsLengths_in :

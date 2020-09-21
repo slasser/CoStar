@@ -19,7 +19,6 @@ Open Scope list_scope.
    
 *)
 
-
 Module LLPredictionFn (Import D : Defs.T).
 
   Module Export Term := TerminationFn D.
@@ -78,6 +77,25 @@ Module LLPredictionFn (Import D : Defs.T).
     intros; auto.
   Qed.
 
+  Lemma return_preserves_pushes_invar :
+    forall pm o o' suf_cr x frs,
+      pushes_from_keyset pm (SF o [] :: SF o' (NT x :: suf_cr) :: frs)
+      -> pushes_from_keyset pm (SF o' suf_cr :: frs).
+  Proof.
+    intros pm o o' suf_cr x locs hk.
+    inv_pfk hk  hi  hk'.
+    inv_pfk hk' hi' hk''; auto.
+  Qed.
+
+  Lemma push_preserves_pushes_invar :
+    forall pm o suf x rhs frs,
+      NtSet.In x (keySet pm)
+      -> pushes_from_keyset pm (SF o (NT x :: suf) :: frs)
+      -> pushes_from_keyset pm (SF (Some x) rhs :: SF o (NT x :: suf) :: frs).
+  Proof.
+    intros; auto.
+  Qed.
+  
   (* "move" operation *)
 
   Inductive subparser_move_result :=
@@ -301,10 +319,10 @@ Module LLPredictionFn (Import D : Defs.T).
       | SF _ (NT x :: suf) =>
         if NtSet.mem x vi then
           (* Unreachable for a left-recursive grammar *)
-          if NtSet.mem x (keySet pm) then
-            CstepError (SpLeftRecursion x)
-          else
-            CstepK NtSet.empty []
+          match NM.find x pm with
+          | Some _ => CstepError (SpLeftRecursion x)
+          | None   => CstepK NtSet.empty []
+          end
         else
           let sps' := map (fun rhs => Sp pred 
                                          (SF (Some x) rhs, fr :: frs))
@@ -1676,7 +1694,7 @@ Module LLPredictionFn (Import D : Defs.T).
       eapply rhssFor_in_iff; eauto.
   Qed.
 
-  Lemma unavailable_nts_allNts :
+  Lemma unavailable_nts_empty :
     forall g pred stk,
       unavailable_nts_invar g NtSet.empty (Sp pred stk).
   Proof.

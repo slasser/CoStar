@@ -79,6 +79,17 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     eapply moveSp_move_step; eauto.
   Qed.
 
+  Lemma move_step_preserves_pushes_invar :
+    forall pm sp sp' t w,
+      move_step sp (t :: w) sp' w
+      -> sp_pushes_from_keyset pm sp
+      -> sp_pushes_from_keyset pm sp'.
+  Proof.
+    intros pm sp sp' (a,l) w' hm hp.
+    eapply moveSp_preserves_pfk; eauto.
+    eapply moveSp_move_step; eauto.
+  Qed.
+
   Lemma move_step_preserves_unprocStackSyms_recognize :
     forall g sp sp' t w',
       move_step sp (t :: w') sp' w'
@@ -106,20 +117,20 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
 
   Inductive closure_step (g : grammar) : NtSet.t -> subparser -> NtSet.t -> subparser -> Prop :=
   | CS_ret :
-      forall av pred o o' x suf' frs,
+      forall vi pred o o' x suf' frs,
         closure_step g
-                     av
+                     vi
                      (Sp pred (SF o [], SF o' (NT x :: suf') :: frs))
-                     (NtSet.add x av)
+                     (NtSet.remove x vi)
                      (Sp pred (SF o' suf', frs))
   | CS_push :
-      forall av pred o x suf frs rhs,
-        NtSet.In x av
+      forall vi pred o x suf frs rhs,
+        ~ NtSet.In x vi
         -> In (x, rhs) g
         -> closure_step g
-                        av 
+                        vi 
                         (Sp pred (SF o (NT x :: suf), frs))
-                        (NtSet.remove x av)
+                        (NtSet.add x vi)
                         (Sp pred (SF (Some x) rhs, SF o (NT x :: suf) :: frs)).
 
   Hint Constructors closure_step : core.
@@ -128,61 +139,74 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     inversion hs as [? ? ? ? ? ? ? | ? ? ? ? ? ? ? hi hi']; subst; clear hs.
 
   Lemma closure_step_preserves_label :
-    forall g av av' sp sp',
-      closure_step g av sp av' sp'
+    forall g vi vi' sp sp',
+      closure_step g vi sp vi' sp'
       -> sp.(prediction) = sp'.(prediction).
   Proof.
-    intros g av av' sp sp' hc; inv hc; auto.
+    intros g vi vi' sp sp' hc; inv hc; auto.
   Qed.
 
   Lemma closure_step_preserves_suffix_stack_wf_invar :
-    forall g av av' sp sp',
-      closure_step g av sp av' sp'
+    forall g vi vi' sp sp',
+      closure_step g vi sp vi' sp'
       -> suffix_stack_wf g sp.(stack)
       -> suffix_stack_wf g sp'.(stack).
   Proof.
-    intros g sp sp' av av' hc hw; inv hc; sis; auto.
+    intros g sp sp' vi vi' hc hw; inv hc; sis; auto.
     - eapply return_preserves_suffix_frames_wf_invar; eauto.
     - eapply push_preserves_suffix_frames_wf_invar; eauto.
-  Qed.    
+  Qed.
+
+  Lemma closure_step_preserves_pushes_invar :
+    forall g pm vi vi' sp sp',
+      production_map_correct pm g
+      -> closure_step g vi sp vi' sp'
+      -> sp_pushes_from_keyset pm sp
+      -> sp_pushes_from_keyset pm sp'.
+  Proof.
+    intros g pm sp sp' vi vi' hp hc hp'; inv hc; sis; auto.
+    - eapply return_preserves_pushes_invar; eauto.
+    - apply push_preserves_pushes_invar; auto.
+      eapply in_grammar__keySet; eauto.
+  Qed.
 
   Lemma cstep_sound :
-    forall g pm av av' sp sp' sps',
+    forall g pm vi vi' sp sp' sps',
       production_map_correct pm g
       -> suffix_stack_wf g sp.(stack)
-      -> cstep g pm av sp = CstepK av' sps'
+      -> cstep pm vi sp = CstepK vi' sps'
       -> In sp' sps'
-      -> closure_step g av sp av' sp'.
+      -> closure_step g vi sp vi' sp'.
   Proof.
-    intros g pm av av' sp sp' sps' hc hw hs hi.
+    intros g pm vi vi' sp sp' sps' hc hw hs hi.
     unfold cstep in hs; dmeqs h; tc; subst; sis.
     - inv hw; inv hs.
       apply in_singleton_eq in hi; subst; auto.
+    - inv hs; inv hi.
     - inv hs.
       apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
       constructor.
-      + apply NF.mem_iff; auto.
+      + apply NF.not_mem_iff; auto.
       + eapply rhssFor_in_iff; eauto.
-    - inv hs; inv hi.
   Qed.
 
   Inductive closure_multistep (g : grammar) :
     NtSet.t -> subparser -> NtSet.t -> subparser -> Prop :=
   | CMS_empty :
-      forall av pred,
+      forall vi pred,
         closure_multistep g
-                          av (Sp pred (SF None [], []))
-                          av (Sp pred (SF None [], []))
+                          vi (Sp pred (SF None [], []))
+                          vi (Sp pred (SF None [], []))
   | CMS_terminal :
-      forall av pred o a suf frs,
-        closure_multistep g av (Sp pred (SF o (T a :: suf), frs))
-                            av (Sp pred (SF o (T a :: suf), frs))
+      forall vi pred o a suf frs,
+        closure_multistep g vi (Sp pred (SF o (T a :: suf), frs))
+                            vi (Sp pred (SF o (T a :: suf), frs))
   | CMS_trans :
-      forall av av' av'' sp sp' sp'',
-        closure_step g av sp av' sp'
-        -> closure_multistep g av' sp' av'' sp''
-        -> closure_multistep g av sp av'' sp''.
+      forall vi vi' vi'' sp sp' sp'',
+        closure_step g vi sp vi' sp'
+        -> closure_multistep g vi' sp' vi'' sp''
+        -> closure_multistep g vi sp vi'' sp''.
 
   Hint Constructors closure_multistep : core.
 
@@ -193,67 +217,71 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     induction hm as [ ? ? | ? ? ? ? ? ? | ? ? ? ? ? ? hs hm' IH].
 
   Lemma closure_multistep_preserves_label :
-    forall g av av' sp sp',
-      closure_multistep g av sp av' sp'
+    forall g vi vi' sp sp',
+      closure_multistep g vi sp vi' sp'
       -> sp.(prediction) = sp'.(prediction).
   Proof.
-    intros g av av' sp sp' hm.
+    intros g vi vi' sp sp' hm.
     induct_cm hm hs hm' IH; auto.
     apply closure_step_preserves_label in hs; tc.
   Qed.
 
   Lemma closure_multistep_done_eq :
-    forall g pm av av' sp sp',
-      closure_multistep g av sp av' sp'
-      -> cstep g pm av sp = CstepDone
+    forall g pm vi vi' sp sp',
+      closure_multistep g vi sp vi' sp'
+      -> cstep pm vi sp = CstepDone
       -> sp = sp'.
   Proof.
-    intros g pm av av' sp sp' hm hs; unfold cstep in hs; dms; tc;
+    intros g pm vi vi' sp sp' hm hs; unfold cstep in hs; dms; tc;
       inv_cm hm hs' hm'; auto; inv hs'.
   Qed.
 
+  
+
   Lemma closure_multistep_not_done_middle_sp_in_continuation :
-    forall g pm av av' av'' sp sp'' sps',
+    forall g pm vi vi' vi'' sp sp'' sps',
       production_map_correct pm g
-      -> closure_multistep g av sp av'' sp''
-      -> cstep g pm av sp = CstepK av' sps'
+      -> closure_multistep g vi sp vi'' sp''
+      -> cstep pm vi sp = CstepK vi' sps'
       -> exists sp',
-          closure_step g av sp av' sp'
-          /\ closure_multistep g av' sp' av'' sp''
+          closure_step g vi sp vi' sp'
+          /\ closure_multistep g vi' sp' vi'' sp''
           /\ In sp' sps'.
   Proof.
-    intros g pm av av' av'' sp sp'' sps' hc hm hs; unfold cstep in hs; dmeqs h; tc; inv hs; eauto.
+    intros g pm vi vi' vi'' sp sp'' sps' hc hm hs; unfold cstep in hs; dmeqs h; tc; inv hs; eauto.
     - inv_cm hm hs hm'; inv hs; eexists; repeat split; auto.
       apply in_eq.
+    - exfalso.
+      inv_cm hm hs hm'.
+      inv_cs hs hi hi'.
+      eapply in_grammar_find_some in hi'; eauto.
+      destruct hi' as [? [? ?]]; tc.
     - inv_cm hm hs hm'; inv hs. 
       eexists; split.
       + constructor; eauto.
       + split; auto.
         apply in_map_iff; eexists; split; eauto.
         eapply rhssFor_in_iff; eauto.
-    - exfalso.
-      inv_cm hm hs hm'.
-      inv_cs hs hi hi'.
-      apply lhs_mem_allNts_true in hi'; tc.
   Qed.
 
   Lemma llc_refines_closure_multistep' :
     forall (g  : grammar)
            (pm : production_map)
-           (hc : production_map_correct pm g)
            (pr : nat * nat)
            (a  : Acc lex_nat_pair pr)
-           (av av'' : NtSet.t)
+           (vi vi'' : NtSet.t)
            (sp sp'' : subparser)
-           (a' : Acc lex_nat_pair (meas g av sp))
+           (hk : sp_pushes_from_keyset pm sp)
+           (a' : Acc lex_nat_pair (meas pm vi sp))
            (sps'' : list subparser),
-      pr = meas g av sp
-      -> closure_multistep g av sp av'' sp''
-      -> llc hc av sp a'  = inr sps''
+      pr = meas pm vi sp
+      -> production_map_correct pm g
+      -> closure_multistep g vi sp vi'' sp''
+      -> llc pm vi sp hk a' = inr sps''
       -> In sp'' sps''.
   Proof.
-    intros g pm hpc pr a.
-    induction a as [pr hlt IH]; intros av av'' sp sp'' a' sps'' heq hc hs; subst.
+    intros g pm pr a.
+    induction a as [pr hlt IH]; intros vi vi'' sp sp'' hk a' sps'' heq hp hc hs; subst.
     unfold llc in hs.
     apply llc_success_cases in hs.
     destruct hs as [[hdone heq] | [sps' [av' [hs [crs [heq ha]]]]]]; subst.
@@ -273,9 +301,16 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma llc_refines_closure_multistep :
-    forall (g  : grammar) (pm : production_map) (hc : production_map_correct pm g) (av av'' : NtSet.t) (sp sp'' : subparser) (a : Acc lex_nat_pair (meas g av sp)) (sps'' : list subparser),
-      closure_multistep g av sp av'' sp''
-      -> llc hc av sp a  = inr sps''
+    forall (g  : grammar)
+           (pm : production_map)
+           (vi vi'' : NtSet.t)
+           (sp sp'' : subparser)
+           (hk : sp_pushes_from_keyset pm sp)
+           (a : Acc lex_nat_pair (meas pm vi sp))
+           (sps'' : list subparser),
+      production_map_correct pm g
+      -> closure_multistep g vi sp vi'' sp''
+      -> llc pm vi sp hk a = inr sps''
       -> In sp'' sps''.
   Proof.
     intros; eapply llc_refines_closure_multistep'; eauto.
@@ -284,33 +319,34 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Lemma llc_sound_wrt_closure_multistep' :
     forall (g  : grammar)
            (pm : production_map)
-           (hc : production_map_correct pm g)
            (pr : nat * nat)
            (a  : Acc lex_nat_pair pr)
-           (av : NtSet.t)
+           (vi : NtSet.t)
            (sp sp''' : subparser)
-           (a' : Acc lex_nat_pair (meas g av sp))
+           (hk : sp_pushes_from_keyset pm sp)
+           (a' : Acc lex_nat_pair (meas pm vi sp))
            (sps''' : list subparser),
-      pr = meas g av sp
+      pr = meas pm vi sp
+      -> production_map_correct pm g
       -> suffix_stack_wf g sp.(stack)
-      -> llc hc av sp a' = inr sps'''
+      -> llc pm vi sp hk a' = inr sps'''
       -> In sp''' sps'''
-      -> exists av''',
-          closure_multistep g av sp av''' sp'''.
+      -> exists vi''',
+          closure_multistep g vi sp vi''' sp'''.
   Proof.
-    intros g pm hc pr a.
-    induction a as [pr hlt IH]; intros av sp sp''' a' sps''' heq hw hs hi; subst.
+    intros g pm pr a.
+    induction a as [pr hlt IH]; intros vi sp sp''' hk a' sps''' heq hp hw hs hi; subst.
     apply llc_success_cases in hs.
-    destruct hs as [[hdone heq] | [sps' [av' [hs [crs [heq ha]]]]]]; subst.
+    destruct hs as [[hdone heq] | [sps' [vi' [hs [crs [heq ha]]]]]]; subst.
     - apply in_singleton_eq in hi; subst.
-      apply cstepDone_stable_config in hdone; auto.
+      eapply cstepDone_stable_config in hdone; eauto.
       destruct sp as [pred ([o suf], frs)].
       inv hdone; eauto.
     - eapply aggrClosureResults_dmap_backwards in ha; eauto.
       destruct ha as [sp' [hi' [sps'' [hi'' [hs' hi''']]]]].
       eapply IH in hs'; eauto.
-      + destruct hs' as [av''' hs'].
-        exists av'''.
+      + destruct hs' as [vi''' hs'].
+        exists vi'''.
         eapply CMS_trans with (sp' := sp'); eauto.
         eapply cstep_sound; eauto.
       + eapply cstep_meas_lt; eauto.
@@ -320,30 +356,32 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Lemma llc_sound_wrt_closure_multistep :
     forall (g  : grammar)
            (pm : production_map)
-           (hc : production_map_correct pm g)
-           (av : NtSet.t)
+           (vi : NtSet.t)
            (sp sp' : subparser)
-           (a : Acc lex_nat_pair (meas g av sp))
+           (hk : sp_pushes_from_keyset pm sp)
+           (a : Acc lex_nat_pair (meas pm vi sp))
            (sps' : list subparser),
-      suffix_stack_wf g sp.(stack)
-      -> llc hc av sp a = inr sps'
+      production_map_correct pm g
+      -> suffix_stack_wf g sp.(stack)
+      -> llc pm vi sp hk a = inr sps'
       -> In sp' sps'
-      -> exists av',
-          closure_multistep g av sp av' sp'.
+      -> exists vi',
+          closure_multistep g vi sp vi' sp'.
   Proof.
     intros; eapply llc_sound_wrt_closure_multistep'; eauto.
   Qed.
   
   Lemma closure_func_refines_closure_multistep :
-    forall g pm (hc : production_map_correct pm g) av'' sp sp'' sps sps'',
-      In sp sps
-      -> closure_multistep g (allNts g) sp av'' sp''
-      ->llClosure hc sps = inr sps''
+    forall g pm vi'' sp sp'' sps sps'' hk,
+      production_map_correct pm g
+      -> In sp sps
+      -> closure_multistep g NtSet.empty sp vi'' sp''
+      -> llClosure pm sps hk = inr sps''
       -> In sp'' sps''.
   Proof.
-    intros g pm hpc av'' sp sp'' sps sps'' hi hc hc'.
-    eapply aggrClosureResults_map_succ_elt_succ in hc'; eauto.
-    destruct hc' as [sps' [heq hall]].
+    intros g pm vi'' sp sp'' sps sps'' hk hp hi hc hc'.
+    eapply aggrClosureResults_dmap_succ_elt_succ in hc'; eauto.
+    destruct hc' as [hi' [sps' [heq hall]]].
     apply hall.
     eapply llc_refines_closure_multistep; eauto.
   Qed.
@@ -353,62 +391,71 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
            (pr : nat * nat)
            (a  : Acc lex_nat_pair pr)
            (g  : grammar)
-           (av : NtSet.t)
+           (pm : production_map)
+           (vi : NtSet.t)
            (sp : subparser)
-           (a' : Acc lex_nat_pair (meas g av sp)),
-      pr = meas g av sp
+           (a' : Acc lex_nat_pair (meas pm vi sp)),
+      pr = meas pm vi sp
       -> no_left_recursion g
+      -> production_map_correct pm g
+      -> sp_pushes_from_keyset pm sp
       -> suffix_stack_wf g sp.(stack)
-      -> unavailable_nts_invar g av sp
+      -> unavailable_nts_invar g vi sp
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w
-      -> exists av' sp',
-          closure_multistep g av sp av' sp'
+      -> exists vi' sp',
+          closure_multistep g vi sp vi' sp'
           /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w.
     Proof.
       intros w pr a.
-      induction a as [m hlt IH]; intros g av sp a' heq hn hw hu hg; subst.
+      induction a as [m hlt IH]; intros g pm vi sp a' heq hn hp hp' hw hu hg; subst.
       destruct sp as [pred ([o [| [a|x] suf]], frs)]; eauto.
       - destruct frs as [| fr' frs]; eauto.
         + inv hw; eauto.
         + simpl in hw; pose proof hw as hw'.
           destruct fr' as [o' [| [? | x] suf']]; inv hw'.
           specialize IH with (sp := Sp pred (SF o' suf', frs)).
-          edestruct IH as [av' [sp' [hcm hg']]]; eauto.
-          * eapply meas_lt_after_return; eauto. 
+          edestruct IH as [vi' [sp' [hcm hg']]]; eauto.
+          * eapply meas_lt_after_return; eauto.
           * apply lex_nat_pair_wf.
+          * eapply return_preserves_pushes_invar; eauto. 
           * eapply return_preserves_suffix_frames_wf_invar; eauto.
           * eapply return_preserves_unavailable_nts_invar; eauto.
     - simpl in hg; apply gamma_recognize_nonterminal_head in hg. 
       destruct hg as [rhs [wpre [wsuf [heq [hi [hg hg']]]]]]; subst.
-      assert (hi' : NtSet.In x av).
+      assert (hi' : ~ NtSet.In x vi).
       { (* lemma *)
-        destruct (In_dec x av) as [hi' | hn']; auto.
-        apply hu in hn'.
-        - destruct hn' as (? & ? & ? & ? & ? & heq & heq' & hnp); subst.
+        destruct (In_dec x vi) as [hi' | hn']; auto.
+        apply hu in hi'.
+        - destruct hi' as (? & ? & ? & ? & ? & heq & heq' & hnp); subst.
           eapply frnp_grammar_nullable_path in hnp; eauto.
           firstorder.
         - apply NF.mem_iff; eapply lhs_mem_allNts_true; eauto. }
       specialize IH with 
           (sp := Sp pred (SF (Some x) rhs, (SF o (NT x :: suf) :: frs))).
-      edestruct IH as [av' [sp' [hcm hg'']]]; eauto.
+      edestruct IH as [vi' [sp' [hcm hg'']]]; eauto.
       + eapply meas_lt_after_push; eauto.
+        eapply in_grammar__in_grammarOf; eauto.
       + apply lex_nat_pair_wf.
+      + apply push_preserves_pushes_invar; auto.
+        eapply in_grammar__keySet; eauto.
       + eapply push_preserves_suffix_frames_wf_invar; eauto. 
       + eapply push_preserves_unavailable_nts_invar; eauto.
       + simpl; apply gamma_recognize_app; auto.
-      + exists av'; exists sp'; split; auto.
+      + exists vi'; exists sp'; split; auto.
         econstructor; eauto.
         constructor; auto.
     Qed.
 
   Lemma exists_cm_target_preserving_unprocStackSyms_recognize :
-    forall g av sp w,
+    forall g pm vi sp w,
       no_left_recursion g
+      -> production_map_correct pm g
+      -> sp_pushes_from_keyset pm sp
       -> suffix_stack_wf g sp.(stack)
-      -> unavailable_nts_invar g av sp
+      -> unavailable_nts_invar g vi sp
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w
-      -> exists av' sp',
-          closure_multistep g av sp av' sp'
+      -> exists vi' sp',
+          closure_multistep g vi sp vi' sp'
           /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w.
   Proof.
     intros; eapply exists_cm_target_preserving_unprocStackSyms_recognize'; eauto;
@@ -416,65 +463,81 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_multistep_preserves_suffix_stack_wf_invar :
-    forall g av av' sp sp',
-      closure_multistep g av sp av' sp'
+    forall g vi vi' sp sp',
+      closure_multistep g vi sp vi' sp'
       -> suffix_stack_wf g sp.(stack)
       -> suffix_stack_wf g sp'.(stack).
   Proof.
-    intros g av av' sp sp' hc; induction hc; intros hw; auto.
+    intros g vi vi' sp sp' hc; induction hc; intros hw; auto.
     eapply IHhc.
     eapply closure_step_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
+  Lemma closure_multistep_preserves_pushes_invar :
+    forall g pm vi vi' sp sp',
+      production_map_correct pm g
+      -> closure_multistep g vi sp vi' sp'
+      -> sp_pushes_from_keyset pm sp
+      -> sp_pushes_from_keyset pm sp'.
+  Proof.
+    intros g pm vi vi' sp sp' hp hc; induction hc; intros hp'; auto.
+    eapply IHhc; eapply closure_step_preserves_pushes_invar; eauto.
+  Qed.
+
   Lemma stable_config_after_closure_multistep :
-    forall g av av' sp sp',
+    forall g vi vi' sp sp',
       suffix_stack_wf g sp.(stack)
-      -> closure_multistep g av sp av' sp'
+      -> closure_multistep g vi sp vi' sp'
       -> stable_config sp'.(stack).
   Proof.
-    intros g av av' sp sp' hw hc.
+    intros g vi vi' sp sp' hw hc.
     induct_cm hc  hs hc' IH; try constructor; sis.
     apply IH; eapply closure_step_preserves_suffix_stack_wf_invar; eauto.
   Qed.
 
   Lemma llStartState_closure_multistep_from_orig_sp' :
-    forall g pm (hc : production_map_correct pm g) cr ce o x suf rhs frs sps w,
+    forall g pm cr ce o x suf rhs frs hk sps w,
       cr = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
+      -> production_map_correct pm g
       -> suffix_stack_wf g (cr, frs)
       -> In (x, rhs) g
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
-      -> llStartState hc x (cr, frs) = inr sps
-      -> exists av sp,
-          closure_multistep g (allNts g) (Sp rhs (ce, cr :: frs)) av sp
+      -> llStartState pm o x suf frs hk = inr sps
+      -> exists vi sp,
+          closure_multistep g NtSet.empty (Sp rhs (ce, cr :: frs)) vi sp
           /\ gamma_recognize g (unprocStackSyms sp.(stack)) w.
   Proof.
-    intros g pm hc cr ce o x suf rhs frs sps w ? ? hn hw hi hg hs; subst; sis.
+    intros g pm cr ce o x suf rhs frs hk sps w ? ? hn hp hw hi hg hs; subst; sis.
     eapply exists_cm_target_preserving_unprocStackSyms_recognize; eauto.
+    - apply push_preserves_pushes_invar; auto.
+      eapply in_grammar__keySet; eauto.
     - apply push_preserves_suffix_frames_wf_invar; auto.
-    - apply unavailable_nts_allNts.
+    - apply unavailable_nts_empty.
   Qed.
 
   Lemma llStartState_closure_multistep_from_orig_sp :
-    forall g pm (hc : production_map_correct pm g) cr ce o x suf rhs frs sps w,
+    forall g pm cr ce o x suf rhs frs hk sps w,
       cr = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
+      -> production_map_correct pm g
       -> suffix_stack_wf g (cr, frs)
       -> In (x, rhs) g
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
-      -> llStartState hc x (cr, frs) = inr sps
-      -> exists av sp,
-          closure_multistep g (allNts g) (Sp rhs (ce, cr :: frs))
-                              av sp
+      -> llStartState pm o x suf frs hk = inr sps
+      -> exists vi sp,
+          closure_multistep g NtSet.empty (Sp rhs (ce, cr :: frs))
+                              vi sp
           /\ gamma_recognize g (unprocStackSyms sp.(stack)) w
           /\ In sp sps.
   Proof.
-    intros g pm hpc cr ce o x suf rhs frs sps w ? ? hn hw hi hg hs; subst; sis. 
+    intros g pm cr ce o x suf rhs frs hk sps w ? ?
+           hn hp hw hi hg hs; subst; sis. 
     pose proof hs as hs'.
     eapply llStartState_closure_multistep_from_orig_sp' in hs'; eauto.
-    destruct hs' as [av [sp [hc hg']]].
+    destruct hs' as [vi [sp [hc hg']]].
     repeat eexists; eauto.
     eapply closure_func_refines_closure_multistep; eauto.
     eapply llInitSps_result_incl_all_rhss; eauto.
@@ -491,9 +554,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         move_closure_multistep g (Sp pred (SF o (T a :: suf), frs)) ((a,l) :: ts)
                                  (Sp pred (SF o (T a :: suf), frs)) ((a,l) :: ts)
   | MC_trans :
-      forall av'' sp sp' sp'' sp''' ts ts'' ts''',
+      forall vi'' sp sp' sp'' sp''' ts ts'' ts''',
         move_step sp ts sp' ts''
-        -> closure_multistep g (allNts g) sp' av'' sp''
+        -> closure_multistep g NtSet.empty sp' vi'' sp''
         -> move_closure_multistep g sp'' ts'' sp''' ts'''
         -> move_closure_multistep g sp ts sp''' ts'''.
 
@@ -617,9 +680,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Lemma mcms_inv_nonempty_word :
     forall g sp sp'' t wsuf,
       move_closure_multistep g sp (t :: wsuf) sp'' wsuf
-      -> exists av' av'' sp',
+      -> exists vi' vi'' sp',
         move_step sp (t :: wsuf) sp' wsuf
-        /\ closure_multistep g av' sp' av'' sp''.
+        /\ closure_multistep g vi' sp' vi'' sp''.
   Proof.
     intros g sp sp'' t wsuf hm; inv_mcms hm; auto.
     - exfalso; eapply cons_neq_tail; eauto.
@@ -630,9 +693,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Lemma mcms_consume_exists_intermediate_subparser :
     forall g sp sp'' t wsuf,
       move_closure_multistep g sp (t :: wsuf) sp'' wsuf
-      -> exists av'' sp',
+      -> exists vi'' sp',
         move_step sp (t :: wsuf) sp' wsuf
-        /\ closure_multistep g (allNts g) sp' av'' sp''.
+        /\ closure_multistep g NtSet.empty sp' vi'' sp''.
   Proof.
     intros g sp sp'' t wsuf hm; inv_mcms hm.
     - exfalso; eapply cons_neq_tail; eauto.
@@ -654,29 +717,34 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma mcms_subparser_consumes_remaining_input :
-    forall g w sp,
+    forall g pm w sp,
       no_left_recursion g
+      -> production_map_correct pm g
+      -> sp_pushes_from_keyset pm sp
       -> stable_config sp.(stack)
       -> suffix_stack_wf g sp.(stack)
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w
       -> exists sp'', 
           move_closure_multistep g sp w sp'' [].
   Proof.
-    intros g w; induction w as [| t w' IH]; intros sp hn hs hw hg.
+    intros g pm w; induction w as [| t w' IH]; intros sp hn hp hp' hs hw hg.
     - eapply mcms_recognize_nil_empty in hg; eauto.
     - assert (hm : exists sp', move_step sp (t :: w') sp' w'). 
       { apply move_step_recognize_cons in hg; auto. }
       destruct hm as [sp' hm].
-      assert (hc : exists av'' sp'', 
-                 closure_multistep g (allNts g) sp' av'' sp''
+      assert (hc : exists vi'' sp'', 
+                 closure_multistep g NtSet.empty sp' vi'' sp''
                  /\ gamma_recognize g (unprocStackSyms sp''.(stack)) w').
       { eapply exists_cm_target_preserving_unprocStackSyms_recognize; eauto.
+        - eapply move_step_preserves_pushes_invar; eauto.
         - eapply move_step_preserves_suffix_stack_wf_invar; eauto.
-        - destruct sp'; apply unavailable_nts_allNts. 
+        - destruct sp'; apply unavailable_nts_empty.
         - eapply move_step_preserves_unprocStackSyms_recognize; eauto. }
-      destruct hc as [av'' [sp'' [hc hg'']]].
+      destruct hc as [vi'' [sp'' [hc hg'']]].
       eapply IH in hg''; eauto.
       + destruct hg'' as [sp''' hmcms]; eauto.
+      + eapply closure_multistep_preserves_pushes_invar; eauto.
+        eapply move_step_preserves_pushes_invar; eauto.
       + eapply stable_config_after_closure_multistep
           with (sp := sp'); eauto.
         eapply move_step_preserves_suffix_stack_wf_invar; eauto.
@@ -712,13 +780,15 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       -> In sp' sps'.
 
   Lemma move_closure_op_preserves_subparsers_complete_invar :
-    forall g pm (hc : production_map_correct pm g) a l wpre wsuf sps sps' sps'' sps''',
-      subparsers_complete_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
+    forall g pm a l wpre wsuf sps sps' sps'' sps''' hk,
+      production_map_correct pm g
+      -> subparsers_complete_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
       -> move a sps' = inr sps''
-      -> llClosure hc sps'' = inr sps'''
+      -> llClosure pm sps'' hk = inr sps'''
       -> subparsers_complete_wrt_originals g sps (wpre ++ [(a,l)]) sps''' wsuf.
   Proof.
-    intros g pm hpc a l wpre wsuf sps sps' sps'' sps''' hinvar hm hc. 
+    intros g pm a l wpre wsuf sps sps' sps'' sps'''
+           hk hp hinvar hm hc. 
     unfold subparsers_complete_wrt_originals. 
     rewrite <- app_assoc; simpl; intros sp sp''' hi hms.
     eapply mcms_backtrack_terminal in hms.
@@ -731,20 +801,23 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma llTarget_preserves_subparsers_complete_invar :
-    forall g pm (hc : production_map_correct pm g) a l wpre wsuf sps sps' sps'',
-      subparsers_complete_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
-      -> llTarget hc a sps' = inr sps''
+    forall g pm a l wpre wsuf sps sps' sps'' hk,
+      production_map_correct pm g
+      -> subparsers_complete_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
+      -> llTarget pm a sps' hk = inr sps''
       -> subparsers_complete_wrt_originals g sps (wpre ++ [(a,l)]) sps'' wsuf.
   Proof.
-    intros g pm hpc a l wpre wsuf sps sps' sps'' hc ht.
-    unfold llTarget in ht; dmeqs H; tc; inv ht.
+    intros g pm a l wpre wsuf sps sps' sps'' hk hp hc ht.
+    apply llTarget_cases in ht.
+    destruct ht as [sps''' [hk' [hm hc']]].
     eapply move_closure_op_preserves_subparsers_complete_invar; eauto.
   Qed.
   
   Lemma llPredict'_succ_labels_eq_after_prefix :
-    forall g pm (hc : production_map_correct pm g) orig_sps wsuf wpre curr_sps rhs,
-      subparsers_complete_wrt_originals g orig_sps wpre curr_sps wsuf
-      -> llPredict' hc curr_sps wsuf = PredSucc rhs
+    forall g pm orig_sps wsuf wpre curr_sps hk rhs,
+      production_map_correct pm g
+      -> subparsers_complete_wrt_originals g orig_sps wpre curr_sps wsuf
+      -> llPredict' pm curr_sps wsuf hk = PredSucc rhs
       -> exists wpre' wsuf',
           wpre ++ wsuf = wpre' ++ wsuf'
           /\ forall sp sp',
@@ -752,8 +825,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
             -> move_closure_multistep g sp (wpre' ++ wsuf') sp' wsuf'
             -> sp.(prediction) = rhs.
   Proof.
-    intros g pm hc orig_sps wsuf.
-    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs hi hl; sis.
+    intros g pm orig_sps wsuf.
+    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps hk rhs hp hi hl; sis.
     - unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| sp'' sps''] eqn:hf; tc.
       destruct (allPredictionsEqual sp'' sps'') eqn:ha'; tc.
@@ -778,7 +851,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         * eapply hi in hm; eauto.
           destruct hm as [hh | ht]; subst; auto.
           eapply allPredictionsEqual_prop; eauto.
-      + dmeq ht; tc.
+      + apply llPredict'_cont_cases in hl.
+        destruct hl as [sps'' [ht hl]]. 
         eapply IH with (wpre := wpre ++ [(a,l)]) in hl; eauto.
         * destruct hl as [wpre' [wsuf'' [heq hall]]].
           exists wpre'; exists wsuf''; split; auto.
@@ -800,23 +874,25 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   (* This probably belongs in a different file, since it's involved in more than
    just proving completeness *)
   Lemma llPredict_succ_at_most_one_rhs_applies :
-    forall g pm (hc : production_map_correct pm g) cr o x suf frs w rhs rhs',
+    forall g pm cr o x suf frs w hk rhs rhs',
       cr = SF o (NT x :: suf)
       -> no_left_recursion g
+      -> production_map_correct pm g
       -> suffix_stack_wf g (cr, frs)
       -> In (x, rhs) g
       -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w
-      -> llPredict hc x (cr, frs) w = PredSucc rhs'
+      -> llPredict pm o x suf frs w hk = PredSucc rhs'
       -> rhs' = rhs.
   Proof.
-    intros g pm hpc cr o x suf frs w rhs rhs' ? hn hw hi hr hl; subst; sis. 
-    unfold llPredict in hl.
-    destruct (llStartState _ _ _) as [m | sps] eqn:hs; tc.
-    eapply llStartState_closure_multistep_from_orig_sp in hs; eauto.
-    destruct hs as [av [sp [hc [hg' hi']]]].
+    intros g pm cr o x suf frs w hk rhs rhs' ? hn hp hw hi hr hl; subst; sis.
+    apply llPredict_cases in hl.
+    destruct hl as [sps [hs hl]].
+    pose proof hs as hs'.
+    eapply llStartState_closure_multistep_from_orig_sp in hs'; eauto.
+    destruct hs' as [vi [sp [hc [hg' hi']]]].
     eapply llPredict'_succ_labels_eq_after_prefix
       with (wpre := []) (orig_sps := sps) in hl;
-      [ .. | eapply subparsers_complete_invar_starts_true; eauto].
+      [ .. | eapply subparsers_complete_invar_starts_true; eauto]; eauto.
     destruct hl as [wpre' [wsuf' [? hall]]]; sis; subst.
     eapply mcms_subparser_consumes_remaining_input in hg'; eauto.
     - destruct hg' as [sp'' hm].
@@ -824,50 +900,14 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       destruct hm as [sp' [hm hm']].
       apply hall in hm; subst; auto.
       apply closure_multistep_preserves_label in hc; auto.
+    - eapply closure_multistep_preserves_pushes_invar; eauto.
+      constructor; auto.
+      eapply in_grammar__keySet; eauto.
     - eapply stable_config_after_closure_multistep; eauto; sis.
       eapply push_preserves_suffix_frames_wf_invar; eauto.
     - eapply closure_multistep_preserves_suffix_stack_wf_invar; eauto; sis.
       apply push_preserves_suffix_frames_wf_invar; auto.
   Qed.
-
-  (* One of the main lemmas in this file; if llPredict return a right-hand side
-   and finds no ambiguity, then only that right-hand side will result in a 
-   successful derivation *)
-  (* This probably belongs in a different file, since it's involved in more than
-   just proving completeness *)
-  (* Also, I think there's a primed version of this lemma--this one may be deprecated *)
-(*    Lemma llPredict_succ_at_most_one_rhs_applies :
-    forall g cr ce o x suf frs w rhs rhs',
-      cr = SF o (NT x :: suf)
-      -> ce = SF (Some x) rhs
-      -> no_left_recursion g
-      -> suffix_stack_wf g (cr, frs)
-      -> In (x, rhs) g
-      -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
-      -> llPredict g x (cr, frs) w = PredSucc rhs'
-      -> rhs' = rhs.
-  Proof.
-    intros g cr ce o x suf frs w rhs rhs' ? ? hn hw hi hg hl; subst; sis.
-    unfold llPredict in hl.
-    destruct (llStartState _ _ _) as [m | sps] eqn:hs; tc.
-    eapply llStartState_closure_multistep_from_orig_sp in hs; eauto.
-    destruct hs as [av [sp [hc [hg' hi']]]].
-    eapply llPredict'_succ_labels_eq_after_prefix
-      with (wpre := []) (orig_sps := sps) in hl;
-      [ .. | eapply subparsers_complete_invar_starts_true; eauto].
-    destruct hl as [wpre' [wsuf' [? hall]]]; sis; subst.
-    eapply mcms_subparser_consumes_remaining_input in hg'; eauto.
-    - destruct hg' as [sp'' hm].
-      eapply mcms_backtrack_two_groups in hm.
-      destruct hm as [sp' [hm hm']].
-      apply hall in hm; subst; auto.
-      apply closure_multistep_preserves_label in hc; auto.
-    - eapply stable_config_after_closure_multistep; eauto.
-    - eapply closure_multistep_preserves_suffix_stack_wf_invar; eauto; sis.
-      apply push_preserves_suffix_frames_wf_invar; auto.
-  Qed. *)
-
-  (* Moving on to the case where llPredict returns Ambig... *)
 
   Inductive move_closure_multistep' (g : grammar) :
     subparser -> list token -> subparser -> list token -> Prop :=
@@ -884,9 +924,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
                                 (Sp pred (SF o (T a :: suf), frs))
                                 ts
   | MC_trans' :
-      forall av'' sp sp' sp'' sp''' ts ts'' ts''',
+      forall vi'' sp sp' sp'' sp''' ts ts'' ts''',
         move_step sp ts sp' ts''
-        -> closure_multistep g (allNts g) sp' av'' sp''
+        -> closure_multistep g NtSet.empty sp' vi'' sp''
         -> move_closure_multistep' g sp'' ts'' sp''' ts'''
         -> move_closure_multistep' g sp ts sp''' ts'''.
 
@@ -916,18 +956,19 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_func_refines_closure_multistep_backward :
-    forall g pm (hc : production_map_correct pm g) sps sps'' sp'',
-      all_suffix_stacks_wf g sps
-      -> llClosure hc sps = inr sps''
+    forall g pm sps sps'' sp'' hk,
+      production_map_correct pm g
+      -> all_suffix_stacks_wf g sps
+      -> llClosure pm sps hk = inr sps''
       -> In sp'' sps''
-      -> exists av'' sp,
+      -> exists vi'' sp,
           In sp sps
-          /\ closure_multistep g (allNts g) sp av'' sp''.
+          /\ closure_multistep g NtSet.empty sp vi'' sp''.
   Proof.
-    intros g pm hpc sps sps'' sp'' ha hc hi.
-    eapply aggrClosureResults_map_backwards in hc; eauto.
-    destruct hc as [sp [sps' [hi' [heq hi'']]]].
-    eapply llc_sound_wrt_closure_multistep in heq; destruct heq; eauto.
+    intros g pm sps sps'' sp'' hk hp ha hc hi.
+    eapply aggrClosureResults_dmap_backwards in hc; eauto.
+    destruct hc as [sp [hi' [sps' [_ [hl hi'']]]]].
+    eapply llc_sound_wrt_closure_multistep in hl; destruct hl; eauto.
   Qed.
 
   Lemma mcms'_transitive :
@@ -978,14 +1019,15 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
 
   (* refactor? *)
   Lemma move_closure_op_preserves_subparsers_sound_invar :
-    forall g pm (hc : production_map_correct pm g) a l wpre wsuf sps sps' sps'' sps''',
-      all_suffix_stacks_wf g sps
+    forall g pm a l wpre wsuf sps sps' sps'' sps''' hk,
+      production_map_correct pm g
+      -> all_suffix_stacks_wf g sps
       -> subparsers_sound_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
       -> move a sps' = inr sps''
-      -> llClosure hc sps'' = inr sps'''
+      -> llClosure pm sps'' hk = inr sps'''
       -> subparsers_sound_wrt_originals g sps (wpre ++ [(a,l)]) sps''' wsuf.
   Proof.
-    intros g pm hpc a l wpre wsuf sps sps' sps'' sps''' ha hi hm hc. 
+    intros g pm a l wpre wsuf sps sps' sps'' sps''' hk hp ha hi hm hc. 
     unfold subparsers_sound_wrt_originals in *.
     rewrite <- app_assoc; simpl; intros sp''' hi'''.
     (* lemma *)
@@ -1016,30 +1058,33 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma llTarget_preserves_subparsers_sound_invar :
-    forall g pm (hc : production_map_correct pm g) a l wpre wsuf sps sps' sps'',
-      all_suffix_stacks_wf g sps
+    forall g pm a l wpre wsuf sps sps' sps'' hk,
+      production_map_correct pm g
+      -> all_suffix_stacks_wf g sps
       -> subparsers_sound_wrt_originals g sps wpre sps' ((a,l) :: wsuf)
-      -> llTarget hc a sps' = inr sps''
+      -> llTarget pm a sps' hk = inr sps''
       -> subparsers_sound_wrt_originals g sps (wpre ++ [(a,l)]) sps'' wsuf.
   Proof.
-    intros g pm hc a l wpre wsuf sps sps' sps'' hw hs ht.
-    unfold llTarget in ht; dmeqs H; tc; inv ht.
+    intros g pm a l wpre wsuf sps sps' sps'' hk hp hw hs ht.
+    apply llTarget_cases in ht.
+    destruct ht as [sps''' [hk' [hm hc]]].
     eapply move_closure_op_preserves_subparsers_sound_invar; eauto.
   Qed.
 
   Lemma llPredict'_ambig_rhs_leads_to_successful_parse :
-    forall g pm (hc : production_map_correct pm g) orig_sps wsuf wpre curr_sps rhs,
-      all_suffix_stacks_wf g orig_sps
+    forall g pm orig_sps wsuf wpre curr_sps hk rhs,
+      production_map_correct pm g
+      -> all_suffix_stacks_wf g orig_sps
       -> subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
-      -> llPredict' hc  curr_sps wsuf = PredAmbig rhs
+      -> llPredict' pm curr_sps wsuf hk = PredAmbig rhs
       -> exists orig_sp final_sp,
           In orig_sp orig_sps
           /\ orig_sp.(prediction) = rhs
           /\ move_closure_multistep' g orig_sp (wpre ++ wsuf) final_sp []
           /\ finalConfig final_sp = true.
   Proof.
-    intros g pm hc orig_sps wsuf.
-    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs ha hi hl; sis; tc.
+    intros g pm orig_sps wsuf.
+    induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps hk rhs hp ha hi hl; sis; tc.
     - unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| csp' csps'] eqn:hf; tc.
       destruct (allPredictionsEqual csp' csps') eqn:ha''; tc.
@@ -1057,7 +1102,8 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         eapply filter_In in hi''; destruct hi''; auto.
     - destruct curr_sps as [| sp' sps']; tc.
       destruct (allPredictionsEqual _ _); tc.
-      dmeq ht; tc.
+      apply llPredict'_cont_cases in hl.
+      destruct hl as [sps'' [ht hl]].
       eapply IH with (wpre := wpre ++ [(a,l)]) in hl; auto.
       + destruct hl as [osp [fsp [hi' [heq [hm' hf]]]]].
         exists osp; exists fsp; repeat split; auto.
@@ -1066,24 +1112,24 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_step_ussr_backward :
-    forall g av av' sp sp' w,
-      closure_step g av sp av' sp'
+    forall g vi vi' sp sp' w,
+      closure_step g vi sp vi' sp'
       -> gamma_recognize g (unprocStackSyms sp'.(stack)) w
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w.
   Proof.
-    intros g av av' sp sp' w hc hg.
+    intros g vi vi' sp sp' w hc hg.
     inv hc; sis; auto.
     apply gamma_recognize_split in hg.
     destruct hg as [wpre [wsuf [? [hg hg']]]]; subst; repeat (econstructor; eauto).
   Qed.
 
   Lemma closure_multistep_ussr_backward :
-    forall g av av' sp sp' w,
-      closure_multistep g av sp av' sp'
+    forall g vi vi' sp sp' w,
+      closure_multistep g vi sp vi' sp'
       -> gamma_recognize g (unprocStackSyms sp'.(stack)) w
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w.
   Proof.
-    intros g av av' sp sp' w hc hg; induction hc; sis; auto.
+    intros g vi vi' sp sp' w hc hg; induction hc; sis; auto.
     apply IHhc in hg.
     eapply closure_step_ussr_backward; eauto.
   Qed.
@@ -1109,39 +1155,41 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_ussr_backwards :
-    forall g pm (hc : production_map_correct pm g) sps sps' sp' w,
-      all_suffix_stacks_wf g sps
-      -> llClosure hc sps = inr sps'
+    forall g pm sps sps' sp' w hk,
+      production_map_correct pm g
+      -> all_suffix_stacks_wf g sps
+      -> llClosure pm sps hk = inr sps'
       -> In sp' sps'
       -> gamma_recognize g (unprocStackSyms sp'.(stack)) w
-      -> exists sp av',
+      -> exists sp vi',
           In sp sps
-          /\ closure_multistep g (allNts g) sp av' sp'
+          /\ closure_multistep g NtSet.empty sp vi' sp'
           /\ gamma_recognize g (unprocStackSyms sp.(stack)) w.
   Proof.
-    intros g pm hpc sps sps' sp' w ha hc hi hg.
+    intros g pm sps sps' sp' w hk hp ha hc hi hg.
     eapply closure_func_refines_closure_multistep_backward in hc; eauto.
-    destruct hc as [av'' [sp [hi' hc]]].
+    destruct hc as [vi'' [sp [hi' hc]]].
     repeat eexists; eauto.
     eapply closure_multistep_ussr_backward; eauto.
   Qed.
 
   (* to do : get rid of unprocStackSyms in the conclusion *)
   Lemma llPredict_ambig_rhs_unproc_stack_syms :
-    forall g pm (hc : production_map_correct pm g) cr ce o x suf frs w rhs,
+    forall g pm cr ce o x suf frs w rhs hk,
       cr = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
+      -> production_map_correct pm g
       -> suffix_stack_wf g (cr, frs)
-      -> llPredict hc x (cr, frs) w = PredAmbig rhs
+      -> llPredict pm o x suf frs w hk = PredAmbig rhs
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g pm hpc cr ce o x suf frs w rhs ? ? hn hw hl; subst; sis.
-    pose proof hl as hl'; apply llPredict_ambig_in_grammar in hl'.
-    unfold llPredict in hl.
-    destruct (llStartState _ _ _) as [m | sps] eqn:hs; tc.
+    intros g pm cr ce o x suf frs w rhs hk ? ? hn hp hw hl; subst; sis.
+    pose proof hl as hl'; eapply llPredict_ambig_in_grammar in hl'; eauto.
+    apply llPredict_cases in hl.
+    destruct hl as [sps [hs hl]].
     eapply llPredict'_ambig_rhs_leads_to_successful_parse
-      with (orig_sps := sps) (wpre := []) in hl; sis.
+      with (orig_sps := sps) (wpre := []) in hl; sis; eauto.
     - destruct hl as [sp [sp' [hi [heq [hm hf]]]]]; subst.
       eapply mcms'_final_config in hm; auto.
       unfold llStartState in hs.
@@ -1268,15 +1316,20 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma cstep_preserves_successful_sp_invar :
-    forall g pm av av' sp sps' w,
+    forall g pm vi vi' sp sps' w,
       production_map_correct pm g
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w
-      -> cstep g pm av sp = CstepK av' sps'
+      -> cstep pm vi sp = CstepK vi' sps'
       -> exists_successful_sp g sps' w.
   Proof.
-    intros g pm av av' sp sps' w hc hg hs.
+    intros g pm vi vi' sp sps' w hc hg hs.
     unfold cstep in hs; dmeqs h; tc; sis; inv hs.
     - eexists; split; [apply in_eq | auto].
+    - exfalso.
+      apply gamma_recognize_nonterminal_head in hg. 
+      destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst.
+      eapply in_grammar_find_some in hi; eauto.
+      destruct hi as [? [? ?]]; tc.
     - apply gamma_recognize_nonterminal_head in hg. 
       destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst. 
       eexists; split.
@@ -1284,21 +1337,18 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         eexists; split; eauto.
         eapply rhssFor_in_iff; eauto.
       + sis; apply gamma_recognize_app; auto.
-    - exfalso.
-      apply gamma_recognize_nonterminal_head in hg. 
-      destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst.
-      apply lhs_mem_allNts_true in hi; tc.
   Qed.
 
   Lemma llc_preserves_successful_sp_invar' :
-    forall g pm (hc : production_map_correct pm g) pr (a : Acc lex_nat_pair pr) av sp (a' : Acc lex_nat_pair (meas g av sp)) sps' w,
-      pr = meas g av sp
-      -> llc hc av sp a' = inr sps'
+    forall g pm pr (a : Acc lex_nat_pair pr) vi sp hk (a' : Acc lex_nat_pair (meas pm vi sp)) sps' w,
+      production_map_correct pm g
+      -> pr = meas pm vi sp
+      -> llc pm vi sp hk a' = inr sps'
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w
       -> exists_successful_sp g sps' w.
   Proof.
-    intros g pm hc pr a'.
-    induction a' as [pr hlt IH]; intros av sp a sps'' w ? hs hg; subst.
+    intros g pm pr a'.
+    induction a' as [pr hlt IH]; intros vi sp hk a sps'' w hp ? hs hg; subst.
     apply llc_success_cases in hs.
     destruct hs as [[hdone heq] | [sps' [av' [hs [crs [heq ha]]]]]]; subst.
     - eexists; split; eauto.
@@ -1314,8 +1364,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma llc_preserves_successful_sp_invar :
-    forall g pm (hc : production_map_correct pm g) av sp (a : Acc lex_nat_pair (meas g av sp)) sps' w,
-      llc hc av sp a = inr sps'
+    forall g pm vi sp hk (a : Acc lex_nat_pair (meas pm vi sp)) sps' w,
+      production_map_correct pm g
+      -> llc pm vi sp hk a = inr sps'
       -> gamma_recognize g (unprocStackSyms sp.(stack)) w
       -> exists_successful_sp g sps' w.
   Proof.
@@ -1323,50 +1374,55 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_preserves_successful_sp_invar :
-    forall g pm (hc : production_map_correct pm g) sps sps' w,
-      exists_successful_sp g sps w
-      -> llClosure hc sps = inr sps'
+    forall g pm sps sps' hk w,
+      production_map_correct pm g
+      -> exists_successful_sp g sps w
+      -> llClosure pm sps hk = inr sps'
       -> exists_successful_sp g sps' w.
   Proof.
-    intros g pm hpc sps sps'' w he hc; destruct he as [sp [hi hg]]; red.
-    eapply aggrClosureResults_map_succ_elt_succ in hc; eauto.
-    destruct hc as [sps' [hs ha]].
+    intros g pm sps sps'' hk w hp he hc; destruct he as [sp [hi hg]]; red.
+    eapply aggrClosureResults_dmap_succ_elt_succ in hc; eauto.
+    destruct hc as [hi' [sps' [hs ha]]].
     eapply llc_preserves_successful_sp_invar in hs; eauto; firstorder.
   Qed.
   
   Lemma move_closure_preserves_successful_sp_invar :
-    forall g pm (hc : production_map_correct pm g) sps sps' sps'' a l w',
-      all_stacks_stable sps
+    forall g pm sps sps' sps'' hk a l w',
+      production_map_correct pm g
+      -> all_stacks_stable sps
       -> exists_successful_sp g sps ((a,l) :: w')
       -> move a sps = inr sps'
-      -> llClosure hc sps' = inr sps''
+      -> llClosure pm sps' hk = inr sps''
       -> exists_successful_sp g sps'' w'.
   Proof.
-    intros g pm hpc sps sps' sps'' a l w' ha he hm hc.
+    intros g pm sps sps' sps'' hk a l w' hp ha he hm hc.
     eapply move_preserves_successful_sp_invar in hm; eauto.
     eapply closure_preserves_successful_sp_invar; eauto.
   Qed.
 
   Lemma llTarget_preserves_successful_sp_invar :
-    forall g pm (hc : production_map_correct pm g) sps sps' a l w',
-      all_stacks_stable sps
+    forall g pm sps sps' hk a l w',
+      production_map_correct pm g
+      -> all_stacks_stable sps
       -> exists_successful_sp g sps ((a,l) :: w')
-      -> llTarget hc a sps = inr sps'
+      -> llTarget pm a sps hk = inr sps'
       -> exists_successful_sp g sps' w'.
   Proof.
-    intros g pm hc sps sps' a l w' hs he ht.
-    unfold llTarget in ht; dmeqs H; tc; inv ht.
+    intros g pm sps sps' hk a l w' hp hs he ht.
+    apply llTarget_cases in ht.
+    destruct ht as [sps'' [hk' [hm hc]]].
     eapply move_closure_preserves_successful_sp_invar; eauto.
   Qed.
   
   Lemma esp_llPredict'_neq_reject :
-    forall g pm (hc : production_map_correct pm g) w sps,
-      all_suffix_stacks_wf g sps
+    forall g pm w sps hk,
+      production_map_correct pm g
+      -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
       -> exists_successful_sp g sps w
-      -> llPredict' hc sps w <> PredReject.
+      -> llPredict' pm sps w hk <> PredReject.
   Proof.
-    intros g pm hc w; induction w as [| (a,l) w' IH]; intros sps ha ha' hex;
+    intros g pm w; induction w as [| (a,l) w' IH]; intros sps hk hp ha ha' hex;
       unfold not; intros hl; unfold exists_successful_sp in hex; sis.
     - destruct hex as [sp [hi hg]].
       destruct sps as [| sp' sps']; try solve [inv hi].
@@ -1378,7 +1434,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       rewrite hf in hg; inv hg.
     - destruct hex as [sp [hi hg]]. 
       destruct sps as [| sp' sps']; try solve [inv hi].
-      dm; tc; dmeq ht; tc.
+      dm; tc.
+      apply llPredict'_cont_cases in hl.
+      destruct hl as [sps'' [ht hl]].
       eapply IH in hl; eauto.
       + eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
       + eapply llTarget_preserves_stacks_stable_invar; eauto.
@@ -1387,16 +1445,17 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma ape_esp_llPredict'_succ :
-    forall g pm (hc : production_map_correct pm g) sp sps ts,
+    forall g pm sp sps ts hk,
       no_left_recursion g
+      -> production_map_correct pm g
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
       -> all_predictions_equal sp sps
       -> exists_successful_sp g sps ts
-      -> llPredict' hc sps ts = PredSucc (prediction sp).
+      -> llPredict' pm sps ts hk = PredSucc (prediction sp).
   Proof.
-    intros g pm hc sp sps ts hn hw hs ha he.
-    destruct (llPredict' hc sps ts) as [rhs | rhs | | e] eqn:hl.
+    intros g pm sp sps ts hk hn hp hw hs ha he.
+    destruct (llPredict' pm sps ts hk) as [rhs | rhs | | e] eqn:hl.
     - f_equal; eapply llPredict'_succ__eq_all_predictions_equal in hl; eauto.
     - exfalso; eapply all_predictions_equal__llPredict'_neq_ambig; eauto. 
     - exfalso; eapply esp_llPredict'_neq_reject; eauto.
@@ -1404,21 +1463,24 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
   
   Lemma esp_llPredict'_succ__exists_target : 
-    forall g pm (hc : production_map_correct pm g) sps a l ts ys,
+    forall g pm sps a l ts hk ys,
       no_left_recursion g
+      -> production_map_correct pm g
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps
       -> exists_successful_sp g sps ((a, l) :: ts)
-      -> llPredict' hc sps ((a, l) :: ts) = PredSucc ys
-      -> exists sps',
-          llTarget hc a sps = inr sps'
-          /\ llPredict' hc sps' ts = PredSucc ys.
+      -> llPredict' pm sps ((a, l) :: ts) hk = PredSucc ys
+      -> exists sps' (ht : llTarget pm a sps hk = inr sps'),
+          llPredict' pm sps' ts (llTarget_preserves_spk pm a sps sps' hk ht) = PredSucc ys.
   Proof.
-    intros g pm hc sps a l ts ys hn hw hs he hl; sis.
+    intros g pm sps a l ts hk ys hn hp hw hs he hl; sis.
     destruct sps as [| sp sps]; tc.
     destruct (allPredictionsEqual _ _) eqn:ha.
     - inv hl; apply allPredictionsEqual_prop in ha.
-      destruct (llTarget hc a (sp :: sps)) as [e | sps'] eqn:ht.
+      pose proof (llTarget_cases pm a (sp :: sps) hk) as ht.
+      (* to do : modified llTarget_cases lemma that allows
+         me to destruct the return value *)      
+      destruct (llTarget pm a (sp :: sps) hk) as [e | sps'] eqn:ht'.
       + exfalso; eapply llTarget_never_returns_error; eauto.
       + eexists; split; eauto.
         eapply ape_esp_llPredict'_succ; eauto. 
