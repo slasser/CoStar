@@ -39,25 +39,25 @@ Module SllPredictionFn (Import D : Defs.T).
     intros cm sp sps' hr; unfold simReturn in hr; dms; inv hr; sis; eauto.
   Qed.
   
-  Fixpoint sllc (g  : grammar)
-                (pm : production_map)
-                (hc : production_map_correct pm g)
+  Fixpoint sllc (pm : production_map)
                 (cm : closure_map)
-                (av : NtSet.t)
+                (vi : NtSet.t)
                 (sp : subparser)
-                (a  : Acc lex_nat_pair (meas g av sp))
+                (hk : sp_pushes_from_keyset pm sp)
+                (a  : Acc lex_nat_pair (meas pm vi sp))
     : closure_result :=
     match simReturn cm sp with
     | Some sps' => inr sps'
     | None      =>
-      match cstep g pm av sp as r return cstep g pm av sp = r -> _ with
+      match cstep pm vi sp as r return cstep pm vi sp = r -> _ with
       | CstepDone       => fun _  => inr [sp]
       | CstepError e    => fun _  => inl e
-      | CstepK av' sps' => 
+      | CstepK vi' sps' => 
         fun hs => 
-          let crs := dmap sps' (fun sp' hin =>
-                                  sllc g pm hc cm av' sp'
-                                       (acc_after_step _ _ _ hc hs hin a))
+          let crs := dmap sps' (fun sp' hi =>
+                                  sllc pm cm vi' sp'
+                                       (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                       (acc_after_step _ _ _ _ _ _ hk hs hi a))
           in  aggrClosureResults crs
       end eq_refl
     end.

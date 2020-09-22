@@ -1477,19 +1477,17 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     destruct sps as [| sp sps]; tc.
     destruct (allPredictionsEqual _ _) eqn:ha.
     - inv hl; apply allPredictionsEqual_prop in ha.
-      pose proof (llTarget_cases pm a (sp :: sps) hk) as ht.
-      (* to do : modified llTarget_cases lemma that allows
-         me to destruct the return value *)      
-      destruct (llTarget pm a (sp :: sps) hk) as [e | sps'] eqn:ht'.
+      pose proof (llTarget_destruct pm a (sp :: sps) hk) as ht.
+      destruct ht as [[e ht] | [sps' ht]].
       + exfalso; eapply llTarget_never_returns_error; eauto.
-      + eexists; split; eauto.
+      + exists sps'; exists ht. 
         eapply ape_esp_llPredict'_succ; eauto. 
         * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
         * eapply llTarget_preserves_stacks_stable_invar; eauto.
         * eapply llTarget_preserves_ape in ht; eauto.
           apply ape_cons_head_eq; auto.
         * eapply llTarget_preserves_successful_sp_invar; eauto.
-    - destruct (llTarget _ _ _) as [? | sps'] eqn:ht; tc; eauto.
+    - apply llPredict'_cont_cases in hl; eauto.
   Qed.
   
   Lemma llInitSps_preserves_esp_invar :
@@ -1497,7 +1495,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       production_map_correct pm g
       -> fr = SF o (NT x :: suf)
       -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> exists_successful_sp g (llInitSps pm x (fr, frs)) w.
+      -> exists_successful_sp g (llInitSps pm o x suf frs) w.
   Proof.
     intros g pm fr o x suf frs w hc ? hg; subst; sis.
     apply gamma_recognize_nonterminal_head in hg.
@@ -1509,27 +1507,29 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma llStartState_preserves_esp_invar :
-    forall g pm (hc : production_map_correct pm g) fr o x suf frs w sps,
-      fr = SF o (NT x :: suf)
+    forall g pm fr o x suf frs hk w sps,
+      production_map_correct pm g
+      -> fr = SF o (NT x :: suf)
       -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> llStartState hc x (fr, frs) = inr sps
+      -> llStartState pm o x suf frs hk = inr sps
       -> exists_successful_sp g sps w.
   Proof.
-    intros g pm hc fr o x suf frs w sps ? hr hs; subst.
+    intros g pm fr o x suf frs hk w sps hp ? hr hs; subst.
     eapply closure_preserves_successful_sp_invar; eauto.
     eapply llInitSps_preserves_esp_invar; eauto.
   Qed.
     
   Theorem ussr_llPredict_neq_reject :
-    forall g pm (hc : production_map_correct pm g) fr o x suf frs w,
-      fr = SF o (NT x :: suf)
+    forall g pm fr o x suf frs w hk,
+      production_map_correct pm g
+      -> fr = SF o (NT x :: suf)
       -> suffix_stack_wf g (fr, frs)
       -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> llPredict hc x (fr, frs) w <> PredReject.
+      -> llPredict pm o x suf frs w hk <> PredReject.
   Proof.
-    intros g pm hc fr o x suf frs w ? hw hg; unfold not; intros hl; subst.
-    unfold llPredict in hl.
-    destruct (llStartState _ _ _) as [e | sps] eqn:hs; tc.
+    intros g pm fr o x suf frs w hk hp ? hw hg hl; subst.
+    apply llPredict_cases in hl.
+    destruct hl as [sps [hs hl]].
     eapply esp_llPredict'_neq_reject; eauto.
     - eapply llStartState_preserves_stacks_wf_invar; eauto. 
     - eapply llStartState_all_stacks_stable; eauto.

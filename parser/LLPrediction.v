@@ -896,6 +896,16 @@ Module LLPredictionFn (Import D : Defs.T).
   Proof.
     intros; eapply llTarget_cases'; eauto.
   Qed.
+
+  Lemma llTarget_destruct :
+    forall pm a sps hk,
+      (exists e, llTarget pm a sps hk = inl e)
+      \/ (exists sps', llTarget pm a sps hk = inr sps').
+  Proof.
+    intros pm a sps hk.
+    remember (llTarget pm a sps hk) as tr eqn:heq.
+    destruct tr; eauto.
+  Qed.    
   
   Lemma llTarget_succ_case :
     forall pm a sps hk sps'',
