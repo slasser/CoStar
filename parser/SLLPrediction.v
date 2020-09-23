@@ -38,6 +38,16 @@ Module SllPredictionFn (Import D : Defs.T).
   Proof.
     intros cm sp sps' hr; unfold simReturn in hr; dms; inv hr; sis; eauto.
   Qed.
+
+  Lemma simReturn_push_invar :
+    forall pm cm sp sps',
+      simReturn cm sp = Some sps'
+      -> all_sp_pushes_from_keyset pm sps'.
+  Proof.
+    intros pm cm [pred (fr, frs)] sps' hr sp' hi; sis; dms; tc; inv hr.
+    apply in_map_iff in hi; destruct hi as [[o suf] [heq hi]]; subst. 
+    repeat red; auto.
+  Qed.
   
   Fixpoint sllc (pm : production_map)
                 (cm : closure_map)
@@ -63,47 +73,48 @@ Module SllPredictionFn (Import D : Defs.T).
     end.
 
   Lemma sllc_unfold :
-    forall g pm (hc : production_map_correct pm g) cm av sp a,
-      sllc g pm hc cm av sp a =
+    forall pm cm vi sp hk a,
+      sllc pm cm vi sp hk a =
       match simReturn cm sp with
       | Some sps' => inr sps'
       | None      =>
-        match cstep g pm av sp as r return cstep g pm av sp = r -> _ with
+        match cstep pm vi sp as r return cstep pm vi sp = r -> _ with
         | CstepDone       => fun _  => inr [sp]
         | CstepError e    => fun _  => inl e
-        | CstepK av' sps' => 
+        | CstepK vi' sps' => 
           fun hs => 
-            let crs := dmap sps' (fun sp' hin =>
-                                    sllc g pm hc cm av' sp'
-                                          (acc_after_step _ _ _ hc hs hin a))
+            let crs := dmap sps' (fun sp' hi =>
+                                    sllc pm cm vi' sp'
+                                         (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                          (acc_after_step _ _ _ _ _ _ hk hs hi a))
             in  aggrClosureResults crs
         end eq_refl
       end.
   Proof.
-    intros g pm hc cm av sp a; destruct a; auto. 
+    intros pm cm vi sp hk a; destruct a; auto.
   Qed.
 
   Lemma sllc_cases' :
-    forall (g   : grammar)
-           (pm  : production_map)
-           (hc  : production_map_correct pm g)
+    forall (pm  : production_map)
            (cm  : closure_map)
-           (av  : NtSet.t)
+           (vi  : NtSet.t)
            (sp  : subparser)
-           (a   : Acc lex_nat_pair (meas g av sp))
+           (hk  : sp_pushes_from_keyset pm sp)
+           (a   : Acc lex_nat_pair (meas pm vi sp))
            (sr  : subparser_closure_step_result)
            (cr  : closure_result)
-           (heq : cstep g pm av sp = sr),
+           (heq : cstep pm vi sp = sr),
       match simReturn cm sp with
       | Some sps' => inr sps'
       | None      =>
-        match sr as r return cstep g pm av sp = r -> closure_result with
+        match sr as r return cstep pm vi sp = r -> closure_result with
         | CstepDone       => fun _  => inr [sp]
         | CstepError e    => fun _  => inl e
-        | CstepK av' sps' => 
+        | CstepK vi' sps' => 
           fun hs => 
-            let crs := dmap sps' (fun sp' hin => sllc g pm hc cm av' sp'
-                                                       (acc_after_step _ _ _ hc hs hin a))
+            let crs := dmap sps' (fun sp' hi => sllc pm cm vi' sp'
+                                                     (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                                       (acc_after_step _ _ _ _ _ _ hk hs hi a))
             in  aggrClosureResults crs
         end heq
       end = cr
@@ -111,113 +122,119 @@ Module SllPredictionFn (Import D : Defs.T).
          | inl e => 
            sr = CstepError e
            \/ exists (sps : list subparser)
-                     (av' : NtSet.t)
-                     (hs  : cstep g pm av sp = CstepK av' sps)
+                     (vi' : NtSet.t)
+                     (hs  : cstep pm vi sp = CstepK vi' sps)
                      (crs : list closure_result),
                crs = dmap sps (fun sp' hi => 
-                                 sllc g pm hc cm av' sp'
-                                       (acc_after_step _ _ _ hc hs hi a))
+                                 sllc pm cm vi' sp'
+                                      (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                       (acc_after_step _ _ _ _ _ _ hk hs hi a))
                /\ aggrClosureResults crs = inl e
          | inr sps =>
            simReturn cm sp = Some sps
            \/ simReturn cm sp = None
               /\ ((sr = CstepDone /\ sps = [sp])
                   \/ exists (sps' : list subparser)
-                            (av'  : NtSet.t)
-                            (hs   : cstep g pm av sp = CstepK av' sps')
+                            (vi'  : NtSet.t)
+                            (hs   : cstep pm vi sp = CstepK vi' sps')
                             (crs  : list closure_result),
                      crs = dmap sps' (fun sp' hi => 
-                                        sllc g pm hc cm av' sp'
-                                             (acc_after_step _ _ _ hc hs hi a))
+                                        sllc pm cm vi' sp'
+                                             (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                             (acc_after_step _ _ _ _ _ _ hk hs hi a))
                      /\ aggrClosureResults crs = inr sps)
          end.
   Proof.
-    intros g pm hc cm av sp a sr cr heq.
+    intros pm cm vi sp hk a sr cr heq.
     dms; tc; intros heq'; try solve [inv heq'; eauto | eauto 10].
   Qed.
   
   Lemma sllc_cases :
-    forall (g  : grammar)
-           (pm  : production_map)
-           (hc  : production_map_correct pm g)
+    forall (pm : production_map)
            (cm : closure_map)
            (sp : subparser)
-           (av : NtSet.t)
-           (a  : Acc lex_nat_pair (meas g av sp))
+           (vi : NtSet.t)
+           (hk : sp_pushes_from_keyset pm sp)
+           (a  : Acc lex_nat_pair (meas pm vi sp))
            (cr : closure_result),
-      sllc g pm hc cm av sp a = cr
+      sllc pm cm vi sp hk a = cr
       -> match cr with
          | inl e => 
-           cstep g pm av sp = CstepError e
+           cstep pm vi sp = CstepError e
            \/ exists (sps : list subparser)
-                     (av' : NtSet.t)
-                     (hs  : cstep g pm av sp = CstepK av' sps)
+                     (vi' : NtSet.t)
+                     (hs  : cstep pm vi sp = CstepK vi' sps)
                      (crs : list closure_result),
                crs = dmap sps (fun sp' hi => 
-                                 sllc g pm hc cm av' sp'
-                                   (acc_after_step _ _ _ hc hs hi a))
+                                 sllc pm cm vi' sp'
+                                      (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                   (acc_after_step _ _ _ _ _ _ hk hs hi a))
                /\ aggrClosureResults crs = inl e
          | inr sps =>
            simReturn cm sp = Some sps
            \/ simReturn cm sp = None
-              /\ ((cstep g pm av sp = CstepDone /\ sps = [sp])
+              /\ ((cstep pm vi sp = CstepDone /\ sps = [sp])
                   \/ exists (sps' : list subparser)
-                            (av'  : NtSet.t)
-                            (hs   : cstep g pm av sp = CstepK av' sps')
+                            (vi'  : NtSet.t)
+                            (hs   : cstep pm vi sp = CstepK vi' sps')
                             (crs  : list closure_result),
                      crs = dmap sps' (fun sp' hi => 
-                                        sllc g pm hc cm av' sp'
-                                             (acc_after_step _ _ _ hc hs hi a))
+                                        sllc pm cm vi' sp'
+                                             (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                             (acc_after_step _ _ _ _ _ _ hk hs hi a))
                      /\ aggrClosureResults crs = inr sps)
                   end.
   Proof.
-    intros g pm hc cm av sp a cr hs; subst.
+    intros pm cm vi sp hk a cr hs; subst.
     rewrite sllc_unfold.
     eapply sllc_cases'; eauto.
   Qed.
 
   Lemma sllc_success_cases :
-    forall g pm (hc : production_map_correct pm g) cm av sp a sps,
-      sllc g pm hc cm av sp a = inr sps
+    forall pm cm vi sp hk a sps,
+      sllc pm cm vi sp hk a = inr sps
       -> simReturn cm sp = Some sps
          \/ simReturn cm sp = None
-            /\ ((cstep g pm av sp = CstepDone /\ sps = [sp])
+            /\ ((cstep pm vi sp = CstepDone /\ sps = [sp])
                 \/ exists (sps' : list subparser)
-                          (av'  : NtSet.t)
-                          (hs   : cstep g pm av sp = CstepK av' sps')
+                          (vi'  : NtSet.t)
+                          (hs   : cstep pm vi sp = CstepK vi' sps')
                           (crs  : list closure_result),
                    crs = dmap sps' (fun sp' hi => 
-                                      sllc g pm hc cm av' sp'
-                                           (acc_after_step _ _ _ hc hs hi a))
+                                      sllc pm cm vi' sp'
+                                           (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                           (acc_after_step _ _ _ _ _ _ hk hs hi a))
                    /\ aggrClosureResults crs = inr sps).
   Proof.
-    intros ? ? ? ? ? ? ? sps; apply sllc_cases with (cr := inr sps); auto.
+    intros ? ? ? ? ? ? sps ?; apply sllc_cases with (cr := inr sps); auto.
   Qed.
 
   Lemma sllc_error_cases :
-    forall g pm (hc : production_map_correct pm g) cm sp av a e,
-      sllc g pm hc cm av sp a = inl e
-      -> cstep g pm av sp = CstepError e
+    forall pm cm sp vi hk a e,
+      sllc pm cm vi sp hk a = inl e
+      -> cstep pm vi sp = CstepError e
          \/ exists (sps : list subparser)
-                   (av' : NtSet.t)
-                   (hs  : cstep g pm av sp = CstepK av' sps)
+                   (vi' : NtSet.t)
+                   (hs  : cstep pm vi sp = CstepK vi' sps)
                    (crs : list closure_result),
           crs = dmap sps (fun sp' hi => 
-                            sllc g pm hc cm av' sp' (acc_after_step _ _ _ hc hs hi a))
+                            sllc pm cm vi' sp'
+                                 (cstep_preserves_pfk _ _ _ _ _ _ hk hs hi)
+                                 (acc_after_step _ _ _ _ _ _ hk hs hi a))
           /\ aggrClosureResults crs = inl e.
   Proof.
-    intros g pm hc cm sp av a e hs; apply sllc_cases with (cr := inl e); auto.
+    intros pm cm sp vi hk a e hs; apply sllc_cases with (cr := inl e); auto.
   Qed.
 
     Lemma sllc_preserves_prediction' :
-    forall g pm (hc : production_map_correct pm g) cm pair (a : Acc lex_nat_pair pair) av sp sp' sps' a',
-      pair = meas g av sp
-      -> sllc g pm hc cm av sp a' = inr sps'
+    forall pm cm pair (a : Acc lex_nat_pair pair) vi sp sp' sps' hk a',
+      pair = meas pm vi sp
+      -> sllc pm cm vi sp hk a' = inr sps'
       -> In sp' sps'
       -> sp'.(prediction) = sp.(prediction).
   Proof.
-    intros g pm hc cm pair a.
-    induction a as [pair hlt IH]; intros av sp sp' sps' a' heq hs hi; subst.
+    intros pm cm pair a.
+    induction a as [pair hlt IH]; intros vi sp sp' sps' hk a' heq hs hi; subst.
     apply sllc_success_cases in hs.
     destruct hs as [hr | [hr [[hs heq] | [sps'' [av' [hs [crs [heq heq']]]]]]]]; subst.
     - eapply simReturn_preserves_prediction; eauto. 
@@ -234,34 +251,82 @@ Module SllPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma sllc_preserves_prediction :
-    forall g pm (hc : production_map_correct pm g) cm av sp sp' sps' (a : Acc lex_nat_pair (meas g av sp)),
-      sllc g pm hc cm av sp a = inr sps'
+    forall pm cm vi sp sp' sps' hk (a : Acc lex_nat_pair (meas pm vi sp)),
+      sllc pm cm vi sp hk a = inr sps'
       -> In sp' sps'
       -> sp'.(prediction) = sp.(prediction).
   Proof.
     intros; eapply sllc_preserves_prediction'; eauto.
   Qed.
-  
-  Definition sllClosure (g : grammar) (pm : production_map) (hc : production_map_correct pm g) (cm : closure_map) (sps : list subparser) :
-    sum prediction_error (list subparser) :=
-    aggrClosureResults (map (fun sp => sllc g pm hc cm (allNts g) sp (lex_nat_pair_wf _)) sps).
+
+  Lemma sllc_preserves_push_invar' :
+    forall pm cm pair (ha : Acc lex_nat_pair pair) vi sp hk ha' sps',
+      pair = meas pm vi sp
+      -> sllc pm cm vi sp hk ha' = inr sps'
+      -> all_sp_pushes_from_keyset pm sps'.
+  Proof.
+    intros pm cm pair a.
+    induction a as [pair hlt IH].
+    intros vi sp hk ha' sps'' heq hc; subst.
+    pose proof hc as hc'; apply sllc_success_cases in hc.
+    destruct hc as [hr | [hr [[hc heq] | [sps' [vi' [hc [crs [heq heq']]]]]]]]; subst; intros sp''' hi.
+    - eapply simReturn_push_invar; eauto. 
+    - apply in_singleton_eq in hi; subst; auto.
+    - eapply aggrClosureResults_succ_in_input in heq'; eauto.
+      destruct heq' as [sps [hi' hi'']].
+      eapply dmap_in in hi'; eauto.
+      destruct hi' as [sp'' [hi''' [_ heq]]].
+      eapply IH in heq; subst; eauto.
+      eapply cstep_meas_lt; eauto.
+  Qed.
+
+  Lemma sllc_preserves_push_invar :
+    forall pm cm vi sp sps' hk ha,
+      sllc pm cm vi sp hk ha = inr sps'
+      -> sp_pushes_from_keyset pm sp
+      -> all_sp_pushes_from_keyset pm sps'.
+  Proof.
+    intros; eapply sllc_preserves_push_invar'; eauto.
+  Qed.
+
+  Definition sllClosure (pm  : production_map)
+                        (cm  : closure_map)
+                        (sps : list subparser)
+                        (hk  : all_sp_pushes_from_keyset pm sps) :
+                        sum prediction_error (list subparser) :=
+    aggrClosureResults (dmap sps (fun sp hi =>
+                                    sllc pm cm NtSet.empty sp
+                                         (pfk_list__pfk_mem _ _ sp hk hi)
+                                         (lex_nat_pair_wf _))).
 
   Lemma sllClosure_preserves_prediction :
-    forall g pm (hc : production_map_correct pm g) cm sps sp' sps',
-      sllClosure g pm hc cm sps = inr sps'
+    forall pm cm sps hk sp' sps',
+      sllClosure pm cm sps hk = inr sps'
       -> In sp' sps'
       -> exists sp, In sp sps /\ prediction sp' = prediction sp.
   Proof.
-    intros g pm hpc cm sps sp' sps' hc hi.
+    intros pm cm sps hk sp' sps' hc hi.
     eapply aggrClosureResults_succ_in_input in hc; eauto.
     destruct hc as [sps'' [hi' hi'']].
-    apply in_map_iff in hi'; destruct hi' as [sp [hspc hi''']].
+    eapply dmap_in in hi'; eauto; sis.
+    destruct hi' as [sp [hi''' [_ hs]]].
     eexists; split; eauto.
     eapply sllc_preserves_prediction; eauto.
   Qed.
 
-  (* SLL prediction *)
-  (* Goal : replace FMapWeakList with FMapAVL *)
+  Lemma sllClosure_preserves_push_invar :
+    forall pm cm sps hk sps',
+      sllClosure pm cm sps hk = inr sps'
+      -> all_sp_pushes_from_keyset pm sps
+      -> all_sp_pushes_from_keyset pm sps'.
+  Proof.
+    intros pm cm sps hk sps'' hc ha sp' hi.
+    eapply aggrClosureResults_succ_in_input in hc; eauto.
+    destruct hc as [sps' [hi' hi'']].
+    eapply dmap_in with (l := sps) in hi'; eauto; sis.
+    destruct hi' as [sp [? [hi''' hspc]]].
+    eapply sllc_preserves_push_invar; eauto.
+  Qed.
 
   Module Subparser_as_UOT <: UsualOrderedType.
 
@@ -360,22 +425,6 @@ Module SllPredictionFn (Import D : Defs.T).
 
   End CacheKey_as_UOT.
 
-  (*Lemma cache_key_eq_dec : 
-    forall k k' : cache_key,
-      {k = k'} + {k <> k'}.
-  Proof.
-    repeat decide equality; try apply t_eq_dec; try apply nt_eq_dec.
-  Defined.*)
-(*
-  Module MDT_CacheKey.
-    Definition t := cache_key.
-    Definition eq_dec := cache_key_eq_dec.
-  End MDT_CacheKey.
-  Module CacheKey_as_DT := Make_UDT(MDT_CacheKey).
-  Module Cache := FMapWeakList.Make CacheKey_as_DT.
-  Module CacheFacts := WFacts_fun CacheKey_as_DT Cache.
- *)
-
   Module Cache      := FMapAVL.Make CacheKey_as_UOT.
   Module CacheFacts := FMapFacts.Facts Cache.
   
@@ -385,56 +434,160 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Definition empty_cache : cache := Cache.empty (list subparser).
   
-  Definition sllTarget g pm (hc : production_map_correct pm g) cm (a : terminal) (sps : list subparser) : sum prediction_error (list subparser) :=
-    match move a sps with
-    | inl e    => inl e
+  Definition sllTarget (pm  : production_map)
+                       (cm  : closure_map)
+                       (a   : terminal)
+                       (sps : list subparser)
+                       (hk  : all_sp_pushes_from_keyset pm sps) :
+                       sum prediction_error (list subparser) :=
+    match move a sps as m return move a sps = m -> _ with
+    | inl e    => fun _ => inl e
     | inr sps' =>
-      match sllClosure g pm hc cm sps' with
-      | inl e => inl e
-      | inr sps'' => inr sps''
-      end
-    end.
+      fun hm =>
+        match sllClosure pm cm sps' (move_preserves_pfk pm a sps sps' hk hm) with
+        | inl e     => inl e
+        | inr sps'' => inr sps''
+        end
+    end eq_refl.
+
+  Lemma sllTarget_cases' :
+    forall pm cm a sps hk mr (heq : move a sps = mr) tr,
+      match mr as m return move a sps = m -> _ with
+      | inl e    => fun _ => inl e
+      | inr sps' =>
+        fun hm =>
+          match sllClosure pm cm sps' (move_preserves_pfk pm a sps sps' hk hm) with
+          | inl e     => inl e
+          | inr sps'' => inr sps''
+          end
+      end heq = tr
+      -> match tr with
+         | inl e =>
+           move a sps = inl e
+           \/ (exists sps' hk',
+                  move a sps = inr sps' /\ sllClosure pm cm sps' hk' = inl e) 
+         | inr sps'' =>
+           exists sps' hk', move a sps = inr sps'
+                            /\ sllClosure pm cm sps' hk' = inr sps''
+         end.
+  Proof.
+    intros pm cm a sps hk mr heq tr.
+    destruct mr as [e' | sps']; intros ?; subst; auto.
+    destruct (sllClosure _ _ _ _) eqn:hc; eauto.
+  Qed.
+
+  Lemma sllTarget_cases :
+    forall pm cm a sps hk tr,
+      sllTarget pm cm a sps hk = tr
+      -> match tr with
+         | inl e =>
+           move a sps = inl e
+           \/ (exists sps' hk',
+                  move a sps = inr sps' /\ sllClosure pm cm sps' hk' = inl e) 
+         | inr sps'' =>
+           (exists sps' hk',
+               move a sps = inr sps' /\ sllClosure pm cm sps' hk' = inr sps'')
+         end.
+  Proof.
+    intros pm cm a sps hk tr ht; eapply sllTarget_cases'; eauto.
+  Qed.
 
   Lemma sllTarget_preserves_prediction :
-    forall g pm (hc : production_map_correct pm g) cm sps a sp' sps',
-      sllTarget g pm hc cm a sps = inr sps'
+    forall pm cm a sps hk sp' sps',
+      sllTarget pm cm a sps hk = inr sps'
       -> In sp' sps'
       -> exists sp, In sp sps /\ prediction sp = prediction sp'.
   Proof.
-    intros g pm hpc cm sps a sp' sps'' hs hi.
-    unfold sllTarget in hs.
-    destruct (move _ _)         as [? | sps' ] eqn:hm; tc.
-    destruct (sllClosure _ _ _) as [? | ?    ] eqn:hc; tc; inv hs.
+    intros pm cm a sps hk sp' sps'' hs hi.
+    apply sllTarget_cases in hs.
+    destruct hs as [sps' [hk' [hm hc]]].
     eapply sllClosure_preserves_prediction in hc; eauto.
     destruct hc as [sp'' [hi'' heq]]; rewrite heq.
     eapply move_preserves_prediction in hm; eauto.
     destruct hm as [? [? ?]]; eauto.
   Qed.
 
-  Definition cache_stores_target_results g pm (hc : production_map_correct pm g) cm ca :=
-    forall sps a sps',
-      Cache.find (sps, a) ca = Some sps'
-      -> sllTarget g pm hc cm a sps = inr sps'.
-  
-  Lemma sllTarget_add_preserves_cache_invar :
-    forall gr pm (hc : production_map_correct pm gr) cm ca sps a sps',
-      cache_stores_target_results gr pm hc cm ca
-      -> sllTarget gr pm hc cm a sps = inr sps'
-      -> cache_stores_target_results gr pm hc cm (Cache.add (sps, a) sps' ca).
+  Lemma sllTarget_preserves_push_invar :
+    forall pm cm a sps hk sps',
+      sllTarget pm cm a sps hk = inr sps'
+      -> all_sp_pushes_from_keyset pm sps
+      -> all_sp_pushes_from_keyset pm sps'.
   Proof.
-    intros gr pm hpc cm ca sps a sps' hc ht ka kb v hf.
-    destruct (CacheKey_as_UOT.eq_dec (ka, kb) (sps, a)) as [he | hn].
-    - inv he; rewrite CacheFacts.add_eq_o in hf; inv hf; auto.
-    - rewrite CacheFacts.add_neq_o in hf; auto.
+    intros pm cm a sps hk sps'' ht ha.
+    apply sllTarget_cases in ht.
+    destruct ht as [sps' [hk' [hm hc]]].
+    eapply sllClosure_preserves_push_invar; eauto.
   Qed.
   
-  Fixpoint sllPredict' (gr  : grammar)
-                       (pm  : production_map)
-                       (hc  : production_map_correct pm gr)
+  Lemma sllTarget_invar_irrel :
+    forall pm cm a sps hk hk' tr,
+      sllTarget pm cm a sps hk = tr
+      -> sllTarget pm cm a sps hk' = tr.
+  Proof.
+    intros pm cm a sps hk hk' tr ht.
+    remember (sllTarget pm cm a sps hk') as tr' eqn:ht'.
+    symmetry in ht'.
+    apply sllTarget_cases in ht.
+    apply sllTarget_cases in ht'.
+    destruct tr as [e | sps'']; destruct tr' as [e' | sps'''].
+    - destruct ht as [hm | [sps' [hk'' [hm hc]]]];
+        destruct ht' as [hm' | [sps'' [hk''' [hm' hc']]]]; tc.
+      rewrite hm in hm'; inv hm'.
+      (* lemma about sllClosure *)
+      admit.
+    - destruct ht as [hm | [sps' [hk'' [hm hc]]]];
+        destruct ht' as [sps'' [hk''' [hm' hc']]]; tc.
+      rewrite hm in hm'; inv hm'.
+      (* lemma about sllClosure *)
+      admit.
+    - destruct ht as [sps' [hk'' [hm hc]]];
+        destruct ht' as [hm' | [sps''' [hk''' [hm' hc']]]]; tc.
+      rewrite hm in hm'; inv hm'.
+      (* lemma *)
+      admit.
+    - destruct ht as [sps' [hk'' [hm hc]]];
+        destruct ht' as [sps'''' [ hk''' [hm' hc']]].
+      rewrite hm in hm'; inv hm'.
+      admit.
+  Admitted.
+
+  Definition cache_stores_target_results pm cm ca :=
+    forall sps a sps',
+      Cache.find (sps, a) ca = Some sps'
+      -> exists hk, sllTarget pm cm a sps hk = inr sps'.
+  
+  Lemma sllTarget_add_preserves_cache_invar :
+    forall pm cm ca sps a sps' hk,
+      cache_stores_target_results pm cm ca
+      -> sllTarget pm cm a sps hk = inr sps'
+      -> cache_stores_target_results pm cm (Cache.add (sps, a) sps' ca).
+  Proof.
+    intros pm cm ca sps a sps' hk hc ht ka kb v hf.
+    destruct (CacheKey_as_UOT.eq_dec (ka, kb) (sps, a)) as [he | hn].
+    - inv he; rewrite CacheFacts.add_eq_o in hf; inv hf; eauto.
+    - rewrite CacheFacts.add_neq_o in hf; auto.
+  Qed.
+
+  Lemma cache_lookup_preserves_push_invar :
+    forall pm cm sps a ca sps',
+      cache_stores_target_results pm cm ca
+      -> Cache.find (sps, a) ca = Some sps'
+      -> all_sp_pushes_from_keyset pm sps'.
+  Proof.
+    intros pm cm sps a ca sps' hc hf.
+    apply hc in hf.
+    destruct hf as [hk ht].
+    eapply sllTarget_preserves_push_invar; eauto.
+  Qed.
+  
+  Fixpoint sllPredict' (pm  : production_map)
                        (cm  : closure_map)
                        (sps : list subparser)
                        (ts  : list token)
-                       (ca  : cache) : prediction_result * cache :=
+                       (ca  : cache)
+                       (hk  : all_sp_pushes_from_keyset pm sps)
+                       (hc  : cache_stores_target_results pm cm ca) :
+                       prediction_result * cache :=
     match ts with
     | []            => (handleFinalSubparsers sps, ca)
     | (a, l) :: ts' =>
@@ -444,31 +597,100 @@ Module SllPredictionFn (Import D : Defs.T).
         if allPredictionsEqual sp' sps' then
           (PredSucc sp'.(prediction), ca)
         else
-          match Cache.find (sp' :: sps', a) ca with 
-          | Some sps'' => sllPredict' gr pm hc cm sps'' ts' ca
-          | None       =>
-            match sllTarget gr pm hc cm a (sp' :: sps') with
-            | inl e     => (PredError e, ca)
-            | inr sps'' =>
-              let ca' := Cache.add (sp' :: sps', a) sps'' ca
-              in  sllPredict' gr pm hc cm sps'' ts' ca'
-            end
-          end
+          match Cache.find (sps, a) ca as f
+                return Cache.find (sps, a) ca = f -> _ with 
+          | Some sps'' =>
+            fun hf =>
+               sllPredict' pm cm sps'' ts' ca
+                          (cache_lookup_preserves_push_invar _ _ _ _ _ _ hc hf) hc
+          | None =>
+            fun _ =>
+              match sllTarget pm cm a sps hk as t
+                    return sllTarget pm cm a sps hk = t -> _ with
+              | inl e     => fun _ => (PredError e, ca)
+              | inr sps'' =>
+                fun ht => 
+                  let ca' := Cache.add (sps, a) sps'' ca
+                  in  sllPredict' pm cm sps'' ts' ca'
+                                  (sllTarget_preserves_push_invar _ _ _ _ _ _ ht hk)
+                                  (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht)
+              end eq_refl
+          end eq_refl
       end
     end.
 
-  Lemma sllPredict'_succ_preserves_cache_invar :
-    forall gr pm (hc : production_map_correct pm gr) cm ts sps ca ys ca',
-      cache_stores_target_results gr pm hc cm ca
-      -> sllPredict' gr pm hc cm sps ts ca = (PredSucc ys, ca')
-      -> cache_stores_target_results gr pm hc cm ca'.
+  Lemma sllPredict'_cont_cases :
+    forall pm cm sps a ts' ca hk hc fr tr pr
+           (heq : Cache.find (sps, a) ca = fr)
+           (heq' : sllTarget pm cm a sps hk = tr),
+      match fr as f return Cache.find (sps, a) ca = f -> _ with 
+      | Some sps'' =>
+        fun hf =>
+          sllPredict' pm cm sps'' ts' ca
+                      (cache_lookup_preserves_push_invar _ _ _ _ _ _ hc hf) hc
+      | None =>
+        fun _ =>
+          match tr as t return sllTarget pm cm a sps hk = t -> _ with
+          | inl e     => fun _ => (PredError e, ca)
+          | inr sps'' =>
+            fun ht => 
+              let ca' := Cache.add (sps, a) sps'' ca
+              in  sllPredict' pm cm sps'' ts' ca'
+                              (sllTarget_preserves_push_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht)
+          end heq'
+      end heq = pr
+      -> match pr with
+         | (PredSucc ys, ca') =>
+           (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
+               sllPredict' pm cm sps'' ts' ca
+                           (cache_lookup_preserves_push_invar _ _ _ _ _ _ hc hf) hc = (PredSucc ys, ca'))
+           \/ (exists sps'' (ht : sllTarget pm cm a sps hk = inr sps''),
+                  sllPredict' pm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
+                              (sllTarget_preserves_push_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredSucc ys, ca'))
+         | (PredAmbig ys, ca') =>
+           (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
+               sllPredict' pm cm sps'' ts' ca
+                           (cache_lookup_preserves_push_invar _ _ _ _ _ _ hc hf) hc = (PredAmbig ys, ca'))
+           \/ (exists sps'' (ht : sllTarget pm cm a sps hk = inr sps''),
+                  sllPredict' pm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
+                              (sllTarget_preserves_push_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredAmbig ys, ca'))
+         | (PredReject, ca') =>
+           (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
+               sllPredict' pm cm sps'' ts' ca
+                           (cache_lookup_preserves_push_invar _ _ _ _ _ _ hc hf) hc = (PredReject, ca'))
+           \/ (exists sps'' (ht : sllTarget pm cm a sps hk = inr sps''),
+                  sllPredict' pm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
+                              (sllTarget_preserves_push_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredReject, ca'))
+         | (PredError e, ca') =>
+           (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
+               sllPredict' pm cm sps'' ts' ca
+                           (cache_lookup_preserves_push_invar _ _ _ _ _ _ hc hf) hc = (PredError e, ca'))
+           \/ sllTarget pm cm a sps hk = inl e
+           \/ (exists sps'' (ht : sllTarget pm cm a sps hk = inr sps''),
+                  sllPredict' pm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
+                              (sllTarget_preserves_push_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredError e, ca'))
+         end.
   Proof.
-    intros gr pm hpc cm ts; induction ts as [| (a,l) ts IH];
-      intros sps ca ys ca' hc hs; sis.
+    intros pm cm sps a ts' ca hk hc fr tr pr heq heq';
+      dms; intros heq''; inv heq''; eauto.
+  Qed.
+
+  Lemma sllPredict'_succ_preserves_cache_invar :
+    forall pm cm ts sps ca hk hc ys ca',
+      sllPredict' pm cm sps ts ca hk hc = (PredSucc ys, ca')
+      -> cache_stores_target_results pm cm ca'.
+  Proof.
+    intros pm cm ts; induction ts as [| (a,l) ts IH];
+      intros sps ca hk hc ys ca' hs; sis.
     - dms; tc; inv hs; auto.
-    - dm; tc; dm; try solve [inv hs; auto]; dm; eauto.
-      dmeq ht; tc. apply IH in hs; auto.
-      apply sllTarget_add_preserves_cache_invar; auto.
+    - dm; tc; dm; try solve [inv hs; auto].
+      apply sllPredict'_cont_cases in hs.
+      destruct hs as [[sps'' [hf hs]] | [sps'' [ht hs]]]; eauto.
   Qed.
 
   Lemma sllPredict'_success_result_in_original_subparsers :
@@ -615,7 +837,7 @@ Module SllPredictionFn (Import D : Defs.T).
       cache_stores_target_results gr pm hc cm ca
       -> adaptivePredict gr pm hc cm x ss ts ca = (PredAmbig ys, ca')
       -> cache_stores_target_results gr pm hc cm ca'.
-    intros gr pm hpc cm x ss ts ca ys ca' hc ha.
+     intros gr pm hpc cm x ss ts ca ys ca' hc ha.
     unfold adaptivePredict in ha; dmeqs H; inv ha; auto.
   Qed.
   
