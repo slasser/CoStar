@@ -518,38 +518,6 @@ Module SllPredictionFn (Import D : Defs.T).
     destruct ht as [sps' [hk' [hm hc]]].
     eapply sllClosure_preserves_push_invar; eauto.
   Qed.
-  
-  Lemma sllTarget_invar_irrel :
-    forall pm cm a sps hk hk' tr,
-      sllTarget pm cm a sps hk = tr
-      -> sllTarget pm cm a sps hk' = tr.
-  Proof.
-    intros pm cm a sps hk hk' tr ht.
-    remember (sllTarget pm cm a sps hk') as tr' eqn:ht'.
-    symmetry in ht'.
-    apply sllTarget_cases in ht.
-    apply sllTarget_cases in ht'.
-    destruct tr as [e | sps'']; destruct tr' as [e' | sps'''].
-    - destruct ht as [hm | [sps' [hk'' [hm hc]]]];
-        destruct ht' as [hm' | [sps'' [hk''' [hm' hc']]]]; tc.
-      rewrite hm in hm'; inv hm'.
-      (* lemma about sllClosure *)
-      admit.
-    - destruct ht as [hm | [sps' [hk'' [hm hc]]]];
-        destruct ht' as [sps'' [hk''' [hm' hc']]]; tc.
-      rewrite hm in hm'; inv hm'.
-      (* lemma about sllClosure *)
-      admit.
-    - destruct ht as [sps' [hk'' [hm hc]]];
-        destruct ht' as [hm' | [sps''' [hk''' [hm' hc']]]]; tc.
-      rewrite hm in hm'; inv hm'.
-      (* lemma *)
-      admit.
-    - destruct ht as [sps' [hk'' [hm hc]]];
-        destruct ht' as [sps'''' [ hk''' [hm' hc']]].
-      rewrite hm in hm'; inv hm'.
-      admit.
-  Admitted.
 
   Definition cache_stores_target_results pm cm ca :=
     forall sps a sps',
