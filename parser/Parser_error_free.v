@@ -22,47 +22,49 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Lemma stacks_wf__step_neq_invalid_state :
     forall (g     : grammar)
            (pm    : production_map)
-           (hp    : production_map_correct pm g)
            (cm    : closure_map)
            (ps    : prefix_stack)
            (ss    : suffix_stack)
            (ts    : list token)
-           (av    : NtSet.t)
+           (vi    : NtSet.t)
            (un    : bool)
-           (ca    : cache),
+           (ca    : cache)
+           (hc    : cache_stores_target_results pm cm ca)
+           (hk    : stack_pushes_from_keyset pm ss),
       stacks_wf g ps ss
-      -> step g pm hp cm ps ss ts av un ca <> StepError InvalidState.
+      -> step pm cm ps ss ts vi un ca hc hk <> StepError InvalidState.
   Proof.
-    intros g pm hp cm ps ss ts av un ca hw; unfold not; intros hs. 
+    intros g pm cm ps ss ts vi un ca hc hk hw; unfold not; intros hs. 
     unfold step in hs; dms; tc; try inv hw.
   Qed.
 
   Lemma multistep_never_reaches_error_state :
     forall (g    : grammar)
            (pm   : production_map)
-           (hp   : production_map_correct pm g)
            (cm   : closure_map)
            (tri  : nat * nat * nat)
            (ha   : Acc lex_nat_triple tri)
            (ps   : prefix_stack)
            (ss   : suffix_stack)
            (ts   : list token)
-           (av   : NtSet.t)
+           (vi   : NtSet.t)
            (un   : bool)
            (ca   : cache)
-           (hc   : cache_stores_target_results g pm hp cm ca)
-           (ha'  : Acc lex_nat_triple (meas g ss ts av)),
-      tri = meas g ss ts av
+           (hc   : cache_stores_target_results pm cm ca)
+           (hk   : stack_pushes_from_keyset pm ss)
+           (ha'  : Acc lex_nat_triple (meas pm ss ts vi)),
+      tri = meas pm ss ts vi
+      -> production_map_correct pm g
       -> stacks_wf g ps ss
-      -> multistep g pm hp cm ps ss ts av un ca hc ha' <> Error InvalidState.
+      -> multistep pm cm ps ss ts vi un ca hc hk ha' <> Error InvalidState.
   Proof.
-    intros g pm hp cm tri ha'.
+    intros g pm cm tri ha'.
     induction ha' as [tri hlt IH].
-    intros ps ss ts av un ca hc ha? hw hm; subst. 
-    apply multistep_invalid_state_cases in hm.
+    intros ps ss ts vi un ca hc hk ha ? hp hw hm; subst. 
+    apply multistep_cases in hm.
     destruct hm as [hs | hm].
     - eapply stacks_wf__step_neq_invalid_state; eauto.
-    - destruct hm as (ps' & ss' & ts' & av' & un' & ca' & hc' & ha' & hs & hm).
+    - destruct hm as (ps' & ss' & ts' & av' & un' & ca' & hc' & hk' & ha' & hs & hm).
       eapply IH in hm; eauto.
       + eapply step_meas_lt with (ca := ca); eauto.
       + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
@@ -77,6 +79,7 @@ Module ParserErrorFreeFn (Import D : Defs.T).
     intros g x ts hp; unfold parse in hp.
     eapply multistep_never_reaches_error_state in hp; eauto.
     - apply lex_nat_triple_wf.
+    - eapply mkProductionMap_correct.
     - constructor.
   Qed.
 
@@ -84,7 +87,7 @@ Module ParserErrorFreeFn (Import D : Defs.T).
    when given a non-left-recursive grammar *)
   Lemma unavailable_nts_invar_starts_true :
     forall g x,
-      unavailable_nts_are_open_calls g (allNts g) (SF None [x], []). 
+      unavailable_nts_are_open_calls g NtSet.empty (SF None [x], []). 
   Proof.
     intros g x; intros x' hi hni; ND.fsetdec.
   Qed.
@@ -94,12 +97,12 @@ Module ParserErrorFreeFn (Import D : Defs.T).
    be defined in terms of unavailable_nts_are_open_calls *)
 
   Lemma return_preserves_unavailable_nts_invar :
-    forall g s_ce s_cr s_cr' s_frs o o' x suf av,
+    forall g s_ce s_cr s_cr' s_frs o o' x suf vi,
       s_ce     = SF o' []
       -> s_cr  = SF o (NT x :: suf)
       -> s_cr' = SF o suf
-      -> unavailable_nts_are_open_calls g av (s_ce, s_cr :: s_frs)
-      -> unavailable_nts_are_open_calls g (NtSet.add x av) (s_cr', s_frs).
+      -> unavailable_nts_are_open_calls g vi (s_ce, s_cr :: s_frs)
+      -> unavailable_nts_are_open_calls g (NtSet.remove x vi) (s_cr', s_frs).
   Proof.
     intros; subst.
     pose proof return_preserves_unavailable_nts_invar as hr; sis.
@@ -107,12 +110,12 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma push_preserves_unavailable_nts_invar :
-    forall g s_cr s_ce s_frs av o x suf rhs,
+    forall g s_cr s_ce s_frs vi o x suf rhs,
       s_cr = SF o (NT x :: suf)
       -> s_ce = SF (Some x) rhs
       -> In (x, rhs) g
-      -> unavailable_nts_are_open_calls g av (s_cr, s_frs)
-      -> unavailable_nts_are_open_calls g (NtSet.remove x av) (s_ce, s_cr :: s_frs).
+      -> unavailable_nts_are_open_calls g vi (s_cr, s_frs)
+      -> unavailable_nts_are_open_calls g (NtSet.add x vi) (s_ce, s_cr :: s_frs).
   Proof.
     intros; subst.
     pose proof push_preserves_unavailable_nts_invar as hp; sis.
@@ -120,13 +123,13 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Qed.  
 
   Lemma step_preserves_unavailable_nts_invar :
-    forall g pm hp cm ps ps' ss ss' ts ts' av av' un un' ca ca',
-      cache_stores_target_results g pm hp cm ca
-      -> step g pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
-      -> unavailable_nts_are_open_calls g av  ss
-      -> unavailable_nts_are_open_calls g av' ss'.
+    forall g pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk,
+      production_map_correct pm g
+      -> step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
+      -> unavailable_nts_are_open_calls g vi  ss
+      -> unavailable_nts_are_open_calls g vi' ss'.
   Proof.
-    intros g pm hp cm ps ps' ss ss' ts ts' av av' un un' ca ca' hc hs hu.
+    intros g pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk hp hs hu.
     unfold step in hs; dmeqs h; tc; inv hs.
     - eapply return_preserves_unavailable_nts_invar; eauto. 
     - intros x hi hn; ND.fsetdec. 
@@ -137,47 +140,50 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma step_left_recursion_detection_sound :
-    forall g pm hp cm ps ss ts av un ca x,
-      unavailable_nts_are_open_calls g av ss
-      -> step g pm hp cm ps ss ts av un ca = StepError (LeftRecursion x)
+    forall g pm cm ps ss ts vi un ca hc hk x,
+      production_map_correct pm g
+      -> unavailable_nts_are_open_calls g vi ss
+      -> step pm cm ps ss ts vi un ca hc hk = StepError (LeftRecursion x)
       -> left_recursive g (NT x).
   Proof.
-    intros g pm hp cm ps ss ts av un ca x hu hs.
+    intros g pm cm ps ss ts vi un ca hc hk x hp hu hs.
     apply step_LeftRecursion_facts in hs.
-    destruct hs as (hni & hi & o & suf & frs & ?); subst.
-    apply hu in hni; auto.
-    destruct hni as (frs_pre & cr & frs_suf & o' & suf' & ? & ? & hf); subst.
-    eapply frnp_grammar_nullable_path; eauto.
+    destruct hs as [hi [[yss hf] [o [suf [frs heq]]]]]; subst.
+    apply hu in hi; auto.
+    - destruct hi as (frs_pre & cr & frs_suf & o' & suf' & ? & ? & hf'); subst.
+      eapply frnp_grammar_nullable_path; eauto.
+    - eapply find_allNts; eauto.
   Qed.
 
   Lemma multistep_left_recursion_detection_sound :
     forall (g      : grammar)
            (pm     : production_map)
-           (hp     : production_map_correct pm g)
            (cm     : closure_map)
            (tri    : nat * nat * nat)
            (ha     : Acc lex_nat_triple tri)
            (ps     : prefix_stack)
            (ss     : suffix_stack)
            (ts     : list token)
-           (av     : NtSet.t)
+           (vi     : NtSet.t)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results g pm hp cm ca)
-           (ha'    : Acc lex_nat_triple (meas g ss ts av))
+           (hc     : cache_stores_target_results pm cm ca)
+           (hk     : stack_pushes_from_keyset pm ss)
+           (ha'    : Acc lex_nat_triple (meas pm ss ts vi))
            (x      : nonterminal),
-      tri = meas g ss ts av
-      -> unavailable_nts_are_open_calls g av ss
-      -> multistep g pm hp cm ps ss ts av un ca hc ha' = Error (LeftRecursion x)
+      tri = meas pm ss ts vi
+      -> production_map_correct pm g
+      -> unavailable_nts_are_open_calls g vi ss
+      -> multistep pm cm ps ss ts vi un ca hc hk ha' = Error (LeftRecursion x)
       -> left_recursive g (NT x).
   Proof.
-    intros g pm hp cm tri ha'; induction ha' as [tri hlt IH].
-    intros ps ss ts av un ca hc ha x ? hu hm; subst.
-    apply multistep_left_recursion_cases in hm.
+    intros g pm cm tri ha'; induction ha' as [tri hlt IH].
+    intros ps ss ts vi un ca hc hk ha x ? hp hu hm; subst.
+    apply multistep_cases in hm.
     destruct hm as [hs | hm].
     - eapply step_left_recursion_detection_sound; eauto. 
-    - destruct hm as (ps' & ss' & ts' & av' & un' & ca' & hc' & ha' & hs & hm).
-      eapply IH with (y := meas g ss' ts' av'); eauto.
+    - destruct hm as (ps' & ss' & ts' & vi' & un' & ca' & hc' & hk' & ha' & hs & hm).
+      eapply IH with (y := meas pm ss' ts' vi'); eauto.
       + eapply step_meas_lt with (ca := ca); eauto.
       + eapply step_preserves_unavailable_nts_invar with (ca := ca); eauto.
   Qed.
@@ -190,6 +196,7 @@ Module ParserErrorFreeFn (Import D : Defs.T).
     intros g x y ts hp; unfold parse in hp.
     eapply multistep_left_recursion_detection_sound in hp; eauto.
     - apply lex_nat_triple_wf.
+    - apply mkProductionMap_correct.
     - intros x' hi hn; ND.fsetdec.
   Qed.
   
@@ -207,14 +214,14 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   (* Errors never arise during prediction, given a non-left-recursive grammar *)
 
   Lemma step_never_returns_prediction_error :
-    forall g pm hp cm ps ss ts av un ca e,
+    forall g pm cm ps ss ts vi un ca hc hk e,
       no_left_recursion g
+      -> production_map_correct pm g
       -> closure_map_correct g cm
-      -> cache_stores_target_results g pm hp cm ca
       -> stacks_wf g ps ss
-      -> step g pm hp cm ps ss ts av un ca <> StepError (PredictionError e).
+      -> step pm cm ps ss ts vi un ca hc hk <> StepError (PredictionError e).
   Proof.
-    intros g pm hp cm ps ss ts av un ca e hn hm hc hw hs.
+    intros g pm cm ps ss ts vi un ca hc hk e hn hp hm hw hs.
     unfold step in hs; repeat dmeq h; tc; inv hs; sis; subst.
     eapply adaptivePredict_neq_error; eauto.
     eapply frames_wf__suffix_frames_wf; eauto.
@@ -223,32 +230,33 @@ Module ParserErrorFreeFn (Import D : Defs.T).
   Lemma multistep_never_returns_prediction_error :
     forall (g      : grammar)
            (pm     : production_map)
-           (hp     : production_map_correct pm g)
            (cm     : closure_map)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
            (ps     : prefix_stack)
            (ss     : suffix_stack)
            (ts     : list token)
-           (av     : NtSet.t)
+           (vi     : NtSet.t)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results g pm hp cm ca)
-           (a'     : Acc lex_nat_triple (meas g ss ts av))
+           (hc     : cache_stores_target_results pm cm ca)
+           (hk     : stack_pushes_from_keyset pm ss)
+           (a'     : Acc lex_nat_triple (meas pm ss ts vi))
            (e      : prediction_error),
       no_left_recursion g
+      -> production_map_correct pm g
       -> closure_map_correct g cm 
-      -> tri = meas g ss ts av
+      -> tri = meas pm ss ts vi
       -> stacks_wf g ps ss
-      -> multistep g pm hp cm ps ss ts av un ca hc a' <> Error (PredictionError e).
+      -> multistep pm cm ps ss ts vi un ca hc hk a' <> Error (PredictionError e).
   Proof.
-    intros g pm hp cm tri a.
+    intros g pm cm tri a.
     induction a as [tri hlt IH].
-    intros ps ss ts av un ca hc a' e hn hcm ? hw hm; subst.
-    apply multistep_prediction_error_cases in hm.
+    intros ps ss ts vi un ca hc hk a' e hn hp hcm ? hw hm; subst.
+    apply multistep_cases in hm.
     destruct hm as [hs | hm].
     - eapply step_never_returns_prediction_error in hs; eauto.
-    - destruct hm as (ps' & ss' & ts' & av' & un' & ca' & hc' & a'' & hs & hm). 
+    - destruct hm as (ps' & ss' & ts' & av' & un' & ca' & hc' & hk' & a'' & hs & hm). 
       eapply IH in hm; eauto.
       + eapply step_meas_lt with (ca := ca); eauto.
       + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
@@ -265,6 +273,7 @@ Module ParserErrorFreeFn (Import D : Defs.T).
     intros g x ts e hn hp; unfold parse in hp.
     eapply multistep_never_returns_prediction_error in hp; eauto.
     - apply lex_nat_triple_wf.
+    - apply mkProductionMap_correct.
     - apply mkClosureMap_result_correct.
     - constructor.
   Qed.

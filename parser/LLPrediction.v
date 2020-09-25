@@ -87,6 +87,15 @@ Module LLPredictionFn (Import D : Defs.T).
     inv_pfk hk' hi' hk''; auto.
   Qed.
 
+  Lemma consume_preserves_pushes_invar :
+    forall pm o a suf frs,
+      pushes_from_keyset pm (SF o (T a :: suf) :: frs)
+      -> pushes_from_keyset pm (SF o suf :: frs).
+  Proof.
+    intros pm o a suf frs hk.
+    inv_pfk hk  hi  hk'; auto.
+  Qed.
+
   Lemma push_preserves_pushes_invar :
     forall pm o suf x rhs frs,
       NtSet.In x (keySet pm)

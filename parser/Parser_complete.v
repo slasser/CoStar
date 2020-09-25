@@ -34,19 +34,19 @@ Module ParserCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma push_succ_preserves_ussr :
-    forall g pm hp cm cr ce frs o x suf rhs w ca ca',
+    forall g pm cm cr ce frs o x suf rhs w ca hc hk ca',
       cr    = SF o (NT x :: suf)
       -> ce = SF (Some x) rhs
       -> no_left_recursion g
+      -> production_map_correct pm g
       -> closure_map_correct g cm
-      -> cache_stores_target_results g pm hp cm ca
       -> suffix_stack_wf g (cr, frs)
-      -> adaptivePredict g pm hp cm x (cr, frs) w ca = (PredSucc rhs, ca')
+      -> adaptivePredict pm cm o x suf frs w ca hc hk = (PredSucc rhs, ca')
       -> gamma_recognize g (unprocStackSyms (cr, frs)) w
       -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
   Proof.
-    intros g pm hpc cm ? ? frs o x suf rhs w ca ca'
-           ? ? hn [hs hc] hc' hw hp hg; subst; sis.
+    intros g pm cm ? ? frs o x suf rhs w ca hci hk ca'
+           ? ? hn hpm [hms hmc] hw hp hg; subst; sis.
     apply gamma_recognize_nonterminal_head in hg.
     destruct hg as (rhs' & wp & wms & ? & hi' & hg & hg'); subst.
     apply gamma_recognize_split in hg'.
