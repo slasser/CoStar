@@ -48,16 +48,16 @@ Module ParserFn (Import D : Defs.T).
                  -> bool -> cache -> step_result
   | StepError  : parse_error -> step_result.
 
-  Definition step (g  : grammar)
-                  (pm : production_map)
-                  (hc : production_map_correct pm g)
+  Definition step (pm : production_map)
                   (cm : closure_map)
                   (ps : prefix_stack)
                   (ss : suffix_stack)
                   (ts : list token)
-                  (av : NtSet.t)
+                  (vi : NtSet.t)
                   (un : bool) 
-                  (ca : cache) : step_result := 
+                  (ca : cache)
+                  (hc : cache_stores_target_results pm cm ca)
+                  (hk : stack_pushes_from_keyset pm ss) : step_result := 
     match ps, ss with
     | (PF pre v, p_frs), (SF o suf, s_frs) =>
       match suf with
@@ -82,7 +82,7 @@ Module ParserFn (Import D : Defs.T).
           | NT x :: suf_cr'   =>
             let ps' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
             let ss' := (SF o_cr suf_cr', s_frs')                              in
-            StepK ps' ss' ts (NtSet.add x av) un ca          
+            StepK ps' ss' ts (NtSet.remove x vi) un ca          
           end
         | _, _ => StepError InvalidState
         end
@@ -94,56 +94,58 @@ Module ParserFn (Import D : Defs.T).
           if t_eq_dec a' a then
             let ps' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
             let ss' := (SF o suf', s_frs)                       in
-            StepK ps' ss' ts' (allNts g) un ca
+            StepK ps' ss' ts' NtSet.empty un ca
           else
             StepReject "token mismatch"
         end
       (* nonterminal case --> push a frame onto the stack *)
-      | NT x :: _ => 
-        if NtSet.mem x av then
-          match adaptivePredict g pm hc cm x ss ts ca with
+      | NT x :: suf' => 
+        if NtSet.mem x vi then
+          (* Unreachable for a left-recursive grammar *)
+          match NM.find x pm with
+          | Some _ => StepError (LeftRecursion x) 
+          | None   => StepReject "nonterminal not in grammar" 
+          end
+        else
+          match adaptivePredict pm cm o x suf s_frs ts ca hc _ with
           | (PredSucc rhs, ca') =>
             let ps' := (PF [] [], PF pre v :: p_frs)        in
             let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK ps' ss' ts (NtSet.remove x av) un ca'
+            StepK ps' ss' ts (NtSet.add x vi) un ca'
           | (PredAmbig rhs, ca') =>
             let ps' := (PF [] [], PF pre v :: p_frs)        in
             let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK ps' ss' ts (NtSet.remove x av) false ca'
+            StepK ps' ss' ts (NtSet.add x vi) false ca'
           | (PredReject, _)  =>
             StepReject "prediction found no viable right-hand sides"
           | (PredError e, _) =>
             StepError (PredictionError e) 
           end
-        else if NtSet.mem x (allNts g) then
-               StepError (LeftRecursion x)
-             else
-               StepReject "nonterminal not in grammar"
       end
     end.
   
   Lemma step_StepAccept_facts :
-    forall g pm hc cm ps ss ts av un ca t,
-      step g pm hc cm ps ss ts av un ca = StepAccept t
+    forall g pm hc cm ps ss ts vi un ca t,
+      step g pm hc cm ps ss ts vi un ca = StepAccept t
       -> ts = []
          /\ exists o, ss = (SF o [], [])
          /\ exists pre,
              ps = (PF pre [t], []).
   Proof.
-    intros g pm hc cm ps ss ts av un ca v hs.
+    intros g pm hc cm ps ss ts vi un ca v hs.
     unfold step in hs; dms; tc.
     inv hs; eauto.
   Qed.
 
   Lemma step_LeftRecursion_facts :
-    forall g pm hc cm ps ss ts av un ca x,
-      step g pm hc cm ps ss ts av un ca = StepError (LeftRecursion x)
+    forall g pm hc cm ps ss ts vi un ca x,
+      step g pm hc cm ps ss ts vi un ca = StepError (LeftRecursion x)
       -> ~ NtSet.In x av
          /\ NtSet.In x (allNts g)
          /\ exists o suf frs,
              ss = (SF o (NT x :: suf), frs).
   Proof.
-    intros g cm pm hc ps ss ts av un ca x hs.
+    intros g cm pm hc ps ss ts vi un ca x hs.
     unfold step in hs; repeat dmeq h; tc; inv hs; sis;
       repeat split; eauto.
     - unfold not; intros hi; apply NF.mem_iff in hi; tc.
@@ -151,12 +153,12 @@ Module ParserFn (Import D : Defs.T).
   Qed.
 
   Lemma step_preserves_cache_invar :
-    forall g pm hc cm ps ps' ss ss' ts ts' av av' un un' ca ca',
+    forall g pm hc cm ps ps' ss ss' ts ts' vi av' un un' ca ca',
       cache_stores_target_results g pm hc cm ca
-      -> step g pm hc cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> step g pm hc cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
       -> cache_stores_target_results g pm hc cm ca'.
   Proof.
-    intros gr pm hpc cm ps ps' ss ss' ts ts' av av' un un' ca ca' hc hs.
+    intros gr pm hpc cm ps ps' ss ss' ts ts' vi av' un un' ca ca' hc hs.
     unfold step in hs; dmeqs H; tc; inv hs; auto.
     - eapply adaptivePredict_succ_preserves_cache_invar;  eauto.
     - eapply adaptivePredict_ambig_preserves_cache_invar; eauto.
@@ -167,7 +169,7 @@ Module ParserFn (Import D : Defs.T).
                   (ts : list token)
                   (av :  NtSet.t) : nat * nat * nat := 
     let m := maxRhsLength g    in
-    let e := NtSet.cardinal av in
+    let e := NtSet.cardinal vi in
     (List.length ts, stackScore ss (1 + m) e, stackHeight ss).
 
   Lemma meas_lt_after_return :
@@ -201,12 +203,12 @@ Module ParserFn (Import D : Defs.T).
   Defined.
 
   Lemma step_meas_lt :
-    forall g pm hc cm ps ps' ss ss' ts ts' av av' un un' ca ca',
+    forall g pm hc cm ps ps' ss ss' ts ts' vi av' un un' ca ca',
       cache_stores_target_results g pm hc cm ca
-      -> step g pm hc cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> step g pm hc cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
       -> lex_nat_triple (meas g ss' ts' av') (meas g ss ts av).
   Proof.
-    intros g pm hpc cm ps ps' ss ss' ts ts' av av' un un' ca ca' hc hs; unfold step in hs.
+    intros g pm hpc cm ps ps' ss ss' ts ts' vi av' un un' ca ca' hc hs; unfold step in hs.
     destruct ss as ([ o [| [a|x] suf] ], frs).
     - dms; tc; inv hs.
       eapply meas_lt_after_return; eauto.
@@ -223,9 +225,9 @@ Module ParserFn (Import D : Defs.T).
   Qed.
 
   Lemma StepK_result_acc :
-    forall g pm hc cm ps ps' ss ss' ts ts' av av' un un' ca ca' (a : Acc lex_nat_triple (meas g ss ts av)),
+    forall g pm hc cm ps ps' ss ss' ts ts' vi av' un un' ca ca' (a : Acc lex_nat_triple (meas g ss ts av)),
       cache_stores_target_results g pm hc cm ca
-      -> step g pm hc cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+      -> step g pm hc cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
       -> Acc lex_nat_triple (meas g ss' ts' av').
   Proof.
     intros; eapply Acc_inv; eauto.
@@ -245,7 +247,7 @@ Module ParserFn (Import D : Defs.T).
                      (hc : cache_stores_target_results gr pm hp cm ca)
                      (ha : Acc lex_nat_triple (meas gr ss ts av))
                      {struct ha} : parse_result :=
-    match step gr pm hp cm ps ss ts av un ca as res return step gr pm hp cm ps ss ts av un ca = res -> _ with
+    match step gr pm hp cm ps ss ts vi un ca as res return step gr pm hp cm ps ss ts vi un ca = res -> _ with
     | StepAccept v                  => fun _  => if un then Accept v else Ambig v
     | StepReject s                  => fun _  => Reject s
     | StepError e                   => fun _  => Error e
@@ -256,9 +258,9 @@ Module ParserFn (Import D : Defs.T).
     end eq_refl.
 
   Lemma multistep_unfold :
-    forall gr pm hp cm ps ss ts av un ca hc ha,
-      multistep gr pm hp cm ps ss ts av un ca hc ha =
-      match step gr pm hp cm ps ss ts av un ca as res return step gr pm hp cm ps ss ts av un ca = res -> _ with
+    forall gr pm hp cm ps ss ts vi un ca hc ha,
+      multistep gr pm hp cm ps ss ts vi un ca hc ha =
+      match step gr pm hp cm ps ss ts vi un ca as res return step gr pm hp cm ps ss ts vi un ca = res -> _ with
       | StepAccept v                  => fun _  => if un then Accept v else Ambig v
       | StepReject s                  => fun _  => Reject s
       | StepError e                   => fun _  => Error e
@@ -286,8 +288,8 @@ Module ParserFn (Import D : Defs.T).
            (ha  : Acc lex_nat_triple (meas gr ss ts av))
            (sr  : step_result)
            (pr  : parse_result)
-           (heq : step gr pm hp cm ps ss ts av un ca = sr),
-      match sr as res return (step gr pm hp cm ps ss ts av un ca = res -> parse_result) with
+           (heq : step gr pm hp cm ps ss ts vi un ca = sr),
+      match sr as res return (step gr pm hp cm ps ss ts vi un ca = res -> parse_result) with
       | StepAccept sv                 => fun _ => if un then Accept sv else Ambig sv
       | StepReject s                  => fun _ => Reject s
       | StepError s                   => fun _ => Error s
@@ -315,7 +317,7 @@ Module ParserFn (Import D : Defs.T).
                               /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Error s)
          end.
   Proof.
-    intros g pm hp cm ps ss ts av un ca hc ha sr pr heq.
+    intros g pm hp cm ps ss ts vi un ca hc ha sr pr heq.
     destruct pr; destruct sr; destruct un;
       try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 10].
   Qed.
@@ -334,27 +336,27 @@ Module ParserFn (Import D : Defs.T).
            (hc  : cache_stores_target_results gr pm hp cm ca)
            (ha  : Acc lex_nat_triple (meas gr ss ts av))
            (pr  : parse_result),
-      multistep gr pm hp cm ps ss ts av un ca hc ha = pr
+      multistep gr pm hp cm ps ss ts vi un ca hc ha = pr
       -> match pr with
-         | Accept f => (step gr pm hp cm ps ss ts av un ca = StepAccept f /\ un = true)
+         | Accept f => (step gr pm hp cm ps ss ts vi un ca = StepAccept f /\ un = true)
                        \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                              step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                               /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Accept f)
-         | Ambig f  => (step gr pm hp cm ps ss ts av un ca = StepAccept f /\ un = false)
+         | Ambig f  => (step gr pm hp cm ps ss ts vi un ca = StepAccept f /\ un = false)
                        \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                              step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                               /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Ambig f)
-         | Reject s => step gr pm hp cm ps ss ts av un ca = StepReject s
+         | Reject s => step gr pm hp cm ps ss ts vi un ca = StepReject s
                        \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                              step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                               /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Reject s)
-         | Error s  => step gr pm hp cm ps ss ts av un ca = StepError s
+         | Error s  => step gr pm hp cm ps ss ts vi un ca = StepError s
                        \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                              step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                              step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                               /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Error s)
          end.
   Proof.
-    intros g pm hp cm ps ss ts av un ca hc ha pr hm; subst.
+    intros g pm hp cm ps ss ts vi un ca hc ha pr hm; subst.
     rewrite multistep_unfold.
     eapply multistep_cases'; eauto.
   Qed.
@@ -373,10 +375,10 @@ Module ParserFn (Import D : Defs.T).
            (hc : cache_stores_target_results gr pm hp cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (t  : tree),
-      multistep gr pm hp cm ps ss ts av un ca hc ha = Accept t
-      -> (step gr pm hp cm ps ss ts av un ca = StepAccept t /\ un = true)
+      multistep gr pm hp cm ps ss ts vi un ca hc ha = Accept t
+      -> (step gr pm hp cm ps ss ts vi un ca = StepAccept t /\ un = true)
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                 /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Accept t).
   Proof.
     intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
@@ -397,10 +399,10 @@ Module ParserFn (Import D : Defs.T).
            (hc : cache_stores_target_results gr pm hp cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (t  : tree),
-      multistep gr pm hp cm ps ss ts av un ca hc ha = Ambig t 
-      -> (step gr pm hp cm ps ss ts av un ca = StepAccept t /\ un = false)
+      multistep gr pm hp cm ps ss ts vi un ca hc ha = Ambig t 
+      -> (step gr pm hp cm ps ss ts vi un ca = StepAccept t /\ un = false)
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                 /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Ambig t).
 
   Proof.
@@ -422,10 +424,10 @@ Module ParserFn (Import D : Defs.T).
            (hc : cache_stores_target_results gr pm hp cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (s  : string),
-      multistep gr pm hp cm ps ss ts av un ca hc ha = Reject s
-      -> step gr pm hp cm ps ss ts av un ca = StepReject s
+      multistep gr pm hp cm ps ss ts vi un ca hc ha = Reject s
+      -> step gr pm hp cm ps ss ts vi un ca = StepReject s
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                 /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Reject s).
   Proof.
     intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
@@ -445,10 +447,10 @@ Module ParserFn (Import D : Defs.T).
            (ca : cache)
            (hc : cache_stores_target_results gr pm hp cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av)),
-      multistep gr pm hp cm ps ss ts av un ca hc ha = Error InvalidState
-      -> step gr pm hp cm ps ss ts av un ca = StepError InvalidState
+      multistep gr pm hp cm ps ss ts vi un ca hc ha = Error InvalidState
+      -> step gr pm hp cm ps ss ts vi un ca = StepError InvalidState
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                 /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Error InvalidState).
   Proof.
     intros ? ? ? ? ? ? ? ? ? ? ? ? hm; subst.
@@ -469,10 +471,10 @@ Module ParserFn (Import D : Defs.T).
            (hc : cache_stores_target_results gr pm hp cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (x  : nonterminal),
-      multistep gr pm hp cm ps ss ts av un ca hc ha = Error (LeftRecursion x)
-      -> step gr pm hp cm ps ss ts av un ca = StepError (LeftRecursion x)
+      multistep gr pm hp cm ps ss ts vi un ca hc ha = Error (LeftRecursion x)
+      -> step gr pm hp cm ps ss ts vi un ca = StepError (LeftRecursion x)
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                 /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Error (LeftRecursion x)).
   Proof.
     intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst.
@@ -493,10 +495,10 @@ Module ParserFn (Import D : Defs.T).
            (hc : cache_stores_target_results gr pm hp cm ca)
            (ha : Acc lex_nat_triple (meas gr ss ts av))
            (e  : prediction_error),
-      multistep gr pm hp cm ps ss ts av un ca hc ha = Error (PredictionError e)
-      -> step gr pm hp cm ps ss ts av un ca = StepError (PredictionError e)
+      multistep gr pm hp cm ps ss ts vi un ca hc ha = Error (PredictionError e)
+      -> step gr pm hp cm ps ss ts vi un ca = StepError (PredictionError e)
          \/ (exists ps' ss' ts' av' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts av un ca = StepK ps' ss' ts' av' un' ca'
+                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' av' un' ca'
                 /\ multistep gr pm hp cm ps' ss' ts' av' un' ca' hc' ha' = Error (PredictionError e)).
   Proof.
     intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst.
