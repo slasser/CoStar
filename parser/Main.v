@@ -38,7 +38,8 @@ Module Make (Export D : Defs.T).
       assert (hg : gamma_derivation g [NT x] wpre [v']).
       { rew_nil_r wpre; eauto. }
       apply hu in hg; inv hg; auto.
-    - apply mkClosureMap_complete.
+    - apply mkProductionMap_correct.
+    - apply mkClosureMap_result_correct.
     - constructor.
     - apply unique_stack_prefix_derivation_invar_starts_true.
   Qed.
@@ -67,6 +68,7 @@ Module Make (Export D : Defs.T).
       inv H5; rew_anr.
       eexists; split; eauto.
       intros heq; subst; tc.
+    - apply mkProductionMap_correct.
     - constructor.
     - exists []; eauto. 
     - apply ambiguous_stack_prefix_derivation_invar_starts_true.
