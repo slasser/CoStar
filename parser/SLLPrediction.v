@@ -383,6 +383,10 @@ Module SllPredictionFn (Import D : Defs.T).
     Defined.
 
   End Subparser_as_UOT.
+
+  Module SpSet := FSetList.Make Subparser_as_UOT.
+  Definition setify (sps : list subparser) : SpSet.t :=
+    fold_right SpSet.add SpSet.empty sps.
   
   Definition cache_key := (list subparser * terminal)%type.
 

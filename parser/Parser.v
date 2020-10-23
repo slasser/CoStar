@@ -58,6 +58,27 @@ Module ParserFn (Import D : Defs.T).
     intros; subst; auto.
   Qed.
 
+  Definition emptyStackMsg (t : token) : string :=
+    "parser stack exhausted but tokens remain\n " ++
+    "next token: " ++ showToken t.
+
+  Definition emptyInputMsg (a : terminal) : string :=
+    "empty input while trying to match terminal " ++ showT a.
+
+  Definition mismatchMsg (a : terminal) (t : token) : string :=
+    "terminal mismatch, next parser terminal: " ++ showT a ++
+    ", next input token: " ++ showToken t.
+
+  Definition notFoundMsg (x : nonterminal) : string :=
+    showNT x ++ " is not a left-hand side in the grammar".
+
+  Definition failedPredictionMsg (x : nonterminal) (ts : list token) : string :=
+    "prediction found no viable right-hand sides for " ++ showNT x ++
+    match ts with
+    | []     => ""
+    | t :: _ => ", next token: " ++ showToken t
+    end.
+    
   Definition step (pm : production_map)
                   (cm : closure_map)
                   (ps : prefix_stack)
@@ -86,7 +107,7 @@ Module ParserFn (Import D : Defs.T).
                   | [t] => StepAccept t
                   | _   => StepError InvalidState
                   end
-                | _ :: _ => StepReject "stack exhausted, tokens remain"
+                | t :: _ => StepReject (emptyStackMsg t)
                 end
               (* nonempty stacks --> return to caller frames *)
               | PF pre_cr v_cr :: p_frs', SF o_cr suf_cr :: s_frs' =>
@@ -104,14 +125,14 @@ Module ParserFn (Import D : Defs.T).
           | T a :: suf' =>
             fun _ => 
               match ts with
-              | []             => StepReject "input exhausted"
+              | []             => StepReject (emptyInputMsg a)
               | (a', l) :: ts' =>
                 if t_eq_dec a' a then
                   let ps' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
                   let ss' := (SF o suf', s_frs)                       in
                   StepK ps' ss' ts' NtSet.empty un ca
                 else
-                  StepReject "token mismatch"
+                  StepReject (mismatchMsg a (a', l))
               end
           (* nonterminal case --> push a frame onto the stack *)
           | NT x :: suf' =>
@@ -120,7 +141,7 @@ Module ParserFn (Import D : Defs.T).
                 (* Unreachable for a left-recursive grammar *)
                 match NM.find x pm with
                 | Some _ => StepError (LeftRecursion x) 
-                | None   => StepReject "nonterminal not in grammar" 
+                | None   => StepReject (notFoundMsg x)
                 end
               else
                 match adaptivePredict pm cm o x suf' s_frs ts ca hc
@@ -135,90 +156,13 @@ Module ParserFn (Import D : Defs.T).
                   let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
                   StepK ps' ss' ts (NtSet.add x vi) false ca'
                 | (PredReject, _)  =>
-                  StepReject "prediction found no viable right-hand sides"
+                  StepReject (failedPredictionMsg x ts)
                 | (PredError e, _) =>
                   StepError (PredictionError e) 
                 end
           end eq_refl
       end eq_refl
     end.
-  
-(*  Definition step (pm : production_map)
-                  (cm : closure_map)
-                  (ps : prefix_stack)
-                  (ss : suffix_stack)
-                  (ts : list token)
-                  (vi : NtSet.t)
-                  (un : bool) 
-                  (ca : cache)
-                  (hc : cache_stores_target_results pm cm ca)
-                  (hk : stack_pushes_from_keyset pm ss) : step_result := 
-    match ps as , ss as ps', ss' return ps, ss = ps', ss' with
-    | (PF pre v, p_frs), (SF o suf, s_frs) =>
-      match suf with
-      (* no more symbols to process in current frame *)
-      | [] =>
-        match p_frs, s_frs with
-        (* empty stacks --> terminate *)
-        | [], [] => 
-          match ts with
-          | [] =>
-            match v with
-            | [t] => StepAccept t
-            | _   => StepError InvalidState
-            end
-          | _ :: _ => StepReject "stack exhausted, tokens remain"
-          end
-        (* nonempty stacks --> return to caller frames *)
-        | PF pre_cr v_cr :: p_frs', SF o_cr suf_cr :: s_frs' =>
-          match suf_cr with
-          | []                => StepError InvalidState
-          | T _  :: _         => StepError InvalidState
-          | NT x :: suf_cr'   =>
-            let ps' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
-            let ss' := (SF o_cr suf_cr', s_frs')                              in
-            StepK ps' ss' ts (NtSet.remove x vi) un ca          
-          end
-        | _, _ => StepError InvalidState
-        end
-      (* terminal case --> consume a token *)
-      | T a :: suf' =>
-        match ts with
-        | []             => StepReject "input exhausted"
-        | (a', l) :: ts' =>
-          if t_eq_dec a' a then
-            let ps' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
-            let ss' := (SF o suf', s_frs)                       in
-            StepK ps' ss' ts' NtSet.empty un ca
-          else
-            StepReject "token mismatch"
-        end
-      (* nonterminal case --> push a frame onto the stack *)
-      | NT x :: suf' => 
-        if NtSet.mem x vi then
-          (* Unreachable for a left-recursive grammar *)
-          match NM.find x pm with
-          | Some _ => StepError (LeftRecursion x) 
-          | None   => StepReject "nonterminal not in grammar" 
-          end
-        else
-          match adaptivePredict pm cm o x suf s_frs ts ca hc _ with
-          | (PredSucc rhs, ca') =>
-            let ps' := (PF [] [], PF pre v :: p_frs)        in
-            let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK ps' ss' ts (NtSet.add x vi) un ca'
-          | (PredAmbig rhs, ca') =>
-            let ps' := (PF [] [], PF pre v :: p_frs)        in
-            let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
-            StepK ps' ss' ts (NtSet.add x vi) false ca'
-          | (PredReject, _)  =>
-            StepReject "prediction found no viable right-hand sides"
-          | (PredError e, _) =>
-            StepError (PredictionError e) 
-          end
-      end
-    end.
- *)
 
   Lemma step_StepAccept_facts :
     forall pm cm ps ss ts vi un ca hc hk t,
@@ -479,151 +423,6 @@ Module ParserFn (Import D : Defs.T).
     rewrite multistep_unfold.
     eapply multistep_cases'; eauto.
   Qed.
-
-(*  Lemma multistep_accept_cases :
-    forall (gr : grammar)
-           (pm  : production_map)
-           (hp  : production_map_correct pm gr)
-           (cm : closure_map)
-           (ps : prefix_stack)
-           (ss : suffix_stack)
-           (ts : list token)
-           (av : NtSet.t)
-           (un : bool)
-           (ca : cache)
-           (hc : cache_stores_target_results gr pm hp cm ca)
-           (ha : Acc lex_nat_triple (meas gr ss ts av))
-           (t  : tree),
-      multistep gr pm hp cm ps ss ts vi un ca hc ha = Accept t
-      -> (step gr pm hp cm ps ss ts vi un ca = StepAccept t /\ un = true)
-         \/ (exists ps' ss' ts' vi' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' vi' un' ca'
-                /\ multistep gr pm hp cm ps' ss' ts' vi' un' ca' hc' ha' = Accept t).
-  Proof.
-    intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ _ _ hm); auto.
-  Qed.
-
-  Lemma multistep_ambig_cases :
-    forall (gr : grammar)
-           (pm : production_map)
-           (hp : production_map_correct pm gr)
-           (cm : closure_map)
-           (ps : prefix_stack)
-           (ss : suffix_stack)
-           (ts : list token)
-           (av : NtSet.t)
-           (un : bool)
-           (ca : cache)
-           (hc : cache_stores_target_results gr pm hp cm ca)
-           (ha : Acc lex_nat_triple (meas gr ss ts av))
-           (t  : tree),
-      multistep gr pm hp cm ps ss ts vi un ca hc ha = Ambig t 
-      -> (step gr pm hp cm ps ss ts vi un ca = StepAccept t /\ un = false)
-         \/ (exists ps' ss' ts' vi' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' vi' un' ca'
-                /\ multistep gr pm hp cm ps' ss' ts' vi' un' ca' hc' ha' = Ambig t).
-
-  Proof.
-    intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ _ _ hm); auto.
-  Qed.
-
-  Lemma multistep_reject_cases :
-    forall (gr : grammar)
-           (pm : production_map)
-           (hp : production_map_correct pm gr)
-           (cm : closure_map)
-           (ps : prefix_stack)
-           (ss : suffix_stack)
-           (ts : list token)
-           (av : NtSet.t)
-           (un : bool)
-           (ca : cache)
-           (hc : cache_stores_target_results gr pm hp cm ca)
-           (ha : Acc lex_nat_triple (meas gr ss ts av))
-           (s  : string),
-      multistep gr pm hp cm ps ss ts vi un ca hc ha = Reject s
-      -> step gr pm hp cm ps ss ts vi un ca = StepReject s
-         \/ (exists ps' ss' ts' vi' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' vi' un' ca'
-                /\ multistep gr pm hp cm ps' ss' ts' vi' un' ca' hc' ha' = Reject s).
-  Proof.
-    intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst. 
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ _ _ hm); auto.
-  Qed.
-
-  Lemma multistep_invalid_state_cases :
-    forall (gr : grammar)
-           (pm : production_map)
-           (hp : production_map_correct pm gr)
-           (cm : closure_map)
-           (ps : prefix_stack)
-           (ss : suffix_stack)
-           (ts : list token)
-           (av : NtSet.t)
-           (un : bool)
-           (ca : cache)
-           (hc : cache_stores_target_results gr pm hp cm ca)
-           (ha : Acc lex_nat_triple (meas gr ss ts av)),
-      multistep gr pm hp cm ps ss ts vi un ca hc ha = Error InvalidState
-      -> step gr pm hp cm ps ss ts vi un ca = StepError InvalidState
-         \/ (exists ps' ss' ts' vi' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' vi' un' ca'
-                /\ multistep gr pm hp cm ps' ss' ts' vi' un' ca' hc' ha' = Error InvalidState).
-  Proof.
-    intros ? ? ? ? ? ? ? ? ? ? ? ? hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ _ _ hm); auto.
-  Qed.
-
-  Lemma multistep_left_recursion_cases :
-    forall (gr : grammar)
-           (pm : production_map)
-           (hp : production_map_correct pm gr)
-           (cm : closure_map)
-           (ps : prefix_stack)
-           (ss : suffix_stack)
-           (ts : list token)
-           (av : NtSet.t)
-           (un : bool)
-           (ca : cache)
-           (hc : cache_stores_target_results gr pm hp cm ca)
-           (ha : Acc lex_nat_triple (meas gr ss ts av))
-           (x  : nonterminal),
-      multistep gr pm hp cm ps ss ts vi un ca hc ha = Error (LeftRecursion x)
-      -> step gr pm hp cm ps ss ts vi un ca = StepError (LeftRecursion x)
-         \/ (exists ps' ss' ts' vi' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' vi' un' ca'
-                /\ multistep gr pm hp cm ps' ss' ts' vi' un' ca' hc' ha' = Error (LeftRecursion x)).
-  Proof.
-    intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ _ _ hm); auto.
-  Qed.
-
-  Lemma multistep_prediction_error_cases :
-    forall (gr : grammar)
-           (pm : production_map)
-           (hp : production_map_correct pm gr)
-           (cm : closure_map)
-           (ps : prefix_stack)
-           (ss : suffix_stack)
-           (ts : list token)
-           (av : NtSet.t)
-           (un : bool)
-           (ca : cache)
-           (hc : cache_stores_target_results gr pm hp cm ca)
-           (ha : Acc lex_nat_triple (meas gr ss ts av))
-           (e  : prediction_error),
-      multistep gr pm hp cm ps ss ts vi un ca hc ha = Error (PredictionError e)
-      -> step gr pm hp cm ps ss ts vi un ca = StepError (PredictionError e)
-         \/ (exists ps' ss' ts' vi' un' ca' hc' ha',
-                step gr pm hp cm ps ss ts vi un ca = StepK ps' ss' ts' vi' un' ca'
-                /\ multistep gr pm hp cm ps' ss' ts' vi' un' ca' hc' ha' = Error (PredictionError e)).
-  Proof.
-    intros ? ? ? ? ? ? ? ? ? ? ? ? ? hm; subst.
-    destruct (multistep_cases _ _ _ _ _ _ _ _ _ _ _ _ _ hm); auto.
-  Qed.
- *)
   
   Lemma cache_invar_starts_true :
     forall pm cm,

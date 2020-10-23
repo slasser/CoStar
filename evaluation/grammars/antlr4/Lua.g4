@@ -1,193 +1,113 @@
 /*
-BSD License
-
-Copyright (c) 2013, Kazunori Sakamoto
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
-3. Neither the NAME of Rainer Schuster nor the NAMEs of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-This grammar file derived from:
-
-    Lua 5.2 Reference Manual
-    http://www.lua.org/manual/5.2/manual.html
-
-    Lua 5.1 grammar written by Nicolai Mainiero
-    http://www.antlr3.org/grammar/1178608849736/Lua.g
+ * Lua 5.1 grammar
+ * 
+ * Nicolai Mainiero
+ * May 2007
+ * 
+ * This is a Lua (http://www.lua.org) grammar for the version 5.1 for ANTLR 3.
+ * I tested it with basic and extended examples and it worked fine. It is also used
+ * for LunarEclipse (http://lunareclipse.sf.net) a Lua editor based on Eclipse.
+ * 
+ * Thanks to Johannes Luber and Gavin Lambert who helped me with some mutually left recursion.
+ *  
  */
 
 grammar Lua;
 
-chunk
-    : block
-    ;
+options {
+  backtrack=true;
+}
 
-block
-    : stat* retstat?
-    ;
+chunk : (stat (';')?)* (laststat (';')?)?;
 
-stat
-    : ';'
-    | varlist '=' explist
-    | functioncall
-    | label
-    | 'break'
-    | 'goto' NAME
-    | 'do' block 'end'
-    | 'while' exp 'do' block 'end'
-    | 'repeat' block 'until' exp
-    | 'if' exp 'then' block ('elseif' exp 'then' block)* ('else' block)? 'end'
-    | 'for' NAME '=' exp ',' exp (',' exp)? 'do' block 'end'
-    | 'for' namelist 'in' explist 'do' block 'end'
-    | 'function' funcname funcbody
-    | 'local' 'function' NAME funcbody
-    | 'local' namelist ('=' explist)?
-    ;
+block : chunk;
 
-retstat
-    : 'return' explist? ';'?
-    ;
+stat :  varlist1 '=' explist1 | 
+	functioncall | 
+	'do' block 'end' | 
+	'while' exp 'do' block 'end' | 
+	'repeat' block 'until' exp | 
+	'if' exp 'then' block ('elseif' exp 'then' block)* ('else' block)? 'end' | 
+	'for' NAME '=' exp ',' exp (',' exp)? 'do' block 'end' | 
+	'for' namelist 'in' explist1 'do' block 'end' | 
+	'function' funcname funcbody | 
+	'local' 'function' NAME funcbody | 
+	'local' namelist ('=' explist1)? ;
 
-label
-    : '::' NAME '::'
-    ;
+laststat : 'return' (explist1)? | 'break';
 
-funcname
-    : NAME ('.' NAME)* (':' NAME)?
-    ;
+funcname : NAME ('.' NAME)* (':' NAME)? ;
 
-varlist
-    : var (',' var)*
-    ;
+varlist1 : var (',' var)*;
 
-namelist
-    : NAME (',' NAME)*
-    ;
 
-explist
-    : exp (',' exp)*
-    ;
+namelist : NAME (',' NAME)*;
 
-exp
-    : 'nil' | 'false' | 'true' | number | string | '...' | functiondef
-    | prefixexp | tableconstructor | exp binop exp | unop exp
-	;
+explist1 : (exp ',')* exp;
 
-var
-    : (NAME | '(' exp ')' varSuffix) varSuffix*
-    ;
+exp :  ('nil' | 'false' | 'true' | number | string | '...' | function | prefixexp | tableconstructor | unop exp) (binop exp)* ;
 
-prefixexp
-    : varOrExp nameAndArgs*
-    ;
+var: (NAME | '(' exp ')' varSuffix) varSuffix*;
 
-functioncall
-    : varOrExp nameAndArgs+
-    ;
+prefixexp: varOrExp nameAndArgs*;
 
-varOrExp
-    : var | '(' exp ')'
-    ;
-
-nameAndArgs
-    : (':' NAME)? args
-    ;
-
-varSuffix
-    : nameAndArgs* ('[' exp ']' | '.' NAME)
-    ;
+functioncall: varOrExp nameAndArgs+;
 
 /*
-var
-    : NAME | prefixexp '[' exp ']' | prefixexp '.' NAME
-    ;
+var :  NAME | prefixexp '[' exp ']' | prefixexp '.' NAME; 
 
-prefixexp
-    : var | functioncall | '(' exp ')'
-    ;
+prefixexp : var | functioncall | '(' exp ')';
 
-functioncall
-    : prefixexp args | prefixexp ':' NAME args 
-    ;
+functioncall :  prefixexp args | prefixexp ':' NAME args ;
 */
 
-args
-    : '(' explist? ')' | tableconstructor | string
-    ;
+varOrExp: var | '(' exp ')';
 
-functiondef
-    : 'function' funcbody
-    ;
+nameAndArgs: (':' NAME)? args;
 
-funcbody
-    : '(' parlist? ')' block 'end'
-    ;
+varSuffix: nameAndArgs* ('[' exp ']' | '.' NAME);
 
-parlist
-    : namelist (',' '...')? | '...'
-    ;
+args :  '(' (explist1)? ')' | tableconstructor | string ;
 
-tableconstructor
-    : '{' fieldlist? '}'
-    ;
+function : 'function' funcbody;
 
-fieldlist
-    : field (fieldsep field)* fieldsep?
-    ;
+funcbody : '(' (parlist1)? ')' block 'end';
 
-field
-    : '[' exp ']' '=' exp | NAME '=' exp | exp
-    ;
+parlist1 : namelist (',' '...')? | '...';
 
-fieldsep
-    : ',' | ';'
-    ;
+tableconstructor : '{' (fieldlist)? '}';
 
-binop
-    : '+' | '-' | '*' | '/' | '^' | '%' | '..'
-    | '<' | '<=' | '>' | '>=' | '==' | '~='
-    | 'and' | 'or'
-    ;
+fieldlist : field (fieldsep field)* (fieldsep)?;
 
-unop
-    : '-' | 'not' | '#'
-    ;
+field : '[' exp ']' '=' exp | NAME '=' exp | exp;
 
-number
-    : INT | HEX | FLOAT | HEX_FLOAT
-    ;
+fieldsep : ',' | ';';
 
-string
-    : NORMALSTRING | CHARSTRING | LONGSTRING
-    ;
+binop : '+' | '-' | '*' | '/' | '^' | '%' | '..' | 
+		 '<' | '<=' | '>' | '>=' | '==' | '~=' | 
+		 'and' | 'or';
+
+unop : '-' | 'not' | '#';
+
+number : INT | FLOAT | EXP | HEX;
+
+string	: NORMALSTRING | CHARSTRING | LONGSTRING;
+
 
 // LEXER
 
-NAME
-    : [a-zA-Z_][a-zA-Z_0-9]*
-    ;
+NAME	:('a'..'z'|'A'..'Z'|'_')(options{greedy=true;}:	'a'..'z'|'A'..'Z'|'_'|'0'..'9')*
+	;
+
+INT	: ('0'..'9')+;
+
+FLOAT 	:INT '.' INT ;
+
+EXP	: (INT| FLOAT) ('E'|'e') ('-')? INT;
+
+HEX	:'0x' ('0'..'9'| 'a'..'f')+ ;
+
+	
 
 NORMALSTRING
     :  '"' ( EscapeSequence | ~('\\'|'"') )* '"' 
@@ -198,80 +118,43 @@ CHARSTRING
    ;
 
 LONGSTRING
-    :	'[' '='* '[' .*? ']' '='* ']'	// TODO: the numbers of '=' should be same
-    ;
-
-INT
-    : Digit+
-    ;
-
-HEX
-    : '0' [xX] HexDigit+
-    ;
-
-FLOAT
-    :   Digit+ '.' Digit* ExponentPart?
-    |   '.' Digit+ ExponentPart?
-    |   Digit+ ExponentPart
-    ;
-
-HEX_FLOAT
-    :   '0' [xX] HexDigit+ '.' HexDigit* HexExponentPart?
-    |   '0' [xX] '.' HexDigit+ HexExponentPart?
-    |   '0' [xX] HexDigit+ HexExponentPart
-    ;
-
-fragment
-ExponentPart
-    :   [eE] [+-]? Digit+
-    ;
-
-fragment
-HexExponentPart
-    :   [pP] [+-]? Digit+
-    ;
+	:	'['('=')*'[' ( EscapeSequence | ~('\\'|']') )* ']'('=')*']'
+	;
 
 fragment
 EscapeSequence
-    :   '\\' [abfnrtvz"'\\]
-    |   DecimalEscape
-    |   HexEscape
+    :   '\\' ('b'|'t'|'n'|'f'|'r'|'\"'|'\''|'\\')
+    |   UnicodeEscape
+    |   OctalEscape
     ;
     
 fragment
-DecimalEscape
-    :   '\\' Digit
-    |   '\\' Digit Digit
-    |   '\\' [0-2] Digit Digit
+OctalEscape
+    :   '\\' ('0'..'3') ('0'..'7') ('0'..'7')
+    |   '\\' ('0'..'7') ('0'..'7')
+    |   '\\' ('0'..'7')
     ;
     
 fragment
-HexEscape
-    :   '\\' 'x' HexDigit HexDigit
+UnicodeEscape
+    :   '\\' 'u' HexDigit HexDigit HexDigit HexDigit
     ;
-
+    
 fragment
-Digit
-    :   [0-9]
-    ;
+HexDigit : ('0'..'9'|'a'..'f'|'A'..'F') ;
 
-fragment
-HexDigit
-    :   [0-9a-fA-F]
-    ;
 
 COMMENT
-    : '--[[' .*? ']]'-> channel(HIDDEN)
+    :   '--[[' ( options {greedy=false;} : . )* ']]' {skip();}
     ;
     
 LINE_COMMENT
-    : '--' ~('\n'|'\r')* '\r'? '\n'-> channel(HIDDEN)
-    ;    
-    
-WS  
-    : [ \t\u000C]+ -> skip
+    : '--' ~('\n'|'\r')* '\r'? '\n' {skip();}
     ;
     
-NEWLINE
-    : '\r'? '\n' -> skip
+    
+WS  :  (' '|'\t'|'\u000C') {skip();}
     ;
+    
+NEWLINE	: ('\r')? '\n' {skip();}
+	;

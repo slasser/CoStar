@@ -10,7 +10,7 @@ SEXP        := sexp
 COQ_BNF     := coq_bnf
 OCAML_BNF   := ocaml_bnf
 
-GRAMMAR_NAMES := Lua Json Dot Erlang
+GRAMMAR_NAMES := Python3 Json Dot Xml # Erlang Lua
 
 $(GRAMMARS)/normalize_rules.exe: $(GRAMMARS)/normalize_rules.ml
 	cd $(GRAMMARS) && dune build --profile release normalize_rules.exe \
@@ -49,7 +49,7 @@ TOKENIZED := tokenized
 
 $(DATA)/TokenizeTestData.class: $(DATA)/TokenizeTestData.java
 	cd $(DATA) \
-        && javac -cp ../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar TokenizeTestData.java
+        && javac -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar TokenizeTestData.java
 
 # Tokenize JSON data sets
 
@@ -124,6 +124,26 @@ $(DATA)/$(TOKENIZED)/$(LUA): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(LUA
         && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
            TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/Lua.g4 $(RAW)/$(LUA) $(TOKENIZED)/$(LUA)
 
+# Tokenize XML PLOS data
+
+XML_PLOS := xml_plos
+
+$(DATA)/$(TOKENIZED)/$(XML_PLOS): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(XML_PLOS)
+	cd $(DATA) \
+        && mkdir -p $(TOKENIZED)/$(XML_PLOS) \
+        && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
+           TokenizeTestData ../$(GRAMMARS)/$(ANTLR4)/XMLLexer.g4 $(RAW)/$(XML_PLOS) $(TOKENIZED)/$(XML_PLOS)
+
+# Tokenize Python3 data
+
+PYTHON3 := python3
+
+$(DATA)/$(TOKENIZED)/$(PYTHON3): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(PYTHON3)
+	cd $(DATA) \
+        && mkdir -p $(TOKENIZED)/$(PYTHON3) \
+        && java -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar \
+           TokenizeTestData python3 $(RAW)/$(PYTHON3) $(TOKENIZED)/$(PYTHON3)
+
 # RUN BENCHMARKS AND PLOT RESULTS
 
 RESULTS := results
@@ -155,6 +175,14 @@ bench-c-python: run_eval.exe $(DATA)/$(TOKENIZED)/$(C_PYTHON) $(RESULTS)/plot.py
 bench-lua: run_eval.exe $(DATA)/$(TOKENIZED)/$(LUA) $(RESULTS)/plot.py
 	./run_eval.exe -lua $(DATA)/$(TOKENIZED)/$(LUA) $(RESULTS)/$(LUA).json
 	cd $(RESULTS) && python plot.py $(LUA).json $(LUA).eps
+
+bench-xml-plos : run_eval.exe $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/plot.py
+	./run_eval.exe -xml $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/$(XML_PLOS).json
+	cd $(RESULTS) && python plot.py $(XML_PLOS).json $(XML_PLOS).eps
+
+bench-python3 : run_eval.exe $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/plot.py
+	./run_eval.exe -python3 $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/$(PYTHON3).json
+	cd $(RESULTS) && python plot.py $(PYTHON3).json $(PYTHON3).eps
 
 clean:
 	rm -f  $(GRAMMARS)/GrammarConverter.class

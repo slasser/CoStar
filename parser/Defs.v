@@ -180,12 +180,12 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Qed.
   
   (* Finite sets of nonterminals *)
-  Module NtSet        := FSetList.Make NT_as_UOT.
-  (*Module NtSet        := FSetAVL.Make NT_as_UOT.*)
-  Module Export NF    := FSetFacts.Facts NtSet.
-  Module Export NP    := FSetProperties.Properties NtSet.
-  Module Export NE    := FSetEqProperties.EqProperties NtSet.
-  Module Export ND    := FSetDecide.Decide NtSet.
+  (* Module NtSet   := FSetAVL.Make NT_as_UOT. -- performance is better with FSetList *)
+  Module NtSet      := FSetList.Make NT_as_UOT.
+  Module Export NF  := FSetFacts.Facts NtSet.
+  Module Export NP  := FSetProperties.Properties NtSet.
+  Module Export NE  := FSetEqProperties.EqProperties NtSet.
+  Module Export ND  := FSetDecide.Decide NtSet.
 
   (* Hide an alternative definition of "sum" from NtSet *)
   Definition sum := Datatypes.sum.
@@ -298,8 +298,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       NM.In x pm -> In x (lhss g).
 
     Definition production_map_sound (pm : production_map) (g : grammar) :=
-    forall x ys yss,
-      NM.MapsTo x yss pm -> In ys yss -> In (x, ys) g.
+      forall x ys yss,
+        NM.MapsTo x yss pm -> In ys yss -> In (x, ys) g.
 
   Definition production_map_complete (pm : production_map) (g : grammar) :=
     forall x ys,
@@ -671,6 +671,11 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition literal := string.
 
   Definition token   := (terminal * literal)% type.
+
+  Definition showToken (t : token) : string :=
+    match t with
+    | (a, l) => "(" ++ showT a ++ ", " ++ l ++ ")"
+    end.
 
   (* Parser return values *)
   Inductive tree    := Leaf : terminal -> literal -> tree

@@ -1,14 +1,14 @@
 module Sexp       = Core_kernel.Sexp
 module In_channel = Core_kernel.In_channel
-(****************************************************************************************)  
-(* CONVERT AN S-EXPRESSION REPRESENTATION OF AN ANTLR GRAMMAR TO AN EBNF DATA STRUCTURE *)
-(****************************************************************************************)  
+(*****************************************************************************************)  
+(* Convert an S-expression representation of an ANTLR4 grammar to an EBNF data structure *)
+(*****************************************************************************************)  
 let sexp_from_file (fname : string) : Sexp.t =
   Sexp.of_string (In_channel.read_all fname)
                    
 let get_name_and_rules_from_sexp_grammar (s : Sexp.t) : string * Sexp.t list =
   match s with
-  | Sexp.List [ Sexp.Atom "COMBINED_GRAMMAR"
+  | Sexp.List [ Sexp.Atom _
               ; Sexp.Atom name
               ; Sexp.List (Sexp.Atom "RULES" :: rules)
               ] -> (name, rules)
@@ -83,14 +83,13 @@ and ebnf_alt_of (s : Sexp.t) : ebnf_alt =
 
 let ebnf_rules_of_sexp_rule (s : Sexp.t) : ebnf_rule list =
   match get_rule_lhs_and_alts s with
-  | (lhs, alts) ->
-     List.map (fun a -> (lhs, ebnf_alt_of a)) alts
+  | (lhs, alts) -> List.map (fun a -> (lhs, ebnf_alt_of a)) alts
 
 let ebnf_grammar_of_rules (rules : Sexp.t list) : ebnf_grammar =
   List.concat (List.map ebnf_rules_of_sexp_rule rules)
-(****************************************************************************************)  
-(* CONVERT AN EBNF GRAMMAR TO BNF                                                       *)
-(****************************************************************************************)
+(**********************************)  
+(* Convert an EBNF grammar to BNF *)
+(**********************************)
 type symbol     = T of string
                 | NT of string
 and bnf_rule    = string * symbol list
@@ -141,10 +140,24 @@ let fresh_name (base : string) (ir : int ref) : string =
   let () = incr ir                        in
   s
 
-let fresh_optional_name () = fresh_name "optional" optional_count
-let fresh_star_name     () = fresh_name "star" star_count
-let fresh_plus_name     () = fresh_name "plus" plus_count
-let fresh_block_name    () = fresh_name "block" block_count
+let fresh_optional_name () = fresh_name "gensym_optional" optional_count
+let fresh_star_name     () = fresh_name "gensym_star" star_count
+let fresh_plus_name     () = fresh_name "gensym_plus" plus_count
+let fresh_block_name    () = fresh_name "gensym_block" block_count
+
+(* The next two functions allow us to avoid creating fresh nonterminals 
+   for some common EBNF patterns, reducing grammar size *)
+let rec no_ebnf_extensions (alt : ebnf_alt) : bool = 
+  match alt with
+  | [] -> true
+  | Terminal _ :: es    -> no_ebnf_extensions es
+  | NonTerminal _ :: es -> no_ebnf_extensions es
+  | _ -> false
+                 
+let extract_simple_singleton_alt (alts : ebnf_alt list) : ebnf_alt option =
+  match alts with
+  | [alt] -> if no_ebnf_extensions alt then Some alt else None
+  | _      -> None
                                  
 let normalize_ebnf_elt (e : ebnf_elt) : symbol * ebnf_rule list =
   match e with
@@ -155,25 +168,39 @@ let normalize_ebnf_elt (e : ebnf_elt) : symbol * ebnf_rule list =
   | Set mems      ->
      let b = fresh_block_name () in
      (NT b, List.map (fun m -> (b, [Terminal m])) mems)
-  | Optional alts ->
-     let o = fresh_optional_name () in
-     let b = fresh_block_name ()    in
-     (NT o, (o, []) :: (o, [NonTerminal b]) :: List.map (fun a -> (b, a)) alts)
   | Block alts ->
      let b = fresh_block_name () in
      (NT b, List.map (fun a -> (b, a)) alts)
+  | Optional alts ->
+     let o = fresh_optional_name () in
+     (match extract_simple_singleton_alt alts with
+      | Some ss_alt ->
+         (NT o, [(o, []) ; (o, ss_alt)])
+      | None -> 
+         let b = fresh_block_name ()    in
+         (NT o, (o, []) :: (o, [NonTerminal b]) :: List.map (fun a -> (b, a)) alts))
   | ZeroOrMore alts ->
      let s = fresh_star_name ()  in
-     let b = fresh_block_name () in
-     (NT s, (s, []) :: (s, [NonTerminal b; NonTerminal s]) :: List.map (fun a -> (b, a)) alts)
+     (match extract_simple_singleton_alt alts with
+      | Some ss_alt ->
+         (NT s, [(s, []) ; (s, ss_alt @ [NonTerminal s])])
+      | None -> 
+         let b = fresh_block_name () in
+         (NT s, (s, []) :: (s, [NonTerminal b; NonTerminal s]) :: List.map (fun a -> (b, a)) alts))
   | OneOrMore alts ->
      let p = fresh_plus_name ()  in
-     let b = fresh_block_name () in
-     (NT p, (p, [NonTerminal b]) :: (p, [NonTerminal b; NonTerminal p]) :: List.map (fun a -> (b, a)) alts)
+     let s = fresh_star_name ()  in
+     (match extract_simple_singleton_alt alts with
+      | Some ss_alt ->
+         (NT p, [(p, ss_alt @ [NonTerminal s]) ; (s, []) ; (s, ss_alt @ [NonTerminal s])])
+      | None ->
+         let b = fresh_block_name () in
+         (NT p, (p, [NonTerminal b; NonTerminal s]) :: (s, []) :: (s, [NonTerminal b; NonTerminal s]) ::
+                List.map (fun a -> (b, a)) alts))
                               
 let normalize_ebnf_rule ((lhs, rhs) : ebnf_rule) : bnf_rule * ebnf_rule list =
-  let prs             = List.map normalize_ebnf_elt rhs        in
-  let lhs'            = normalize_nonterminal_name lhs    in
+  let prs             = List.map normalize_ebnf_elt rhs                  in
+  let lhs'            = normalize_nonterminal_name lhs                   in
   let rhs', new_rules = List.map fst prs, List.concat (List.map snd prs) in
   ((lhs', rhs'), new_rules)
 
@@ -188,9 +215,9 @@ let bnf_rules_of_ebnf_rule (e : ebnf_rule) : bnf_rule list =
         
 let bnf_of (g : ebnf_grammar) : bnf_grammar =
   List.concat (List.map bnf_rules_of_ebnf_rule g)
-(****************************************************************************************)  
-(* ELIMINATE DIRECT LEFT RECURSION FROM A BNF GRAMMAR                                   *)
-(****************************************************************************************)
+(**********************************************************************************)  
+(* Eliminate direct left recursion from a BNF grammar (may not currently be used) *)
+(**********************************************************************************)
 let lhss (g : bnf_grammar) : string list =
   List.sort_uniq String.compare (List.map fst g)
 
@@ -213,7 +240,7 @@ let alphabetize_rhss (x : string) (rhss : symbol list list) : symbol list list *
 let leftrec_elim_count = ref 0
                              
 let elim_left_recursion' ((x, rhss) : string * symbol list list) : bnf_rule list =
-  let (alphas, betas) = alphabetize_rhss x rhss                              in
+  let (alphas, betas) = alphabetize_rhss x rhss in
   match alphas with
   | []     -> List.map (fun rhs -> (x, rhs)) rhss (* no left-recursive right-hand sides *)
   | _ :: _ ->
@@ -225,9 +252,9 @@ let elim_left_recursion' ((x, rhss) : string * symbol list list) : bnf_rule list
 
 let elim_left_recursion (g : bnf_grammar) : bnf_grammar =
   List.concat (List.map elim_left_recursion' (group_by_lhs g))
-(****************************************************************************************)  
-(* CONVERT A BNF GRAMMAR TO A STRING REPRESENTING A COQ MODULE FOR THAT GRAMMAR         *)
-(****************************************************************************************)
+(********************************************************************************)  
+(* Convert a BNF grammar to a string representing a Coq module for that grammar *)
+(********************************************************************************)
 let rec rhs_terminals (ys : symbol list) : string list =
   match ys with
   | []          -> []
@@ -576,15 +603,18 @@ let coq_grammar_file_contents (g : bnf_grammar) (g_name : string) : string =
                 ; coq_export_pg
                 ; coq_grammar_def g_name g
                 ]
-(****************************************************************************************)  
-(* FULL PIPELINE: CONVERT AN S-EXPRESSION ANTLR GRAMMAR TO A COQ SOURCE FILE            *)
-(****************************************************************************************)
+(******************************************************************************)  
+(* Full pipeline: convert an S-expression ANTLR4 grammar to a Coq source file *)
+(******************************************************************************)
 let main (sexp_fname : string) (coq_fname : string) : unit =
   let s  = sexp_from_file sexp_fname                                           in
   let (g_name, sexp_rules) = get_name_and_rules_from_sexp_grammar s            in
   let g = sexp_rules |> ebnf_grammar_of_rules |> bnf_of |> elim_left_recursion in
   let oc = open_out coq_fname                                                  in
-  let _  = output_string oc (coq_grammar_file_contents g g_name)               in
+  let () = output_string oc (coq_grammar_file_contents g g_name)               in
   close_out oc
 
-let () = main Sys.argv.(1) Sys.argv.(2)
+let () =
+  let sexp_fname = Sys.argv.(1) in
+  let coq_fname  = Sys.argv.(2) in
+  main sexp_fname coq_fname

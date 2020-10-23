@@ -44,7 +44,7 @@ element     :   '<' Name attribute* '>' content '<' '/' Name '>'
 
 reference   :   EntityRef | CharRef ;
 
-attribute   :   Name '=' STRING ; // Our STRING is AttValue in spec
+attribute   :   Name EQUALS STRING ; // Our STRING is AttValue in spec
 
 /** ``All text that is not markup constitutes the character data of
  *  the document.''

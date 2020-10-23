@@ -57,5 +57,12 @@
     "=:=" : "equal_colon_equal",
     "=/=" : "equal_div_equal",
     ":-"  : "colon_minus",
-    "~="  : "tilde_equal"
+    "~="  : "tilde_equal",
+    "**"  : "star_star",
+    "@="  : "at_equal",
+    "**=" : "star_star_equal",
+    "//=" : "fslash_fslash_equal",
+    "<>"  : "langle_rangle",
+    "//"  : "fslash_fslash",
+    "\n"  : "newline"
 }

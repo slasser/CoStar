@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.LexerInterpreter;
@@ -58,6 +59,19 @@ public class TokenizeTestData {
 	return new JSONObject().put("terminal", terminal)
 	                       .put("literal" , literal);
     }
+
+    static JSONObject jsonReprOfPythonToken(Vocabulary v, Token t) {
+	String literal = t.getText();
+	String terminal;
+	String symbolicName = v.getSymbolicName(t.getType());
+	if (symbolicName == null) {
+	    terminal = "Lit_" + normalize(literal);
+	} else {
+	    terminal = symbolicName;
+	}
+	return new JSONObject().put("terminal", terminal)
+	                       .put("literal" , literal);
+    }
     
     static JSONArray getJsonTokens(String lexerPath, String dataPath) throws Exception {
 	LexerGrammar lg = new LexerGrammar(readFile(lexerPath));
@@ -68,12 +82,30 @@ public class TokenizeTestData {
 	                                             .map(t -> jsonTokenRepr(v, t)).collect(Collectors.toList());
 	return new JSONArray(jsonTokens);
     }
+
+    static JSONArray getJsonTokensOfPython(String dataPath) throws Exception {
+	Python3Lexer l = new Python3Lexer(CharStreams.fromFileName(dataPath));
+	Python3Parser p = new Python3Parser(new CommonTokenStream(l));
+	Vocabulary v = p.getVocabulary();
+	List<? extends Token> tokens = l.getAllTokens();
+	List<JSONObject> jsonTokens = tokens.stream().filter(t -> t.getChannel() == Token.DEFAULT_CHANNEL)
+	                                             .map(t -> jsonTokenRepr(v, t)).collect(Collectors.toList());
+	return new JSONArray(jsonTokens);
+    }
+	
+    static String PYTHON3 = "python3";
     
     static void tokenizeAllFiles(String lexerPath, String dataDir, String tokensDir) throws Exception {
 	for (File f : new File(dataDir).listFiles()) {
-	    JSONArray tokens = getJsonTokens(lexerPath, f.getPath());
+	    JSONArray tokens;
+	    if (lexerPath.equals(PYTHON3)) {
+		tokens = getJsonTokensOfPython(f.getPath());
+	    } else {
+		tokens = getJsonTokens(lexerPath, f.getPath());
+	    }
 	    System.out.print("tokenizing : " + f.getName() + "\n# tokens   : " + tokens.length() + "\n***\n");
-	    String tokensPath = tokensDir + "/" + f.getName().split("\\.")[0] + ".json";
+	    String fname = f.getName();
+	    String tokensPath = tokensDir + "/" + fname.substring(0, fname.lastIndexOf('.')) + ".json";
 	    PrintWriter writer = new PrintWriter(tokensPath, "UTF-8");
 	    writer.print(tokens.toString(4));
 	    writer.close();
