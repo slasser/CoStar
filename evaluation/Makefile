@@ -10,7 +10,7 @@ SEXP        := sexp
 COQ_BNF     := coq_bnf
 OCAML_BNF   := ocaml_bnf
 
-GRAMMAR_NAMES := Python3 Json Dot Xml # Erlang Lua
+GRAMMAR_NAMES := Python3 Json Dot Xml
 
 $(GRAMMARS)/normalize_rules.exe: $(GRAMMARS)/normalize_rules.ml
 	cd $(GRAMMARS) && dune build --profile release normalize_rules.exe \
@@ -47,7 +47,12 @@ DATA      := data
 RAW       := raw
 TOKENIZED := tokenized
 
-$(DATA)/TokenizeTestData.class: $(DATA)/TokenizeTestData.java
+$(DATA)/Python3Lexer.java $(DATA)/Python3Parser.java: $(GRAMMARS)/$(ANTLR4)/Python3.g4
+	cp $(GRAMMARS)/$(ANTLR4)/Python3.g4 $(DATA) \
+        && cd $(DATA) \
+        && java -jar ../resources/antlr-4.8-complete.jar Python3.g4
+
+$(DATA)/TokenizeTestData.class: $(DATA)/Python3Lexer.java $(DATA)/Python3Parser.java $(DATA)/TokenizeTestData.java
 	cd $(DATA) \
         && javac -cp .:../resources/antlr-4.8-complete.jar:../resources/json-20200518.jar TokenizeTestData.java
 
@@ -193,6 +198,7 @@ clean:
 	rm -rf $(BENCHMARKING)/_build
 	find   $(BENCHMARKING) -type f -not -name "dune" -not -name "run_eval.ml" -delete
 	rm -f  run_eval.exe
+	rm -f  $(DATA)/Python3*
 	rm -f  $(DATA)/TokenizeTestData.class
 	rm -rf $(DATA)/$(TOKENIZED)
 	find   $(RESULTS) -type f -not -name "plot.py" -delete
