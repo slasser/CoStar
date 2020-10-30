@@ -586,7 +586,7 @@ let coq_export_pg : string =
 let coq_imports : string =
   String.concat "\n" [ "Require Import OrderedType OrderedTypeAlt OrderedTypeEx."
                      ; "Require Import List String ExtrOcamlBasic ExtrOcamlString."
-                     ; "Require Import GallStar.Defs GallStar.Main GallStar.Orders."
+                     ; "Require Import CoStar.Defs CoStar.Main CoStar.Orders."
                      ; "Import ListNotations."
                      ; "Open Scope list_scope."
                      ; "Open Scope string_scope."

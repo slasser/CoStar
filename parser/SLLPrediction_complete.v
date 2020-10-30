@@ -1,6 +1,6 @@
 Require Import List.
-Require Import GallStar.SLLPrediction_error_free.
-Require Import GallStar.Tactics.
+Require Import CoStar.SLLPrediction_error_free.
+Require Import CoStar.Tactics.
 Import ListNotations.
 
 Module SllPredictionCompleteFn (Import D : Defs.T).

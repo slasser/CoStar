@@ -1,5 +1,5 @@
 Require Import List OrderedType OrderedTypeAlt OrderedTypeEx.
-Require Import GallStar.Tactics.
+Require Import CoStar.Tactics.
 Import ListNotations.
 
 Module UOT_Facts (U : UsualOrderedType).

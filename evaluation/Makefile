@@ -26,9 +26,9 @@ $(GRAMMARS)/$(COQ_BNF): $(GRAMMARS)/normalize_rules.exe $(GRAMMARS)/$(SEXP)
 $(GRAMMARS)/$(OCAML_BNF): $(GRAMMARS)/$(COQ_BNF)
 	mkdir -p $(GRAMMARS)/$(OCAML_BNF)
 	cd $(GRAMMARS)/$(COQ_BNF)  && \
-        for VFILE in *.v; do coqc -Q ../../../parser GallStar $${VFILE}; done && \
+        for VFILE in *.v; do coqc -Q ../../../parser CoStar $${VFILE}; done && \
 	echo "Require Extraction.\nRequire Import $(GRAMMAR_NAMES).\nExtraction Blacklist List String.\nSeparate Extraction $(GRAMMAR_NAMES)." > ExtractGrammars.v && \
-	coqc -Q ../../../parser GallStar ExtractGrammars.v && \
+	coqc -Q ../../../parser CoStar ExtractGrammars.v && \
 	mv *.ml *.mli ../$(OCAML_BNF)
 
 # BUILD THE EVALUATION SCRIPT

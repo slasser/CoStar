@@ -1,4 +1,4 @@
--R . GallStar
+-R . CoStar
 
 Tactics.v
 Utils.v

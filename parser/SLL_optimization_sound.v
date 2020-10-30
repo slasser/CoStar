@@ -1,8 +1,8 @@
 Require Import List Relation_Operators Operators_Properties.
-Require Import GallStar.Lex.
-Require Import GallStar.SLLPrediction.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.Lex.
+Require Import CoStar.SLLPrediction.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module SllOptimizationSoundFn (Import D : Defs.T).

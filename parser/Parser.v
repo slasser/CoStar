@@ -1,10 +1,10 @@
 Require Import FMaps Omega PeanoNat String. 
-Require Import GallStar.Defs.
-Require Import GallStar.Lex.
-Require Import GallStar.SLLPrediction_complete.
-Require Import GallStar.Tactics.
-Require Import GallStar.Termination.
-Require Import GallStar.Utils.
+Require Import CoStar.Defs.
+Require Import CoStar.Lex.
+Require Import CoStar.SLLPrediction_complete.
+Require Import CoStar.Tactics.
+Require Import CoStar.Termination.
+Require Import CoStar.Utils.
 Import ListNotations.
 Open Scope list_scope.
 Open Scope string_scope.

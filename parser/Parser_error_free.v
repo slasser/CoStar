@@ -1,10 +1,10 @@
 Require Import List.
-Require Import GallStar.Defs.
-Require Import GallStar.Lex.
-Require Import GallStar.Parser_sound.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
-Require Import GallStar.LLPrediction_error_free.
+Require Import CoStar.Defs.
+Require Import CoStar.Lex.
+Require Import CoStar.Parser_sound.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
+Require Import CoStar.LLPrediction_error_free.
 Import ListNotations.
 
 Module ParserErrorFreeFn (Import D : Defs.T).

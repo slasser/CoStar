@@ -1,7 +1,7 @@
 Require Import Arith List Omega.
-Require Import GallStar.Defs.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.Defs.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module TerminationFn (Export D : Defs.T).

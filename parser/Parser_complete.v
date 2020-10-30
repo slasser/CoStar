@@ -1,8 +1,8 @@
 Require Import Bool List String.
-Require Import GallStar.Lex.
-Require Import GallStar.Parser_error_free.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.Lex.
+Require Import CoStar.Parser_error_free.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module ParserCompleteFn (Import D : Defs.T).

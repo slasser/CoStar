@@ -1,9 +1,9 @@
 Require Import Arith Bool FMaps List MSets Omega PeanoNat Program.Wf String.
-Require Import GallStar.Defs.
-Require Import GallStar.Lex.
-Require Import GallStar.Tactics.
-Require Import GallStar.Termination.
-Require Import GallStar.Utils.
+Require Import CoStar.Defs.
+Require Import CoStar.Lex.
+Require Import CoStar.Tactics.
+Require Import CoStar.Termination.
+Require Import CoStar.Utils.
 Import ListNotations.
 Open Scope list_scope.
 

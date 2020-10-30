@@ -1,9 +1,9 @@
 Require Import List.
-Require Import GallStar.Defs.
-Require Import GallStar.Lex.
-Require Import GallStar.LLPrediction.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.Defs.
+Require Import CoStar.Lex.
+Require Import CoStar.LLPrediction.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module LLPredictionErrorFreeFn (Import D : Defs.T).

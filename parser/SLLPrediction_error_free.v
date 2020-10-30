@@ -1,8 +1,8 @@
 Require Import List.
-Require Import GallStar.Lex.
-Require Import GallStar.SLL_optimization_sound.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.Lex.
+Require Import CoStar.SLL_optimization_sound.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module SllPredictionErrorFreeFn (Import D : Defs.T).

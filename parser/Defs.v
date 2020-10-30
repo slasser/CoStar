@@ -1,8 +1,8 @@
 Require Import FSets FSets.FMapAVL List Omega String.
 Require Import CoLoR.Util.FGraph.TransClos.
-Require Import GallStar.Orders.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.Orders.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 (* Types of grammar symbols; the user provides these at grammar definition time *)

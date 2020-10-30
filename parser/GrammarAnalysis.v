@@ -1,7 +1,7 @@
 Require Import List MSets Relation_Operators Wf_nat.
-Require Import GallStar.LLPrediction_complete.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.LLPrediction_complete.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 Require Import FSets FSets.FMapAVL FSets.FMapFacts.
 Require Import CoLoR.Util.FGraph.TransClos.

@@ -1,9 +1,9 @@
 Require Import FMaps List FSets Program.Wf.
-Require Import GallStar.GrammarAnalysis.
-Require Import GallStar.Lex.
-Require Import GallStar.Orders.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.GrammarAnalysis.
+Require Import CoStar.Lex.
+Require Import CoStar.Orders.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module SllPredictionFn (Import D : Defs.T).

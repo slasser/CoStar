@@ -1,5 +1,5 @@
 Require Import List Omega Relations Relation_Operators.
-Require Import GallStar.Tactics.
+Require Import CoStar.Tactics.
         Import ListNotations.
 
 (* STANDARD LIBRARY-LIKE DEFINITIONS *)

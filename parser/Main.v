@@ -1,11 +1,11 @@
 Require Import List String.
-Require Import GallStar.Defs.
-Require Import GallStar.Parser.
-Require Import GallStar.Parser_sound.
-Require Import GallStar.Parser_error_free.
-Require Import GallStar.Parser_complete.
-Require Import GallStar.Tactics.
-Require Import GallStar.Utils.
+Require Import CoStar.Defs.
+Require Import CoStar.Parser.
+Require Import CoStar.Parser_sound.
+Require Import CoStar.Parser_error_free.
+Require Import CoStar.Parser_complete.
+Require Import CoStar.Tactics.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module Make (Export D : Defs.T).

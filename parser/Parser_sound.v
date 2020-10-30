@@ -1,10 +1,10 @@
 Require Import Arith Bool List.
-Require Import GallStar.Defs.
-Require Import GallStar.Lex.
-Require Import GallStar.Parser.
-Require Import GallStar.Tactics.
-Require Import GallStar.Termination.
-Require Import GallStar.Utils.
+Require Import CoStar.Defs.
+Require Import CoStar.Lex.
+Require Import CoStar.Parser.
+Require Import CoStar.Tactics.
+Require Import CoStar.Termination.
+Require Import CoStar.Utils.
 Import ListNotations.
 
 Module ParserSoundFn (Import D : Defs.T).
