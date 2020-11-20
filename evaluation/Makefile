@@ -155,39 +155,39 @@ RESULTS := results
 
 bench-json-cities: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_CITIES) $(RESULTS)/plot.py
 	./run_eval.exe -json $(DATA)/$(TOKENIZED)/$(JSON_CITIES) $(RESULTS)/$(JSON_CITIES).json
-	cd $(RESULTS) && python plot.py $(JSON_CITIES).json $(JSON_CITIES).eps
+	cd $(RESULTS) && python3.7 plot.py $(JSON_CITIES).json $(JSON_CITIES).eps
 
 bench-json-nobel: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
 	./run_eval.exe -json $(DATA)/$(TOKENIZED)/$(JSON_NOBEL) $(RESULTS)/$(JSON_NOBEL).json
-	cd $(RESULTS) && python plot.py $(JSON_NOBEL).json $(JSON_NOBEL).eps
+	cd $(RESULTS) && python3.7 plot.py $(JSON_NOBEL).json $(JSON_NOBEL).eps
 
 bench-dot: run_eval.exe $(DATA)/$(TOKENIZED)/$(DOT)
 	./run_eval.exe -dot $(DATA)/$(TOKENIZED)/$(DOT) $(RESULTS)/$(DOT).json
-	cd $(RESULTS) && python plot.py $(DOT).json $(DOT).eps
+	cd $(RESULTS) && python3.7 plot.py $(DOT).json $(DOT).eps
 
 bench-erlang: run_eval.exe $(DATA)/$(TOKENIZED)/$(ERLANG)
 	./run_eval.exe -erlang $(DATA)/$(TOKENIZED)/$(ERLANG) $(RESULTS)/$(ERLANG).json
-	cd $(RESULTS) && python plot.py $(ERLANG).json $(ERLANG).eps
+	cd $(RESULTS) && python3.7 plot.py $(ERLANG).json $(ERLANG).eps
 
 bench-erlang-minimal: run_eval.exe $(DATA)/$(TOKENIZED)/$(ERLANG_MINIMAL)
 	./run_eval.exe -erlang $(DATA)/$(TOKENIZED)/$(ERLANG_MINIMAL) $(RESULTS)/$(ERLANG_MINIMAL).json
-	cd $(RESULTS) && python plot.py $(ERLANG_MINIMAL).json $(ERLANG_MINIMAL).eps
+	cd $(RESULTS) && python3.7 plot.py $(ERLANG_MINIMAL).json $(ERLANG_MINIMAL).eps
 
 bench-c-python: run_eval.exe $(DATA)/$(TOKENIZED)/$(C_PYTHON) $(RESULTS)/plot.py
 	./run_eval.exe -c $(DATA)/$(TOKENIZED)/$(C_PYTHON) $(RESULTS)/$(C_PYTHON).json
-	cd $(RESULTS) && python plot.py $(C_PYTHON).json $(C_PYTHON).eps
+	cd $(RESULTS) && python3.7 plot.py $(C_PYTHON).json $(C_PYTHON).eps
 
 bench-lua: run_eval.exe $(DATA)/$(TOKENIZED)/$(LUA) $(RESULTS)/plot.py
 	./run_eval.exe -lua $(DATA)/$(TOKENIZED)/$(LUA) $(RESULTS)/$(LUA).json
-	cd $(RESULTS) && python plot.py $(LUA).json $(LUA).eps
+	cd $(RESULTS) && python3.7 plot.py $(LUA).json $(LUA).eps
 
 bench-xml-plos : run_eval.exe $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/plot.py
 	./run_eval.exe -xml $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/$(XML_PLOS).json
-	cd $(RESULTS) && python plot.py $(XML_PLOS).json $(XML_PLOS).eps
+	cd $(RESULTS) && python3.7 plot.py $(XML_PLOS).json $(XML_PLOS).eps
 
 bench-python3 : run_eval.exe $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/plot.py
 	./run_eval.exe -python3 $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/$(PYTHON3).json
-	cd $(RESULTS) && python plot.py $(PYTHON3).json $(PYTHON3).eps
+	cd $(RESULTS) && python3.7 plot.py $(PYTHON3).json $(PYTHON3).eps
 
 clean:
 	rm -f  $(GRAMMARS)/GrammarConverter.class

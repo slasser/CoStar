@@ -20,12 +20,12 @@ let read_tokens_from_file (t_of_string : coq_string -> 'a) (fname : string) : ('
 (* Utilities for writing JSON representations of benchmark results     *)
 (***********************************************************************)
 type test_result =
-  { filename   : string
-  ; num_tokens : int
-  ; parse_time : float }
+  { filename    : string
+  ; num_tokens  : int
+  ; parse_times : float list}
 
-let mk_test_result (fn : string) (nt : int) (pt : float) : test_result =
-  {filename = fn; num_tokens = nt; parse_time = pt}
+let mk_test_result (fn : string) (nt : int) (pts : float list) : test_result =
+  {filename = fn; num_tokens = nt; parse_times = pts}
 
 (* Int.compare causes an "unbound value" error *)
 let cmp_test_results (tr : test_result) (tr' : test_result) : int =
@@ -33,8 +33,9 @@ let cmp_test_results (tr : test_result) (tr' : test_result) : int =
 
 let json_of_test_result (tr : test_result) : Yb.t =
   match tr with
-  | {filename = fn; num_tokens = nt; parse_time = pt} ->
-     `Assoc [("filename", `String fn); ("num_tokens", `Int nt); ("parse_time", `Float pt)]
+  | {filename = fn; num_tokens = nt; parse_times = pts} ->
+     let json_floats = List.map (fun pt -> `Float pt) pts
+     in  `Assoc [("filename", `String fn); ("num_tokens", `Int nt); ("parse_times", `List json_floats)]
 
 let json_of_test_results (trs : test_result list) : Yb.t =
   `List (List.map json_of_test_result (List.sort cmp_test_results trs))
@@ -53,7 +54,9 @@ let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
 
 let print_result (fname : string) (res : coq_string) =
   Printf.printf "***\nFile   : %s\nResult : %s \n%!" fname (str_of_coqstr res)
-        
+
+let num_trials = 5
+                
 let benchmark_parser_on_dataset parse grammar start_sym t_of_str show_result data_dir : test_result list =
   let parse'  = parse grammar start_sym in
   let files   = Sys.readdir data_dir    in
@@ -61,9 +64,13 @@ let benchmark_parser_on_dataset parse grammar start_sym t_of_str show_result dat
   for i = 0 to Array.length files - 1 do
     let fname       = files.(i)                                               in
     let ts          = read_tokens_from_file t_of_str (data_dir ^ "/" ^ fname) in
-    let (time, res) = benchmark parse' ts                                     in
-    let ()          = print_result fname (show_result res)                    in
-    results := (mk_test_result fname (List.length ts) time) :: !results
+    let parse_times = ref []                                                  in
+    (for j = 0 to num_trials - 1 do
+       let (time, res) = benchmark parse' ts in
+       if j = 0 then print_result fname (show_result res) else ();
+       parse_times := time :: !parse_times
+     done);
+    results := (mk_test_result fname (List.length ts) !parse_times) :: !results
   done;
   !results
 
