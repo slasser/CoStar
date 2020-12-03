@@ -59,7 +59,7 @@ $(DATA)/TokenizeTestData.class: $(DATA)/Python3Lexer.java $(DATA)/Python3Parser.
 # Tokenize JSON data sets
 
 JSON_CITIES := json_cities
-JSON_NOBEL  := json_nobel
+JSON_NOBEL  := json-nobel
 
 $(DATA)/$(TOKENIZED)/$(JSON_CITIES): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$(JSON_CITIES)
 	cd $(DATA) \
