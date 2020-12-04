@@ -8,14 +8,12 @@ A parser based on the ALL(*) algorithm, implemented and verified with Coq.
 To build the parser and the evaluation framework:
 
 ```
-cd <project_root>
 make
 ```
 
 To clean:
 
 ```
-cd <project_root>	
 make clean
 ```
 
@@ -44,11 +42,23 @@ Benchmark options:
 - ```dot```        : DOT data from the ANTLR 4 performance evaluation
 - ```python3```    : files from the Python 3.6.12 standard library
 
+### Parser Dependencies
 
+(Version numbers are for versions used during development/testing; other versions might work, too.)
 
+* Coq 8.11.2
 
+* CoLoR 1.7.0 (Coq Library on Rewriting and Termination)
 
+  * Installation:
 
+    ```
+        opam repo add coq-released https://coq.inria.fr/opam/released
+        opam update
+        opam install --jobs=$n coq-color
+    ```
+
+  * License: CeCILL (French free software license, GPL-compatible)
 
 
 
