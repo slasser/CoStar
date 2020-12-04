@@ -52,9 +52,9 @@ if (datafile=="dot.json"):
     plt.legend([l1,l2], ["Regression", "LOWESS"],prop={'size':11}, loc='lower right')
 
 lang = ""
-if datafile == "json_nobel.json":
+if datafile == "json-nobel.json":
     lang = "JSON"
-elif datafile == "xml_plos.json":
+elif datafile == "xml-plos.json":
     lang = "XML"
 elif datafile == "dot.json":
     lang = "DOT"

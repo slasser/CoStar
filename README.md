@@ -81,3 +81,13 @@ Benchmark options:
   * The JAR is available at the link above.
   * Note: the evaluation framework assumes that the ANTLR and JSON-Java JARs are located in `/usr/local/lib`. You can set a different location by editing `evaluation/Makefile`.
 
+* Python 3.7.9
+
+* numpy (Python library)
+
+* matplotlib (Python library)
+
+* statsmodels (Python library)
+
+
+

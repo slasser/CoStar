@@ -111,11 +111,13 @@ bench-json-nobel: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
 	cd $(RESULTS) && python3.7 plot.py $(JSON_NOBEL).json $(JSON_NOBEL).eps
 
 bench-xml-plos: run_eval.exe $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/plot.py
-	./run_eval.exe -xml $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/$(XML_PLOS).json
+	ulimit -s unlimited  \
+	&& ./run_eval.exe -xml $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/$(XML_PLOS).json
 	cd $(RESULTS) && python3.7 plot.py $(XML_PLOS).json $(XML_PLOS).eps
 
 bench-dot: run_eval.exe $(DATA)/$(TOKENIZED)/$(DOT)
-	./run_eval.exe -dot $(DATA)/$(TOKENIZED)/$(DOT) $(RESULTS)/$(DOT).json
+	ulimit -s unlimited \
+	&& ./run_eval.exe -dot $(DATA)/$(TOKENIZED)/$(DOT) $(RESULTS)/$(DOT).json
 	cd $(RESULTS) && python3.7 plot.py $(DOT).json $(DOT).eps
 
 bench-python3: run_eval.exe $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/plot.py
