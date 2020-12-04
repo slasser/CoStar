@@ -121,7 +121,8 @@ bench-dot: run_eval.exe $(DATA)/$(TOKENIZED)/$(DOT)
 	cd $(RESULTS) && python3.7 plot.py $(DOT).json $(DOT).eps
 
 bench-python3: run_eval.exe $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/plot.py
-	./run_eval.exe -python3 $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/$(PYTHON3).json
+	ulimit -s unlimited \
+	&& ./run_eval.exe -python3 $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/$(PYTHON3).json
 	cd $(RESULTS) && python3.7 plot.py $(PYTHON3).json $(PYTHON3).eps
 
 clean:
