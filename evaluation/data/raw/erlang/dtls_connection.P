@@ -1,6 +1,0 @@
--file("test/lib/ssl/src/dtls_connection.erl", 1).
-
--module(dtls_connection).
-
-
-

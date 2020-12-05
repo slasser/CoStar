@@ -1,1 +1,0 @@
-package.loaded["oil.component"] = require "loop.component.base"
