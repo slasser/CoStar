@@ -40,3 +40,4 @@ Makefile.conf
 
 *.class
 
+evaluation/saved_results
