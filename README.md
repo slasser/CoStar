@@ -96,7 +96,7 @@ The command above tokenizes the json-nobel data set (if it hasn't been tokenized
 Benchmark options:
 
 - ```json-nobel``` : Nobel Prize historical data in JSON format
-- ```xml-plos```   : PLoS journal articles with XML annotations
+- ```xml-plos```   : Public Library of Science journal articles with XML annotations
 - ```dot```        : DOT data from the ANTLR 4 performance evaluation
 - ```python3```    : files from the Python 3.6.12 standard library
 
