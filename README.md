@@ -22,7 +22,7 @@ A parser based on the ALL(*) algorithm, implemented and verified with Coq.
   ```
   opam repo add coq-released https://coq.inria.fr/opam/released
   opam update
-  opam install coq-color
+  opam install coq-color.1.7.0
   ```
 
   License: CeCILL (French free software license, GPL-compatible)
