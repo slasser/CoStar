@@ -48,29 +48,47 @@ Benchmark options:
 
 * Coq 8.11.2
 
+  ```
+  opam pin add coq 8.11.2
+  opam install coq
+  ```
+
 * [CoLoR 1.7.0](http://color.inria.fr/) (Coq Library on Rewriting and Termination)
 
-  * Installation:
+  ```
+  opam repo add coq-released https://coq.inria.fr/opam/released
+  opam update
+  opam install --jobs=$n coq-color
+  ```
 
-    ```
-        opam repo add coq-released https://coq.inria.fr/opam/released
-        opam update
-        opam install --jobs=$n coq-color
-    ```
-
-  * License: CeCILL (French free software license, GPL-compatible)
+  License: CeCILL (French free software license, GPL-compatible)
 
 ### Evaluation Framework Dependencies
 
 * OCaml 4.11.1+flambda
+  ```
+  opam switch create 4.11.1+flambda
+  ```
 
 * Dune 2.7.1
+  ```
+  opam pin add dune 2.7.1
+  opam install dune
+  ```
 
 * Core_kernel 0.14.0 (OCaml library)
-
+  ```
+  opam install core_kernel
+  
 * Yojson 1.7.0 (OCaml library)
+  ```
+  opam install yojson
+  ```
 
 * Java 8 (e.g., openjdk 1.8.0_275)
+  ```
+  sudo apt-get install openjdk-8-jdk
+  ```
 
 * [ANTLR 4.8](https://www.antlr.org)
 
@@ -82,12 +100,24 @@ Benchmark options:
   * Note: the evaluation framework assumes that the ANTLR and JSON-Java JARs are located in `/usr/local/lib`. You can set a different location by editing `evaluation/Makefile`.
 
 * Python 3.7.9
+  ```
+  sudo apt-get install python3.7
+  ```
 
 * numpy (Python library)
+  ```
+  pip3 install numpy
+  ```
 
 * matplotlib (Python library)
+  ```
+  pip3 install matplotlib
+  ```
 
 * statsmodels (Python library)
+  ```
+  pip3 install statsmodels
+  ```
 
 
 
