@@ -22,7 +22,7 @@ A parser based on the ALL(*) algorithm, implemented and verified with Coq.
   ```
   opam repo add coq-released https://coq.inria.fr/opam/released
   opam update
-  opam install coq-color
+  opam install coq-color.1.7.0
   ```
 
   License: CeCILL (French free software license, GPL-compatible)
@@ -49,7 +49,7 @@ A parser based on the ALL(*) algorithm, implemented and verified with Coq.
   * The JAR is available at the link above.
   * Note: the evaluation framework assumes that the ANTLR and JSON-Java JARs are located in `/usr/local/lib`. You can set a different location by editing `evaluation/Makefile`.
 
-* Python 3.7.9
+* Python 3.7
   ```
   sudo apt-get install python3.7
   ```
@@ -96,7 +96,7 @@ The command above tokenizes the json-nobel data set (if it hasn't been tokenized
 Benchmark options:
 
 - ```json-nobel``` : Nobel Prize historical data in JSON format
-- ```xml-plos```   : PLoS journal articles with XML annotations
+- ```xml-plos```   : Public Library of Science journal articles with XML annotations
 - ```dot```        : DOT data from the ANTLR 4 performance evaluation
 - ```python3```    : files from the Python 3.6.12 standard library
 
