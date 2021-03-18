@@ -64,5 +64,5 @@ plt.text(max(sizes)/13, max(times)/1.5, "%d %s files"%(len(test_results),lang), 
 
 plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(round(x / 1000)), ',')))
 
-plt.savefig(plotfile, format="eps", bbox_inches='tight', pad_inches=0, dpi=1000)
+plt.savefig(plotfile, format="pdf", bbox_inches='tight', pad_inches=0, dpi=1000)
 print ("results saved to evaluation/results/" + plotfile)
