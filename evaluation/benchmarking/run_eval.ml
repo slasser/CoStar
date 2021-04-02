@@ -55,13 +55,15 @@ let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
 let print_result (fname : string) (res : coq_string) =
   Printf.printf "***\nFile   : %s\nResult : %s \n%!" fname (str_of_coqstr res)
 
-let num_trials = 5
+let num_trials = 1
                 
 let benchmark_parser_on_dataset parse grammar start_sym t_of_str show_result data_dir : test_result list =
-  let parse'  = parse grammar start_sym in
-  let files   = Sys.readdir data_dir    in
-  let results = ref []                  in
+  let parse'      = parse grammar start_sym in
+  let files       = Sys.readdir data_dir    in
+  let total_files = Array.length files      in
+  let results     = ref []                  in
   for i = 0 to Array.length files - 1 do
+    let ()          = Printf.printf "file #%d of %d\n" (i + 1) total_files    in
     let fname       = files.(i)                                               in
     let ts          = read_tokens_from_file t_of_str (data_dir ^ "/" ^ fname) in
     let parse_times = ref []                                                  in

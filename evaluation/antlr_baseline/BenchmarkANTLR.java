@@ -2,12 +2,14 @@ import java.io.*;
 import java.util.*;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.*;
+import org.antlr.v4.runtime.atn.ParserATNSimulator;
 import org.antlr.v4.tool.*;
 import org.json.*;
 
 public class BenchmarkANTLR {
 
-    enum Benchmark { JSON, XML, DOT, PYTHON }
+    enum Benchmark      { JSON, XML, DOT, PYTHON }
+    enum ANTLRComponent { LEXER, PARSER }
 
     static String JSON_GRAMMAR        = "JSON.g4";
     static String JSON_START_SYM      = "json";
@@ -22,8 +24,14 @@ public class BenchmarkANTLR {
     static String XML_PARSER_GRAMMAR  = "XMLParser.g4";
     static String XML_START_SYM       = "document";
 
-    static int THROWAWAY_TRIALS       = 2;
-    static int RECORDED_TRIALS        = 5;
+    static String FILENAME_KEY        = "filename";
+    static String NUM_TOKENS_KEY      = "num_tokens";
+    static String TIMES_KEY           = "execution_times";
+
+    static int WARMUP_RUNS            = 2;
+    static int NUM_TRIALS             = 5;
+
+    // Utility methods
 
     public static CommonTokenStream getTokenStream(Benchmark benchmark, String dataFile) throws IOException {
 	CharStream stream = CharStreams.fromFileName(dataFile);
@@ -68,7 +76,7 @@ public class BenchmarkANTLR {
 	return g.createParserInterpreter(tokens);
     }
 
-    public static String getStartSymbol(Benchmark benchmark) throws IOException {
+    public static String getStartSymbol(Benchmark benchmark) {
 	switch (benchmark) {
 	  case JSON :
 	      return JSON_START_SYM;
@@ -85,60 +93,140 @@ public class BenchmarkANTLR {
 
     public static int getNumTokens(Benchmark benchmark, String dataFile) throws IOException {
 	CommonTokenStream tokenStream = getTokenStream(benchmark, dataFile);
-	tokenStream.fill();
+	tokenStream.fill();	
 	return tokenStream.getTokens().size();
     }
 
-    public static JSONArray runInterpTrials(Benchmark benchmark,
-					    String dataFile,
-					    boolean preTokenize) throws IOException {
+    /* Methods for benchmarking ANTLR lexers and parser interpreters
+       using our default experimental setup (five trials per file,
+       instantiate a new lexer/parser at the beginning of each trial) */
+    
+    public static JSONArray runTrials(Benchmark benchmark,
+				      ANTLRComponent component,
+				      String dataFile) throws IOException {
 	List<Double> times = new ArrayList<Double>();
-	for (int i = 0; i < (THROWAWAY_TRIALS + RECORDED_TRIALS); i++) {
+	for (int i = 0; i < NUM_TRIALS; i++) {
 	    CommonTokenStream tokens = getTokenStream(benchmark, dataFile);
-	    if (preTokenize) {
-		tokens.fill();
+	    long start, stop;
+	    switch (component) {
+	      case LEXER : // benchmark the lexer
+		  start = System.nanoTime();
+		  tokens.fill();
+		  stop = System.nanoTime();
+		  break;
+	      case PARSER : // benchmark the parser
+		  tokens.fill();
+		  ParserInterpreter parser = getInterp(benchmark, tokens);
+		  parser.setErrorHandler(new BailErrorStrategy());
+		  String startSymbol = getStartSymbol(benchmark);
+		  start = System.nanoTime();
+		  ParseTree t = parser.parse(parser.getRuleIndex(startSymbol));
+		  stop = System.nanoTime();
+		  break;
+	      default :
+		  throw new RuntimeException("invalid ANTLRComponent option");
 	    }
-	    ParserInterpreter parser = getInterp(benchmark, tokens);
-	    String startSymbol = getStartSymbol(benchmark);
-	    long start = System.currentTimeMillis();
-	    ParseTree t = parser.parse(parser.getRuleIndex(startSymbol));
-	    long stop = System.currentTimeMillis();
-	    if (i >= THROWAWAY_TRIALS) {
-		times.add((stop - start) / 1000.0); // convert to seconds
-	    }
+	    times.add((stop - start) / 1_000_000_000.0); // convert to seconds
 	}
 	return new JSONArray(times);
     }
-    
-    public static JSONObject benchmarkInterpOnFile(Benchmark benchmark,
-						   String dataDir,
-						   String dataFileName,
-						   boolean preTokenize) throws IOException {
+
+    public static JSONObject benchmarkANTLRComponentOnFile(Benchmark benchmark,
+							   ANTLRComponent component,
+							   String dataDir,
+							   String dataFileName) throws IOException {
 	String dataFile = dataDir + "/" + dataFileName;
-	int numTokens = getNumTokens(benchmark, dataFile);
-	JSONArray times = runInterpTrials(benchmark, dataFile, preTokenize);
-	return new JSONObject().put("filename", dataFileName)
-	                       .put("num_tokens", numTokens)
-	                       .put("parse_times", times);
+	int numTokens   = getNumTokens(benchmark, dataFile);
+	JSONArray times = runTrials(benchmark, component, dataFile);
+	return new JSONObject().put(FILENAME_KEY, dataFileName)
+	                       .put(NUM_TOKENS_KEY, numTokens)
+	                       .put(TIMES_KEY, times);
     }
     
-    public static JSONArray benchmarkInterpOnDataSet(Benchmark benchmark,
-						     String dataDirName,
-						     boolean preTokenize) throws IOException {
+    public static JSONArray benchmarkANTLRComponentOnDataSet(Benchmark benchmark,
+							     ANTLRComponent component,
+							     String dataDirName) throws IOException {
 	List<JSONObject> records = new ArrayList<JSONObject>();
-	File dataDir = new File(dataDirName);
-	List<String> dataFileNames = new ArrayList<String>(Arrays.asList(dataDir.list()));
-	for (String dataFileName : dataFileNames) {
-	    JSONObject record = benchmarkInterpOnFile(benchmark, dataDirName, dataFileName, preTokenize);
+	String[] dataFileNames   = (new File(dataDirName)).list();
+	for (int i = 0; i < dataFileNames.length; i++) {
+	    System.out.println("file #" + (i + 1) + " of " + dataFileNames.length);
+	    JSONObject record = benchmarkANTLRComponentOnFile(benchmark, component, dataDirName, dataFileNames[i]);
 	    System.out.println(record.toString(4));
 	    records.add(record);
 	}
 	// Sort the records by number of tokens
 	records.sort((r1, r2) ->
-		     Integer.valueOf(r1.getInt("num_tokens")).compareTo(Integer.valueOf(r2.getInt("num_tokens"))));
+		     Integer.valueOf(r1.getInt(NUM_TOKENS_KEY)).compareTo(Integer.valueOf(r2.getInt(NUM_TOKENS_KEY))));
 	return new JSONArray(records);
     }
 
+    /*    public static double benchmarkANTLRComponentOnFile2(ParserInterpreter parser,
+							String startSymbol) throws IOException {
+	long start, stop;
+	int startRuleIndex = parser.getRuleIndex(startSymbol);
+	start = System.nanoTime();
+	ParseTree t = parser.parse(startRuleIndex);
+	stop = System.nanoTime();
+	return (stop - start) / 1_000_000_000.0; // convert to seconds
+    }
+
+    public static JSONArray benchmarkANTLRComponentOnCorpus(Benchmark benchmark,
+							    ANTLRComponent component,
+							    String dataDirName) throws IOException {
+	// corpus information 
+	File dataDir               = new File(dataDirName);
+	List<String> dataFileNames = new ArrayList<String>(Arrays.asList(dataDir.list()));
+	int totalFiles             = dataFileNames.size();
+
+	// maps to hold the parse times and number of tokens for each file
+	Map<String, List<Double>>  fileNameToTimes = new HashMap<String, List<Double>>();
+	Map<String, Integer>  fileNameToNumTokens  = new HashMap<String, Integer>();
+
+
+	CommonTokenStream dummyTokens = getTokenStream(benchmark, dataDirName + "/" + dataFileNames.get(0));
+	ParserInterpreter parser = getInterp(benchmark, dummyTokens);
+	parser.setErrorHandler(new BailErrorStrategy());
+	String startSymbol = getStartSymbol(benchmark);
+
+	for (int i = 0; i < (THROWAWAY_TRIALS + RECORDED_TRIALS); i++) {
+	    System.out.println("CORPUS PASS " + (i + 1));
+	    int currFileNumber = 1;
+	    for (String dataFileName : dataFileNames) {
+		System.out.println(dataFileName + "  (file #" + currFileNumber + " of " + totalFiles + ")");
+		currFileNumber++;
+		String dataFile = dataDirName + "/" + dataFileName;
+		fileNameToNumTokens.put(dataFileName, getNumTokens(benchmark, dataFile));
+
+		CommonTokenStream tokens = getTokenStream(benchmark, dataFile);
+		tokens.fill();
+		parser.setTokenStream(tokens);
+		
+		double time = benchmarkANTLRComponentOnFile2(parser, startSymbol);
+		if (i >= THROWAWAY_TRIALS) {
+		    if (fileNameToTimes.containsKey(dataFileName)) {
+			List<Double> prevTimes = fileNameToTimes.get(dataFileName);
+			prevTimes.add(time);
+		    } else {
+			List<Double> times = new ArrayList<Double>();
+			times.add(time);
+			fileNameToTimes.put(dataFileName, times);
+		    }
+		}
+		parser.reset();
+	    }
+	}
+	List<JSONObject> records = new ArrayList<JSONObject>();
+        fileNameToTimes.forEach((fname, times) ->
+				records.add(new JSONObject().put(FILENAME_KEY, fname)
+					                    .put(NUM_TOKENS_KEY, fileNameToNumTokens.get(fname))
+                       					    .put(getTimesKey(component), times)));
+	// Sort the records by number of tokens
+	records.sort((r1, r2) ->
+		     Integer.valueOf(r1.getInt(NUM_TOKENS_KEY)).compareTo(Integer.valueOf(r2.getInt(NUM_TOKENS_KEY))));
+	return new JSONArray(records);
+    }
+    */
+    
     public static void writeResults(JSONArray benchmarkResults, String outFileName) throws Exception {
 	PrintWriter writer = new PrintWriter(outFileName, "UTF-8");
 	writer.print(benchmarkResults.toString(4));
@@ -148,8 +236,8 @@ public class BenchmarkANTLR {
     public static void main(String[] args) throws Exception {
 
 	String benchmarkName = args[0];
-	String dataDirName   = args[1];
-	boolean preTokenize  = Boolean.parseBoolean(args[2]);
+	String componentName = args[1];
+	String dataDirName   = args[2];
 	String outFileName   = args[3];
 
 	Benchmark benchmark;
@@ -169,8 +257,25 @@ public class BenchmarkANTLR {
 	  default:
 	      throw new RuntimeException("invalid benchmark name");
 	}
-	
-	JSONArray records = benchmarkInterpOnDataSet(benchmark, dataDirName, preTokenize);
+
+	ANTLRComponent component;
+	switch (componentName) {
+	  case "lexer" :
+	      component = ANTLRComponent.LEXER;
+	      break;
+	  case "parser" :
+	      component = ANTLRComponent.PARSER;
+	      break;
+	  default:
+	      throw new RuntimeException("invalid component name");
+	}
+
+	for (int i = 0; i < WARMUP_RUNS; i++) {
+	    System.out.println("*** WARM-UP RUN #" + (i + 1) + " ***");
+	    JSONArray records = benchmarkANTLRComponentOnDataSet(benchmark, component, dataDirName);
+	}
+	System.out.println("*** TEST RUN ***");
+	JSONArray records = benchmarkANTLRComponentOnDataSet(benchmark, component, dataDirName);
 	writeResults(records, outFileName);
     }
 }
