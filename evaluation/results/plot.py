@@ -19,7 +19,7 @@ drop = int(len(test_results) * 0.99)
 test_results = test_results[0:drop]
 
 token_counts      = [int(tr["num_tokens"])   for tr in test_results]
-parse_time_groups = [[float(pt) for pt in tr["parse_times"]] for tr in test_results]
+parse_time_groups = [[float(pt) for pt in tr["execution_times"]] for tr in test_results]
 
 avg_parse_times = [np.mean(g) for g in parse_time_groups]
 
@@ -45,23 +45,24 @@ if (datafile=="dot__costar-parser.json"):
     plt.legend([l1,l2], ["Regression", "LOWESS"],prop={'size':11}, loc='lower right')
 
 lang = ""
-if datafile == "json__costar-parser.json":
-    lang = "JSON files"
-elif datafile == "xml__costar-parser.json":
-    lang = "XML files"
-elif datafile == "dot__costar-parser.json":
-    lang = "DOT files"
-elif datafile == "python__costar-parser.json" or datafile == "python__antlr-parser.json"  or datafile == "python__antlr-parser__cache-warm-up.json":
-    lang = "Python files"
+if datafile.split("__")[0] == "json":
+    lang = "JSON"
+elif datafile.split("__")[0] == "xml":
+    lang = "XML"
+elif datafile.split("__")[0] == "dot":
+    lang = "DOT"
+elif datafile.split("__")[0] == "python":
+    lang = "Python"
 
-print(max(times)/1.5)
-plt.text(max(sizes)/130.0, 0.02467, "%d %s"%(len(test_results),lang), family="serif", size=14)
+plt.text(max(sizes)/130.0, max(times)/1.5, "%d %s files"%(len(test_results),lang), family="serif", size=14)
 
 plt.setp(ax.get_xticklabels(), fontsize=14)
 plt.setp(ax.get_yticklabels(), fontsize=14)
 plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(round(x / 1000)), ',')))
 
-ax.set_title("ANTLR parser, after cache warm-up")
-plt.ylim([0.0, 0.04])
+# For ANTLR Python parser plots
+#ax.set_title("ANTLR parser, after cache warm-up")
+#plt.ylim([0.0, 0.04])
+
 plt.savefig(plotfile, format="eps", bbox_inches='tight', pad_inches=0, dpi=1000)
 print ("results saved to evaluation/results/" + plotfile)

@@ -125,6 +125,26 @@ bench-python3: run_eval.exe $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/plot.py
 	&& ./run_eval.exe -python3 $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/$(PYTHON3).json
 	cd $(RESULTS) && python3.7 plot.py $(PYTHON3).json $(PYTHON3).eps
 
+# Benchmark ANTLR lexers and parser interpreters
+
+ANTLR_BASELINE := antlr_baseline
+
+$(ANTLR_BASELINE)/BenchmarkANTLR.class : $(ANTLR_BASELINE)/BenchmarkANTLR.class $(ANTLR_BASELINE)/JSON.g4 $(ANTLR_BASELINE)/XMLLexer.g4 $(ANTLR_BASELINE)/XMLParser.g4 $(ANTLR_BASELINE)/DOT.g4 $(ANTLR_BASELINE)/Python3.g4
+	cd $(ANTLR_BASELINE) \
+        && java -jar $(ANTLR_JAR) JSON.g4 \
+        && java -jar $(ANTLR_JAR) XMLLexer.g4 XMLParser.g4 \
+        && java -jar $(ANTLR_JAR) DOT.g4 \
+        && java -jar $(ANTLR_JAR) Python3.g4 \
+	&& javac -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) *.java
+
+JSON_ANTLR_LEXER  := json__antlr-lexer
+JSON_ANTLR_PARSER := json__antlr-parser
+
+bench-json-antlr-lexer : $(ANTLR_BASELINE)/BenchmarkANTLR.class $(ANTLR_BASELINE)/$(DATA)/$(JSON_NOBEL)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) BenchmarkANTLR json lexer $(DATA)/$(JSON_NOBEL) ../$(RESULTS)/$(JSON_ANTLR_LEXER).json
+	cd $(RESULTS) && python3.7 plot.py $(JSON_ANTLR_LEXER).json $(JSON_ANTLR_LEXER).eps
+
 clean:
 	rm -f  $(GRAMMARS)/GrammarConverter.class
 	rm -rf $(GRAMMARS)/_build
