@@ -8,6 +8,10 @@ from sys import argv
 from statsmodels.nonparametric.smoothers_lowess import lowess as lowess
 import math
 
+# avoid Type 3 fonts (required for camera-ready copy)
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype']  = 42
+
 datafile = argv[1]
 plotfile = argv[2]
 
@@ -39,11 +43,13 @@ p1 = plt.plot(sizes, fit_fn(sizes), 'k--', lw=1.5)
 z = lowess(times, sizes, frac=0.1)
 p2 = plt.plot(z[:,0], z[:,1], '-', lw = 1.5, color = 'r', label = "Lowess fit")
 
-if (datafile=="dot__costar-parser.json"):
+# legend
+if (datafile=="json__costar-parser.json"):
     l1 = plt.Line2D([0,0], [1,1], color='k', linestyle='--')
     l2 = plt.Line2D([0,0], [1,1], color='r')
     plt.legend([l1,l2], ["Regression", "LOWESS"],prop={'size':11}, loc='lower right')
 
+# text that lists number of data points (e.g., "24 JSON files")
 lang = ""
 if datafile.split("__")[0] == "json":
     lang = "JSON"
@@ -54,13 +60,23 @@ elif datafile.split("__")[0] == "dot":
 elif datafile.split("__")[0] == "python":
     lang = "Python"
 
-plt.text(max(sizes)/130.0, max(times)/1.5, "%d %s files"%(len(test_results),lang), family="serif", size=14)
+plt.text(max(sizes)/13.0, max(times)/1.5, "%d %s files"%(len(test_results),lang), family="serif", size=14)
 
+# increase font size of tick labels
 plt.setp(ax.get_xticklabels(), fontsize=14)
 plt.setp(ax.get_yticklabels(), fontsize=14)
+
+# divide x-axis values by 1000 (convert tokens to "thousands of tokens")
 plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(round(x / 1000)), ',')))
 
+# make x and y axes start at zero
+ax.set_xlim([0, None])
+ax.set_ylim([0, None])
+
 # For ANTLR Python parser plots
+if datafile == "python__antlr-parser.json":
+    ax.set_title("ANTLR parser, no cache warm-up")
+    
 #ax.set_title("ANTLR parser, after cache warm-up")
 #plt.ylim([0.0, 0.04])
 

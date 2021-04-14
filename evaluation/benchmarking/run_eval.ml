@@ -35,7 +35,7 @@ let json_of_test_result (tr : test_result) : Yb.t =
   match tr with
   | {filename = fn; num_tokens = nt; parse_times = pts} ->
      let json_floats = List.map (fun pt -> `Float pt) pts
-     in  `Assoc [("filename", `String fn); ("num_tokens", `Int nt); ("parse_times", `List json_floats)]
+     in  `Assoc [("filename", `String fn); ("num_tokens", `Int nt); ("execution_times", `List json_floats)]
 
 let json_of_test_results (trs : test_result list) : Yb.t =
   `List (List.map json_of_test_result (List.sort cmp_test_results trs))
@@ -55,7 +55,7 @@ let benchmark (f : 'a -> 'b) (x : 'a) : float * 'b =
 let print_result (fname : string) (res : coq_string) =
   Printf.printf "***\nFile   : %s\nResult : %s \n%!" fname (str_of_coqstr res)
 
-let num_trials = 1
+let num_trials = 5
                 
 let benchmark_parser_on_dataset parse grammar start_sym t_of_str show_result data_dir : test_result list =
   let parse'      = parse grammar start_sym in

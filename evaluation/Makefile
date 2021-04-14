@@ -101,29 +101,34 @@ $(DATA)/$(TOKENIZED)/$(PYTHON3): $(DATA)/TokenizeTestData.class $(DATA)/$(RAW)/$
         && java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR)\
            TokenizeTestData python3 $(RAW)/$(PYTHON3) $(TOKENIZED)/$(PYTHON3)
 
-# RUN BENCHMARKS AND PLOT RESULTS
+# RUN COSTAR BENCHMARKS AND PLOT RESULTS
 
 RESULTS := results
 
-bench-json-nobel: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
+JSON_COSTAR_PARSER   := json__costar-parser
+XML_COSTAR_PARSER    := xml__costar-parser
+DOT_COSTAR_PARSER    := dot__costar-parser
+PYTHON_COSTAR_PARSER := python__costar-parser
+
+bench-costar-json: run_eval.exe $(DATA)/$(TOKENIZED)/$(JSON_NOBEL)
 	ulimit -s unlimited  \
-        &&  ./run_eval.exe -json $(DATA)/$(TOKENIZED)/$(JSON_NOBEL) $(RESULTS)/$(JSON_NOBEL).json
-	cd $(RESULTS) && python3.7 plot.py $(JSON_NOBEL).json $(JSON_NOBEL).eps
+        &&  ./run_eval.exe -json $(DATA)/$(TOKENIZED)/$(JSON_NOBEL) $(RESULTS)/$(JSON_COSTAR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(JSON_COSTAR_PARSER).json $(JSON_COSTAR_PARSER).eps
 
-bench-xml-plos: run_eval.exe $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/plot.py
+bench-costar-xml: run_eval.exe $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/plot.py
 	ulimit -s unlimited  \
-	&& ./run_eval.exe -xml $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/$(XML_PLOS).json
-	cd $(RESULTS) && python3.7 plot.py $(XML_PLOS).json $(XML_PLOS).eps
+	&& ./run_eval.exe -xml $(DATA)/$(TOKENIZED)/$(XML_PLOS) $(RESULTS)/$(XML_COSTAR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(XML_COSTAR_PARSER).json $(XML_COSTAR_PARSER).eps
 
-bench-dot: run_eval.exe $(DATA)/$(TOKENIZED)/$(DOT)
+bench-costar-dot: run_eval.exe $(DATA)/$(TOKENIZED)/$(DOT)
 	ulimit -s unlimited \
-	&& ./run_eval.exe -dot $(DATA)/$(TOKENIZED)/$(DOT) $(RESULTS)/$(DOT).json
-	cd $(RESULTS) && python3.7 plot.py $(DOT).json $(DOT).eps
+	&& ./run_eval.exe -dot $(DATA)/$(TOKENIZED)/$(DOT) $(RESULTS)/$(DOT_COSTAR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(DOT_COSTAR_PARSER).json $(DOT_COSTAR_PARSER).eps
 
-bench-python3: run_eval.exe $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/plot.py
+bench-costar-python: run_eval.exe $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/plot.py
 	ulimit -s unlimited \
-	&& ./run_eval.exe -python3 $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/$(PYTHON3).json
-	cd $(RESULTS) && python3.7 plot.py $(PYTHON3).json $(PYTHON3).eps
+	&& ./run_eval.exe -python3 $(DATA)/$(TOKENIZED)/$(PYTHON3) $(RESULTS)/$(PYTHON_COSTAR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(PYTHON_COSTAR_PARSER).json $(PYTHON_COSTAR_PARSER).eps
 
 # Benchmark ANTLR lexers and parser interpreters
 
@@ -137,13 +142,73 @@ $(ANTLR_BASELINE)/BenchmarkANTLR.class : $(ANTLR_BASELINE)/BenchmarkANTLR.class 
         && java -jar $(ANTLR_JAR) Python3.g4 \
 	&& javac -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) *.java
 
-JSON_ANTLR_LEXER  := json__antlr-lexer
-JSON_ANTLR_PARSER := json__antlr-parser
+JSON_ANTLR_LEXER    := json__antlr-lexer
+JSON_ANTLR_PARSER   := json__antlr-parser
 
-bench-json-antlr-lexer : $(ANTLR_BASELINE)/BenchmarkANTLR.class $(ANTLR_BASELINE)/$(DATA)/$(JSON_NOBEL)
+XML_ANTLR_LEXER     := xml__antlr-lexer
+XML_ANTLR_PARSER    := xml__antlr-parser
+
+DOT_ANTLR_LEXER     := dot__antlr-lexer
+DOT_ANTLR_PARSER    := dot__antlr-parser
+
+PYTHON_ANTLR_LEXER  := python__antlr-lexer
+PYTHON_ANTLR_PARSER := python__antlr-parser
+
+bench-json-antlr-lexer : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                         $(ANTLR_BASELINE)/$(DATA)/$(JSON_NOBEL)
 	cd $(ANTLR_BASELINE) \
-	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) BenchmarkANTLR json lexer $(DATA)/$(JSON_NOBEL) ../$(RESULTS)/$(JSON_ANTLR_LEXER).json
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR json lexer $(DATA)/$(JSON_NOBEL) ../$(RESULTS)/$(JSON_ANTLR_LEXER).json
 	cd $(RESULTS) && python3.7 plot.py $(JSON_ANTLR_LEXER).json $(JSON_ANTLR_LEXER).eps
+
+bench-json-antlr-parser : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                          $(ANTLR_BASELINE)/$(DATA)/$(JSON_NOBEL)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR json parser $(DATA)/$(JSON_NOBEL) ../$(RESULTS)/$(JSON_ANTLR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(JSON_ANTLR_PARSER).json $(JSON_ANTLR_PARSER).eps
+
+bench-xml-antlr-lexer : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                        $(ANTLR_BASELINE)/$(DATA)/$(XML_PLOS)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR xml lexer $(DATA)/$(XML_PLOS) ../$(RESULTS)/$(XML_ANTLR_LEXER).json
+	cd $(RESULTS) && python3.7 plot.py $(XML_ANTLR_LEXER).json $(XML_ANTLR_LEXER).eps
+
+bench-xml-antlr-parser : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                         $(ANTLR_BASELINE)/$(DATA)/$(XML_PLOS)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR xml parser $(DATA)/$(XML_PLOS) ../$(RESULTS)/$(XML_ANTLR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(XML_ANTLR_PARSER).json $(XML_ANTLR_PARSER).eps
+
+bench-dot-antlr-lexer : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                        $(ANTLR_BASELINE)/$(DATA)/$(DOT)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR dot lexer $(DATA)/$(DOT) ../$(RESULTS)/$(DOT_ANTLR_LEXER).json
+	cd $(RESULTS) && python3.7 plot.py $(DOT_ANTLR_LEXER).json $(DOT_ANTLR_LEXER).eps
+
+bench-dot-antlr-parser : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                         $(ANTLR_BASELINE)/$(DATA)/$(DOT)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR dot parser $(DATA)/$(DOT) ../$(RESULTS)/$(DOT_ANTLR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(DOT_ANTLR_PARSER).json $(DOT_ANTLR_PARSER).eps
+
+bench-python-antlr-lexer : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                           $(ANTLR_BASELINE)/$(DATA)/$(PYTHON3)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR python lexer $(DATA)/$(PYTHON3) ../$(RESULTS)/$(PYTHON_ANTLR_LEXER).json
+	cd $(RESULTS) && python3.7 plot.py $(PYTHON_ANTLR_LEXER).json $(PYTHON_ANTLR_LEXER).eps
+
+bench-python-antlr-parser : $(ANTLR_BASELINE)/BenchmarkANTLR.class \
+                            $(ANTLR_BASELINE)/$(DATA)/$(PYTHON3)
+	cd $(ANTLR_BASELINE) \
+	&& java -cp .:$(ANTLR_JAR):$(JSON_JAVA_JAR) \
+           BenchmarkANTLR python parser $(DATA)/$(PYTHON3) ../$(RESULTS)/$(PYTHON_ANTLR_PARSER).json
+	cd $(RESULTS) && python3.7 plot.py $(PYTHON_ANTLR_PARSER).json $(PYTHON_ANTLR_PARSER).eps
 
 clean:
 	rm -f  $(GRAMMARS)/GrammarConverter.class
