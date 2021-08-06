@@ -268,3 +268,12 @@ Lemma fold_right_unroll :
 Proof.
   auto.
 Qed.
+
+Fixpoint tuple' (xs : list Type) : Type :=
+  match xs with
+  | [] => unit
+  | x :: xs' => prod (tuple' xs') x
+  end.
+
+Definition tuple (xs : list Type) : Type :=
+  tuple' (rev xs).

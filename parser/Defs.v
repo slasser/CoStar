@@ -32,12 +32,17 @@ Module Type SYMBOL_TYPES.
   
   Parameter showT  : terminal    -> string.
   Parameter showNT : nonterminal -> string.
+
+  Parameter t_semty  : terminal    -> Type.
+  Parameter nt_semty : nonterminal -> Type.
   
 End SYMBOL_TYPES.
 
 (* Core definitions, parameterized by grammar symbol types *)
 Module DefsFn (Export Ty : SYMBOL_TYPES).
 
+  (* Terminal symbols as a usual ordered type *)
+  
   Module T_as_UCT <: UsualComparableType.
     Definition t             := terminal.
     Definition compare       := compareT.
@@ -47,6 +52,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Module T_as_UOT <: UsualOrderedType := UOT_from_UCT T_as_UCT.
   
+  (* Nonterminal symbols as a usual ordered type *)
+
   Module NT_as_UCT <: UsualComparableType.
     Definition t             := nonterminal.
     Definition compare       := compareNT.
@@ -56,6 +63,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     
   Module NT_as_UOT <: UsualOrderedType := UOT_from_UCT NT_as_UCT.
 
+  (* Equality tests for terminals and nonterminals *)
+  
   Definition t_eq_dec  := T_as_UOT.eq_dec.
   Definition nt_eq_dec := NT_as_UOT.eq_dec.
 
@@ -71,9 +80,29 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | right _ => false
     end.
 
+  (* Finite sets of nonterminals *)
+
+  Module NtSet      := FSetList.Make NT_as_UOT.
+  Module Export NF  := FSetFacts.Facts NtSet.
+  Module Export NP  := FSetProperties.Properties NtSet.
+  Module Export NE  := FSetEqProperties.EqProperties NtSet.
+  Module Export ND  := FSetDecide.Decide NtSet.
+  (* Hide an alternative definition of "sum" from NtSet *)
+  Definition sum := Datatypes.sum.
+
+  (* Grammar symbols *)
+  
   Inductive symbol := T  : terminal -> symbol 
                     | NT : nonterminal -> symbol.
 
+  (* The semantic type for symbol s *)  
+  Definition symbol_semty (s : symbol) : Type :=
+    match s with
+    | T a  => t_semty  a
+    | NT x => nt_semty x
+    end.
+
+  (* Symbols as a usual ordered type *)
   Module Symbol_as_UOT <: UsualOrderedType.
     
     Definition t := symbol.
@@ -168,6 +197,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   End Symbol_as_UOT.
 
+  (* Sequences of symbols (i.e., production right-hand sides) *)
+  
   Module Gamma_as_UOT <: UsualOrderedType := List_as_UOT Symbol_as_UOT.
 
   Definition beqGamma (xs ys : list symbol) : bool :=
@@ -178,25 +209,85 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Proof.
     unfold beqGamma; split; intros; dms; tc. 
   Qed.
+
+  (* The semantic type for a list of symbols *)
+  Definition rhs_semty (gamma : list symbol) : Type :=
+    tuple (List.map symbol_semty gamma).
+
+  (* Grammar productions *)
   
-  (* Finite sets of nonterminals *)
-  (* Module NtSet   := FSetAVL.Make NT_as_UOT. -- performance is better with FSetList *)
-  Module NtSet      := FSetList.Make NT_as_UOT.
-  Module Export NF  := FSetFacts.Facts NtSet.
-  Module Export NP  := FSetProperties.Properties NtSet.
-  Module Export NE  := FSetEqProperties.EqProperties NtSet.
-  Module Export ND  := FSetDecide.Decide NtSet.
-
-  (* Hide an alternative definition of "sum" from NtSet *)
-  Definition sum := Datatypes.sum.
-
-  (* Grammar-related definitions *)               
   Definition production := (nonterminal * list symbol)%type.
-
-  Definition grammar    := list production.
 
   Definition lhs (p : production) : nonterminal :=
     let (x, _) := p in x.
+
+  (* The type of a semantic predicate for a production *)
+  Definition predicate_ty (p : production) : Type :=
+    let (_, ys) := p in rhs_semty ys -> bool.
+  
+  (* The type of a semantic action for a production *)
+  Definition action_ty (p : production) : Type :=
+    let (x, ys) := p in rhs_semty ys -> nt_semty x.
+
+  Module Production_as_UOT <: UsualOrderedType := Pair_as_UOT NT_as_UOT Gamma_as_UOT.
+
+  (* Finite maps with productions as keys *)
+  Module PM  := FMapAVL.Make Production_as_UOT.
+  Module PMF := FMapFacts.Facts PM.
+
+  (* Grammars *)
+
+  Definition predicate_action_pair_ty (p : production) : Type :=
+    option (predicate_ty p) * action_ty p.
+
+  Definition grammar_entry : Type :=
+    {p : production & predicate_action_pair_ty p}.
+  
+  Definition base_grammar : Type :=
+    PM.t grammar_entry.
+
+  Definition grammar_wf (b : base_grammar) : Prop :=
+    forall p p' fs, PM.MapsTo p (@existT _ _ p' fs) b -> p = p'.
+  
+  Definition wf_grammar : Type :=
+    {b : base_grammar | grammar_wf b}.
+  
+  Lemma coerce_semantics :
+    forall (g    : base_grammar)
+           (p p' : production)
+           (fs   : predicate_action_pair_ty p')
+           (Hw   : grammar_wf g)
+           (Hf   : PM.find p g = Some (@existT _ _ p' fs)),
+      predicate_action_pair_ty p.
+  Proof.
+    intros g p p' fs Hw Hf.
+    apply PMF.find_mapsto_iff in Hf.
+    apply Hw in Hf; subst; auto.
+  Defined.
+
+  Lemma in_find_contra :
+    forall (p  : production)
+           (g  : base_grammar),
+      PM.In p g
+      -> PM.find p g <> None.
+  Proof.
+    intros p g Hi Hf.
+    eapply PMF.in_find_iff; eauto.
+  Defined.
+ 
+  Definition predicateAndAction
+             (p  : production)
+             (g  : base_grammar)
+             (Hw : grammar_wf g)
+             (Hi : PM.In p g) : predicate_action_pair_ty p :=
+    match PM.find p g as o return PM.find p g = o -> _ with
+    | Some (@existT _ _ p' _) =>
+      fun Hf =>
+        (coerce_semantics _ _ _ _ Hw Hf)
+    | None =>
+      fun Hf =>
+        match in_find_contra _ _ Hi Hf with end
+    end eq_refl.
 
   Definition lhss (g : grammar) : list nonterminal :=
     map lhs g.
