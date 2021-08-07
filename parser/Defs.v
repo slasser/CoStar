@@ -90,6 +90,22 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   (* Hide an alternative definition of "sum" from NtSet *)
   Definition sum := Datatypes.sum.
 
+  Definition fromNtList (ls : list nonterminal) : NtSet.t :=
+    fold_right NtSet.add NtSet.empty ls.
+
+  Lemma fromNtList_in_iff :
+    forall (x : nonterminal)
+           (l : list nonterminal), 
+      In x l <-> NtSet.In x (fromNtList l).
+  Proof.
+    intros x l; split; intro hi; induction l as [| x' l IH]; sis; try ND.fsetdec.
+    - destruct hi as [hh | ht]; subst; auto.
+      + ND.fsetdec.
+      + apply IH in ht; ND.fsetdec.
+    - destruct (NF.eq_dec x' x); subst; auto.
+      right; apply IH; ND.fsetdec.
+  Qed.
+
   (* Grammar symbols *)
   
   Inductive symbol := T  : terminal -> symbol 
@@ -221,12 +237,15 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition lhs (p : production) : nonterminal :=
     let (x, _) := p in x.
 
+  Definition rhs (p : production) : list symbol :=
+    let (_, gamma) := p in gamma.
+
   (* The type of a semantic predicate for a production *)
-  Definition predicate_ty (p : production) : Type :=
+  Definition predicate_semty (p : production) : Type :=
     let (_, ys) := p in rhs_semty ys -> bool.
   
   (* The type of a semantic action for a production *)
-  Definition action_ty (p : production) : Type :=
+  Definition action_semty (p : production) : Type :=
     let (x, ys) := p in rhs_semty ys -> nt_semty x.
 
   Module Production_as_UOT <: UsualOrderedType := Pair_as_UOT NT_as_UOT Gamma_as_UOT.
@@ -237,28 +256,52 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   (* Grammars *)
 
-  Definition predicate_action_pair_ty (p : production) : Type :=
-    option (predicate_ty p) * action_ty p.
+  (* Each grammar production includes an optional semantic 
+     predicate and a semantic action. The production's symbols
+     determine the types of these functions. *)
+  Definition production_semty (p : production) : Type :=
+    option (predicate_semty p) * action_semty p.
 
   Definition grammar_entry : Type :=
-    {p : production & predicate_action_pair_ty p}.
+    {p : production & production_semty p}.
   
-  Definition base_grammar : Type :=
+  Definition grammar : Type :=
     PM.t grammar_entry.
 
-  Definition grammar_wf (b : base_grammar) : Prop :=
-    forall p p' fs, PM.MapsTo p (@existT _ _ p' fs) b -> p = p'.
-  
+  (* might not be necessary *)
+  Definition lhs_in_grammar (x : nonterminal) (g : grammar) : Prop :=
+    exists (ys : list symbol), PM.In (x, ys) g.
+
+  Definition productions (g : grammar) : list production :=
+    map fst (PM.elements g).
+
+  Definition lhss (g : grammar) : list nonterminal :=
+    map fst (productions g).
+
+  Definition grammar_wf (g : grammar) : Prop :=
+    forall p p' fs, PM.MapsTo p (@existT _ _ p' fs) g -> p = p'.
+
+  (* A well-formed grammar is essentially a dependent map, 
+     where the type of each entry (semantic predicate / 
+     semantic action pair) depends on the key (production) 
+     associated with it. Coq's standard library for finite
+     maps does not provide a dependent interface, so we create
+     one as follows:
+
+     A well-formed grammar is a finite map in which keys are
+     productions, entries are (production, semantic function)
+     pairs, and for each key/entry pair, the productions in the
+     key and entry are equal. *)
   Definition wf_grammar : Type :=
-    {b : base_grammar | grammar_wf b}.
+    {g : grammar | grammar_wf g}.
   
-  Lemma coerce_semantics :
-    forall (g    : base_grammar)
+  Lemma coerce_production_semty :
+    forall (g    : grammar)
            (p p' : production)
-           (fs   : predicate_action_pair_ty p')
+           (fs   : production_semty p')
            (Hw   : grammar_wf g)
            (Hf   : PM.find p g = Some (@existT _ _ p' fs)),
-      predicate_action_pair_ty p.
+      production_semty p.
   Proof.
     intros g p p' fs Hw Hf.
     apply PMF.find_mapsto_iff in Hf.
@@ -266,156 +309,208 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Defined.
 
   Lemma in_find_contra :
-    forall (p  : production)
-           (g  : base_grammar),
+    forall (p : production)
+           (g : grammar),
       PM.In p g
       -> PM.find p g <> None.
   Proof.
     intros p g Hi Hf.
     eapply PMF.in_find_iff; eauto.
   Defined.
- 
-  Definition predicateAndAction
+
+  (* Look up the semantic predicate and action associated
+     with a given production *)
+  Definition findPredicateAndAction
              (p  : production)
-             (g  : base_grammar)
+             (g  : grammar)
              (Hw : grammar_wf g)
-             (Hi : PM.In p g) : predicate_action_pair_ty p :=
+             (Hi : PM.In p g) : production_semty p :=
     match PM.find p g as o return PM.find p g = o -> _ with
     | Some (@existT _ _ p' _) =>
       fun Hf =>
-        (coerce_semantics _ _ _ _ Hw Hf)
+        (coerce_production_semty _ _ _ _ Hw Hf)
     | None =>
       fun Hf =>
         match in_find_contra _ _ Hi Hf with end
     end eq_refl.
 
-  Definition lhss (g : grammar) : list nonterminal :=
-    map lhs g.
-
-  Lemma production_lhs_in_lhss :
-    forall g x ys,
-      In (x, ys) g
-      -> In x (lhss g).
-  Proof.
-    intros g x ys hi; induction g as [| (x', ys') ps IH]; sis.
-    - inv hi.
-    - destruct hi as [hh | ht].
-      + inv hh; apply in_eq.
-      + apply in_cons; auto.
-  Qed.
-
-  Lemma lhss_exists_rhs :
-    forall g x,
-      In x (lhss g)
-      -> exists ys, In (x, ys) g.
-  Proof.
-    intros g x hi.
-    apply in_map_iff in hi; destruct hi as [(?, ?) [? ?]]; sis; subst; eauto.
-  Qed.
-
-  Definition rhs (p : production) : list symbol :=
-    let (_, gamma) := p in gamma.
-
-  Definition rhss (g : grammar) : list (list symbol) :=
-    map rhs g.
-
-  (* to do : delete this function after swapping in 
-     a production_map lookup *)
-  Fixpoint rhssForNt (ps : list production) (x : nonterminal) : list (list symbol) :=
-    match ps with
-    | []                 => []
-    | (x', gamma) :: ps' => 
-      if nt_eq_dec x' x then 
-        gamma :: rhssForNt ps' x
-      else 
-        rhssForNt ps' x
-    end.
-  
-  Lemma rhssForNt_in_iff :
-    forall g x ys,
-      In ys (rhssForNt g x)
-      <-> In (x, ys) g.
-  Proof.
-    intros g x ys; split; intros hi.
-    - induction g as [| (x', ys') g]; sis; tc.
-      dm; subst; auto.
-      inv hi; auto.
-    - induction g as [| (x', ys') g]; sis; tc.
-      destruct hi as [heq | hi].
-      + inv heq.
-        dm; tc.
-        apply in_eq.
-      + dm; subst; auto. 
-        apply in_cons; auto.
-  Qed.
-
-  Hint Resolve rhssForNt_in_iff : core.
-
-  Lemma rhssForNt_rhss :
-    forall g x rhs,
-      In rhs (rhssForNt g x) -> In rhs (rhss g).
-  Proof.
-    intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
-    - inv Hin.
-    - dm; subst; auto.
-      destruct Hin as [Heq | Hin]; subst; auto.
-  Qed.
-
-  Definition fromNtList (ls : list nonterminal) : NtSet.t :=
-    fold_right NtSet.add NtSet.empty ls.
-
-  Lemma fromNtList_in_iff :
-    forall (x : nonterminal)
-           (l : list nonterminal), 
-      In x l <-> NtSet.In x (fromNtList l).
-  Proof.
-    intros x l; split; intro hi; induction l as [| x' l IH]; sis; try ND.fsetdec.
-    - destruct hi as [hh | ht]; subst; auto.
-      + ND.fsetdec.
-      + apply IH in ht; ND.fsetdec.
-    - destruct (NF.eq_dec x' x); subst; auto.
-      right; apply IH; ND.fsetdec.
-  Qed.
+  (* An rhs_map maps each grammar nonterminal to its
+     right-hand sides. It provides an efficient way to look
+     up all right-hand sides for a given nonterminal -- a 
+     frequent parser operation. *)
   
   (* Finite maps with nonterminal keys *)
   Module NM  := FMapAVL.Make NT_as_UOT.
   Module NMF := FMapFacts.Facts NM.
 
-  (* A production map maps each grammar nonterminal to its right-hand sides *)
-  Definition production_map := NM.t (list (list symbol)).
+  Definition rhs_map := NM.t (list (list symbol)).
 
-  Definition production_map_keys_sound (pm : production_map) (g : grammar) : Prop :=
-    forall x,
-      NM.In x pm -> In x (lhss g).
-
-    Definition production_map_sound (pm : production_map) (g : grammar) :=
-      forall x ys yss,
-        NM.MapsTo x yss pm -> In ys yss -> In (x, ys) g.
-
-  Definition production_map_complete (pm : production_map) (g : grammar) :=
-    forall x ys,
-      In (x, ys) g -> exists yss, NM.MapsTo x yss pm /\ In ys yss.
-
-  Definition addProduction (p : production) (pm : production_map) : production_map :=
+  Definition addProduction (p : production) (e : grammar_entry) (rm : rhs_map) : rhs_map :=
     match p with
     | (x, ys) =>
-      match NM.find x pm with
-      | Some yss => NM.add x (ys :: yss) pm
-      | None     => NM.add x [ys] pm
+      match NM.find x rm with
+      | Some yss => NM.add x (ys :: yss) rm
+      | None     => NM.add x [ys] rm
       end
     end.
 
-  Lemma addProduction_preserves_keys_soundness :
-    forall pm ps p,
-      production_map_keys_sound pm ps
-      -> production_map_keys_sound (addProduction p pm) (p :: ps).
+  Definition mkRhsMap (g : grammar) : rhs_map :=
+    PM.fold addProduction g (NM.empty (list (list symbol))).
+  
+  Definition rhs_map_keys_sound (rm : rhs_map) (g : grammar) : Prop :=
+    forall x,
+      NM.In x rm -> exists ys, PM.In (x, ys) g.
+
+  Definition rmks' (rm : rhs_map) (prs : list (production * grammar_entry)) : Prop :=
+    forall x,
+      NM.In x rm -> exists ys e, In ((x, ys), e) prs.
+
+Lemma fold_left_preserves_list_invar' :
+    forall (A B   : Type)
+           (f     : A -> B -> A)
+           (xs ys : list B)
+           (a     : A)
+           (P     : A -> list B -> Prop),
+      P a xs
+      -> (forall a b bs, P a bs -> P (f a b) (bs ++ [b]))
+      -> P (fold_left f ys a) (xs ++ ys).
+  Proof.
+    intros A B f xs ys; revert xs. 
+    induction ys as [| y ys IH]; intros xs a P ha hf; sis.
+    - rew_anr; auto.
+    - apply hf with (b := y) in ha.
+      apply IH with (xs := xs ++ [y]) in ha; auto.
+      rewrite cons_app_singleton; apps.
+  Qed.
+
+  Lemma fold_left_preserves_list_invar :
+    forall (A B : Type)
+           (f   : A -> B -> A)
+           (bs  : list B)
+           (a   : A)
+           (P   : A -> list B -> Prop),
+      P a []
+      -> (forall a b bs, P a bs -> P (f a b) (bs ++ [b]))
+      -> P (fold_left f bs a) bs.
+  Proof.
+    intros.
+    rewrite <- app_nil_l.
+    apply fold_left_preserves_list_invar'; auto.
+  Qed.
+  
+  Lemma rmks'_empty :
+      rmks' (NM.empty (list (list symbol))) [].
+  Proof.
+    intros x hi.
+    apply NMF.empty_in_iff in hi; destruct hi.
+  Qed.
+
+  Lemma find_Some__In :
+    forall (x   : nonterminal)
+           (rm  : rhs_map)
+           (yss : list (list symbol)),
+      NM.find x rm = Some yss -> NM.In x rm.
+  Proof.
+    intros x rm yss hf.
+    apply NMF.in_find_iff; tc.
+  Qed.
+  
+  Lemma addProduction_preserves_rmks' :
+    forall rm pr prs,
+      rmks' rm prs
+      -> rmks' (addProduction (fst pr) (snd pr) rm) (prs ++ [pr]).
+  Proof.
+    intros rm ((x, ys), e) prs hi x' hi'; red in hi; sis.
+    destruct (NM.find x rm) as [yss |] eqn:hf.
+    - destruct (nt_eq_dec x' x) as [heq | hneq]; subst.
+      + apply find_Some__In in hf.
+        apply hi in hf.
+        destruct hf as [ys' [e' hi'']].
+        exists ys', e'.
+        apply in_or_app; left; auto.
+      + apply NMF.add_neq_in_iff in hi'; auto.
+        apply hi in hi'.
+        destruct hi' as [ys' [e' hi']].
+        exists ys', e'.
+        apply in_or_app; left; auto.
+    - destruct (nt_eq_dec x' x) as [heq | hneq]; subst.
+      + exists ys, e.
+        apply in_or_app; right.
+        apply in_eq.
+      + apply NMF.add_neq_in_iff in hi'; auto.
+        apply hi in hi'.
+        destruct hi' as [ys' [e' hi']].
+        exists ys', e'.
+        apply in_or_app; left; auto.
+  Qed.
+  
+  Lemma in_rhs_map__in_pairs :
+    forall (prs : list (production * grammar_entry)),
+      rmks' 
+        (fold_left (fun a p => addProduction (fst p) (snd p) a)
+                   prs
+                   (NM.empty (list (list symbol))))
+        prs.
+  Proof.
+    intros prs.
+    apply fold_left_preserves_list_invar.
+    - apply rmks'_empty.
+    - apply addProduction_preserves_rmks'.
+  Qed.
+  
+  Lemma grammar_eq_key_elt_equivalence :
+    Equivalence (PM.eq_key_elt (elt:=grammar_entry)).
+  Proof.
+    constructor; try firstorder.
+    - intros x y z heq heq'.
+      repeat red in heq; repeat red in heq'; repeat red.
+      destruct heq as [h1 h2]; destruct heq' as [h3 h4].
+      rewrite h1; rewrite h3; rewrite h2; rewrite h4; auto.
+  Qed.
+  
+  Lemma mkRhsMap_keys_sound :
+    forall g,
+      rhs_map_keys_sound (mkRhsMap g) g.
+  Proof.
+    intros g x hi.
+    unfold mkRhsMap in hi.
+    rewrite PM.fold_1 in hi.
+    apply in_rhs_map__in_pairs in hi.
+    destruct hi as [ys [e hi]].
+    exists ys.
+    apply PMF.elements_in_iff.
+    exists e.
+    apply In_InA; auto.
+    apply grammar_eq_key_elt_equivalence.
+  Qed.
+
+  Definition rhs_map_sound (rm : rhs_map) (g : grammar) :=
+    forall x ys yss,
+      NM.MapsTo x yss rm -> In ys yss -> PM.In (x, ys) g.
+
+  Definition rhs_map_complete (rm : rhs_map) (g : grammar) :=
+    forall x ys,
+      PM.In (x, ys) g -> exists yss, NM.MapsTo x yss rm /\ In ys yss.
+
+  Definition rhs_map_keys_sound' (rm : rhs_map) (ps : list production) : Prop :=
+    forall x,
+      NM.In x rm -> exists ys, In (x, ys) ps.
+
+  Lemma addProduction_preserves_keys_soundness' :
+    forall rm ps p,
+      rhs_map_keys_sound' rm ps
+      -> rhs_map_keys_sound' (addProduction p rm) (p :: ps).
   Proof.
     unfold addProduction; intros pm ps (x, ys) hs x' hi; sis. 
     destruct (NM.find _ _) as [yss |] eqn:hf;
-      destruct (nt_eq_dec x' x) as [? | hneq]; subst; auto;
-        apply NMF.add_neq_in_iff in hi; auto.
+      destruct (nt_eq_dec x' x) as [? | hneq]; subst; eauto.
+    - apply NMF.add_neq_in_iff in hi; auto.
+      apply hs in hi; destruct hi; eauto.
+    - apply NMF.add_neq_in_iff in hi; auto.
+      apply hs in hi; destruct hi; eauto.
   Qed.
 
+  (*
   Lemma addProduction_preserves_soundness :
     forall pm ps p,
       production_map_sound pm ps
@@ -468,10 +563,20 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
         * exists yss; split; auto.
           apply NM.add_2; auto.
   Qed.
-          
-  Definition mkProductionMap (g : grammar) : production_map :=
-    fold_right addProduction (NM.empty (list (list symbol))) g.
-
+   *)
+ 
+  
+  Lemma mkRhsMap_keys_sound :
+    forall g,
+      rhs_map_keys_sound (mkRhsMap g) g.
+  Proof.
+    intros g x hi.
+    
+    intros g; unfold mkProductionMap; rewrite <- app_nil_r.
+    apply fold_right_addProduction_preserves_keys_soundness.
+    apply empty_production_map_keys_sound.
+  Qed.
+  
   Lemma fold_right_addProduction_preserves_keys_soundness :
     forall pre suf pm,
       production_map_keys_sound pm suf
