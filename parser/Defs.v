@@ -326,9 +326,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
              (Hw : grammar_wf g)
              (Hi : PM.In p g) : production_semty p :=
     match PM.find p g as o return PM.find p g = o -> _ with
-    | Some (@existT _ _ p' _) =>
+    | Some (@existT _ _ _ fs) =>
       fun Hf =>
-        (coerce_production_semty _ _ _ _ Hw Hf)
+        (coerce_production_semty _ _ _ fs Hw Hf)
     | None =>
       fun Hf =>
         match in_find_contra _ _ Hi Hf with end
@@ -343,6 +343,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Module NM  := FMapAVL.Make NT_as_UOT.
   Module NMF := FMapFacts.Facts NM.
 
+  Lemma find_Some__In :
+    forall (x : nonterminal)
+           (A : Type)
+           (a : A)
+           (m : NM.t A),
+      NM.find x m = Some a -> NM.In x m.
+  Proof.
+    intros x A a m Hi.
+    apply NMF.in_find_iff; tc.
+  Qed.
+
   Definition rhs_map := NM.t (list (list symbol)).
 
   Definition addProduction (p : production) (e : grammar_entry) (rm : rhs_map) : rhs_map :=
@@ -356,63 +367,18 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Definition mkRhsMap (g : grammar) : rhs_map :=
     PM.fold addProduction g (NM.empty (list (list symbol))).
-  
-  Definition rhs_map_keys_sound (rm : rhs_map) (g : grammar) : Prop :=
-    forall x,
-      NM.In x rm -> exists ys, PM.In (x, ys) g.
+
+  (* Soundness of keys in the result of mkRhsMap w.r.t. the input grammar *)
 
   Definition rmks' (rm : rhs_map) (prs : list (production * grammar_entry)) : Prop :=
     forall x,
       NM.In x rm -> exists ys e, In ((x, ys), e) prs.
-
-Lemma fold_left_preserves_list_invar' :
-    forall (A B   : Type)
-           (f     : A -> B -> A)
-           (xs ys : list B)
-           (a     : A)
-           (P     : A -> list B -> Prop),
-      P a xs
-      -> (forall a b bs, P a bs -> P (f a b) (bs ++ [b]))
-      -> P (fold_left f ys a) (xs ++ ys).
-  Proof.
-    intros A B f xs ys; revert xs. 
-    induction ys as [| y ys IH]; intros xs a P ha hf; sis.
-    - rew_anr; auto.
-    - apply hf with (b := y) in ha.
-      apply IH with (xs := xs ++ [y]) in ha; auto.
-      rewrite cons_app_singleton; apps.
-  Qed.
-
-  Lemma fold_left_preserves_list_invar :
-    forall (A B : Type)
-           (f   : A -> B -> A)
-           (bs  : list B)
-           (a   : A)
-           (P   : A -> list B -> Prop),
-      P a []
-      -> (forall a b bs, P a bs -> P (f a b) (bs ++ [b]))
-      -> P (fold_left f bs a) bs.
-  Proof.
-    intros.
-    rewrite <- app_nil_l.
-    apply fold_left_preserves_list_invar'; auto.
-  Qed.
   
   Lemma rmks'_empty :
       rmks' (NM.empty (list (list symbol))) [].
   Proof.
     intros x hi.
     apply NMF.empty_in_iff in hi; destruct hi.
-  Qed.
-
-  Lemma find_Some__In :
-    forall (x   : nonterminal)
-           (rm  : rhs_map)
-           (yss : list (list symbol)),
-      NM.find x rm = Some yss -> NM.In x rm.
-  Proof.
-    intros x rm yss hf.
-    apply NMF.in_find_iff; tc.
   Qed.
   
   Lemma addProduction_preserves_rmks' :
@@ -444,7 +410,7 @@ Lemma fold_left_preserves_list_invar' :
         apply in_or_app; left; auto.
   Qed.
   
-  Lemma in_rhs_map__in_pairs :
+  Lemma rmks'__fold_left :
     forall (prs : list (production * grammar_entry)),
       rmks' 
         (fold_left (fun a p => addProduction (fst p) (snd p) a)
@@ -467,6 +433,10 @@ Lemma fold_left_preserves_list_invar' :
       destruct heq as [h1 h2]; destruct heq' as [h3 h4].
       rewrite h1; rewrite h3; rewrite h2; rewrite h4; auto.
   Qed.
+
+  Definition rhs_map_keys_sound (rm : rhs_map) (g : grammar) : Prop :=
+    forall x,
+      NM.In x rm -> exists ys, PM.In (x, ys) g.
   
   Lemma mkRhsMap_keys_sound :
     forall g,
@@ -475,7 +445,7 @@ Lemma fold_left_preserves_list_invar' :
     intros g x hi.
     unfold mkRhsMap in hi.
     rewrite PM.fold_1 in hi.
-    apply in_rhs_map__in_pairs in hi.
+    apply rmks'__fold_left in hi.
     destruct hi as [ys [e hi]].
     exists ys.
     apply PMF.elements_in_iff.
@@ -484,192 +454,198 @@ Lemma fold_left_preserves_list_invar' :
     apply grammar_eq_key_elt_equivalence.
   Qed.
 
+  (* Soundness of the result of mkRhsMap w.r.t. the input grammar *)
+
+  Definition rms' (rm : rhs_map) (prs : list (production * grammar_entry)) : Prop :=
+    forall x ys yss,
+      NM.MapsTo x yss rm -> In ys yss -> exists e, In ((x, ys), e) prs.
+
+  Lemma rms'_empty :
+      rms' (NM.empty (list (list symbol))) [].
+  Proof.
+    intros x ys yss Hm Hi.
+    exfalso.
+    eapply NMF.empty_mapsto_iff; eauto.
+  Qed.
+
+  Lemma addProduction_preserves_rms' :
+    forall rm pr prs,
+      rms' rm prs
+      -> rms' (addProduction (fst pr) (snd pr) rm) (prs ++ [pr]).
+  Proof.
+    intros rm ((x', ys'), e) prs Hr x ys yss Hm Hi; sis. 
+    destruct (NM.find _ _) as [yss' |] eqn:Hf.
+    - destruct (nt_eq_dec x' x) as [? | Hneq]; subst.
+      + apply NMF.add_mapsto_iff in Hm.
+        destruct Hm as [[_ Heq] | [? ?]]; tc; subst.
+        destruct Hi as [Hh | Ht]; subst.
+        * exists e.
+          apply in_or_app; right.
+          apply in_eq.
+        * apply NMF.find_mapsto_iff in Hf.
+          eapply Hr in Ht; eauto.
+          destruct Ht as [e' Hi].
+          exists e'.
+          apply in_or_app; left; auto.
+      + apply NM.add_3 in Hm; auto.
+        eapply Hr in Hi; eauto.
+        destruct Hi as [e' Hi].
+        exists e'.
+        apply in_or_app; left; auto.
+    - destruct (nt_eq_dec x' x) as [? | Hneq]; subst.
+      + apply NMF.add_mapsto_iff in Hm.
+        destruct Hm as [[_ Heq] | [? ?]]; tc; subst.
+        apply in_singleton_eq in Hi; subst.
+        exists e.
+        apply in_or_app; right.
+        apply in_eq.
+      + apply NM.add_3 in Hm; auto.
+        eapply Hr in Hi; eauto.
+        destruct Hi as [e' Hi].
+        exists e'.
+        apply in_or_app; left; auto.
+  Qed.
+
+    Lemma rms'__fold_left :
+    forall (prs : list (production * grammar_entry)),
+      rms' 
+        (fold_left (fun a p => addProduction (fst p) (snd p) a)
+                   prs
+                   (NM.empty (list (list symbol))))
+        prs.
+  Proof.
+    intros prs.
+    apply fold_left_preserves_list_invar.
+    - apply rms'_empty.
+    - apply addProduction_preserves_rms'.
+  Qed.
+  
   Definition rhs_map_sound (rm : rhs_map) (g : grammar) :=
     forall x ys yss,
       NM.MapsTo x yss rm -> In ys yss -> PM.In (x, ys) g.
 
-  Definition rhs_map_complete (rm : rhs_map) (g : grammar) :=
-    forall x ys,
-      PM.In (x, ys) g -> exists yss, NM.MapsTo x yss rm /\ In ys yss.
-
-  Definition rhs_map_keys_sound' (rm : rhs_map) (ps : list production) : Prop :=
-    forall x,
-      NM.In x rm -> exists ys, In (x, ys) ps.
-
-  Lemma addProduction_preserves_keys_soundness' :
-    forall rm ps p,
-      rhs_map_keys_sound' rm ps
-      -> rhs_map_keys_sound' (addProduction p rm) (p :: ps).
+  Lemma mkRhsMap_sound :
+    forall g,
+      rhs_map_sound (mkRhsMap g) g.
   Proof.
-    unfold addProduction; intros pm ps (x, ys) hs x' hi; sis. 
-    destruct (NM.find _ _) as [yss |] eqn:hf;
-      destruct (nt_eq_dec x' x) as [? | hneq]; subst; eauto.
-    - apply NMF.add_neq_in_iff in hi; auto.
-      apply hs in hi; destruct hi; eauto.
-    - apply NMF.add_neq_in_iff in hi; auto.
-      apply hs in hi; destruct hi; eauto.
+    intros g x ys yss Hm Hi.
+    unfold mkRhsMap in Hm.
+    rewrite PM.fold_1 in Hm.
+    eapply rms'__fold_left in Hi; eauto.
+    destruct Hi as [e Hi].
+    apply PMF.elements_in_iff.
+    exists e.
+    apply In_InA; auto.
+    apply grammar_eq_key_elt_equivalence.
   Qed.
 
-  (*
-  Lemma addProduction_preserves_soundness :
-    forall pm ps p,
-      production_map_sound pm ps
-      -> production_map_sound (addProduction p pm) (p :: ps).
+  (* Completeness of the result of mkRhsMap w.r.t. the input grammar *)
+
+  Definition rmc' (rm : rhs_map) (prs : list (production * grammar_entry)) : Prop :=
+    forall x ys e,
+      In ((x, ys), e) prs
+      -> exists yss, NM.MapsTo x yss rm /\ In ys yss.
+
+  Lemma rmc'_empty :
+      rmc' (NM.empty (list (list symbol))) [].
   Proof.
-    unfold addProduction; intros pm ps (x, ys) hs x' ys' yss hm hi.
-    destruct (NM.find _ _) as [yss' |] eqn:hf.
-    - destruct (nt_eq_dec x' x) as [? | hneq]; subst.
-      + apply NMF.add_mapsto_iff in hm.
-        destruct hm as [[_ heq] | [? ?]]; tc; subst.
-        destruct hi as [hh | ht]; subst.
-        * apply in_eq.
-        * apply in_cons; eapply hs; eauto.
-          apply NMF.find_mapsto_iff; auto.
-      + apply NM.add_3 in hm; auto.
-        apply in_cons; eauto.
-    - destruct (nt_eq_dec x' x) as [? | hneq]; subst.
-      + apply NMF.add_mapsto_iff in hm.
-        destruct hm as [[_ heq] | [? ?]]; tc; subst.
-        apply in_singleton_eq in hi; subst; apply in_eq.
-      + apply NM.add_3 in hm; auto.
-        apply in_cons; eauto.
+    intros x ys e Hi.
+    inv Hi. 
   Qed.
 
-  Lemma addProduction_preserves_completeness :
-    forall pm ps p,
-      production_map_complete pm ps
-      -> production_map_complete (addProduction p pm) (p :: ps).
+  Lemma addProduction_preserves_rmc' :
+    forall rm pr prs,
+      rmc' rm prs
+      -> rmc' (addProduction (fst pr) (snd pr) rm) (prs ++ [pr]).
   Proof.
-    unfold addProduction; intros pm ps (x, ys) hc x' ys' hi.
-    destruct hi as [hh | ht].
-    - inv hh.
-      destruct (NM.find _ _) as [yss' |] eqn:hf; eexists; split;
-        try (apply NMF.add_mapsto_iff; auto); try apply in_eq.
+    intros rm ((x', ys'), e') prs hr x ys e hi; sis.
+    apply in_app_or in hi; destruct hi as [hl | hr'].
     - destruct (NM.find _ _) as [yss' |] eqn:hf.
       + destruct (nt_eq_dec x' x) as [? | hneq]; subst;
-          apply hc in ht; destruct ht as [yss [hm hi]].
-        * exists (ys :: yss'); split; auto.
+          apply hr in hl; destruct hl as [yss [hm hi]].
+        * exists (ys' :: yss'); split; auto.
           -- apply NMF.add_mapsto_iff; auto.
           -- apply NMF.find_mapsto_iff in hm.
              rewrite hm in hf; inv hf; apply in_cons; auto.
         * exists yss; split; auto.
           apply NMF.add_mapsto_iff; auto.
       + destruct (nt_eq_dec x' x) as [? | hneq]; subst;
-          apply hc in ht; destruct ht as [yss [hm hi]].
-        * exists [ys]; split; auto.
+          apply hr in hl; destruct hl as [yss [hm hi]].
+        * exists [ys']; split; auto.
           -- apply NMF.add_mapsto_iff; auto.
           -- apply NMF.find_mapsto_iff in hm.
              rewrite hm in hf; inv hf; apply in_cons; auto.
         * exists yss; split; auto.
           apply NM.add_2; auto.
-  Qed.
-   *)
- 
-  
-  Lemma mkRhsMap_keys_sound :
-    forall g,
-      rhs_map_keys_sound (mkRhsMap g) g.
-  Proof.
-    intros g x hi.
-    
-    intros g; unfold mkProductionMap; rewrite <- app_nil_r.
-    apply fold_right_addProduction_preserves_keys_soundness.
-    apply empty_production_map_keys_sound.
+    - apply in_singleton_eq in hr'; inv hr'.
+      destruct (NM.find _ _) as [yss' |] eqn:hf; eexists; split;
+        try (apply NMF.add_mapsto_iff; auto); try apply in_eq.
   Qed.
   
-  Lemma fold_right_addProduction_preserves_keys_soundness :
-    forall pre suf pm,
-      production_map_keys_sound pm suf
-      -> production_map_keys_sound (fold_right addProduction pm pre) (pre ++ suf).
+  Lemma rmc'__fold_left :
+    forall (prs : list (production * grammar_entry)),
+      rmc' 
+        (fold_left (fun a p => addProduction (fst p) (snd p) a)
+                   prs
+                   (NM.empty (list (list symbol))))
+        prs.
   Proof.
-    intros pre; induction pre as [| (x', ys') pre IH]; intros suf pm hs; auto.
-    rewrite fold_right_unroll.
-    apply addProduction_preserves_keys_soundness; apply IH; auto.
+    intros prs.
+    apply fold_left_preserves_list_invar.
+    - apply rmc'_empty.
+    - apply addProduction_preserves_rmc'.
   Qed.
 
-  Lemma empty_production_map_keys_sound :
+  Definition rhs_map_complete (rm : rhs_map) (g : grammar) :=
+    forall x ys,
+      PM.In (x, ys) g -> exists yss, NM.MapsTo x yss rm /\ In ys yss.
+
+  Lemma pm_InA__In :
+    forall x ys e prs,
+      InA (PM.eq_key_elt (elt:=grammar_entry)) ((x, ys), e) prs
+      -> In ((x, ys), e) prs.
+  Proof.
+    intros x ys e prs hi; induction prs as [| ((x', ys'), e') prs IH]; sis.
+    - inv hi.
+    - inversion hi as [pr' prs' heq | pr' prs' hi']; subst; clear hi.
+      + repeat red in heq; sis.
+        destruct heq as [heq ?]; subst.
+        inv heq; auto.
+      + right; auto.
+  Qed.
+
+  Lemma mkRhsMap_complete :
     forall g,
-      production_map_keys_sound (NM.empty (list (list symbol))) g.
+      rhs_map_complete (mkRhsMap g) g.
   Proof.
-    intros g x hi.
-    exfalso; eapply NMF.empty_in_iff; eauto.
+    intros g x ys hi.
+    apply PMF.elements_in_iff in hi.
+    destruct hi as [e hi].
+    apply pm_InA__In in hi.
+    eapply rmc'__fold_left in hi.
+    destruct hi as [yss [hm hi]].
+    exists yss; split; auto.
+    unfold mkRhsMap.
+    rewrite PM.fold_1; auto.
   Qed.
 
-  Lemma mkProductionMap_keys_sound :
-    forall g,
-      production_map_keys_sound (mkProductionMap g) g.
-  Proof.
-    intros g; unfold mkProductionMap; rewrite <- app_nil_r.
-    apply fold_right_addProduction_preserves_keys_soundness.
-    apply empty_production_map_keys_sound.
-  Qed.
-
-  Lemma fold_right_addProduction_preserves_soundness :
-    forall pre suf pm,
-      production_map_sound pm suf
-      -> production_map_sound (fold_right addProduction pm pre) (pre ++ suf).
-  Proof.
-    intros pre; induction pre as [| (x', ys') pre IH]; intros suf pm hs; auto.
-    rewrite fold_right_unroll.
-    apply addProduction_preserves_soundness; apply IH; auto.
-  Qed.
-
-  Lemma empty_production_map_sound :
-    forall g,
-      production_map_sound (NM.empty (list (list symbol))) g.
-  Proof.
-    intros g x ys yss hm hi.
-    exfalso; eapply NMF.empty_mapsto_iff; eauto.
-  Qed.
-
-  Lemma mkProductionMap_sound :
-    forall g,
-      production_map_sound (mkProductionMap g) g.
-  Proof.
-    intros g; unfold mkProductionMap; rewrite <- app_nil_r.
-    apply fold_right_addProduction_preserves_soundness.
-    apply empty_production_map_sound.
-  Qed.
-
-  Lemma fold_right_addProduction_preserves_completeness :
-    forall pre suf pm,
-      production_map_complete pm suf
-      -> production_map_complete (fold_right addProduction pm pre) (pre ++ suf).
-  Proof.
-    intros pre; induction pre as [| (x', ys') pre IH]; intros suf pm hs; auto.
-    rewrite fold_right_unroll.
-    apply addProduction_preserves_completeness; apply IH; auto.
-  Qed.
-
-  Lemma empty_production_map_complete__empty_grammar :
-    production_map_complete (NM.empty (list (list symbol))) [].
-  Proof.
-    intros x ys hi; inv hi.
-  Qed.
-
-  Lemma mkProductionMap_complete :
-    forall g,
-      production_map_complete (mkProductionMap g) g.
-  Proof.
-    intros g; unfold mkProductionMap; rewrite <- app_nil_r.
-    apply fold_right_addProduction_preserves_completeness.
-    apply empty_production_map_complete__empty_grammar.
-  Qed.
-
-  Definition production_map_correct (pm : production_map) (g : grammar) :=
-    production_map_keys_sound pm g
-    /\production_map_sound pm g
-    /\ production_map_complete pm g.
+  Definition rhs_map_correct (rm : rhs_map) (g : grammar) :=
+    rhs_map_keys_sound rm g
+    /\ rhs_map_sound rm g
+    /\ rhs_map_complete rm g.
   
-  Lemma mkProductionMap_correct :
+  Lemma mkRhsMap_correct :
     forall (g : grammar),
-      production_map_correct (mkProductionMap g) g.
+      rhs_map_correct (mkRhsMap g) g.
   Proof.
     intros g; repeat split.
-    - apply mkProductionMap_keys_sound.
-    - apply mkProductionMap_sound.
-    - apply mkProductionMap_complete.
+    - apply mkRhsMap_keys_sound.
+    - apply mkRhsMap_sound.
+    - apply mkRhsMap_complete.
   Qed.
+
+
+  
 
   Lemma in_grammar_find_some :
     forall g pm x ys,

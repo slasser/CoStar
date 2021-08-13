@@ -277,3 +277,46 @@ Fixpoint tuple' (xs : list Type) : Type :=
 
 Definition tuple (xs : list Type) : Type :=
   tuple' (rev xs).
+
+Lemma fold_left_preserves_list_invar' :
+    forall (A B   : Type)
+           (f     : A -> B -> A)
+           (xs ys : list B)
+           (a     : A)
+           (P     : A -> list B -> Prop),
+      P a xs
+      -> (forall a b bs, P a bs -> P (f a b) (bs ++ [b]))
+      -> P (fold_left f ys a) (xs ++ ys).
+  Proof.
+    intros A B f xs ys; revert xs. 
+    induction ys as [| y ys IH]; intros xs a P ha hf; sis.
+    - rew_anr; auto.
+    - apply hf with (b := y) in ha.
+      apply IH with (xs := xs ++ [y]) in ha; auto.
+      rewrite cons_app_singleton; apps.
+  Qed.
+
+  Lemma fold_left_preserves_list_invar :
+    forall (A B : Type)
+           (f   : A -> B -> A)
+           (bs  : list B)
+           (a   : A)
+           (P   : A -> list B -> Prop),
+      P a []
+      -> (forall a b bs, P a bs -> P (f a b) (bs ++ [b]))
+      -> P (fold_left f bs a) bs.
+  Proof.
+    intros.
+    rewrite <- app_nil_l.
+    apply fold_left_preserves_list_invar'; auto.
+  Qed.
+
+  Lemma exists_in_app_l :
+    forall (A     : Type)
+           (xs ys : list A),
+      (exists x, In x xs)
+      -> exists x, In x (xs ++ ys).
+  Proof.
+    intros A xs ys [x Hi].
+    eexists; apply in_or_app; left; eauto.
+  Qed.
