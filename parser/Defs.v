@@ -985,18 +985,18 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   (* Derivation relation for concrete syntax trees *)
   Inductive tree_derivation (g : grammar) : symbol -> list token -> tree -> Prop :=
-  | T_der  : 
+  | Leaf_der  : 
       forall (a : terminal) (v : t_semty a),
         tree_derivation g (T a) [@existT _ _ a v] (Leaf a)
-  | NT_der : 
+  | Node_der : 
       forall (x  : nonterminal) (ys : list symbol) (w : list token) (sts : forest),
         PM.In (x, ys) g
         -> forest_derivation g ys w sts
         -> tree_derivation g (NT x) w (Node x sts)
   with forest_derivation (g : grammar) : list symbol -> list token-> forest-> Prop :=
-       | Nil_der  : 
+       | NilForest_der  : 
            forest_derivation g [] [] []
-       | Cons_der : 
+       | ConsForest_der : 
            forall (s : symbol) (ss : list symbol) (wpre wsuf : list token) 
                   (tr : tree) (trs : list tree),
              tree_derivation g s wpre tr
@@ -1172,6 +1172,102 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition unique_forest_derivation g ss w v :=
     forest_derivation g ss w v
     /\ forall v', forest_derivation g ss w v' -> v = v'.
+
+  (* Derivation relation for semantic values *)
+  Inductive sem_value_derivation (g : grammar) :
+    forall (s : symbol), list token -> symbol_semty s -> Prop :=
+  | T_der  : 
+      forall (a : terminal) (v : t_semty a),
+        sem_value_derivation g (T a) [@existT _ _ a v] v
+  | NT_der : 
+      forall (x  : nonterminal)
+             (ys : list symbol)
+             (w  : list token)
+             (vs : symbols_semty ys)
+             (f  : action_semty (x, ys)),
+        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (None, f)) g
+        -> sem_values_derivation g ys w vs
+        -> sem_value_derivation g (NT x) w (f vs)
+  | NT_der_pred : 
+      forall (x  : nonterminal)
+             (ys : list symbol)
+             (w  : list token)
+             (vs : symbols_semty ys)
+             (p  : predicate_semty (x, ys))
+             (f  : action_semty (x, ys)),
+        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (Some p, f)) g
+        -> sem_values_derivation g ys w vs
+        -> p vs = true
+        -> sem_value_derivation g (NT x) w (f vs)
+  with sem_values_derivation (g : grammar) :
+         forall (ys : list symbol), list token -> (symbols_semty ys) -> Prop :=
+       | Nil_der  : 
+           sem_values_derivation g [] [] tt
+       | Cons_der : 
+           forall (s     : symbol)
+                  (ss    : list symbol)
+                  (w1 w2 : list token) 
+                  (v     : symbol_semty s)
+                  (vs    : symbols_semty ss),
+             sem_value_derivation g s w1 v
+             -> sem_values_derivation g ss w2 vs
+             -> sem_values_derivation g (s :: ss) (w1 ++ w2) (v, vs).
+
+  Hint Constructors sem_value_derivation sem_values_derivation : core.
+
+  Scheme sem_value_derivation_mutual_ind  := Induction for sem_value_derivation Sort Prop
+    with sem_values_derivation_mutual_ind := Induction for sem_values_derivation Sort Prop.
+
+  Definition revTuple'_nil_case :
+    forall (xs ys : list symbol)
+           (ys_vs : symbols_semty ys),
+           xs = []
+           -> symbols_semty (rev xs ++ ys).
+    intros; subst; auto.
+  Defined.
+
+  Definition revTuple'_rec_case :
+    forall (x         : symbol)
+           (xs' xs ys : list symbol)
+           (xs_vs     : symbols_semty xs)
+           (ys_vs     : symbols_semty ys)
+           (f         : (forall (xs ys : list symbol),
+                            symbols_semty xs
+                            -> symbols_semty ys
+                            -> symbols_semty (rev xs ++ ys))),
+      xs = x :: xs'
+      -> symbols_semty (rev xs ++ ys).
+    intros x xs' xs ys xs_vs ys_vs f heq; subst; sis.
+    destruct xs_vs as (x_v, xs'_vs).
+    rewrite <- app_assoc; sis.
+    apply (f xs' (x :: ys) xs'_vs (x_v, ys_vs)).
+  Defined.
+  
+ Fixpoint revTuple'
+          (xs ys : list symbol)
+          (xs_vs : symbols_semty xs)
+          (ys_vs : symbols_semty ys) : symbols_semty (rev xs ++ ys) :=
+   match xs as l return xs = l -> _ with
+   | []       => fun heq => revTuple'_nil_case xs ys ys_vs heq
+   | x :: xs' => fun heq => revTuple'_rec_case x xs' xs ys xs_vs ys_vs revTuple' heq
+   end eq_refl.
+
+ Definition revTuple_body :
+   forall (xs : list symbol)
+          (vs : symbols_semty xs), symbols_semty (rev xs).
+   intros xs vs.
+   rewrite <- app_nil_r.
+   apply (revTuple' xs [] vs tt).
+ Defined.
+
+ Definition revTuple (xs : list symbol) (vs : symbols_semty xs) : symbols_semty (rev xs) :=
+   revTuple_body xs vs.
+
+  Ltac inv_td hs  hi hg:=
+    inversion hs as [ ? ? | ? ? ? ? hi hg]; subst; clear hs.
+
+  Ltac inv_fd hg  hs hg' :=
+    inversion hg as [| ? ? ? ? ? ? hs hg']; subst; clear hg.
 
   Inductive sym_recognize (g : grammar) : symbol -> list token -> Prop :=
   | T_rec  : 

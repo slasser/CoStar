@@ -269,14 +269,11 @@ Proof.
   auto.
 Qed.
 
-Fixpoint tuple' (xs : list Type) : Type :=
+Fixpoint tuple (xs : list Type) : Type :=
   match xs with
   | [] => unit
-  | x :: xs' => prod (tuple' xs') x
+  | x :: xs' => prod x (tuple xs')
   end.
-
-Definition tuple (xs : list Type) : Type :=
-  tuple' (rev xs).
 
 Lemma fold_left_preserves_list_invar' :
     forall (A B   : Type)
