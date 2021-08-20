@@ -230,6 +230,51 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition symbols_semty (gamma : list symbol) : Type :=
     tuple (List.map symbol_semty gamma).
 
+  Definition revTuple'_nil_case :
+    forall (xs ys : list symbol)
+           (ys_vs : symbols_semty ys)
+           (heq   : xs = []),
+      symbols_semty (rev xs ++ ys).
+    intros; subst; auto.
+  Defined.
+
+  Definition revTuple'_rec_case :
+    forall (x         : symbol)
+           (xs' xs ys : list symbol)
+           (xs_vs     : symbols_semty xs)
+           (ys_vs     : symbols_semty ys)
+           (f         : (forall (xs ys : list symbol),
+                            symbols_semty xs
+                            -> symbols_semty ys
+                            -> symbols_semty (rev xs ++ ys)))
+           (heq       : xs = x :: xs'),
+      symbols_semty (rev xs ++ ys).
+    intros x xs' xs ys xs_vs ys_vs f heq; subst; sis.
+    destruct xs_vs as (x_v, xs'_vs).
+    rewrite <- app_assoc; sis.
+    apply (f xs' (x :: ys) xs'_vs (x_v, ys_vs)).
+  Defined.
+  
+  Fixpoint revTuple'
+           (xs ys : list symbol)
+           (xs_vs : symbols_semty xs)
+           (ys_vs : symbols_semty ys) : symbols_semty (rev xs ++ ys) :=
+    match xs as l return xs = l -> _ with
+    | []       => fun heq => revTuple'_nil_case xs ys ys_vs heq
+    | x :: xs' => fun heq => revTuple'_rec_case x xs' xs ys xs_vs ys_vs revTuple' heq
+    end eq_refl.
+
+  Definition revTuple_body :
+    forall (xs : list symbol)
+           (vs : symbols_semty xs), symbols_semty (rev xs).
+    intros xs vs.
+    rewrite <- app_nil_r.
+    apply (revTuple' xs [] vs tt).
+  Defined.
+  
+  Definition revTuple (xs : list symbol) (vs : symbols_semty xs) : symbols_semty (rev xs) :=
+    revTuple_body xs vs.
+
   (* Grammar productions *)
   
   Definition production := (nonterminal * list symbol)%type.
@@ -253,6 +298,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   (* Finite maps with productions as keys *)
   Module PM  := FMapAVL.Make Production_as_UOT.
   Module PMF := FMapFacts.Facts PM.
+
+  Lemma pm_mapsto_in :
+    forall (p : production)
+           (A : Type)
+           (a : A)
+           (m : PM.t A),
+      PM.MapsTo p a m -> PM.In p m.
+  Proof.
+    intros x A a m hm.
+    apply PMF.in_find_iff.
+    intros hf.
+    apply PMF.find_mapsto_iff in hm; tc.
+  Qed.
 
   Lemma grammar_eq_key_elt_equivalence :
     forall (A : Type),
@@ -1112,6 +1170,132 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     repeat eexists; eauto.
   Qed.
 
+  Lemma inv_leaf_treeder :
+    forall g s w a,
+      tree_derivation g s w (Leaf a)
+      -> s = T a  /\ exists v, w = [@existT _ _ a v].
+  Proof.
+    intros g s w a hd; inv hd; eauto.
+  Qed.
+
+  Lemma inv_node_treeder :
+    forall g s w x sts,
+      tree_derivation g s w (Node x sts)
+      -> s = NT x /\ exists ys, PM.In (x, ys) g /\ forest_derivation g ys w sts.
+  Proof.
+    intros g s w x sts hd; inv hd; eauto.
+  Qed.
+
+  Lemma inv_cons_forestder :
+    forall g ss w t ts,
+      forest_derivation g ss w (t :: ts)
+      -> exists s ss' w1 w2,
+        ss = s :: ss'
+        /\ w = w1 ++ w2
+        /\ tree_derivation g s w1 t
+        /\ forest_derivation g ss' w2 ts.
+  Proof.
+    intros g ss w t ts hd; inv hd; eauto 8.
+  Qed.
+            
+  Definition terminals (ts : list token) : list terminal :=
+    map (@projT1 _ t_semty) ts.
+
+  Lemma terminals_app :
+    forall ts ts',
+      terminals (ts ++ ts') = terminals ts ++ terminals ts'.
+  Proof.
+    intros ts ts'.
+    unfold terminals.
+    apply map_app.
+  Qed.
+
+  Lemma forests_eq__words_eq_rhss_eq' :
+    forall g ys w ts,
+      forest_derivation g ys w ts
+      -> forall w' suf suf' ys',
+        forest_derivation g ys' w' ts
+        -> w ++ suf = w' ++ suf'
+        -> w' = w /\ suf' = suf /\ ys' = ys.
+  Proof.
+    intros g ys w ts hf. 
+    induction hf using forest_derivation_mutual_ind with
+        (P := fun s w t (hs : tree_derivation g s w t) =>
+                forall w' suf suf' s',
+                  tree_derivation g s' w' t
+                  -> w ++ suf = w' ++ suf'
+                  -> w' = w /\ suf' = suf /\ s' = s).
+    - intros w' suf suf' s' hd heq; sis.
+      apply inv_leaf_treeder in hd.
+      destruct hd as [? [v' heq']]; subst.
+      inv heq; repeat split; auto.
+      apply heads_eq_tails_eq__lists_eq; auto.
+    - intros w' suf suf' s' hd heq.
+      apply inv_node_treeder in hd.
+      destruct hd as [? [ys' [hi hd]]]; subst.
+      eapply IHhf in hd; eauto.
+      firstorder.
+    - intros w' suf suf' ys' hd heq; inv hd; auto.
+    - intros w' suf suf' ys' hd heq.
+      apply inv_cons_forestder in hd.
+      destruct hd as [s' [ss' [w1 [w2 [heq' [heq'' [hd hd']]]]]]]; subst.
+      repeat rewrite <- app_assoc in heq.
+      eapply IHhf in hd; eauto.
+      destruct hd as [? [heq' ?]]; subst.
+      eapply IHhf0 in hd'; eauto.
+      destruct hd' as [? [? ?]]; subst; auto.
+  Qed.
+
+  Lemma forests_eq__words_eq_rhss_eq :
+    forall g ys ys' pre pre' suf suf' ts,
+      forest_derivation g ys pre ts
+      -> forest_derivation g ys' pre' ts
+      -> pre ++ suf = pre' ++ suf'
+      -> pre' = pre /\ suf' = suf /\ ys' = ys.
+  Proof.
+    intros. eapply forests_eq__words_eq_rhss_eq'; eauto.
+  Qed.
+  
+(*  Lemma forests_eq__rhss_eq' :
+    forall g ys w ts,
+      forest_derivation g ys w ts
+      -> forall w' ys',
+        forest_derivation g ys' w' ts
+        -> (terminals w' = terminals w) /\ ys' = ys.
+  Proof.
+    intros g ys w ts hf. 
+    induction hf using forest_derivation_mutual_ind with
+        (P := fun s w t (hs : tree_derivation g s w t) =>
+                forall w' s',
+                  tree_derivation g s' w' t
+                  -> terminals w' = terminals w /\ s' = s).
+    - intros w' s' hs; inv hs; auto.
+    - intros w' s' hs; inv hs; firstorder.
+    - intros w' ys' hf; auto; inv hf; auto. 
+    - intros w' ys' hf'.
+      inv hf'.
+      apply IHhf in H3.
+      destruct H3 as [ht ?]; subst.
+      apply IHhf0 in H4.
+      destruct H4 as [ht' ?]; subst.
+      split; auto.
+      repeat rewrite terminals_app.
+      rewrite ht.
+      rewrite ht'; auto.
+  Qed. *)
+
+(*  Lemma forests_eq__rhss_eq :
+    forall g ys ys' w ts,
+      forest_derivation g ys w ts
+      -> forest_derivation g ys' w ts
+      -> ys' = ys.
+  Proof.
+    intros g ys ys' w ts hf hf'.
+    eapply forests_eq__rhss_eq'
+      with (ys := ys) (ys' := ys') in hf'; eauto.
+    firstorder.
+  Qed. *)
+
 (*  Lemma trees_eq__forests_eq_words_eq' :
     forall g ys w v,
       forest_derivation g ys w v
@@ -1218,57 +1402,280 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Scheme sem_value_derivation_mutual_ind  := Induction for sem_value_derivation Sort Prop
     with sem_values_derivation_mutual_ind := Induction for sem_values_derivation Sort Prop.
 
-  Definition revTuple'_nil_case :
-    forall (xs ys : list symbol)
-           (ys_vs : symbols_semty ys),
-           xs = []
-           -> symbols_semty (rev xs ++ ys).
-    intros; subst; auto.
-  Defined.
+  Ltac inv_v hv  hm hvs hp :=
+    inversion hv as [ ? ?
+                    | ? ? ? ? ? hm hvs
+                    | ? ? ? ? ? ? hm hvs hp]; subst; clear hv.
 
-  Definition revTuple'_rec_case :
-    forall (x         : symbol)
-           (xs' xs ys : list symbol)
-           (xs_vs     : symbols_semty xs)
-           (ys_vs     : symbols_semty ys)
-           (f         : (forall (xs ys : list symbol),
-                            symbols_semty xs
-                            -> symbols_semty ys
-                            -> symbols_semty (rev xs ++ ys))),
-      xs = x :: xs'
-      -> symbols_semty (rev xs ++ ys).
-    intros x xs' xs ys xs_vs ys_vs f heq; subst; sis.
-    destruct xs_vs as (x_v, xs'_vs).
-    rewrite <- app_assoc; sis.
-    apply (f xs' (x :: ys) xs'_vs (x_v, ys_vs)).
-  Defined.
+  Ltac inv_svs hvs  hv hvs' :=
+    inversion hvs as [| ? ? ? ? ? ? hv hvs']; subst; clear hvs.
+
+  Lemma inv_t_semder :
+    forall g a w v,
+      sem_value_derivation g (T a) w v
+      -> w = [@existT _ _ a v].
+  Proof.
+    intros g a w v hs.
+    inversion hs as [? ? h h' heq | |]; subst; clear hs.
+    apply Eqdep_dec.inj_pair2_eq_dec in heq; subst; auto.
+    apply Symbol_as_UOT.eq_dec.
+  Qed.
+
+  Lemma inv_nt_semder :
+    forall g x w v,
+      sem_value_derivation g (NT x) w v
+      -> (exists ys o f vs,
+             PM.MapsTo (x, ys) (@existT _ _ (x, ys) (o, f)) g
+             /\ sem_values_derivation g ys w vs
+             /\ f vs = v).
+  Proof.
+    intros g x w v hd.
+    inversion hd as [| ? ? ? ? ? hm hd' h h' heq | ? ? ? ? ? ? hm hd' hp h h' heq]; subst; clear hd.
+    - repeat eexists; eauto.
+      apply Eqdep_dec.inj_pair2_eq_dec in heq; auto.
+      apply Symbol_as_UOT.eq_dec.
+    - repeat eexists; eauto.
+      apply Eqdep_dec.inj_pair2_eq_dec in heq; auto.
+      apply Symbol_as_UOT.eq_dec.
+  Qed.
+
+  Inductive tree_corresp_value (g : grammar) :
+    forall (s : symbol), list token -> tree -> symbol_semty s -> Prop :=
+  | Leaf_corresp :
+      forall (a : terminal)
+             (v : t_semty a),
+        tree_corresp_value g (T a) [@existT _ _ a v] (Leaf a) v
+  | Node_corresp :
+      forall (x   : nonterminal)
+             (ys  : list symbol)
+             (w   : list token)
+             (sts : forest)
+             (vs  : symbols_semty ys)
+             (o   : option (predicate_semty (x, ys)))
+             (f   : action_semty (x, ys)),
+        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (o,f)) g
+        -> forest_corresp_values g ys w sts vs
+        -> tree_corresp_value g (NT x) w (Node x sts) (f vs)
+  with forest_corresp_values (g : grammar) :
+         forall (ys : list symbol), list token -> forest -> symbols_semty ys -> Prop :=
+  | Nil_corresp :
+      forest_corresp_values g [] [] [] tt
+  | Cons_corresp :
+      forall (s     : symbol)
+             (ss    : list symbol)
+             (w1 w2 : list token)
+             (t     : tree)
+             (ts    : forest)
+             (v     : symbol_semty s)
+             (vs    : symbols_semty ss),
+        tree_corresp_value g s w1 t v
+        -> forest_corresp_values g ss w2 ts vs
+        -> forest_corresp_values g (s :: ss) (w1 ++ w2) (t :: ts) (v, vs).
+
+  Hint Constructors tree_corresp_value forest_corresp_values : core.
+
+  Scheme tcv_mutual_ind := Induction for tree_corresp_value Sort Prop
+    with fcv_mutual_ind := Induction for forest_corresp_values Sort Prop.
+
+  Lemma inv_terminal_corresp :
+    forall g a w t v,
+      tree_corresp_value g (T a) w t v
+      -> (w = [@existT _ _ a v]
+          /\ t = Leaf a).
+  Proof.
+    intros g a w t v hc.
+    inv hc.
+    apply Eqdep_dec.inj_pair2_eq_dec in H3; subst; auto.
+    apply Symbol_as_UOT.eq_dec.
+  Qed.
+
+  Lemma inv_nonterminal_corresp :
+    forall g x w t v,
+      tree_corresp_value g (NT x) w t v
+      -> (exists ys o f sts vs,
+             PM.MapsTo (x, ys) (@existT _ _ (x, ys) (o, f)) g
+             /\ t = Node x sts
+             /\ v = f vs
+             /\ forest_corresp_values g ys w sts vs).
+  Proof.
+    intros g x w t v hc.
+    inv hc.
+    repeat eexists; eauto.
+    apply Eqdep_dec.inj_pair2_eq_dec in H4; auto.
+    apply Symbol_as_UOT.eq_dec.
+  Qed.
+
+  Lemma sem_derivation__exists_corresp_tree_derivation :
+    forall g s w v,
+      sem_value_derivation g s w v
+      -> exists t, tree_corresp_value g s w t v.
+  Proof.
+    intros g s w v hs.
+    induction hs using sem_value_derivation_mutual_ind with
+        (P  := fun s w v hs =>
+                 exists t, tree_corresp_value g s w t v)
+        (P0 := fun ss w vs hs =>
+                 exists ts, forest_corresp_values g ss w ts vs); eauto.
+    - destruct IHhs as [sts hc].
+      eexists; eauto.
+    - destruct IHhs as [sts hc].
+      eexists; eauto.
+    - destruct IHhs  as [st hc].
+      destruct IHhs0 as [sts hc'].
+      exists (st :: sts); auto.
+  Qed.
+
+(*  Lemma inv_nt_tcv :
+    forall x t v,
+      tree_corresp_value (NT x) t v
+      -> (exists ys sts vs f,
+             t = Node x sts
+             /\ forest_corresp_values ys sts vs
+             /\ v = f vs).
+  Proof.
+    intros x t v hc.
+    inversion hc as [| ? ? ? ? ? ? h h' heq]; subst; clear hc.
+    repeat eexists; eauto.
+    apply Eqdep_dec.inj_pair2_eq_dec in heq; eauto.
+    apply Symbol_as_UOT.eq_dec.
+  Qed.
   
- Fixpoint revTuple'
-          (xs ys : list symbol)
-          (xs_vs : symbols_semty xs)
-          (ys_vs : symbols_semty ys) : symbols_semty (rev xs ++ ys) :=
-   match xs as l return xs = l -> _ with
-   | []       => fun heq => revTuple'_nil_case xs ys ys_vs heq
-   | x :: xs' => fun heq => revTuple'_rec_case x xs' xs ys xs_vs ys_vs revTuple' heq
-   end eq_refl.
+ *)
 
- Definition revTuple_body :
-   forall (xs : list symbol)
-          (vs : symbols_semty xs), symbols_semty (rev xs).
-   intros xs vs.
-   rewrite <- app_nil_r.
-   apply (revTuple' xs [] vs tt).
- Defined.
+  Lemma corresp__tree_derivation :
+    forall g s w t v,
+      tree_corresp_value g s w t v
+      -> tree_derivation g s w t.
+  Proof.
+    intros g s w t v hc.
+    induction hc using tcv_mutual_ind with
+        (P0 := fun ss w ts vs hc =>
+                 forest_derivation g ss w ts); eauto.
+    econstructor; eauto.
+    eapply pm_mapsto_in; eauto.
+  Qed.
+    
+  Lemma corresp__forest_derivation :
+    forall g ss w ts vs,
+      forest_corresp_values g ss w ts vs
+      -> forest_derivation g ss w ts.
+  Proof.
+    intros g ss w ts vs hc.
+    induction hc using fcv_mutual_ind with
+        (P  := fun s w t v hc =>
+                 tree_derivation g s w t); eauto.
+    econstructor; eauto.
+    eapply pm_mapsto_in; eauto.
+  Qed.
 
- Definition revTuple (xs : list symbol) (vs : symbols_semty xs) : symbols_semty (rev xs) :=
-   revTuple_body xs vs.
+  Lemma fcv__forests_eq__words_eq_rhss_eq :
+    forall g ss ss' pre pre' suf suf' ts vs vs',
+      forest_corresp_values g ss pre ts vs
+      -> forest_corresp_values g ss' pre' ts vs'
+      -> pre ++ suf = pre' ++ suf'
+      -> pre' = pre /\ suf' = suf /\ ss' = ss.
+  Proof.
+    intros g ss ss' pre pre' suf suf' ts vs vs' hc hc' heq.
+    apply corresp__forest_derivation in hc.
+    apply corresp__forest_derivation in hc'.
+    eapply forests_eq__words_eq_rhss_eq; eauto.
+  Qed.
 
-  Ltac inv_td hs  hi hg:=
-    inversion hs as [ ? ? | ? ? ? ? hi hg]; subst; clear hs.
+  Lemma tree_corresp_values_function' :
+    forall (g      : grammar)
+           (s : symbol)
+           (pre : list token)
+           (t : tree)
+           (v : symbol_semty s),
+      tree_corresp_value g s pre t v
+      -> (forall (pre' suf suf' : list token)
+                 (v' : symbol_semty s),
+             tree_corresp_value g s pre' t v'
+             -> pre ++ suf = pre' ++ suf'
+             -> pre = pre' /\ suf = suf' /\ v = v').
+  Proof.
+    intros g s pre t v hc.
+    induction hc using tcv_mutual_ind with
+        (P  := fun s pre t v hc =>
+                 (forall pre' suf suf' v',
+                     tree_corresp_value g s pre' t v'
+                     -> pre ++ suf = pre' ++ suf'
+                     -> pre = pre' /\ suf = suf' /\ v = v'))
+        (P0 := fun ss pre ts vs hc =>
+                 (forall pre' suf suf' vs',
+                     forest_corresp_values g ss pre' ts vs'
+                     -> pre ++ suf = pre' ++ suf'
+                     -> pre = pre' /\ suf = suf' /\ vs = vs')).
+    - intros wpre' wsuf wsuf' v' hc heq.
+      apply inv_terminal_corresp in hc.
+      destruct hc; subst.
+      inv heq.
+      apply Eqdep_dec.inj_pair2_eq_dec in H1; subst; auto.
+      apply t_eq_dec.
+    - intros wpre' wsuf wsuf' v' hc heq.
+      apply inv_nonterminal_corresp in hc.
+      destruct hc as [ys' [o' [f' [sts' [vs' [hm [heq' [heq'' hc]]]]]]]]; subst.
+      inv heq'.
+      pose proof hc as hc'.
+      eapply fcv__forests_eq__words_eq_rhss_eq
+        with (ss := ys) in hc; subst; eauto.
+      destruct hc as [? [? ?]]; subst.
+      repeat split; auto.
+      eapply IHhc in hc'; eauto.
+      destruct hc' as [_ [_ ?]]; subst.
+      apply PMF.MapsTo_fun
+        with (e := @existT _ _ (x,ys) (o,f)) in hm; auto.
+      apply Eqdep_dec.inj_pair2_eq_dec in hm.
+      + inv hm; auto.
+      + apply Production_as_UOT.eq_dec.
+    - intros pre suf suf' vs' hc heq; sis; subst.
+      inv hc; repeat split; auto.
+      apply Eqdep_dec.inj_pair2_eq_dec in H2; auto.
+      apply Gamma_as_UOT.eq_dec.
+    - intros wpre' wsuf wsuf' vs' hc' heq.
+      inv hc'.
+      repeat rewrite <- app_assoc in heq.
+      eapply IHhc in H5; eauto.
+      destruct H5 as [? [? ?]]; subst.
+      eapply IHhc0 in H6; eauto.
+      destruct H6 as [? [? ?]]; subst.
+      repeat split; auto.
+      apply Eqdep_dec.inj_pair2_eq_dec in H3; auto.
+      apply Gamma_as_UOT.eq_dec.
+  Qed.
 
-  Ltac inv_fd hg  hs hg' :=
-    inversion hg as [| ? ? ? ? ? ? hs hg']; subst; clear hg.
-
+  Lemma tree_corresp_value_function :
+    forall (g : grammar)
+           (s : symbol)
+           (w : list token)
+           (t : tree)
+           (v v' : symbol_semty s),
+      tree_corresp_value g s w t v
+      -> tree_corresp_value g s w t v'
+      -> v = v'.
+  Proof.
+    intros g s w t v v' hc hc'.
+    eapply tree_corresp_values_function'
+      with (suf := []) (suf' := []) (v := v) in hc'; eauto.
+    firstorder.
+  Qed.
+  
+  Lemma all_trees_eq__all_sem_values_eq :
+    forall g s w v t,
+      sem_value_derivation g s w v
+      -> tree_corresp_value g s w t v
+      -> (forall t', tree_derivation g s w t' -> t' = t)
+      -> (forall v', sem_value_derivation g s w v' -> v = v').
+  Proof.
+    intros g s w v t hd hc hu v' hd'.
+    apply sem_derivation__exists_corresp_tree_derivation in hd'.
+    destruct hd' as [t' hc'].
+    pose proof hc' as hc''.
+    apply corresp__tree_derivation in hc''.
+    apply hu in hc''; subst.
+    eapply tree_corresp_value_function; eauto.
+  Qed.
+  
   Inductive sym_recognize (g : grammar) : symbol -> list token -> Prop :=
   | T_rec  : 
       forall (a : terminal) (l : t_semty a),

@@ -317,3 +317,11 @@ Lemma fold_left_preserves_list_invar' :
     intros A xs ys [x Hi].
     eexists; apply in_or_app; left; eauto.
   Qed.
+
+
+  Lemma heads_eq_tails_eq__lists_eq :
+    forall (A : Type) (x y : A) (xs ys : list A),
+      x = y -> xs = ys -> x :: xs = y :: ys.
+  Proof.
+    intros; subst; auto.
+  Qed.
