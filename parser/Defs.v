@@ -425,6 +425,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Definition rhs_map := NM.t (list (list symbol)).
 
+  Definition allRhss (rm : rhs_map) : list (list symbol) :=
+    List.concat (List.map snd (NM.elements rm)).
+
   Definition addProduction
              (p : production)
              (e : grammar_entry)

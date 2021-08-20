@@ -60,6 +60,39 @@ Proof.
       apply Max.le_max_r.
 Qed.
 
+Definition lengths {A} (xss : list (list A)) : list nat :=
+  List.map (fun xs => List.length xs) xss.
+
+Lemma in__in_lengths :
+  forall {A} (xs : list A) xss,
+    In xs xss
+    -> In (List.length xs) (lengths xss).
+Proof.
+  intros A xs xss hi; induction xss; simpl in *; inv hi; auto. 
+Qed.
+
+Definition maxLength {A} (xss : list (list A)) : nat :=
+  listMax (lengths xss).
+
+Lemma mem_length_le_max :
+  forall {A : Type} (xs : list A) (xss : list (list A)),
+    In xs xss
+    -> List.length xs <= maxLength xss.
+Proof.
+  intros; unfold maxLength.
+  apply listMax_in_le.
+  apply in__in_lengths; auto.
+Qed.
+
+Lemma mem_length_lt_max_plus_1 :
+  forall A (xs : list A) xss,
+    In xs xss
+    -> List.length xs < 1 + maxLength xss.
+Proof.
+  intros A xs xss hi.
+  apply mem_length_le_max in hi; omega.
+Qed.
+
 (* Lemmas about standard library definitions *)
 
 Lemma app_nil_r' : forall A (xs : list A), xs = xs ++ [].
@@ -324,4 +357,4 @@ Lemma fold_left_preserves_list_invar' :
       x = y -> xs = ys -> x :: xs = y :: ys.
   Proof.
     intros; subst; auto.
-  Qed.
+  Qed. 
