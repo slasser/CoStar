@@ -392,15 +392,14 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition findPredicateAndAction
              (p  : production)
              (g  : grammar)
-             (hw : grammar_wf g)
-             (hi : PM.In p g) : production_semty p :=
+             (hw : grammar_wf g) : option (production_semty p) :=
     match PM.find p g as o return PM.find p g = o -> _ with
     | Some (@existT _ _ _ fs) =>
       fun hf =>
-        (coerce_production_semty _ _ _ fs hw hf)
+        Some (coerce_production_semty _ _ _ fs hw hf)
     | None =>
-      fun hf =>
-        match in_find_contra _ _ hi hf with end
+      fun _ =>
+        None
     end eq_refl.
 
   (* An rhs_map maps each grammar nonterminal to its
@@ -411,6 +410,41 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   (* Finite maps with nonterminal keys *)
   Module NM  := FMapAVL.Make NT_as_UOT.
   Module NMF := FMapFacts.Facts NM.
+
+  Lemma nm_InA_In :
+    forall B x (y : B) prs,
+      InA (NM.eq_key_elt (elt:=B)) (x, y) prs
+      -> In (x, y) prs.
+  Proof.
+    intros B x y prs hi; induction prs as [| (x', y') prs IH]; inv hi; sis; auto.
+    match goal with
+    | H : NM.eq_key_elt _ _ |- _ => inv H
+    end.
+    sis; subst; auto.
+  Qed.
+
+  Lemma nm_eq_key_elt_equivalence :
+    forall (A : Type),
+      Equivalence (NM.eq_key_elt (elt:=A)).
+  Proof.
+    constructor; try firstorder.
+    - intros x y z heq heq'.
+      repeat red in heq; repeat red in heq'; repeat red.
+      destruct heq as [h1 h2]; destruct heq' as [h3 h4].
+      rewrite h1; rewrite h3; rewrite h2; rewrite h4; auto.
+  Qed.
+  
+  Lemma nm_mapsto_elements_iff :
+    forall B x (y : B) m,
+      NM.MapsTo x y m <-> In (x, y) (NM.elements m).
+  Proof.
+    intros B x y m; split; [intros hm | intros hi].
+    - apply nm_InA_In.
+      apply NMF.elements_mapsto_iff in hm; auto.
+    - apply NMF.elements_mapsto_iff.
+      apply In_InA; auto.
+      apply nm_eq_key_elt_equivalence.
+  Qed.
 
   Lemma find_Some__In :
     forall (x : nonterminal)
@@ -518,7 +552,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     apply In_InA; auto.
     apply grammar_eq_key_elt_equivalence.
   Qed.
-
+ 
   (* Soundness of the result of mkRhsMap w.r.t. the input grammar *)
 
   Definition rms' (rm : rhs_map) (prs : list (production * grammar_entry)) : Prop :=
@@ -763,6 +797,46 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     exists (x', yss'); split; auto.
   Qed.
 
+  Lemma rhssFor_elements :
+    forall x ys rm,
+      In ys (rhssFor x rm)
+      -> (exists yss, In (x, yss) (NM.elements rm) /\ In ys yss).
+  Proof.
+    intros x ys rm hi.
+    unfold rhssFor in hi.
+    destruct (NM.find _ _) as [yss |] eqn:hf.
+    - exists yss; split; auto.
+      apply NMF.find_mapsto_iff in hf.
+      apply nm_mapsto_elements_iff; auto.
+    - inv hi.
+  Qed.
+
+  Lemma rhssFor_allRhss' :
+    forall A B (x : A) (y : B) ys prs,
+      In (x, ys) prs
+      -> In y ys
+      -> In y (List.concat (List.map snd prs)).
+  Proof.
+    intros A B x y ys prs hi hi'.
+    induction prs as [| (x', y') prs IH]; sis.
+    - inv hi.
+    - destruct hi as [hh | ht].
+      + inv hh;
+        apply in_or_app; auto.
+      + apply in_or_app; auto.
+  Qed.
+  
+  Lemma rhssFor_allRhss :
+    forall x ys rm,
+      In ys (rhssFor x rm)
+      -> In ys (allRhss rm).
+  Proof.
+    intros x ys rm hi.
+    apply rhssFor_elements in hi.
+    destruct hi as [yss [hi hi']].
+    eapply rhssFor_allRhss'; eauto.
+  Qed.
+
 (*
   Lemma in_grammar__keySet :
     forall g pm x ys,
@@ -943,14 +1017,27 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   (* Parser stacks *)
 
-  Inductive frame : Type :=
+  Inductive parser_frame : Type :=
   | Fr (x   : nonterminal)       (* lhs *)
        (pre : list symbol)       (* rhs prefix *)
        (sem : symbols_semty pre) (* sem value for prefix *)
        (suf : list symbol).      (* rhs suffix *)
 
+  Definition suffix (fr : parser_frame) : list symbol :=
+    match fr with
+    | Fr _ _ _ suf => suf
+    end.
+
+  Definition frameSuffixes (frs : list parser_frame) : list (list symbol) :=
+    List.map suffix frs.
+
   Definition parser_stack : Type :=
-    (frame * list frame)%type.
+    (parser_frame * list parser_frame)%type.
+
+  Definition stackSuffixes (stk : parser_stack) : list symbol * list (list symbol) :=
+    match stk with
+    | (fr, frs) => (suffix fr, frameSuffixes frs)
+    end.
 
 (*  Inductive suffix_frame :=
   | SF : option nonterminal -> list symbol -> suffix_frame.
@@ -1026,7 +1113,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition suffix_stack := (suffix_frame * list suffix_frame)%type. 
  *)
 
-  Fixpoint unprocSyms (frs : list frame) : list symbol :=
+  Fixpoint unprocSyms (frs : list parser_frame) : list symbol :=
     match frs with 
     | []                         => []
     | Fr _ _ _ suf :: frs'       => suf ++ unprocSyms frs'
