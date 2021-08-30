@@ -1754,10 +1754,10 @@ Module LLPredictionFn (Import D : Defs.T).
         -> frames_repr_nullable_path g [Fr y pre' vs' suf' ; Fr x pre vs (NT y :: suf)]
   | FR_indirect :
       forall x y pre pre' vs vs' suf suf' frs,
-        PM.In (x, rev pre' ++ suf') g
+        PM.In (y, rev pre' ++ suf') g
         -> nullable_gamma g (rev pre')
-        -> frames_repr_nullable_path g (Fr x pre vs (NT x :: suf) :: frs)
-        -> frames_repr_nullable_path g (Fr y pre' vs' suf' :: Fr x pre vs (NT x :: suf) :: frs).
+        -> frames_repr_nullable_path g (Fr x pre vs (NT y :: suf) :: frs)
+        -> frames_repr_nullable_path g (Fr y pre' vs' suf' :: Fr x pre vs (NT y :: suf) :: frs).
 
   Hint Constructors frames_repr_nullable_path : core.
 
@@ -1837,14 +1837,14 @@ Module LLPredictionFn (Import D : Defs.T).
       + apply frnp_inv_two_head_frames in hf; eauto.
       + inv_frnp hf hi hn hf'; eauto.
   Qed.
-
+      
   Lemma frnp_caller_nt_nullable :
-    forall g x o o' suf suf' frs,
-      frames_repr_nullable_path g (SF o' suf' :: SF o (NT x :: suf) :: frs)
+    forall g x y pre pre' vs vs' suf suf' frs,
+      frames_repr_nullable_path g (Fr y pre' vs' suf' :: Fr x pre vs (NT y :: suf) :: frs)
       -> nullable_gamma g suf'
-      -> nullable_sym g (NT x).
+      -> nullable_sym g (NT y).
   Proof.
-    intros g x o o' suf suf' frs hf hng.
+    intros g x y pre pre' vs vs' suf suf' frs hf hng. 
     inv_frnp hf hi hn hf'.
     - econstructor; eauto.
       apply nullable_app; auto.
@@ -1859,9 +1859,9 @@ Module LLPredictionFn (Import D : Defs.T).
       forall (x : nonterminal),
         NtSet.In x (allNts g)
         -> NtSet.In x vi
-        -> exists frs_pre fr_cr frs_suf o suf,
-            frs = frs_pre ++ fr_cr :: frs_suf
-            /\ fr_cr = SF o (NT x :: suf)
+        -> exists frs_pre fr_cr frs_suf w pre vs suf,
+            reconstr (fr :: frs) = fr :: frs_pre ++ fr_cr :: frs_suf
+            /\ fr_cr = Fr w pre vs (NT x :: suf)
             /\ frames_repr_nullable_path g (fr :: frs_pre ++ [fr_cr])
     end.
 
@@ -1876,60 +1876,68 @@ Module LLPredictionFn (Import D : Defs.T).
     forall sp, In sp sps -> unavailable_nts_invar g vi sp.
 
   Lemma return_preserves_unavailable_nts_invar :
-    forall g vi pr o o' suf x fr cr cr' frs,
-      fr     = SF o []
-      -> cr  = SF o' (NT x :: suf)
-      -> cr' = SF o' suf
+    forall g vi pr fr cr cr' x y pre pre' vs vs' vs'' suf frs,
+      fr     = Fr y pre' vs' []
+      -> cr  = Fr x pre vs suf
+      -> cr' = Fr x (NT y :: pre) vs'' suf
       -> unavailable_nts_invar g vi (Sp pr (fr, cr :: frs))
-      -> unavailable_nts_invar g (NtSet.remove x vi) (Sp pr (cr', frs)). 
+      -> unavailable_nts_invar g (NtSet.remove y vi) (Sp pr (cr', frs)). 
   Proof.
-    intros g vi pr o o' suf' x' fr cr cr' frs ? ? ? hu; subst.
-    intros x hi hn.
-    assert (hn' : NtSet.In x vi) by ND.fsetdec.
+    intros g vi pr fr cr cr' x y' pre pre' vs vs' vs'' suf frs ? ? ? hu; subst. 
+    intros y hi hn.
+    assert (hn' : NtSet.In y vi) by ND.fsetdec.
     apply hu in hn'; auto.
-    destruct hn' as (frs_pre & fr_cr & frs_suf & ? & suf & heq & ? & hf); subst.
-    destruct frs_pre as [| fr' frs_pre]; sis; inv heq.
-    - ND.fsetdec.
-    - pose proof hf as hf'; apply frnp_inv_two_head_frames in hf'.
-      apply frnp_shift_head_frame with (pre := [NT x']) in hf'; eauto 8.
+    destruct hn' as (frs_pre & fr_cr & frs_suf & w & ? & ? & ? & heq & ? & hf); subst; sis.
+    destruct frs_pre as [| fr' frs_pre]; sis.
+    - inv_frnp hf hi' hn' hf'; try solve [inv hf'].
+      ND.fsetdec.
+    - apply heads_eq_tails_eq__lists_eq in heq.
+      destruct heq as [? heq].
+      apply heads_eq_tails_eq__lists_eq in heq.
+      destruct heq as [hh ht]; subst; rewrite ht.
+      pose proof hf as hf'.
+      apply frnp_inv_two_head_frames in hf.
+      eapply frnp_shift_head_frame with (suf := [NT y']) in hf; eauto 10.
       constructor; auto.
-      apply frnp_caller_nt_nullable in hf; auto.
+      apply frnp_caller_nt_nullable in hf'; auto.
   Qed.
 
   Lemma push_preserves_unavailable_nts_invar :
-    forall g cr ce vi pr o o' suf x rhs frs,
-      cr = SF o (NT x :: suf)
-      -> ce = SF o' rhs
-      -> In (x, rhs) g
+    forall g cr cr' ce vi pr x pre vs y suf rhs frs,
+      cr = Fr x pre vs (NT y :: suf)
+      -> cr' = Fr x pre vs suf
+      -> ce = Fr y [] tt rhs
+      -> PM.In (y, rhs) g
       -> unavailable_nts_invar g vi (Sp pr (cr, frs))
-      -> unavailable_nts_invar g (NtSet.add x vi) (Sp pr (ce, cr :: frs)).
+      -> unavailable_nts_invar g (NtSet.add y vi) (Sp pr (ce, cr' :: frs)).
   Proof.
-    intros g cr ce vi pr o o' suf' x' rhs frs ? ? hi hu; subst.
-    intros x hi' hn.
-    destruct (NF.eq_dec x' x); subst.
+    intros g cr cr' ce vi pr x pre vs y' suf rhs frs ? ? ? hi hu; subst. 
+    intros y hi' hn.
+    destruct (NF.eq_dec y' y); subst.
     - exists []; repeat eexists; eauto; sis.
-      eapply FR_direct with (pre' := []); auto.
-    - assert (hn' : NtSet.In x vi) by ND.fsetdec.
+      eapply FR_direct with (pre' := []); sis; auto.
+    - assert (hn' : NtSet.In y vi) by ND.fsetdec.
       apply hu in hn'; simpl in hn'; clear hu; auto.
-      destruct hn' as (frs_pre & fr_cr & frs_suf & ? &
-                       suf & heq & heq' & hf); subst.
-      exists (SF o (NT x' :: suf') :: frs_pre); repeat eexists; eauto.
-      eapply FR_indirect with (pre' := []); eauto.
+      destruct hn' as (frs_pre & fr_cr & frs_suf & ? & ? & ? & ? & heq & heq' & hf); subst; sis.
+      apply heads_eq_tails_eq__lists_eq in heq.
+      destruct heq as [? ht]; rewrite ht.
+      exists (Fr x pre vs (NT y' :: suf) :: frs_pre); repeat eexists; sis; eauto.
   Qed.
 
   Lemma cstep_preserves_unavailable_nts_invar :
-    forall g rm sp sp' sps' vi vi',
+    forall g hw rm sp sp' sps' vi vi',
       rhs_map_correct rm g
       -> unavailable_nts_invar g vi sp
-      -> cstep rm vi sp = CstepK vi' sps'
+      -> cstep g hw rm vi sp = CstepK vi' sps'
       -> In sp' sps'
       -> unavailable_nts_invar g vi' sp'.
   Proof.
-    intros g rm sp sp' sps' vi vi' hc hu hs hi.
-    unfold cstep in hs; dmeqs h; inv hs; tc.
+    intros g hw rm sp sp' sps' vi vi' hc hu hs hi.
+    unfold cstep in hs; dmeqs h; inv hs; tc; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
       eapply return_preserves_unavailable_nts_invar; eauto.
-    - inv hi.
+    - apply in_singleton_eq in hi; subst.
+      eapply return_preserves_unavailable_nts_invar; eauto.
     - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
       eapply push_preserves_unavailable_nts_invar; eauto.
       eapply rhssFor_in_iff; eauto.
@@ -1941,5 +1949,5 @@ Module LLPredictionFn (Import D : Defs.T).
   Proof.
     intros g pred (fr, frs); repeat red; intros; ND.fsetdec.
   Qed.
-
-End LLPredictionFn. 
+  
+End LLPredictionFn.

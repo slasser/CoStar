@@ -353,7 +353,8 @@ Lemma fold_left_preserves_list_invar' :
 
   Lemma heads_eq_tails_eq__lists_eq :
     forall (A : Type) (x y : A) (xs ys : list A),
-      x = y -> xs = ys -> x :: xs = y :: ys.
+      (x = y /\ xs = ys) <-> x :: xs = y :: ys.
   Proof.
-    intros; subst; auto.
+    intros A x y xs ys; split; [intros [h h'] | intros h]; subst; auto.
+    inv h; auto.
   Qed.

@@ -9,16 +9,17 @@ Defs.v
 Termination.v
 
 LLPrediction.v
+GrammarAnalysis.v
+SLLPrediction.v
+Parser.v
+
 LLPrediction_error_free.v
 LLPrediction_complete.v
 
-GrammarAnalysis.v
-SLLPrediction.v
 SLL_optimization_sound.v
 SLLPrediction_error_free.v
 SLLPrediction_complete.v
 
-Parser.v
 Parser_sound.v
 Parser_error_free.v
 Parser_complete.v

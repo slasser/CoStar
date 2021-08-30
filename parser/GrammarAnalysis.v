@@ -1,5 +1,6 @@
 Require Import List MSets Relation_Operators Wf_nat.
-Require Import CoStar.LLPrediction_complete.
+Require Import CoStar.Orders.
+Require Import CoStar.LLPrediction.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
@@ -8,7 +9,102 @@ Require Import CoLoR.Util.FGraph.TransClos.
 
 Module GrammarAnalysisFn (Import D : Defs.T).
 
-  Module Export LLPC := LLPredictionCompleteFn D.
+  Module Export LLPC := LLPredictionFn D.
+
+  (* Suffix frames -- the stack representation that SLL prediction uses *)
+  
+  Inductive suffix_frame :=
+  | SF : option nonterminal -> list symbol -> suffix_frame.
+
+  Module SF_as_UOT <: UsualOrderedType.
+
+    Module O  := Option_as_UOT NT_as_UOT.
+    Module L  := List_as_UOT Symbol_as_UOT.
+    Module P  := Pair_as_UOT O L.
+
+    Definition t := suffix_frame.
+
+    Definition eq       := @eq t.
+    Definition eq_refl  := @eq_refl t.
+    Definition eq_sym   := @eq_sym t.
+    Definition eq_trans := @eq_trans t.
+
+    Definition lt x y :=
+      match x, y with
+      | SF o suf, SF o' suf' =>
+        P.lt (o, suf) (o', suf')
+      end.
+
+    Lemma lt_trans :
+      forall x y z,
+        lt x y -> lt y z -> lt x z.
+    Proof.
+      unfold lt; intros [o suf] [o' suf'] [o'' suf'']; eapply P.lt_trans; eauto.
+    Qed.
+
+    Lemma lt_not_eq :
+      forall x y, lt x y -> ~ x = y.
+    Proof.
+      unfold lt; intros [o suf] [o' suf'] hl he; inv he.
+      eapply P.lt_not_eq; eauto.
+    Qed.
+
+    Definition compare (x y : suffix_frame) : Compare lt eq x y.
+      refine (match x, y with
+              | SF o suf, SF o' suf' =>
+                match P.compare (o, suf) (o', suf') with
+                | LT hl => LT _
+                | GT he => GT _
+                | EQ hl => EQ _
+                end
+              end); red; tc.
+    Defined.
+      
+    Definition eq_dec (x y : suffix_frame) : {x = y} + {x <> y}.
+      refine (match x, y with
+              | SF o suf, SF o' suf' =>
+                match P.eq_dec (o, suf) (o', suf') with
+                | left he  => left _
+                | right hn => right _
+                end
+              end); tc.
+    Defined.
+
+  End SF_as_UOT.
+
+  (* Finite sets of suffix frames *)
+  Module FS  := FSetAVL.Make SF_as_UOT.
+  Module FSF := FSetFacts.Facts FS.
+
+  (* Finite maps with suffix frame keys *)
+  Module FM  := FMapAVL.Make SF_as_UOT.
+  Module FMF := FMapFacts.Facts FM.
+
+  (* Module for finding the transitive closure
+     of a finite graph with suffix frame nodes *)
+  Module TC  := TransClos.Make FS FM.
+  
+  Definition suffix_stack := (suffix_frame * list suffix_frame)%type.
+  
+  (* The definition of "stability" for SLL stacks *)
+  Inductive stable_config : suffix_stack -> Prop :=
+  | SC_empty :
+      stable_config (SF None [], [])
+  | SC_terminal :
+      forall o a suf frs,
+        stable_config (SF o (T a :: suf), frs).
+
+  Hint Constructors stable_config : core.
+
+  Record sll_subparser : Type :=
+    SLL_Sp { prediction : list symbol;
+             stack      : suffix_stack }.
+
+  Definition all_stable sps :=
+    forall sp, In sp sps -> stable_config sp.(stack).
+
+  (* Graph in which nodes are suffix frames, and edges 
+     connect "closure-reachable" frames *)
 
   Definition edge := (suffix_frame * suffix_frame)%type.
 
@@ -19,30 +115,31 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     suffix_frame -> suffix_frame -> Prop :=
   | Fstep_final_ret :
       forall x ys,
-        In (x, ys) g
+        PM.In (x, ys) g
         -> frame_step g (SF (Some x) [])
                         (SF  None    [])
   | Fstep_nonfinal_ret :
       forall x y pre suf,
-        In (x, pre ++ NT y :: suf) g
+        PM.In (x, pre ++ NT y :: suf) g
         -> frame_step g (SF (Some y) [])
-                      (SF (Some x) suf)
+                        (SF (Some x) suf)
   | Fstep_initial_push :
       forall x rhs,
-        In (x, rhs) g
+        PM.In (x, rhs) g
         -> frame_step g (SF None     [NT x])
                         (SF (Some x) rhs)
   | Fstep_noninitial_push :
       forall x y pre suf rhs,
-        In (x, pre ++ NT y :: suf) g
-        -> In (y, rhs) g
+        PM.In (x, pre ++ NT y :: suf) g
+        -> PM.In (y, rhs) g
         -> frame_step g (SF (Some x) (NT y :: suf))
                         (SF (Some y) rhs).
 
   Hint Constructors frame_step : core.
 
   (* Correspondence between closure_multistep and frame_step relations *)
-  
+
+  (*
   Lemma closure_step__frame_step :
     forall g av av' sp sp' pr pr' fr fr' frs frs',
       sp     = Sp pr  (fr, frs)
@@ -108,6 +205,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     intros; eapply closure_multistep__frame_step_trc'; eauto.
   Qed.
 
+   *)
+  
   (* COMPUTATION OF SINGLE-STEP FRAME CLOSURE EDGES *)
 
   Definition step_edges_sound (g : grammar) (es : list edge) :=
@@ -138,38 +237,40 @@ Module GrammarAnalysisFn (Import D : Defs.T).
   Definition mstep_edges_correct (g : grammar) (es : list edge) :=
     mstep_edges_sound g es /\ mstep_edges_complete g es.
 
-  Definition initialPushEdges' (g : grammar) (x : nonterminal) : list edge :=
+  Definition initialPushEdges' (ps : list production) (x : nonterminal) : list edge :=
     map (fun rhs => (SF None [NT x], SF (Some x) rhs))
-        (rhssForNt g x).
+        (rhssFor' ps x).
 
   Lemma initialPushEdges'_sound :
     forall g s d x,
-      In (s, d) (initialPushEdges' g x)
+      In (s, d) (initialPushEdges' (productions g) x)
       -> frame_step g s d.
   Proof.
     intros g s d x hi.
     apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; inv heq.
-    apply rhssForNt_in_iff in hi; auto.
+    eapply rhssFor'_in_iff in hi.
+    apply in_productions_iff in hi; auto.
   Qed.
 
   Lemma initialPushEdges'_complete :
     forall g x rhs,
-      In (x, rhs) g
+      PM.In (x, rhs) g
       -> In (SF None [NT x], SF (Some x) rhs)
-            (initialPushEdges' g x).
+            (initialPushEdges' (productions g) x).
   Proof.
     intros g x rhs hi.
     apply in_map_iff; eexists; split; eauto.
-    apply rhssForNt_in_iff; auto.
+    apply rhssFor'_in_iff.
+    apply in_productions_iff; auto.
   Qed.
 
-  Definition initialPushEdges (g : grammar) :=
-    flat_map (initialPushEdges' g) (lhss g).
+  Definition initialPushEdges (ps : list production) : list edge :=
+    flat_map (initialPushEdges' ps) (lhss' ps).
 
   Lemma initialPushEdges_sound :
     forall g s d,
-   In (s, d) (initialPushEdges g)
-   -> frame_step g s d.
+      In (s, d) (initialPushEdges (productions g))
+      -> frame_step g s d.
   Proof.
     intros g s d hi.
     apply in_flat_map in hi; destruct hi as [x [hi hi']].
@@ -178,29 +279,30 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Lemma initialPushEdges_complete :
     forall g x rhs,
-      In (x, rhs) g
-      -> In (SF None [NT x], SF (Some x) rhs) (initialPushEdges g).
+      PM.In (x, rhs) g
+      -> In (SF None [NT x], SF (Some x) rhs) (initialPushEdges (productions g)).
   Proof.
     intros g x rhs hi.
     apply in_flat_map; exists x; split.
-    - eapply production_lhs_in_lhss; eauto.
-    - apply initialPushEdges'_complete; auto.
+    - apply in_productions_iff in hi.
+      eapply production_lhs_in_lhss'; eauto.
+    - eapply initialPushEdges'_complete; eauto.
   Qed.
   
-  Fixpoint pushEdges' (g : grammar) (x : nonterminal) (ys : list symbol) : list edge :=
+  Fixpoint pushEdges' (ps : list production) (x : nonterminal) (ys : list symbol) : list edge :=
     match ys with 
     | []          => []
-    | T _ :: ys'  => pushEdges' g x ys'
+    | T _ :: ys'  => pushEdges' ps x ys'
     | NT y :: ys' =>
       let es := map (fun rhs => (SF (Some x) ys, SF (Some y) rhs))
-                    (rhssForNt g y)
-      in  es ++ pushEdges' g x ys'
+                    (rhssFor' ps y)
+      in  es ++ pushEdges' ps x ys'
     end.
 
   Lemma pushEdges'_sound :
     forall g s d x suf pre,
-      In (x, pre ++ suf) g
-      -> In (s, d) (pushEdges' g x suf)
+      PM.In (x, pre ++ suf) g
+      -> In (s, d) (pushEdges' (productions g) x suf)
       -> frame_step g s d.
   Proof.
     intros g s d x suf. 
@@ -209,46 +311,51 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     - apply IH with (pre := pre ++ [T a]); apps.
     - apply in_app_or in hi; destruct hi as [hi | hi].
       + apply in_map_iff in hi; destruct hi as [rhs [heq hi]].
-        inv heq; apply rhssForNt_in_iff in hi; eauto.
+        inv heq.
+        apply rhssFor'_in_iff in hi.
+        apply in_productions_iff in hi; eauto.
       + apply IH with (pre := pre ++ [NT y]); apps.
   Qed.
 
   Lemma pushEdges'_complete :
     forall g x y rhs pre suf rhs',
       rhs = pre ++ NT y :: suf
-      -> In (y, rhs') g
+      -> PM.In (y, rhs') g
       -> In (SF (Some x) (NT y :: suf), SF (Some y) rhs')
-            (pushEdges' g x rhs).
+            (pushEdges' (productions g) x rhs).
   Proof.
     intros g x y rhs; induction rhs as [| [a | y'] suf' IH]; intros pre suf rhs' heq hi; sis.
     - apply app_cons_not_nil in heq; inv heq.
     - destruct pre; sis; inv heq; eauto.
     - destruct pre; sis; inv heq; apply in_or_app; eauto.
       left; apply in_map_iff; eexists; split; eauto.
-      apply rhssForNt_in_iff; auto.
+      apply rhssFor'_in_iff. 
+      apply in_productions_iff; auto.
   Qed.
 
-  Definition pushEdges (g : grammar) : list edge :=
-    flat_map (fun p => pushEdges' g (lhs p) (rhs p)) g.
+  Definition pushEdges (ps : list production) : list edge :=
+    flat_map (fun p => pushEdges' ps (lhs' p) (rhs' p)) ps.
 
   Lemma pushEdges_sound :
     forall g s d,
-      In (s, d) (pushEdges g)
+      In (s, d) (pushEdges (productions g))
       -> frame_step g s d.
   Proof.
     intros g s d hi.
     apply in_flat_map in hi; destruct hi as [(x, ys) [hi hi']]; sis.
+    apply in_productions_iff in hi.
     eapply pushEdges'_sound with (pre := []); eauto.
   Qed.
 
   Lemma pushEdges_complete :
     forall g x y pre suf rhs,
-      In (x, pre ++ NT y :: suf) g
-      -> In (y, rhs) g
+      PM.In (x, pre ++ NT y :: suf) g
+      -> PM.In (y, rhs) g
       -> In (SF (Some x) (NT y :: suf), SF (Some y) rhs)
-            (pushEdges g).
+            (pushEdges (productions g)).
   Proof.
     intros g x y pre suf rhs hi hi'.
+    apply in_productions_iff in hi.
     apply in_flat_map; exists (x, pre ++ NT y :: suf); split; auto; sis.
     eapply pushEdges'_complete; eauto.
   Qed.
@@ -263,7 +370,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Lemma returnEdges'_sound :
     forall g s d x suf pre,
-      In (x, pre ++ suf) g
+      PM.In (x, pre ++ suf) g
       -> In (s, d) (returnEdges' x suf)
       -> frame_step g s d.
   Proof.
@@ -288,52 +395,59 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     - destruct pre; sis; inv heq; eauto.
   Qed.
 
-  Definition returnEdges (g : grammar) : list edge :=
-    flat_map (fun p => returnEdges' (lhs p) (rhs p)) g.
+  Definition returnEdges (ps : list production) : list edge :=
+    flat_map (fun p => returnEdges' (lhs' p) (rhs' p)) ps.
 
   Lemma returnEdges_sound :
     forall g s d,
-      In (s, d) (returnEdges g) -> frame_step g s d.
+      In (s, d) (returnEdges (productions g)) -> frame_step g s d.
   Proof.
     intros g s d hi.
     apply in_flat_map in hi; destruct hi as [(x, ys) [hi hi']]; sis.
+    apply in_productions_iff in hi.
     eapply returnEdges'_sound with (pre := []); eauto.
   Qed.
 
   Lemma returnEdges_complete :
     forall g x y pre suf,
-      In (x, pre ++ NT y :: suf) g
-      -> In (SF (Some y) [], SF (Some x) suf) (returnEdges g).
+      PM.In (x, pre ++ NT y :: suf) g
+      -> In (SF (Some y) [], SF (Some x) suf) (returnEdges (productions g)).
   Proof.
     intros g x y pre suf hi.
+    apply in_productions_iff in hi.
     apply in_flat_map; eexists; split; eauto; sis.
     eapply returnEdges'_complete; eauto.
   Qed.
 
-  Definition finalReturnEdges g : list edge :=
-    map (fun x => (SF (Some x) [], SF None [])) (lhss g).
+  Definition finalReturnEdges (ps : list production) : list edge :=
+    map (fun x => (SF (Some x) [], SF None [])) (lhss' ps).
 
   Lemma finalReturnEdges_sound :
     forall g s d,
-      In (s, d) (finalReturnEdges g) -> frame_step g s d.
+      In (s, d) (finalReturnEdges (productions g)) -> frame_step g s d.
   Proof.
     intros g s d hi.
-    apply in_map_iff in hi. destruct hi as [x [heq hi]]; inv heq.
-    apply lhss_exists_rhs in hi; destruct hi as [ys hi]; eauto.
+    apply in_map_iff in hi.
+    destruct hi as [x [heq hi]]; inv heq.
+    apply in_lhss'_exists_rhs in hi.
+    destruct hi as [ys hi].
+    apply in_productions_iff in hi; eauto.
   Qed.
 
   Lemma finalReturnEdges_complete :
     forall g x ys,
-      In (x, ys) g
-      -> In (SF (Some x) [], SF None []) (finalReturnEdges g).
+      PM.In (x, ys) g
+      -> In (SF (Some x) [], SF None []) (finalReturnEdges (productions g)).
   Proof.
     intros g x ys hi.
     apply in_map_iff; eexists; split; eauto.
-    eapply production_lhs_in_lhss; eauto.
+    apply in_productions_iff in hi.
+    eapply production_lhs_in_lhss'; eauto.
   Qed.
   
-  Definition epsilonEdges g : list edge :=
-    initialPushEdges g ++ pushEdges g ++ returnEdges g ++ finalReturnEdges g.
+  Definition epsilonEdges (g : grammar) : list edge :=
+    let ps := productions g
+    in  initialPushEdges ps ++ pushEdges ps ++ returnEdges ps ++ finalReturnEdges ps.
 
   Lemma epsilonEdges__step_edges_sound :
     forall g,
@@ -683,12 +797,6 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     intros fr frs hs; inv hs; auto.
     sis; dm; tc.
   Qed.
-
-  Definition dstStable (e : edge) : bool :=
-    let (_, b) := e in stable b.
-
-  Definition stableEdges (es : list edge) : list edge :=
-    filter dstStable es.
 
   Definition keepStableNodes (s : FS.t) : list suffix_frame :=
     FS.elements (FS.filter stable s).

@@ -279,11 +279,78 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   
   Definition production := (nonterminal * list symbol)%type.
 
-  Definition lhs (p : production) : nonterminal :=
+  Definition lhs' (p : production) : nonterminal :=
     let (x, _) := p in x.
 
-  Definition rhs (p : production) : list symbol :=
+  Definition lhss' (ps : list production) : list nonterminal :=
+    map lhs' ps.
+
+  Lemma production_lhs_in_lhss' :
+    forall ps x ys,
+      In (x, ys) ps
+      -> In x (lhss' ps).
+  Proof.
+    intros ps x ys hi.
+    apply in_map_iff.
+    exists (x, ys); split; sis; auto.
+  Qed.
+
+  Lemma in_lhss'_exists_rhs :
+    forall x ps,
+      In x (lhss' ps)
+      -> exists ys,
+        In (x, ys) ps.
+  Proof.
+    intros x ps hi.
+    apply in_map_iff in hi.
+    destruct hi as [(x', ys) [? hi]]; sis; subst; eauto.
+  Qed.
+
+  Definition rhs' (p : production) : list symbol :=
     let (_, gamma) := p in gamma.
+
+  Definition rhss' (ps : list production) : list (list symbol) :=
+    map rhs' ps.
+
+   Fixpoint rhssFor' (ps : list production) (x : nonterminal) : list (list symbol) :=
+    match ps with
+    | []                 => []
+    | (x', gamma) :: ps' => 
+      if nt_eq_dec x' x then 
+        gamma :: rhssFor' ps' x
+      else 
+        rhssFor' ps' x
+    end.
+  
+  Lemma rhssFor'_in_iff :
+    forall ps x ys,
+      In ys (rhssFor' ps x)
+      <-> In (x, ys) ps.
+  Proof.
+    intros g x ys; split; intros hi.
+    - induction g as [| (x', ys') g]; sis; tc.
+      dm; subst; auto.
+      inv hi; auto.
+    - induction g as [| (x', ys') g]; sis; tc.
+      destruct hi as [heq | hi].
+      + inv heq.
+        dm; tc.
+        apply in_eq.
+      + dm; subst; auto. 
+        apply in_cons; auto.
+  Qed.
+
+  Hint Resolve rhssFor'_in_iff : core.
+
+  Lemma rhssFor'_rhss :
+    forall ps x rhs,
+      In rhs (rhssFor' ps x) -> In rhs (rhss' ps).
+  Proof.
+    intros g x rhs Hin; induction g as [| (x', rhs') ps IH]; simpl in *.
+    - inv Hin.
+    - dm; subst; auto.
+      destruct Hin as [Heq | Hin]; subst; auto.
+  Qed.
 
   (* The type of a semantic predicate for a production *)
   Definition predicate_semty (p : production) : Type :=
@@ -322,6 +389,20 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       destruct heq as [h1 h2]; destruct heq' as [h3 h4].
       rewrite h1; rewrite h3; rewrite h2; rewrite h4; auto.
   Qed.
+
+  Lemma pm_InA__In :
+    forall A x ys e prs,
+      InA (PM.eq_key_elt (elt:=A)) ((x, ys), e) prs
+      -> In ((x, ys), e) prs.
+  Proof.
+    intros A x ys e prs hi; induction prs as [| ((x', ys'), e') prs Ih]; sis.
+    - inv hi.
+    - inversion hi as [pr' prs' heq | pr' prs' hi']; subst; clear hi.
+      + repeat red in heq; sis.
+        destruct heq as [heq ?]; subst.
+        inv heq; auto.
+      + right; auto.
+  Qed.
   
   (* Grammars *)
 
@@ -344,8 +425,33 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition productions (g : grammar) : list production :=
     map fst (PM.elements g).
 
+  Lemma in_productions_iff :
+    forall g x ys,
+      PM.In (x, ys) g <-> In (x, ys) (productions g).
+  Proof.
+    intros g x ys; split; intros hi.
+    - apply in_map_iff.
+      apply PMF.elements_in_iff in hi.
+      destruct hi as [e hi].
+      apply pm_InA__In in hi.
+      exists ((x, ys), e); auto.
+    - apply in_map_iff in hi.
+      destruct hi as [((x',ys'), e) [heq hi]]; sis.
+      inv heq.
+      apply PMF.elements_in_iff.
+      exists e.
+      apply In_InA; auto.
+      apply grammar_eq_key_elt_equivalence.
+  Qed.
+
   Definition lhss (g : grammar) : list nonterminal :=
     map fst (productions g).
+
+  Definition rhss (g : grammar) : list (list symbol) :=
+    map snd (productions g).
+
+  Definition allNts (g : grammar) : NtSet.t :=
+    fromNtList (lhss g).
 
   Definition grammar_wf (g : grammar) : Prop :=
     forall p p' fs, PM.MapsTo p (@existT _ _ p' fs) g -> p = p'.
@@ -410,6 +516,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   (* Finite maps with nonterminal keys *)
   Module NM  := FMapAVL.Make NT_as_UOT.
   Module NMF := FMapFacts.Facts NM.
+
+  Lemma nm_mapsto_in :
+    forall (x : nonterminal)
+           (A : Type)
+           (a : A)
+           (m : NM.t A),
+      NM.MapsTo x a m -> NM.In x m.
+  Proof.
+    intros x A a m hm.
+    apply NMF.in_find_iff.
+    intros hf.
+    apply NMF.find_mapsto_iff in hm; tc.
+  Qed.
 
   Lemma nm_InA_In :
     forall B x (y : B) prs,
@@ -699,20 +818,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     forall x ys,
       PM.In (x, ys) g -> exists yss, NM.MapsTo x yss rm /\ In ys yss.
 
-  Lemma pm_InA__In :
-    forall x ys e prs,
-      InA (PM.eq_key_elt (elt:=grammar_entry)) ((x, ys), e) prs
-      -> In ((x, ys), e) prs.
-  Proof.
-    intros x ys e prs hi; induction prs as [| ((x', ys'), e') prs Ih]; sis.
-    - inv hi.
-    - inversion hi as [pr' prs' heq | pr' prs' hi']; subst; clear hi.
-      + repeat red in heq; sis.
-        destruct heq as [heq ?]; subst.
-        inv heq; auto.
-      + right; auto.
-  Qed.
-
   Lemma mkRhsMap_complete :
     forall g,
       rhs_map_complete (mkRhsMap g) g.
@@ -760,8 +865,34 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition keys (rm : rhs_map) : list nonterminal :=
     fold_right (fun pr l => fst pr :: l) [] (NM.elements rm).
 
+  Lemma production_lhs_in_keys :
+    forall g rm x ys,
+      rhs_map_correct rm g
+      -> PM.In (x, ys) g
+      -> In x (keys rm).
+  Proof.
+    intros g rm x ys hc hi.
+    apply in_map_iff.
+    destruct hc as [_ [_ hc]].
+    apply hc in hi.
+    destruct hi as [yss [hm hi]].
+    exists (x, yss); split; auto.
+    apply nm_mapsto_elements_iff; auto.
+  Qed.
+    
   Definition keySet (rm : rhs_map) : NtSet.t :=
     fromNtList (keys rm).
+
+  Lemma production_lhs_in_keySet :
+    forall g rm x ys,
+      rhs_map_correct rm g
+      -> PM.In (x, ys) g
+      -> NtSet.In x (keySet rm).
+  Proof.
+    intros.
+    eapply fromNtList_in_iff.
+    eapply production_lhs_in_keys; eauto.
+  Qed.
   
   Definition rhssFor (x : nonterminal) (rm : rhs_map) : list (list symbol) :=
     match NM.find x rm with
@@ -783,9 +914,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
         rewrite hm in hf; inv hf; auto.
   Qed.
 
-  Lemma rhssFor_keySet :
+  Lemma rhssFor_keys :
     forall x ys rm,
-      In ys (rhssFor x rm) -> NtSet.In x (keySet rm).
+      In ys (rhssFor x rm) -> In x (keys rm).
   Proof.
     intros x ys rm hi; unfold rhssFor in hi.
     destruct (NM.find _ _) as [yss |] eqn:hf; try solve [inv hi].
@@ -793,8 +924,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     apply NMF.elements_mapsto_iff in hf.
     apply InA_alt in hf.
     destruct hf as [(x', yss') [heq hi']]; inv heq; sis; subst.
-    apply fromNtList_in_iff; apply in_map_iff.
+    apply in_map_iff. 
     exists (x', yss'); split; auto.
+  Qed.
+  
+  Lemma rhssFor_keySet :
+    forall x ys rm,
+      In ys (rhssFor x rm) -> NtSet.In x (keySet rm).
+  Proof.
+    intros.
+    apply fromNtList_in_iff.
+    eapply rhssFor_keys; eauto.
   Qed.
 
   Lemma rhssFor_elements :
