@@ -1,7 +1,7 @@
 Require Import FMaps Omega PeanoNat String. 
 Require Import CoStar.Defs.
 Require Import CoStar.Lex.
-Require Import CoStar.SLLPrediction_complete.
+Require Import CoStar.SLLPrediction.
 Require Import CoStar.Tactics.
 Require Import CoStar.Termination.
 Require Import CoStar.Utils.
@@ -11,7 +11,7 @@ Open Scope string_scope.
 
 Module ParserFn (Import D : Defs.T).
 
-  Module Export SOS := SllPredictionCompleteFn D.
+  Module Export SLLP := SllPredictionFn D.
 
   Inductive parse_error :=
   | InvalidState    : parse_error
@@ -27,37 +27,37 @@ Module ParserFn (Import D : Defs.T).
     end.
 
   (* to do : move this lower *)
-  Inductive parse_result := Accept : tree -> parse_result
-                          | Ambig  : tree -> parse_result
-                          | Reject : string -> parse_result
-                          | Error  : parse_error -> parse_result.
-
+  Inductive parse_result : Type :=
+  | Accept : forall (x : nonterminal), nt_semty x -> parse_result
+  | Ambig  : forall (x : nonterminal), nt_semty x -> parse_result
+  | Reject : string -> parse_result
+  | Error  : parse_error -> parse_result. 
+  
   (* For validation *)
   Definition showResult (pr : parse_result) : string :=
     match pr with
-    | Accept tr => "Accept"
-    | Ambig tr  => "Ambig"
-    | Reject s  => "Reject: " ++ s
-    | Error e   => "Error:  " ++ showParseError e
+    | Accept x v => "Accept"
+    | Ambig x v  => "Ambig"
+    | Reject s   => "Reject: " ++ s
+    | Error e    => "Error:  " ++ showParseError e
     end.
   
   Inductive step_result :=
-  | StepAccept : tree -> step_result
+  | StepAccept : forall (x : nonterminal), nt_semty x -> step_result
   | StepReject : string -> step_result
-  | StepK      : prefix_stack -> suffix_stack -> list token -> NtSet.t
-                 -> bool -> cache -> step_result
+  | StepK      : parser_stack -> list token -> NtSet.t -> bool -> cache -> step_result
   | StepError  : parse_error -> step_result.
 
-  Lemma push_invar_eqs :
-    forall pm ss o x suf suf' frs,
-      stack_pushes_from_keyset pm ss
-      -> ss = (SF o suf, frs)
-      -> suf = NT x :: suf'
-      -> stack_pushes_from_keyset pm (SF o (NT x :: suf'), frs).
+  Lemma lhss_invar_eqs :
+    forall rm sk x pre vs suf y suf' frs,
+      stack_lhss_from_keyset rm sk
+      -> sk = (Fr x pre vs suf, frs)
+      -> suf = NT y :: suf'
+      -> stack_lhss_from_keyset rm (Fr x pre vs (NT y :: suf'), frs).
   Proof.
     intros; subst; auto.
   Qed.
-
+  
   Definition emptyStackMsg (t : token) : string :=
     "parser stack exhausted but tokens remain\n " ++
     "next token: " ++ showToken t.
@@ -78,91 +78,96 @@ Module ParserFn (Import D : Defs.T).
     | []     => ""
     | t :: _ => ", next token: " ++ showToken t
     end.
-    
-  Definition step (pm : production_map)
-                  (cm : closure_map)
-                  (ps : prefix_stack)
-                  (ss : suffix_stack)
-                  (ts : list token)
-                  (vi : NtSet.t)
-                  (un : bool) 
-                  (ca : cache)
-                  (hc : cache_stores_target_results pm cm ca)
-                  (hk : stack_pushes_from_keyset pm ss) : step_result := 
-    match ps with
-    | (PF pre v, p_frs) =>
-      match ss as ss' return ss = ss' -> _ with
-      | (SF o suf, s_frs) =>
-        fun hss => 
-          match suf as suf' return suf = suf' -> _ with
-          (* no more symbols to process in current frame *)
-          | [] =>
-            fun _ => 
-              match p_frs, s_frs with
-              (* empty stacks --> terminate *)
-              | [], [] => 
-                match ts with
-                | [] =>
-                  match v with
-                  | [t] => StepAccept t
-                  | _   => StepError InvalidState
-                  end
-                | t :: _ => StepReject (emptyStackMsg t)
-                end
-              (* nonempty stacks --> return to caller frames *)
-              | PF pre_cr v_cr :: p_frs', SF o_cr suf_cr :: s_frs' =>
-                match suf_cr with
-                | []                => StepError InvalidState
-                | T _  :: _         => StepError InvalidState
-                | NT x :: suf_cr'   =>
-                  let ps' := (PF (NT x :: pre_cr) (Node x (rev v) :: v_cr), p_frs') in
-                  let ss' := (SF o_cr suf_cr', s_frs')                              in
-                  StepK ps' ss' ts (NtSet.remove x vi) un ca          
-                end
-              | _, _ => StepError InvalidState
-              end
-          (* terminal case --> consume a token *)
-          | T a :: suf' =>
-            fun _ => 
+
+  Definition step
+             (gr : grammar)
+             (hw : grammar_wf gr)
+             (rm : rhs_map)
+             (cm : closure_map)
+             (sk : parser_stack)
+             (ts : list token)
+             (vi : NtSet.t)
+             (un : bool) 
+             (ca : cache)
+             (hc : cache_stores_target_results rm cm ca)
+             (hk : stack_lhss_from_keyset rm sk) : step_result :=
+    match sk as sk' return sk = sk' -> _ with
+    | (Fr x pre vs suf, frs) =>
+      fun hsk =>
+        match suf as suf' return suf = suf' -> _ with
+        (* no more symbols to process in current frame *)
+        | [] =>
+          fun _ =>
+            match frs with
+            (* empty stacks --> terminate *)
+            | [] => 
               match ts with
-              | []             => StepReject (emptyInputMsg a)
-              | (a', l) :: ts' =>
-                if t_eq_dec a' a then
-                  let ps' := (PF (T a :: pre) (Leaf a l :: v), p_frs) in
-                  let ss' := (SF o suf', s_frs)                       in
-                  StepK ps' ss' ts' NtSet.empty un ca
-                else
-                  StepReject (mismatchMsg a (a', l))
+              | [] =>
+                match pre, vs with
+                | [NT x], (v, tt) => StepAccept x v
+                | _, _ => StepError InvalidState
+                end
+              | t :: _ => StepReject (emptyStackMsg t)
               end
-          (* nonterminal case --> push a frame onto the stack *)
-          | NT x :: suf' =>
-            fun hsuf => 
-              if NtSet.mem x vi then
-                (* Unreachable for a left-recursive grammar *)
-                match NM.find x pm with
-                | Some _ => StepError (LeftRecursion x) 
-                | None   => StepReject (notFoundMsg x)
-                end
+            (* nonempty stacks --> return to caller frames *)
+            | Fr x_cr pre_cr vs_cr suf_cr :: frs' =>
+              let pre' := rev pre in
+              let vs'  := revTuple pre vs in
+              match findPredicateAndAction (x, pre') gr hw with
+              (* check predicate and reduce *)
+              | Some (Some p, f) =>
+                if p vs' then
+                  let sk' := (Fr x_cr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
+                  in  StepK sk' ts (NtSet.remove x vi) un ca
+                else
+                  StepReject "some failed predicate message here"
+              (* reduce *)
+              | Some (None, f) =>
+                let sk' := (Fr x_cr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
+                in  StepK sk' ts (NtSet.remove x vi) un ca
+              (* impossible case *)
+              | None =>
+                StepError InvalidState
+              end
+            end
+        (* terminal case --> consume a token *)
+        | T a :: suf' =>
+          fun _ => 
+            match ts with
+            | []             => StepReject (emptyInputMsg a)
+            | @existT _ _ a' v :: ts' =>
+              if t_eq_dec a' a then
+                let sk' := (Fr x (T a' :: pre) (v, vs) suf', frs)
+                in  StepK sk' ts' NtSet.empty un ca
               else
-                match adaptivePredict pm cm o x suf' s_frs ts ca hc
-                                      (push_invar_eqs _ _ _ _ _ _ _ hk hss hsuf)
-                with
-                | (PredSucc rhs, ca') =>
-                  let ps' := (PF [] [], PF pre v :: p_frs)        in
-                  let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
-                  StepK ps' ss' ts (NtSet.add x vi) un ca'
-                | (PredAmbig rhs, ca') =>
-                  let ps' := (PF [] [], PF pre v :: p_frs)        in
-                  let ss' := (SF (Some x) rhs, SF o suf :: s_frs) in
-                  StepK ps' ss' ts (NtSet.add x vi) false ca'
-                | (PredReject, _)  =>
-                  StepReject (failedPredictionMsg x ts)
-                | (PredError e, _) =>
-                  StepError (PredictionError e) 
-                end
-          end eq_refl
-      end eq_refl
-    end.
+                StepReject (mismatchMsg a (@existT _ _ a' v))
+            end
+        (* nonterminal case --> push a frame onto the stack *)
+        | NT y :: suf' =>
+          fun hsuf =>
+            if NtSet.mem y vi then
+              (* Unreachable for a left-recursive grammar *)
+              match NM.find y rm with
+              | Some _ => StepError (LeftRecursion y) 
+              | None   => StepReject (notFoundMsg y)
+              end
+            else
+              match adaptivePredict gr hw rm cm x pre vs y suf' frs ts ca hc
+                                    (lhss_invar_eqs _ _ _ _ _ _ _ _ _ hk hsk hsuf)
+              with
+              | (PredSucc rhs, ca') =>
+                let sk' := (Fr y [] tt rhs, Fr x pre vs suf' :: frs) in
+                StepK sk' ts (NtSet.add y vi) un ca'
+              | (PredAmbig rhs, ca') =>
+                let sk' := (Fr y [] tt rhs, Fr x pre vs suf' :: frs) in
+                StepK sk' ts (NtSet.add y vi) false ca'
+              | (PredReject, _)  =>
+                StepReject (failedPredictionMsg y ts)
+              | (PredError e, _) =>
+                StepError (PredictionError e) 
+              end
+        end eq_refl
+    end eq_refl.
 
   Lemma step_StepAccept_facts :
     forall pm cm ps ss ts vi un ca hc hk t,
