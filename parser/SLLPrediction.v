@@ -10,46 +10,101 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Module Export GA := GrammarAnalysisFn D.
 
-  (* Now for the parts that correspond to the LL prediction module *)
+  (* move operation *)
 
-  Definition simReturn (cm : closure_map) (sp : subparser) : option (list subparser) :=
-    match sp with
-    | Sp pred (SF (Some x) [], []) =>
-      let dsts := destFrames (SF (Some x) []) cm in
-      let sps' := map (fun d => Sp pred (d, [])) dsts
-      in  Some sps'
-    | _ => None
+  Definition sll_moveSp (t : token) (sp : sll_subparser) : subparser_move_result :=
+    match t with
+    | @existT _ _ a _ =>
+      match sp with
+      | SllSp pred stk =>
+        match stk with
+        | (SF _ [], [])            => MoveReject
+        | (SF _ [], _ :: _)        => MoveError SpInvalidState
+        | (SF _ (NT _ :: _), _)    => MoveError SpInvalidState
+        | (SF o (T a' :: suf), frs) =>
+          if t_eq_dec a' a then
+            MoveSucc (SllSp pred (SF o suf, frs))
+          else
+            MoveReject
+        end
+      end
     end.
 
-  Lemma simReturn_preserves_prediction :
-    forall cm sp sp' sps',
-      simReturn cm sp = Some sps'
+  Definition sll_move (t : token) (sps : list sll_subparser) : move_result sll_subparser :=
+    aggrMoveResults (map (sll_moveSp t) sps).
+
+  (* closure operation *)
+
+Definition sll_cstep (rm : rhs_map) (vi : NtSet.t) (sp : sll_subparser) : 
+    subparser_closure_step_result :=
+    match sp with
+    | SllSp pred (fr, frs) =>
+      match fr, frs with
+      (* return to caller frame *)
+      | SF (Some x) [], SF o_cr suf_cr :: frs_tl =>
+        let stk':= (SF o_cr suf_cr, frs_tl) 
+        in  CstepK (NtSet.remove x vi) [SllSp pred stk']
+      (* done case -- top stack symbol is a terminal *)
+      | SF (Some _) (T _ :: _), _ => CstepDone
+      (* push case *)
+      | SF o (NT x :: suf), _ =>
+        if NtSet.mem x vi then
+          (* Unreachable for a left-recursive grammar *)
+          match NM.find x rm with
+          | Some _ => CstepError (SpLeftRecursion x)
+          | None   => CstepK NtSet.empty []
+          end
+        else
+          let fr'  := SF o suf in
+          let sps' := map (fun rhs => SllSp pred (SF (Some x) rhs, fr' :: frs))
+                          (rhssFor x rm)
+          in  CstepK (NtSet.add x vi) sps'
+      | _, _ => CstepError SpInvalidState
+      end
+    end.
+
+  Lemma cstep_meas_lt :
+    forall (rm     : rhs_map)
+           (sp sp' : sll_subparser)
+           (sps'   : list sll_subparser)
+           (vi vi' : NtSet.t),
+      sll_sp_lhss_from_keyset rm sp
+      -> sll_cstep rm vi sp = CstepK vi' sps'
       -> In sp' sps'
-      -> prediction sp' = prediction sp.
+      -> lex_nat_pair (sll_meas rm vi' sp') (sll_meas rm vi sp).
   Proof.
-    intros cm [pred (fr, frs)] sp' sps' hs hi; sis; dms; tc; inv hs.
-    apply in_map_iff in hi; destruct hi as [? [? ?]]; subst; auto.
-  Qed.
+    intros rm sp sp' sps' vi vi' ha hs hi. 
+    unfold sll_cstep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
+    - apply in_singleton_eq in hi; subst.
+      eapply sll_meas_lt_after_return; eauto.
+    - apply in_map_iff in hi.
+      destruct hi as [rhs [heq hi]]; subst.
+      eapply sll_meas_lt_after_push; eauto.
+      + apply not_mem_iff; auto.
+      + eapply rhssFor_keySet; eauto.
+      + eapply rhssFor_allRhss; eauto.
+    - apply in_map_iff in hi.
+      destruct hi as [rhs [heq hi]]; subst.
+      eapply sll_meas_lt_after_push; eauto.
+      + apply not_mem_iff; auto.
+      + eapply rhssFor_keySet; eauto.
+      + eapply rhssFor_allRhss; eauto.
+  Defined.
 
-  Lemma simReturn_stack_shape :
-    forall cm sp sps',
-      simReturn cm sp = Some sps'
-      -> exists x, stack sp = (SF (Some x) [], []).
+  Lemma acc_after_step :
+    forall pm sp sp' sps' vi vi',
+      sp_pushes_from_keyset pm sp
+      -> cstep pm vi sp = CstepK vi' sps'
+      -> In sp' sps'
+      -> Acc lex_nat_pair (meas pm vi sp)
+      -> Acc lex_nat_pair (meas pm vi' sp').
   Proof.
-    intros cm sp sps' hr; unfold simReturn in hr; dms; inv hr; sis; eauto.
-  Qed.
-
-  Lemma simReturn_push_invar :
-    forall pm cm sp sps',
-      simReturn cm sp = Some sps'
-      -> all_sp_pushes_from_keyset pm sps'.
-  Proof.
-    intros pm cm [pred (fr, frs)] sps' hr sp' hi; sis; dms; tc; inv hr.
-    apply in_map_iff in hi; destruct hi as [[o suf] [heq hi]]; subst. 
-    repeat red; auto.
-  Qed.
+    intros pm sp sp' sps' vi vi' hk heq hi ha.
+    eapply Acc_inv; eauto.
+    eapply cstep_meas_lt; eauto.
+  Defined.
   
-  Fixpoint sllc (pm : production_map)
+  Fixpoint sllc (rm : production_map)
                 (cm : closure_map)
                 (vi : NtSet.t)
                 (sp : subparser)

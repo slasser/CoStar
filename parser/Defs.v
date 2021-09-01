@@ -1157,30 +1157,34 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   (* Parser stacks *)
 
+  (* The stack used in LL prediction and parsing *)
+
   Inductive parser_frame : Type :=
   | Fr (x   : nonterminal)       (* lhs *)
        (pre : list symbol)       (* rhs prefix *)
        (sem : symbols_semty pre) (* sem value for prefix *)
        (suf : list symbol).      (* rhs suffix *)
 
-  Definition suffix (fr : parser_frame) : list symbol :=
-    match fr with
-    | Fr _ _ _ suf => suf
-    end.
-
-  Definition frameSuffixes (frs : list parser_frame) : list (list symbol) :=
-    List.map suffix frs.
-
   Definition parser_stack : Type :=
     (parser_frame * list parser_frame)%type.
 
-  Definition stackSuffixes (stk : parser_stack) : list symbol * list (list symbol) :=
-    match stk with
-    | (fr, frs) => (suffix fr, frameSuffixes frs)
+  Definition bottomFrameSyms (stk : parser_stack) : list symbol := 
+    match bottomElt stk with
+    | Fr _ pre _ suf => rev pre ++ suf
     end.
 
-(*  Inductive suffix_frame :=
+  Record subparser := Sp { prediction : list symbol
+                         ; stack      : parser_stack }.
+
+  (* The stack used in SLL prediction *)
+  
+  Inductive suffix_frame :=
   | SF : option nonterminal -> list symbol -> suffix_frame.
+
+  Definition sllSuffix (fr : suffix_frame) : list symbol :=
+    match fr with
+    | SF _ suf => suf
+    end.
 
   Module SF_as_UOT <: UsualOrderedType.
 
@@ -1249,10 +1253,39 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   (* Module for finding the transitive closure
      of a finite graph with suffix frame nodes *)
   Module TC  := TransClos.Make FS FM.
-  
-  Definition suffix_stack := (suffix_frame * list suffix_frame)%type. 
- *)
 
+  Definition suffix_stack := (suffix_frame * list suffix_frame)%type.
+
+  Definition sllSuffixes' (frs : list suffix_frame) : list (list symbol) :=
+    map sllSuffix frs.
+  
+  Definition sllSuffixes (stk : suffix_stack) : list symbol * list (list symbol) :=
+    match stk with
+    | (fr, frs) => (sllSuffix fr, sllSuffixes' frs)
+    end.
+
+  Record sll_subparser : Type :=
+    SllSp { sll_prediction : list symbol;
+            sll_stack      : suffix_stack }.
+
+  (* Projecting an SLL subparser from an LL subparser *)
+
+  Definition sllify' (fr : parser_frame) : suffix_frame :=
+    match fr with
+    | Fr x _ _ suf => SF (Some x) suf
+    end.
+
+  Definition sllify (stk : parser_stack) : suffix_stack :=
+    match stk with
+    | (fr, frs) => (sllify' fr, map sllify' frs)
+    end.
+
+  Definition sllifySp (sp : subparser) : sll_subparser :=
+    match sp with
+    | Sp pred stk => SllSp pred (sllify stk)
+    end.
+  
+  (*
   Fixpoint unprocSyms (frs : list parser_frame) : list symbol :=
     match frs with 
     | []                         => []
@@ -1263,11 +1296,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     match stk with
     | (fr, frs) => unprocSyms (fr :: frs)
     end.
-
-  Definition bottomFrameSyms (stk : parser_stack) : list symbol := 
-    match bottomElt stk with
-    | Fr _ pre _ suf => rev pre ++ suf
-    end.
+   *)
 
   (* Grammatical derivation relations -- the main parser correctnes spec *)
 

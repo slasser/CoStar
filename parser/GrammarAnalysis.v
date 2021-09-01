@@ -10,81 +10,6 @@ Require Import CoLoR.Util.FGraph.TransClos.
 Module GrammarAnalysisFn (Import D : Defs.T).
 
   Module Export LLPC := LLPredictionFn D.
-
-  (* Suffix frames -- the stack representation that SLL prediction uses *)
-  
-  Inductive suffix_frame :=
-  | SF : option nonterminal -> list symbol -> suffix_frame.
-
-  Module SF_as_UOT <: UsualOrderedType.
-
-    Module O  := Option_as_UOT NT_as_UOT.
-    Module L  := List_as_UOT Symbol_as_UOT.
-    Module P  := Pair_as_UOT O L.
-
-    Definition t := suffix_frame.
-
-    Definition eq       := @eq t.
-    Definition eq_refl  := @eq_refl t.
-    Definition eq_sym   := @eq_sym t.
-    Definition eq_trans := @eq_trans t.
-
-    Definition lt x y :=
-      match x, y with
-      | SF o suf, SF o' suf' =>
-        P.lt (o, suf) (o', suf')
-      end.
-
-    Lemma lt_trans :
-      forall x y z,
-        lt x y -> lt y z -> lt x z.
-    Proof.
-      unfold lt; intros [o suf] [o' suf'] [o'' suf'']; eapply P.lt_trans; eauto.
-    Qed.
-
-    Lemma lt_not_eq :
-      forall x y, lt x y -> ~ x = y.
-    Proof.
-      unfold lt; intros [o suf] [o' suf'] hl he; inv he.
-      eapply P.lt_not_eq; eauto.
-    Qed.
-
-    Definition compare (x y : suffix_frame) : Compare lt eq x y.
-      refine (match x, y with
-              | SF o suf, SF o' suf' =>
-                match P.compare (o, suf) (o', suf') with
-                | LT hl => LT _
-                | GT he => GT _
-                | EQ hl => EQ _
-                end
-              end); red; tc.
-    Defined.
-      
-    Definition eq_dec (x y : suffix_frame) : {x = y} + {x <> y}.
-      refine (match x, y with
-              | SF o suf, SF o' suf' =>
-                match P.eq_dec (o, suf) (o', suf') with
-                | left he  => left _
-                | right hn => right _
-                end
-              end); tc.
-    Defined.
-
-  End SF_as_UOT.
-
-  (* Finite sets of suffix frames *)
-  Module FS  := FSetAVL.Make SF_as_UOT.
-  Module FSF := FSetFacts.Facts FS.
-
-  (* Finite maps with suffix frame keys *)
-  Module FM  := FMapAVL.Make SF_as_UOT.
-  Module FMF := FMapFacts.Facts FM.
-
-  (* Module for finding the transitive closure
-     of a finite graph with suffix frame nodes *)
-  Module TC  := TransClos.Make FS FM.
-  
-  Definition suffix_stack := (suffix_frame * list suffix_frame)%type.
   
   (* The definition of "stability" for SLL stacks *)
   Inductive stable_config : suffix_stack -> Prop :=
@@ -95,13 +20,9 @@ Module GrammarAnalysisFn (Import D : Defs.T).
         stable_config (SF o (T a :: suf), frs).
 
   Hint Constructors stable_config : core.
-
-  Record sll_subparser : Type :=
-    SLL_Sp { prediction : list symbol;
-             stack      : suffix_stack }.
-
+  
   Definition all_stable sps :=
-    forall sp, In sp sps -> stable_config sp.(stack).
+    forall sp, In sp sps -> stable_config sp.(sll_stack).
 
   (* Graph in which nodes are suffix frames, and edges 
      connect "closure-reachable" frames *)

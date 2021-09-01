@@ -1,5 +1,6 @@
 Require Import Arith List Omega.
 Require Import CoStar.Defs.
+Require Import CoStar.Lex.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
@@ -322,4 +323,136 @@ Module TerminationFn (Export D : Defs.T).
     intros; eapply stackScore_lt_after_push; sis; eauto.
   Qed.
 
+  (* A subparser invariant used to prove termination *)
+
+  Inductive upper_lhss_from_keyset (rm : rhs_map) : list suffix_frame -> Prop :=
+  | LK_bottom :
+      forall o suf,
+        upper_lhss_from_keyset rm [SF o suf]
+  | LK_upper :
+      forall x suf fr frs,
+        NtSet.In x (keySet rm)
+        -> upper_lhss_from_keyset rm (fr :: frs)
+        -> upper_lhss_from_keyset rm (SF (Some x) suf :: fr :: frs).
+
+  Hint Constructors upper_lhss_from_keyset : core.
+  
+  Ltac inv_ulk hk  hi hk' := inversion hk as [? ? | ? ? ? ? hi hk']; subst; clear hk.
+  
+  Definition sll_stack_lhss_from_keyset (rm : rhs_map) (stk : suffix_stack) : Prop :=
+    match stk with
+    | (fr, frs) => upper_lhss_from_keyset rm (fr :: frs)
+    end.
+
+  Definition sll_sp_lhss_from_keyset (rm : rhs_map) (sp : sll_subparser) : Prop :=
+    match sp with
+    | SllSp _ stk => sll_stack_lhss_from_keyset rm stk
+    end.
+
+  Definition all_sll_sp_lhss_from_keyset (rm : rhs_map) (sps : list sll_subparser) :=
+    forall sp, In sp sps -> sll_sp_lhss_from_keyset rm sp.
+
+  Lemma sll_ulk_list__ulk_mem :
+    forall rm sps sp,
+      all_sll_sp_lhss_from_keyset rm sps
+      -> In sp sps
+      -> sll_sp_lhss_from_keyset rm sp.
+  Proof.
+    intros; auto.
+  Qed.
+
+  Lemma sll_return_preserves_keyset_invar :
+    forall rm o_ce o_cr suf_ce suf_cr frs,
+      upper_lhss_from_keyset rm (SF o_ce suf_ce :: SF o_cr suf_cr :: frs)
+      -> upper_lhss_from_keyset rm (SF o_cr suf_cr :: frs).
+  Proof.
+    intros rm oce ocr sufce sufcr frs hk.
+    inv_ulk hk hi hk'.
+    inv_ulk hk' hi' hk''; auto.
+  Qed.
+
+  Lemma sll_consume_preserves_keyset_invar :
+    forall rm o suf suf' frs,
+      upper_lhss_from_keyset rm (SF o suf :: frs)
+      -> upper_lhss_from_keyset rm (SF o suf' :: frs).
+  Proof.
+    intros rm o suf suf' frs hk. 
+    inv_ulk hk hi hk'; auto.
+  Qed.
+
+  Lemma sll_push_preserves_keyset_invar :
+    forall rm x o_cr suf_cr suf_cr' suf_ce frs,
+      NtSet.In x (keySet rm)
+      -> upper_lhss_from_keyset rm (SF o_cr suf_cr :: frs)
+      -> upper_lhss_from_keyset rm (SF (Some x) suf_ce :: SF o_cr suf_cr' :: frs).
+  Proof.
+    intros ? ? ? ? ? ? ? hi hk; inv hk; auto.
+  Qed.
+
+  (* Now lift the invariant to LL subparser and parser stacks *)
+
+  Definition stack_lhss_from_keyset (rm : rhs_map) (stk : parser_stack) : Prop :=
+    sll_stack_lhss_from_keyset rm (sllify stk).
+
+  Definition sp_lhss_from_keyset (rm : rhs_map) (sp : subparser) : Prop :=
+    sll_sp_lhss_from_keyset rm (sllifySp sp).
+
+  Definition all_sp_lhss_from_keyset (rm : rhs_map) (sps : list subparser) : Prop :=
+    forall sp, In sp sps -> sp_lhss_from_keyset rm sp.
+
+  Lemma ulk_list__ulk_mem :
+    forall rm sps sp,
+      all_sp_lhss_from_keyset rm sps
+      -> In sp sps
+      -> sp_lhss_from_keyset rm sp.
+  Proof.
+    intros; auto.
+  Qed.
+
+  (* A measure function for SLL subparsers *)
+
+  Definition sll_meas (rm : rhs_map) (vi : NtSet.t) (sp : sll_subparser) : nat * nat :=
+    match sp with
+    | SllSp _ stk =>
+      let m  := maxLength (allRhss rm) in
+      let e  := NtSet.cardinal (NtSet.diff (keySet rm) vi)
+      in  (stackScore (sllSuffixes stk) (1 + m) e, stackHeight stk)
+    end.
+
+  Lemma sll_meas_lt_after_return :
+    forall rm sp sp' vi vi' pred o suf x frs,
+      sp = SllSp pred (SF (Some x) [], SF o suf :: frs)
+      -> sp' = SllSp pred (SF o suf, frs)
+      -> vi' = NtSet.remove x vi
+      -> sll_sp_lhss_from_keyset rm sp
+      -> lex_nat_pair (sll_meas rm vi' sp') (sll_meas rm vi sp).
+  Proof.
+    intros rm sp sp' vi vi' pred o suf x frs ? ? ? hk; subst.
+    pose proof stackScore_le_after_return' as hle.
+    specialize hle with (suf_cr := suf) (x := x).
+    eapply le_lt_or_eq in hle; eauto.
+    destruct hle as [hlt | heq]; sis.
+    - apply pair_fst_lt; eauto.
+    - rewrite heq; apply pair_snd_lt; auto.
+    - inv hk; auto. 
+  Defined.
+
+  Lemma sll_meas_lt_after_push :
+    forall rm vi vi' sp sp' pred fr_cr fr_cr' fr_ce o x suf rhs frs,
+      sp     = SllSp pred (fr_cr, frs)
+      -> sp' = SllSp pred (fr_ce, fr_cr' :: frs)
+      -> fr_cr  = SF o (NT x :: suf)
+      -> fr_cr' = SF o suf
+      -> fr_ce  = SF (Some x) rhs
+      -> vi' = NtSet.add x vi
+      -> ~ NtSet.In x vi
+      -> NtSet.In x (keySet rm)
+      -> In rhs (allRhss rm)
+      -> lex_nat_pair (sll_meas rm vi' sp') (sll_meas rm vi sp).
+  Proof.
+    intros; subst.
+    apply pair_fst_lt.
+    eapply stackScore_lt_after_push; sis; eauto.
+  Defined.
+  
 End TerminationFn.
