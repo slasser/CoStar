@@ -178,6 +178,11 @@ Module SllPredictionFn (Import D : Defs.T).
       eapply rhssFor_keySet; eauto.
   Qed.
 
+  Definition sll_meas (rm : rhs_map) (vi : NtSet.t) (sp : sll_subparser) : nat * nat :=
+    match sp with
+    | SllSp _ sk => ss_meas rm vi sk
+    end.
+
   Lemma sllCstep_meas_lt :
     forall (rm     : rhs_map)
            (sp sp' : sll_subparser)
@@ -191,16 +196,16 @@ Module SllPredictionFn (Import D : Defs.T).
     intros rm sp sp' sps' vi vi' ha hs hi. 
     unfold sllCstep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
-      eapply sll_meas_lt_after_return; eauto.
+      eapply ss_meas_lt_after_return; eauto.
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
-      eapply sll_meas_lt_after_push; eauto.
+      eapply ss_meas_lt_after_push; eauto.
       + apply not_mem_iff; auto.
       + eapply rhssFor_keySet; eauto.
       + eapply rhssFor_allRhss; eauto.
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
-      eapply sll_meas_lt_after_push; eauto.
+      eapply ss_meas_lt_after_push; eauto.
       + apply not_mem_iff; auto.
       + eapply rhssFor_keySet; eauto.
       + eapply rhssFor_allRhss; eauto.

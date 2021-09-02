@@ -814,7 +814,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
       apply stable_compat_bool.
   Qed.
     
-  Theorem mkClosureMap_result_correct :
+  Theorem mkClosureMap_correct :
     forall g,
       closure_map_correct g (mkClosureMap g).
   Proof.

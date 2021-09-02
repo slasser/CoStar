@@ -409,8 +409,50 @@ Module TerminationFn (Export D : Defs.T).
     intros; auto.
   Qed.
 
-  (* A measure function for SLL subparsers *)
+  (* A measure function for suffix stacks *)
 
+  Definition ss_meas (rm : rhs_map) (vi : NtSet.t) (sk : suffix_stack) : nat * nat :=
+    let m  := maxLength (allRhss rm) in
+    let e  := NtSet.cardinal (NtSet.diff (keySet rm) vi)
+    in  (stackScore (sllSuffixes sk) (1 + m) e, stackHeight sk).
+
+  Lemma ss_meas_lt_after_return :
+    forall rm sk sk' vi vi' o suf x frs,
+      sk = (SF (Some x) [], SF o suf :: frs)
+      -> sk' = (SF o suf, frs)
+      -> vi' = NtSet.remove x vi
+      -> sll_stack_lhss_from_keyset rm sk
+      -> lex_nat_pair (ss_meas rm vi' sk') (ss_meas rm vi sk).
+  Proof.
+    intros rm sk sk' vi vi' o suf x frs ? ? ? hk; subst.
+    unfold ss_meas.
+    pose proof stackScore_le_after_return' as hle.
+    specialize hle with (suf_cr := suf) (x := x).
+    eapply le_lt_or_eq in hle; eauto.
+    destruct hle as [hlt | heq]; sis.
+    - apply pair_fst_lt; eauto.
+    - rewrite heq; apply pair_snd_lt; auto.
+    - inv hk; auto. 
+  Defined.
+
+  Lemma ss_meas_lt_after_push :
+    forall rm vi vi' sk sk' fr_cr fr_cr' fr_ce o x suf rhs frs,
+      sk     = (fr_cr, frs)
+      -> sk' = (fr_ce, fr_cr' :: frs)
+      -> fr_cr  = SF o (NT x :: suf)
+      -> fr_cr' = SF o suf
+      -> fr_ce  = SF (Some x) rhs
+      -> vi' = NtSet.add x vi
+      -> ~ NtSet.In x vi
+      -> NtSet.In x (keySet rm)
+      -> In rhs (allRhss rm)
+      -> lex_nat_pair (ss_meas rm vi' sk') (ss_meas rm vi sk).
+  Proof.
+    intros; subst.
+    apply pair_fst_lt.
+    eapply stackScore_lt_after_push; sis; eauto.
+  Defined.
+(*
   Definition sll_meas (rm : rhs_map) (vi : NtSet.t) (sp : sll_subparser) : nat * nat :=
     match sp with
     | SllSp _ stk =>
@@ -454,5 +496,5 @@ Module TerminationFn (Export D : Defs.T).
     apply pair_fst_lt.
     eapply stackScore_lt_after_push; sis; eauto.
   Defined.
-  
+  *)
 End TerminationFn.

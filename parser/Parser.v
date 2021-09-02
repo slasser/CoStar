@@ -25,25 +25,9 @@ Module ParserFn (Import D : Defs.T).
     | LeftRecursion x   => "LeftRecursion " ++ showNT x
     | PredictionError e => "PredictionError (" ++ showPredictionError e ++ ")"
     end.
-
-  (* to do : move this lower *)
-  Inductive parse_result : Type :=
-  | Accept : forall (x : nonterminal), nt_semty x -> parse_result
-  | Ambig  : forall (x : nonterminal), nt_semty x -> parse_result
-  | Reject : string -> parse_result
-  | Error  : parse_error -> parse_result. 
-  
-  (* For validation *)
-  Definition showResult (pr : parse_result) : string :=
-    match pr with
-    | Accept x v => "Accept"
-    | Ambig x v  => "Ambig"
-    | Reject s   => "Reject: " ++ s
-    | Error e    => "Error:  " ++ showParseError e
-    end.
-  
-  Inductive step_result :=
-  | StepAccept : forall (x : nonterminal), nt_semty x -> step_result
+ 
+  Inductive step_result : Type :=
+  | StepAccept : forall (x : nonterminal), nt_semty x -> step_result 
   | StepReject : string -> step_result
   | StepK      : parser_stack -> list token -> NtSet.t -> bool -> cache -> step_result
   | StepError  : parse_error -> step_result.
@@ -104,7 +88,7 @@ Module ParserFn (Import D : Defs.T).
               match ts with
               | [] =>
                 match pre, vs with
-                | [NT x], (v, tt) => StepAccept x v
+                | [NT y], (v, tt) => StepAccept y v
                 | _, _ => StepError InvalidState
                 end
               | t :: _ => StepReject (emptyStackMsg t)
@@ -170,172 +154,200 @@ Module ParserFn (Import D : Defs.T).
     end eq_refl.
 
   Lemma step_StepAccept_facts :
-    forall pm cm ps ss ts vi un ca hc hk t,
-      step pm cm ps ss ts vi un ca hc hk = StepAccept t
+    forall gr hw rm cm sk ts vi un ca hc hk y v,
+      step gr hw rm cm sk ts vi un ca hc hk = StepAccept y v
       -> ts = []
-         /\ exists o, ss = (SF o [], [])
-         /\ exists pre,
-             ps = (PF pre [t], []).
+         /\ exists x, sk = (Fr x [NT y] (v, tt) [], []).
   Proof.
-    intros pm cm ps ss ts vi un ca hc hk t hs.
+    intros gr hw rm cm sk ts vi un ca hc hk y v hs.
     unfold step in hs; dms; tc.
     inv hs; eauto.
   Qed.
 
   Lemma step_LeftRecursion_facts :
-    forall pm cm ps ss ts vi un ca hc hk x,
-      step pm cm ps ss ts vi un ca hc hk = StepError (LeftRecursion x)
-      -> NtSet.In x vi
-         /\ (exists yss, NM.find x pm = Some yss)
-         /\ (exists o suf frs,
-             ss = (SF o (NT x :: suf), frs)).
+    forall gr hw rm cm sk ts vi un ca hc hk y,
+      step gr hw rm cm sk ts vi un ca hc hk = StepError (LeftRecursion y)
+      -> NtSet.In y vi
+         /\ (exists yss, NM.find y rm = Some yss)
+         /\ (exists x pre vs suf frs,
+             sk = (Fr x pre vs (NT y :: suf), frs)). 
   Proof.
-    intros cm pm ps ss ts vi un ca hc hk x hs.
+    intros gr hw cm rm sk ts vi un ca hc hk y hs.
     unfold step in hs; repeat dmeq h; tc; inv hs; sis;
-      repeat split; eauto.
+      repeat split; eauto 6.
     apply NF.mem_iff; auto.
   Qed.
 
   Lemma step_preserves_cache_invar :
-    forall pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk,
-      step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-      -> cache_stores_target_results pm cm ca'.
+    forall gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk,
+      step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+      -> cache_stores_target_results rm cm ca'.
   Proof.
-    intros pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk hs.
+    intros gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk hs.
     unfold step in hs; dmeqs H; tc; inv hs; auto.
     - eapply adaptivePredict_succ_preserves_cache_invar;  eauto.
     - eapply adaptivePredict_ambig_preserves_cache_invar; eauto.
   Defined.
 
-  Lemma step_preserves_push_invar :
-    forall pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk,
-      step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-      -> stack_pushes_from_keyset pm ss'.
+  Lemma step_preserves_lhss_invar :
+    forall gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk,
+      rhs_map_correct rm gr
+      -> step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+      -> stack_lhss_from_keyset rm sk'.
   Proof.
-    intros pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk hs.
-    unfold step in hs; dmeqs H; tc; inv hs; eauto.
-    - eapply return_preserves_pushes_invar; eauto.
-    - eapply consume_preserves_pushes_invar; eauto.
-    - eapply push_preserves_pushes_invar; eauto.
+    intros gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk hr hs.
+    unfold step in hs; dmeqs H; tc; inv hs; red; red in hk; sis.
+    - eapply sll_return_preserves_keyset_invar; eauto.
+    - eapply sll_return_preserves_keyset_invar; eauto.
+    - eapply sll_consume_preserves_keyset_invar; eauto.
+    - eapply sll_push_preserves_keyset_invar; eauto.
       eapply rhssFor_keySet.
       eapply adaptivePredict_succ_in_rhssFor; eauto.
-    - eapply push_preserves_pushes_invar; eauto.
+    - eapply sll_push_preserves_keyset_invar; eauto.
       eapply rhssFor_keySet.
-      (* lemma *)
+      (* lemma relating SLL and LL prediction *)
+      (*
       eapply llPredict_ambig_in_rhssFor; eauto.
       eapply adaptivePredict_ambig_llPredict_ambig; eauto.
+       *)
+      unfold adaptivePredict in H4.
+      destruct (sllPredict _ _ _ _ _ _) in H4.
+      destruct p in H4; try solve [inv H4].
+      inv H4.
+      eapply llPredict_ambig_in_rhssFor; eauto.
   Qed.
 
-  Definition meas (pm : production_map)
-                  (ss : suffix_stack)
+  Definition meas (rm : rhs_map)
+                  (sk : parser_stack)
                   (ts : list token)
-                  (vi :  NtSet.t) : nat * nat * nat := 
-    let m := maxRhsLength (grammarOf pm)                in
-    let e := NtSet.cardinal (NtSet.diff (keySet pm) vi) in
-    (List.length ts, stackScore ss (1 + m) e, stackHeight ss).
+                  (vi :  NtSet.t) : nat * nat * nat :=
+    let (stkScore, stkHeight) := ss_meas rm vi (sllify sk)
+    in  (List.length ts, stkScore, stkHeight).
 
   Lemma meas_lt_after_return :
-    forall pm ce cr cr' o o_cr x suf frs ts vi,
-      ce     = SF o []
-      -> cr  = SF o_cr (NT x :: suf)
-      -> cr' = SF o_cr suf
-      -> stack_pushes_from_keyset pm (ce, cr :: frs)
-      -> lex_nat_triple (meas pm (cr', frs) ts (NtSet.remove x vi))
-                        (meas pm (ce, cr :: frs) ts vi).
+    forall rm ce cr cr' x y pre pre' pre'' vs vs' vs'' suf frs ts vi,
+      ce     = Fr y pre' vs' []
+      -> cr  = Fr x pre vs suf
+      -> cr' = Fr x pre'' vs'' suf
+      -> stack_lhss_from_keyset rm (ce, cr :: frs)
+      -> lex_nat_triple (meas rm (cr', frs) ts (NtSet.remove y vi))
+                        (meas rm (ce, cr :: frs) ts vi).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? ? ? ? ? ? hs;
-      subst; unfold meas; inv hs.
-    pose proof stackScore_le_after_return as hs.
-    eapply le_lt_or_eq in hs; eauto.
-    destruct hs as [hlt | heq].
-    - apply triple_snd_lt; eauto. 
-    - rewrite heq; apply triple_thd_lt; auto.
+    intros ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? hk; subst; unfold meas.
+    red in hk.
+    eapply ss_meas_lt_after_return with (vi := vi) in hk; sis; eauto.
+    inversion hk as [ ? ? ? ? hl | ? ? ? hl heq heq']; subst; clear hk.
+    - apply triple_snd_lt; auto.
+    - rewrite heq'.
+      apply triple_thd_lt; auto.
   Defined.
 
   Lemma meas_lt_after_push :
-    forall pm cr ce o o' x suf rhs frs ts vi,
-      cr = SF o (NT x :: suf)
-      -> ce = SF o' rhs
-      -> In (x, rhs) (grammarOf pm)
-      -> ~ NtSet.In x vi
-      -> lex_nat_triple (meas pm (ce, cr :: frs) ts (NtSet.add x vi))
-                        (meas pm (cr, frs) ts vi).
+    forall rm cr cr' ce x pre vs y suf rhs frs ts vi,
+      cr = Fr x pre vs (NT y :: suf)
+      -> cr' = Fr x pre vs suf
+      -> ce = Fr y [] tt rhs
+      -> In rhs (rhssFor y rm)
+      -> NtSet.mem y vi = false 
+      -> lex_nat_triple (meas rm (ce, cr' :: frs) ts (NtSet.add y vi))
+                        (meas rm (cr, frs) ts vi).
   Proof.
-    intros; subst.
+    intros ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? hi hm; subst.
     apply triple_snd_lt.
-    eapply stackScore_lt_after_push; eauto.
-    eapply grammarOf_keySet; eauto.
+    apply stackScore_lt_after_push; sis; auto.
+    - eapply rhssFor_keySet; eauto.
+    - apply NF.not_mem_iff in hm; auto.
+    - eapply rhssFor_allRhss; eauto.
   Defined.
-
+  
   Lemma step_meas_lt :
-    forall pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk,
-      step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-      -> lex_nat_triple (meas pm ss' ts' vi') (meas pm ss ts vi).
+    forall gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk,
+      step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+      -> lex_nat_triple (meas rm sk' ts' vi') (meas rm sk ts vi).
   Proof.
-    intros pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk hs; unfold step in hs.
-    destruct ss as ([ o [| [a|x] suf] ], frs).
-    - dms; tc; inv hs.
-      eapply meas_lt_after_return; eauto.
-    - dms; tc; inv hs.
-      apply triple_fst_lt; auto.
-    - destruct ps as ([pre v], p_frs).
-      destruct (NtSet.mem x vi) eqn:hm; [dms; tc | ..].
-      apply NF.not_mem_iff in hm.
-      destruct (adaptivePredict _ _ _ _ _ _ _ _ _ _) eqn:ha; dms; tc; inv hs.
-      + eapply meas_lt_after_push; eauto.
-        apply rhssFor_grammarOf.
-        eapply adaptivePredict_succ_in_rhssFor; eauto.
-      + eapply meas_lt_after_push; eauto.
-        apply rhssFor_grammarOf.
-        (* lemma *)
-        eapply llPredict_ambig_in_rhssFor.
-        eapply adaptivePredict_ambig_llPredict_ambig; eauto.
+    intros gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk hs; unfold step in hs.
+    destruct sk as ([x pre vs suf], frs).
+    dmeqs H; tc; inv hs.
+    - eapply meas_lt_after_return with (pre'' := NT x :: _); eauto.
+    - eapply meas_lt_after_return with (pre'' := NT x :: _); eauto.
+    - apply triple_fst_lt; auto.
+    - eapply meas_lt_after_push; eauto.
+      eapply adaptivePredict_succ_in_rhssFor; eauto.
+    - eapply meas_lt_after_push; eauto.
+      (* lemma relating SLL and LL prediction *)
+      (*
+      eapply llPredict_ambig_in_rhssFor; eauto.
+      eapply adaptivePredict_ambig_llPredict_ambig; eauto.
+       *)
+      unfold adaptivePredict in H2.
+      destruct (sllPredict _ _ _ _ _ _) in H2.
+      destruct p in H2; try solve [inv H2].
+      inv H2.
+      eapply llPredict_ambig_in_rhssFor; eauto.
   Qed.
 
   Lemma StepK_result_acc :
-    forall pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca'
-           hc hk (a : Acc lex_nat_triple (meas pm ss ts vi)),
-      step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-      -> Acc lex_nat_triple (meas pm ss' ts' vi').
+    forall gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca'
+           hc hk (a : Acc lex_nat_triple (meas rm sk ts vi)),
+      step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+      -> Acc lex_nat_triple (meas rm sk' ts' vi').
   Proof.
     intros; eapply Acc_inv; eauto.
     eapply step_meas_lt; eauto.
   Defined.
+
+  Inductive parse_result : Type :=
+  | Accept : forall (x : nonterminal), nt_semty x -> parse_result
+  | Ambig  : forall (x : nonterminal), nt_semty x -> parse_result
+  | Reject : string -> parse_result
+  | Error  : parse_error -> parse_result. 
   
-  Fixpoint multistep (pm : production_map)
-                     (cm : closure_map)
-                     (ps : prefix_stack)
-                     (ss : suffix_stack)
-                     (ts : list token)
-                     (vi : NtSet.t)
-                     (un : bool)
-                     (ca : cache)
-                     (hc : cache_stores_target_results pm cm ca)
-                     (hk : stack_pushes_from_keyset pm ss)
-                     (ha : Acc lex_nat_triple (meas pm ss ts vi))
-                     {struct ha} : parse_result :=
-    match step pm cm ps ss ts vi un ca hc hk as res return step pm cm ps ss ts vi un ca hc hk = res -> _ with
-    | StepAccept v                  => fun _  => if un then Accept v else Ambig v
-    | StepReject s                  => fun _  => Reject s
-    | StepError e                   => fun _  => Error e
-    | StepK ps' ss' ts' vi' un' ca' =>
-      fun hs => multistep pm cm ps' ss' ts' vi' un' ca'
+  (* For validation *)
+  Definition showResult (pr : parse_result) : string :=
+    match pr with
+    | Accept x v => "Accept"
+    | Ambig x v  => "Ambig"
+    | Reject s   => "Reject: " ++ s
+    | Error e    => "Error:  " ++ showParseError e
+    end.
+  
+  Fixpoint multistep
+           (gr : grammar)
+           (hw : grammar_wf gr)
+           (rm : rhs_map)
+           (hr : rhs_map_correct rm gr)
+           (cm : closure_map)
+           (sk : parser_stack)
+           (ts : list token)
+           (vi : NtSet.t)
+           (un : bool)
+           (ca : cache)
+           (hc : cache_stores_target_results rm cm ca)
+           (hk : stack_lhss_from_keyset rm sk)
+           (ha : Acc lex_nat_triple (meas rm sk ts vi))
+           {struct ha} : parse_result :=
+    match step gr hw rm cm sk ts vi un ca hc hk as res return step gr hw rm cm sk ts vi un ca hc hk = res -> _ with
+    | StepAccept x v            => fun _  => if un then Accept x v else Ambig x v
+    | StepReject s              => fun _  => Reject s
+    | StepError e               => fun _  => Error e
+    | StepK sk' ts' vi' un' ca' =>
+      fun hs => multistep gr hw rm hr cm sk' ts' vi' un' ca'
                           (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
-                          (step_preserves_push_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
+                          (step_preserves_lhss_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hr hs)
                           (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk ha hs)
     end eq_refl.
 
   Lemma multistep_unfold :
-    forall pm cm ps ss ts vi un ca hc hk ha,
-      multistep pm cm ps ss ts vi un ca hc hk ha =
-      match step pm cm ps ss ts vi un ca hc hk as res return step pm cm ps ss ts vi un ca hc hk = res -> _ with
-      | StepAccept v                  => fun _  => if un then Accept v else Ambig v
+    forall gr hw rm hr cm sk ts vi un ca hc hk ha,
+      multistep gr hw rm hr cm sk ts vi un ca hc hk ha =
+      match step gr hw rm cm sk ts vi un ca hc hk as res return step gr hw rm cm sk ts vi un ca hc hk = res -> _ with
+      | StepAccept x v                => fun _  => if un then Accept x v else Ambig x v
       | StepReject s                  => fun _  => Reject s
       | StepError e                   => fun _  => Error e
-      | StepK ps' ss' ts' vi' un' ca' =>
-        fun hs => multistep pm cm ps' ss' ts' vi' un' ca'
+      | StepK sk' ts' vi' un' ca' =>
+        fun hs => multistep gr hw rm hr cm sk' ts' vi' un' ca'
                             (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
-                            (step_preserves_push_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
+                            (step_preserves_lhss_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hr hs)
                             (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk ha hs)
       end eq_refl.
   Proof.
@@ -343,117 +355,121 @@ Module ParserFn (Import D : Defs.T).
   Qed.
   
   Lemma multistep_cases' :
-    forall (pm  : production_map)
+    forall (gr  : grammar)
+           (hw  : grammar_wf gr)
+           (rm  : rhs_map)
+           (hr  : rhs_map_correct rm gr)
            (cm  : closure_map)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
+           (sk  : parser_stack)
            (ts  : list token)
            (vi  : NtSet.t)
            (un  : bool)
            (ca  : cache)
-           (hc  : cache_stores_target_results pm cm ca)
-           (hk  : stack_pushes_from_keyset pm ss)
-           (ha  : Acc lex_nat_triple (meas pm ss ts vi))
+           (hc  : cache_stores_target_results rm cm ca)
+           (hk  : stack_lhss_from_keyset rm sk)
+           (ha  : Acc lex_nat_triple (meas rm sk ts vi))
            (sr  : step_result)
            (pr  : parse_result)
-           (heq : step pm cm ps ss ts vi un ca hc hk = sr),
-      match sr as res return (step pm cm ps ss ts vi un ca hc hk = res -> parse_result) with
-      | StepAccept sv                 => fun _ => if un then Accept sv else Ambig sv
+           (heq : step gr hw rm cm sk ts vi un ca hc hk = sr),
+      match sr as res return (step gr hw rm cm sk ts vi un ca hc hk = res -> parse_result) with
+      | StepAccept x sv                 => fun _ => if un then Accept x sv else Ambig x sv
       | StepReject s                  => fun _ => Reject s
       | StepError s                   => fun _ => Error s
-      | StepK ps' ss' ts' vi' un' ca' =>
-        fun hs => multistep pm cm ps' ss' ts' vi' un' ca'
+      | StepK sk' ts' vi' un' ca' =>
+        fun hs => multistep gr hw rm hr cm sk' ts' vi' un' ca'
                             (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
-                            (step_preserves_push_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
+                            (step_preserves_lhss_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hr hs)
                             (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk ha hs)
       end heq = pr
       -> match pr with
-         | Accept f => (sr = StepAccept f /\ un = true)
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              sr = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Accept f)
-         | Ambig f  => (sr = StepAccept f /\ un = false)
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              sr = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Ambig f)
+         | Accept x f => (sr = StepAccept x f /\ un = true)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              sr = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Accept x f)
+         | Ambig x f  => (sr = StepAccept x f /\ un = false)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              sr = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Ambig x f)
          | Reject s => sr = StepReject s
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              sr = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Reject s)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              sr = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Reject s)
          | Error s  => sr = StepError s
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              sr = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Error s)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              sr = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Error s)
          end.
   Proof.
-    intros pm cm ps ss ts vi un ca hc hk ha sr pr heq.
+    intros gr hw rm hr cm sk ts vi un ca hc hk ha sr pr heq.
     destruct pr; destruct sr; destruct un;
       try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 12].
   Qed.
 
   Lemma multistep_cases :
-    forall (pm  : production_map)
+    forall (gr  : grammar)
+           (hw  : grammar_wf gr)
+           (rm  : rhs_map)
+           (hr  : rhs_map_correct rm gr)
            (cm  : closure_map)
-           (ps  : prefix_stack)
-           (ss  : suffix_stack)
+           (sk  : parser_stack)
            (ts  : list token)
            (vi  : NtSet.t)
            (un  : bool)
            (ca  : cache)
-           (hc  : cache_stores_target_results pm cm ca)
-           (hk  : stack_pushes_from_keyset pm ss)
-           (ha  : Acc lex_nat_triple (meas pm ss ts vi))
+           (hc  : cache_stores_target_results rm cm ca)
+           (hk  : stack_lhss_from_keyset rm sk)
+           (ha  : Acc lex_nat_triple (meas rm sk ts vi))
            (pr  : parse_result),
-      multistep pm cm ps ss ts vi un ca hc hk ha = pr
+      multistep gr hw rm hr cm sk ts vi un ca hc hk ha = pr
       -> match pr with
-         | Accept f => (step pm cm ps ss ts vi un ca hc hk = StepAccept f /\ un = true)
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Accept f)
-         | Ambig f  => (step pm cm ps ss ts vi un ca hc hk = StepAccept f /\ un = false)
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Ambig f)
-         | Reject s => step pm cm ps ss ts vi un ca hc hk = StepReject s
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Reject s)
-         | Error s  => step pm cm ps ss ts vi un ca hc hk = StepError s
-                       \/ (exists ps' ss' ts' vi' un' ca' hc' hk' ha',
-                              step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-                              /\ multistep pm cm ps' ss' ts' vi' un' ca' hc' hk' ha' = Error s)
+         | Accept x f => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = true)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Accept x f)
+         | Ambig x f  => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = false)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Ambig x f)
+         | Reject s => step gr hw rm cm sk ts vi un ca hc hk = StepReject s
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Reject s)
+         | Error s  => step gr hw rm cm sk ts vi un ca hc hk = StepError s
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Error s)
          end.
   Proof.
-    intros pm cm ps ss ts vi un ca hc hk ha pr hm; subst.
+    intros gr hw rm hr cm sk ts vi un ca hc hk ha pr hm; subst.
     rewrite multistep_unfold.
     eapply multistep_cases'; eauto.
   Qed.
   
   Lemma cache_invar_starts_true :
-    forall pm cm,
-      cache_stores_target_results pm cm empty_cache.
+    forall rm cm,
+      cache_stores_target_results rm cm empty_cache.
   Proof.
-    intros pm cm sps a sps' hf.
+    intros rm cm sps a sps' hf.
     rewrite CacheFacts.empty_o in hf; tc.
   Defined.
 
   Lemma push_invar_starts_true :
-    forall pm x,
-      stack_pushes_from_keyset pm (SF None [NT x], []).
+    forall rm x,
+      stack_lhss_from_keyset rm (Fr x [] tt [NT x], []). 
   Proof.
-    intros pm x; red; auto.
+    intros rm x; repeat red; sis; auto.
   Qed.
 
   (* This curried pattern enables us to partially apply the parser to a grammar
      and compute the closure map once, instead of each time we parse an input *)
-  Definition parse (g : grammar) : nonterminal -> list token -> parse_result :=
-    let pm := mkProductionMap g in
-    let cm := mkClosureMap g    in
+  Definition parse (gr : grammar) (hw : grammar_wf gr) : nonterminal -> list token -> parse_result :=
+    let rm := mkRhsMap gr         in
+    let hr := mkRhsMap_correct gr in
+    let cm := mkClosureMap gr     in
     fun (x : nonterminal) (ts : list token) =>
-      let p_stk0 := (PF []   []    , []) in
-      let s_stk0 := (SF None [NT x], []) in
-      multistep pm cm p_stk0 s_stk0 ts NtSet.empty true empty_cache
-                (cache_invar_starts_true pm cm)
+      let sk0 := (Fr x [] tt [NT x], []) in
+      multistep gr hw rm hr cm sk0 ts NtSet.empty true empty_cache
+                (cache_invar_starts_true rm cm)
                 (push_invar_starts_true _ _)
                 (lex_nat_triple_wf _).
 

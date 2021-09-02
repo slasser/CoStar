@@ -261,24 +261,13 @@ Module LLPredictionFn (Import D : Defs.T).
       match fr with
       (* return case *)
       | Fr x pre vs [] =>
-        let pre' := rev pre in
-        let vs'  := revTuple pre vs in
         match frs with
         (* stack is exhausted *)
-        | [] =>
-          match findPredicateAndAction (x, pre') g hw with
-          (* check semantic predicate and terminate *)
-          | Some (Some p, _) =>
-            if p vs' then CstepDone else CstepK NtSet.empty []
-          (* terminate *)
-          | Some (None, _) =>
-            CstepDone
-          (* impossible case *)
-          | None =>
-            CstepError SpInvalidState
-          end
+        | [] => CstepDone
         (* return to caller frame *)
         | Fr x_cr pre_cr vs_cr suf_cr :: frs' =>
+          let pre' := rev pre in
+          let vs'  := revTuple pre vs in
           match findPredicateAndAction (x, pre') g hw with
           (* check semantic predicate and reduce *)
           | Some (Some p, f) =>
@@ -501,8 +490,10 @@ Module LLPredictionFn (Import D : Defs.T).
         apply in_cons; auto.
   Qed.
 
-  Definition meas (rm : rhs_map) (vi : NtSet.t) (sp : subparser) : nat * nat :=
-    sll_meas rm vi (sllifySp sp).
+  Definition ll_meas (rm : rhs_map) (vi : NtSet.t) (sp : subparser) : nat * nat :=
+    match sp with
+    | Sp _ sk => ss_meas rm vi (sllify sk)
+    end.
 
   Lemma cstep_meas_lt :
     forall (g      : grammar)
@@ -514,17 +505,17 @@ Module LLPredictionFn (Import D : Defs.T).
       sp_lhss_from_keyset rm sp
       -> cstep g hw rm vi sp = CstepK vi' sps'
       -> In sp' sps'
-      -> lex_nat_pair (meas rm vi' sp') (meas rm vi sp).
+      -> lex_nat_pair (ll_meas rm vi' sp') (ll_meas rm vi sp).
   Proof.
     intros g hw rm sp sp' sps' vi vi' ha hs hi. 
     unfold cstep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
-      eapply sll_meas_lt_after_return; sis; eauto.
+      eapply ss_meas_lt_after_return; sis; eauto.
     - apply in_singleton_eq in hi; subst.
-      eapply sll_meas_lt_after_return; sis; eauto.  
+      eapply ss_meas_lt_after_return; sis; eauto.  
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
-      eapply sll_meas_lt_after_push; sis; eauto.
+      eapply ss_meas_lt_after_push; sis; eauto.
       + apply not_mem_iff; auto.
       + eapply rhssFor_keySet; eauto.
       + eapply rhssFor_allRhss; eauto. 
@@ -535,8 +526,8 @@ Module LLPredictionFn (Import D : Defs.T).
       sp_lhss_from_keyset rm sp
       -> cstep g hw rm vi sp = CstepK vi' sps'
       -> In sp' sps'
-      -> Acc lex_nat_pair (meas rm vi sp)
-      -> Acc lex_nat_pair (meas rm vi' sp').
+      -> Acc lex_nat_pair (ll_meas rm vi sp)
+      -> Acc lex_nat_pair (ll_meas rm vi' sp').
   Proof.
     intros g hw rm sp sp' sps' vi vi' hk heq hi ha.
     eapply Acc_inv; eauto.
@@ -550,7 +541,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (vi : NtSet.t)
            (sp : subparser)
            (hk : sp_lhss_from_keyset rm sp)
-           (ha : Acc lex_nat_pair (meas rm vi sp)) : closure_result subparser :=
+           (ha : Acc lex_nat_pair (ll_meas rm vi sp)) : closure_result subparser :=
     match cstep g hw rm vi sp as r return cstep g hw rm vi sp = r -> _ with
     | CstepDone       => fun _  => inr [sp]
     | CstepError e    => fun _  => inl e
@@ -589,7 +580,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (vi  : NtSet.t)
            (sp  : subparser)
            (hk  : sp_lhss_from_keyset rm sp)
-           (ha  : Acc lex_nat_pair (meas rm vi sp))
+           (ha  : Acc lex_nat_pair (ll_meas rm vi sp))
            (sr  : subparser_closure_step_result)
            (cr  : closure_result subparser)
            (heq : cstep g hw rm vi sp = sr),
@@ -642,7 +633,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (vi : NtSet.t)
            (sp : subparser)
            (hk : sp_lhss_from_keyset rm sp)
-           (ha : Acc lex_nat_pair (meas rm vi sp))
+           (ha : Acc lex_nat_pair (ll_meas rm vi sp))
            (cr : closure_result subparser),
       llc g hw rm vi sp hk ha = cr
       -> match cr with
@@ -711,7 +702,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Lemma llc_preserves_prediction' :
     forall g hw rm pair (ha : Acc lex_nat_pair pair) vi sp hk ha' sp' sps',
-      pair = meas rm vi sp
+      pair = ll_meas rm vi sp
       -> llc g hw rm vi sp hk ha' = inr sps'
       -> In sp' sps'
       -> sp'.(prediction) = sp.(prediction).
@@ -743,7 +734,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Lemma llc_preserves_sulk' :
     forall g hw rm pair (ha : Acc lex_nat_pair pair) vi sp hk ha' sps',
-      pair = meas rm vi sp
+      pair = ll_meas rm vi sp
       -> llc g hw rm vi sp hk ha' = inr sps'
       -> all_sp_lhss_from_keyset rm sps'.
   Proof.
