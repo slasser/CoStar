@@ -48,15 +48,15 @@ Module LLPredictionFn (Import D : Defs.T).
       | Sp pred stk =>
         match stk with
         (* stack is exhausted *)
-        | (Fr _ _ _ [], [])         => MoveReject
+        | (Fr _ _ [], [])         => MoveReject
         (* impossible case *)
-        | (Fr _ _ _ [], _ :: _)     => MoveError SpInvalidState
+        | (Fr _ _ [], _ :: _)     => MoveError SpInvalidState
         (* impossible case *)
-        | (Fr _ _ _ (NT _ :: _), _) => MoveError SpInvalidState
+        | (Fr _ _ (NT _ :: _), _) => MoveError SpInvalidState
         (* try to consume a token *)
-        | (Fr x pre v (T a :: suf), frs) =>
+        | (Fr pre v (T a :: suf), frs) =>
           if t_eq_dec a' a then
-            MoveSucc (Sp pred (Fr x (T a' :: pre) (v', v) suf, frs))
+            MoveSucc (Sp pred (Fr (T a' :: pre) (v', v) suf, frs))
           else
             MoveReject
         end
@@ -73,24 +73,24 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma moveSp_succ_step :
-    forall sp sp' x pre a v v' suf frs pred,
-      sp = Sp pred (Fr x pre v (T a :: suf), frs)
-      -> sp' = Sp pred (Fr x (T a :: pre) (v', v) suf, frs)
+    forall sp sp' pre a v v' suf frs pred,
+      sp = Sp pred (Fr pre v (T a :: suf), frs)
+      -> sp' = Sp pred (Fr (T a :: pre) (v', v) suf, frs)
       -> moveSp (@existT _ _ a v') sp = MoveSucc sp'.
   Proof.
     intros; subst; unfold moveSp; dms; tc.
   Qed.
   
-  Lemma moveSp_preserves_ulk :
+  Lemma moveSp_preserves_pki :
     forall rm a sp sp',
-      sp_lhss_from_keyset rm sp
+      sp_pushes_from_keyset rm sp
       -> moveSp a sp = MoveSucc sp'
-      -> sp_lhss_from_keyset rm sp'.
+      -> sp_pushes_from_keyset rm sp'.
   Proof.
     intros rm a sp sp' hk hm.
     unfold moveSp in hm; dms; tc; inv hm; sis.
     red; red in hk; sis.
-    eapply sll_consume_preserves_keyset_invar; eauto.
+    eapply consume_preserves_keyset_invar; eauto.
   Qed.
   
   Definition move_result (A : Type) := sum prediction_error (list A).
@@ -218,9 +218,9 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma move_succ_all_sps_step :
-    forall sp sp' pred x pre v a suf v' frs sps sps',
-      sp = Sp pred (Fr x pre v (T a :: suf), frs)
-      -> sp' = Sp pred (Fr x (T a :: pre) (v', v) suf, frs)
+    forall sp sp' pred pre v a suf v' frs sps sps',
+      sp = Sp pred (Fr pre v (T a :: suf), frs)
+      -> sp' = Sp pred (Fr (T a :: pre) (v', v) suf, frs)
       -> In sp sps
       -> move (@existT _ _ a v') sps = inr sps'
       -> In sp' sps'.
@@ -230,16 +230,16 @@ Module LLPredictionFn (Import D : Defs.T).
     eapply moveSp_succ_step; eauto.
   Qed.
 
-  Lemma move_preserves_ulk :
+  Lemma move_preserves_pki :
     forall rm a sps sps',
-      all_sp_lhss_from_keyset rm sps
+      all_sp_pushes_from_keyset rm sps
       -> move a sps = inr sps'
-      -> all_sp_lhss_from_keyset rm sps'.
+      -> all_sp_pushes_from_keyset rm sps'.
   Proof.
     intros rm a sps sps' hk hm sp' hi'.
     eapply aggrMoveResults_map_backwards in hm; eauto.
     destruct hm as [sp [hi hm]].
-    eapply moveSp_preserves_ulk; eauto.
+    eapply moveSp_preserves_pki; eauto.
   Qed.
 
   (* "closure" operation *)
@@ -260,47 +260,47 @@ Module LLPredictionFn (Import D : Defs.T).
     | Sp pred (fr, frs) =>
       match fr with
       (* return case *)
-      | Fr x pre vs [] =>
+      | Fr pre vs [] =>
         match frs with
         (* stack is exhausted *)
         | [] => CstepDone
         (* return to caller frame *)
-        | Fr x_cr pre_cr vs_cr suf_cr :: frs' =>
+        | Fr pre_cr vs_cr (NT x :: suf_cr) :: frs' =>
           let pre' := rev pre in
           let vs'  := revTuple pre vs in
           match findPredicateAndAction (x, pre') g hw with
           (* check semantic predicate and reduce *)
           | Some (Some p, f) =>
             if p vs' then
-              let stk' := (Fr x_cr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
+              let stk' := (Fr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
               in  CstepK (NtSet.remove x vi) [Sp pred stk']
             else
               (* failed semantic predicate *)
               CstepK NtSet.empty []
           (* reduce *)
           | Some (None, f) =>
-            let stk' := (Fr x_cr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
+            let stk' := (Fr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
             in  CstepK (NtSet.remove x vi) [Sp pred stk']
           | None =>
             (* impossible case *)
             CstepError SpInvalidState
           end
+        | _ => CstepError SpInvalidState
         end
       (* consume case *)
-      | Fr _ _ _ (T _ :: _) => CstepDone
+      | Fr _ _ (T _ :: _) => CstepDone
       (* push case *)
-      | Fr x pre v (NT y :: suf) =>
-        if NtSet.mem y vi then
+      | Fr pre v (NT x :: suf) =>
+        if NtSet.mem x vi then
           (* unreachable for a left-recursive grammar *)
-          match NM.find y rm with
-          | Some _ => CstepError (SpLeftRecursion y)
+          match NM.find x rm with
+          | Some _ => CstepError (SpLeftRecursion x)
           | None   => CstepK NtSet.empty []
           end
         else
-          let fr'  := Fr x pre v suf in
-          let sps' := map (fun rhs => Sp pred (Fr y [] tt rhs, fr' :: frs))
-                          (rhssFor y rm)
-          in  CstepK (NtSet.add y vi) sps' 
+          let sps' := map (fun rhs => Sp pred (Fr [] tt rhs, fr :: frs))
+                          (rhssFor x rm)
+          in  CstepK (NtSet.add x vi) sps' 
       end
     end.
   
@@ -318,24 +318,24 @@ Module LLPredictionFn (Import D : Defs.T).
       destruct hi as [rhs [heq hi]]; subst; auto.
   Qed.
 
-  Lemma cstep_preserves_ulk :
+  Lemma cstep_preserves_pki :
     forall g hw rm sp sp' sps' vi vi',
-      sp_lhss_from_keyset rm sp
+      sp_pushes_from_keyset rm sp
       -> cstep g hw rm vi sp = CstepK vi' sps'
       -> In sp' sps'
-      -> sp_lhss_from_keyset rm sp'.
+      -> sp_pushes_from_keyset rm sp'.
   Proof.
     intros g hw rm sp sp' sps' vi vi' hk hs hi; red in hk.
     unfold cstep in hs; dms; tc; inv hs; red; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
       red; red in hk; sis.
-      eapply sll_return_preserves_keyset_invar; eauto.
+      eapply return_preserves_keyset_invar; eauto.
     - apply in_singleton_eq in hi; subst.
       red; red in hk; sis.
-      eapply sll_return_preserves_keyset_invar; eauto.
+      eapply return_preserves_keyset_invar; eauto.
     - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
       red; red in hk; sis.
-      eapply sll_push_preserves_keyset_invar; eauto.
+      eapply push_preserves_keyset_invar; eauto.
       eapply rhssFor_keySet; eauto.
   Qed.
 
@@ -492,7 +492,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Definition ll_meas (rm : rhs_map) (vi : NtSet.t) (sp : subparser) : nat * nat :=
     match sp with
-    | Sp _ sk => ss_meas rm vi (sllify sk)
+    | Sp _ sk => meas rm vi (stackSuffixes sk)
     end.
 
   Lemma cstep_meas_lt :
@@ -502,7 +502,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (sp sp' : subparser)
            (sps'   : list subparser)
            (vi vi' : NtSet.t),
-      sp_lhss_from_keyset rm sp
+      sp_pushes_from_keyset rm sp
       -> cstep g hw rm vi sp = CstepK vi' sps'
       -> In sp' sps'
       -> lex_nat_pair (ll_meas rm vi' sp') (ll_meas rm vi sp).
@@ -510,12 +510,12 @@ Module LLPredictionFn (Import D : Defs.T).
     intros g hw rm sp sp' sps' vi vi' ha hs hi. 
     unfold cstep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
-      eapply ss_meas_lt_after_return; sis; eauto.
+      eapply meas_lt_after_return; sis; eauto.
     - apply in_singleton_eq in hi; subst.
-      eapply ss_meas_lt_after_return; sis; eauto.  
+      eapply meas_lt_after_return; sis; eauto.  
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
-      eapply ss_meas_lt_after_push; sis; eauto.
+      eapply meas_lt_after_push; sis; eauto.
       + apply not_mem_iff; auto.
       + eapply rhssFor_keySet; eauto.
       + eapply rhssFor_allRhss; eauto. 
@@ -523,7 +523,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Lemma acc_after_step :
     forall g hw rm sp sp' sps' vi vi',
-      sp_lhss_from_keyset rm sp
+      sp_pushes_from_keyset rm sp
       -> cstep g hw rm vi sp = CstepK vi' sps'
       -> In sp' sps'
       -> Acc lex_nat_pair (ll_meas rm vi sp)
@@ -540,7 +540,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (rm : rhs_map)
            (vi : NtSet.t)
            (sp : subparser)
-           (hk : sp_lhss_from_keyset rm sp)
+           (hk : sp_pushes_from_keyset rm sp)
            (ha : Acc lex_nat_pair (ll_meas rm vi sp)) : closure_result subparser :=
     match cstep g hw rm vi sp as r return cstep g hw rm vi sp = r -> _ with
     | CstepDone       => fun _  => inr [sp]
@@ -549,7 +549,7 @@ Module LLPredictionFn (Import D : Defs.T).
       fun hs => 
         let crs := dmap sps' (fun sp' hi =>
                                 llc g hw rm vi' sp'
-                                    (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                    (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                     (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
         in  aggrClosureResults crs
     end eq_refl.
@@ -565,7 +565,7 @@ Module LLPredictionFn (Import D : Defs.T).
           let crs := 
               dmap sps' (fun sp' hi =>
                            llc g hw rm vi' sp'
-                               (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                               (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
           in  aggrClosureResults crs
       end eq_refl.
@@ -579,7 +579,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (rm  : rhs_map)
            (vi  : NtSet.t)
            (sp  : subparser)
-           (hk  : sp_lhss_from_keyset rm sp)
+           (hk  : sp_pushes_from_keyset rm sp)
            (ha  : Acc lex_nat_pair (ll_meas rm vi sp))
            (sr  : subparser_closure_step_result)
            (cr  : closure_result subparser)
@@ -591,7 +591,7 @@ Module LLPredictionFn (Import D : Defs.T).
         fun hs => 
           let crs := 
               dmap sps' (fun sp' hi => llc g hw rm vi' sp'
-                                            (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                            (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                             (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
           in  aggrClosureResults crs
       end heq = cr
@@ -604,7 +604,7 @@ Module LLPredictionFn (Import D : Defs.T).
                      (crs : list (closure_result subparser)),
                crs = dmap sps (fun sp' hi => 
                                  llc g hw rm vi' sp'
-                                     (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                     (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                      (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
                /\ aggrClosureResults crs = inl e
          | inr sps => 
@@ -615,7 +615,7 @@ Module LLPredictionFn (Import D : Defs.T).
                      (crs  : list (closure_result subparser)),
                crs = dmap sps' (fun sp' hi => 
                                   llc g hw rm vi' sp'
-                                      (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                      (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                       (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
                /\ aggrClosureResults crs = inr sps
          end.
@@ -632,7 +632,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (rm : rhs_map)
            (vi : NtSet.t)
            (sp : subparser)
-           (hk : sp_lhss_from_keyset rm sp)
+           (hk : sp_pushes_from_keyset rm sp)
            (ha : Acc lex_nat_pair (ll_meas rm vi sp))
            (cr : closure_result subparser),
       llc g hw rm vi sp hk ha = cr
@@ -645,7 +645,7 @@ Module LLPredictionFn (Import D : Defs.T).
                      (crs : list (closure_result subparser)),
                crs = dmap sps (fun sp' hi => 
                                  llc g hw rm vi' sp'
-                                     (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                     (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                      (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
                /\ aggrClosureResults crs = inl e
          | inr sps =>
@@ -656,7 +656,7 @@ Module LLPredictionFn (Import D : Defs.T).
                      (crs  : list (closure_result subparser)),
                crs = dmap sps' (fun sp' hi => 
                                   llc g hw rm vi' sp'
-                                      (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                      (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                       (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
                /\ aggrClosureResults crs = inr sps
          end.
@@ -676,7 +676,7 @@ Module LLPredictionFn (Import D : Defs.T).
                    (crs  : list (closure_result subparser)),
           crs = dmap sps' (fun sp' hi => 
                              llc g hw rm vi' sp'
-                                 (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                 (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                  (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
           /\ aggrClosureResults crs = inr sps.
   Proof.
@@ -693,7 +693,7 @@ Module LLPredictionFn (Import D : Defs.T).
                    (crs : list (closure_result subparser)),
           crs = dmap sps (fun sp' hi => 
                             llc g hw rm vi' sp'
-                                (cstep_preserves_ulk _ _ _ _ _ _ _ _ hk hs hi)
+                                (cstep_preserves_pki _ _ _ _ _ _ _ _ hk hs hi)
                                 (acc_after_step _ _ _ _ _ _ _ _ hk hs hi ha))
           /\ aggrClosureResults crs = inl e.
   Proof.
@@ -732,11 +732,11 @@ Module LLPredictionFn (Import D : Defs.T).
     intros; eapply llc_preserves_prediction'; eauto.
   Qed.
 
-  Lemma llc_preserves_sulk' :
+  Lemma llc_preserves_pki' :
     forall g hw rm pair (ha : Acc lex_nat_pair pair) vi sp hk ha' sps',
       pair = ll_meas rm vi sp
       -> llc g hw rm vi sp hk ha' = inr sps'
-      -> all_sp_lhss_from_keyset rm sps'.
+      -> all_sp_pushes_from_keyset rm sps'.
   Proof.
     intros g hw rm pair a.
     induction a as [pair hlt IH].
@@ -752,13 +752,13 @@ Module LLPredictionFn (Import D : Defs.T).
       eapply cstep_meas_lt; eauto.
   Qed.
 
-  Lemma llc_preserves_sulk :
+  Lemma llc_preserves_pki :
     forall g hw rm vi sp hk ha sps sps',
-      all_sp_lhss_from_keyset rm sps
+      all_sp_pushes_from_keyset rm sps
       -> llc g hw rm vi sp hk ha = inr sps'
-      -> all_sp_lhss_from_keyset rm sps'.
+      -> all_sp_pushes_from_keyset rm sps'.
   Proof.
-    intros; eapply llc_preserves_sulk'; eauto.
+    intros; eapply llc_preserves_pki'; eauto.
   Qed.
   
   Definition llClosure
@@ -766,15 +766,15 @@ Module LLPredictionFn (Import D : Defs.T).
              (hw  : grammar_wf g)
              (rm  : rhs_map)
              (sps : list subparser)
-             (hk  : all_sp_lhss_from_keyset rm sps) :
+             (hk  : all_sp_pushes_from_keyset rm sps) :
     sum prediction_error (list subparser) :=
     aggrClosureResults (dmap sps (fun sp hi =>
                                     llc g hw rm NtSet.empty sp
-                                        (ulk_list__ulk_mem _ _ sp hk hi)
+                                        (pki_list__pki_mem _ _ sp hk hi)
                                         (lex_nat_pair_wf _))).
 
   Lemma llClosure_preserves_prediction :
-    forall g hw rm sps (hk : all_sp_lhss_from_keyset rm sps) sps' sp',
+    forall g hw rm sps (hk : all_sp_pushes_from_keyset rm sps) sps' sp',
       llClosure g hw rm sps hk = inr sps'
       -> In sp' sps'
       -> exists sp, In sp sps /\ sp'.(prediction) = sp.(prediction).
@@ -788,27 +788,27 @@ Module LLPredictionFn (Import D : Defs.T).
     eapply llc_preserves_prediction; eauto.
   Qed.
 
-  Lemma llClosure_preserves_ulk :
-    forall g hw rm sps sps' (hk : all_sp_lhss_from_keyset rm sps),
+  Lemma llClosure_preserves_pki :
+    forall g hw rm sps sps' (hk : all_sp_pushes_from_keyset rm sps),
       llClosure g hw rm sps hk = inr sps'
-      -> all_sp_lhss_from_keyset rm sps'. 
+      -> all_sp_pushes_from_keyset rm sps'. 
   Proof.
     intros g hw rm sps spss' hk hc sp' hi.
     eapply aggrClosureResults_succ_in_input in hc; eauto.
     destruct hc as [sps' [hi' hi'']].
     eapply dmap_in with (l := sps) in hi'; eauto; sis.
     destruct hi' as [sp [? [hi''' hspc]]].
-    eapply llc_preserves_sulk; eauto.
+    eapply llc_preserves_pki; eauto.
   Qed.
     
   Definition llTarget g hw rm a sps
-                      (hk : all_sp_lhss_from_keyset rm sps) :
+                      (hk : all_sp_pushes_from_keyset rm sps) :
                       sum prediction_error (list subparser) :=
     match move a sps as m return move a sps = m -> _ with
     | inl e    => fun _ => inl e
     | inr sps' =>
       fun hm =>
-        match llClosure g hw rm sps' (move_preserves_ulk _ _ _ _ hk hm) with
+        match llClosure g hw rm sps' (move_preserves_pki _ _ _ _ hk hm) with
         | inl e     => inl e
         | inr sps'' => inr sps''
         end
@@ -820,7 +820,7 @@ Module LLPredictionFn (Import D : Defs.T).
       | inl e    => fun _ => inl e
       | inr sps' =>
         fun hm =>
-          match llClosure g hw rm sps' (move_preserves_ulk _ _ _ _ hk hm) with
+          match llClosure g hw rm sps' (move_preserves_pki _ _ _ _ hk hm) with
           | inl e     => inl e
           | inr sps'' => inr sps''
           end
@@ -876,15 +876,15 @@ Module LLPredictionFn (Import D : Defs.T).
     intros g hw rm a sps hk sps'' ht; apply llTarget_cases in ht; auto.
   Qed.
 
-  Lemma llTarget_preserves_ulk :
+  Lemma llTarget_preserves_pki :
     forall g hw rm a sps sps' hk,
       llTarget g hw rm a sps hk = inr sps'
-      -> all_sp_lhss_from_keyset rm sps'.
+      -> all_sp_pushes_from_keyset rm sps'.
   Proof.
     intros g hw rm a sps sps'' hk ht.
     apply llTarget_succ_case in ht.
     destruct ht as [sps' [hk' [hmhc]]].
-    eapply llClosure_preserves_ulk; eauto.
+    eapply llClosure_preserves_pki; eauto.
   Qed.
 
   (* LL prediction *)
@@ -897,7 +897,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Definition finalConfig (sp : subparser) : bool :=
     match sp with
-    | Sp _ (Fr _ _ _ [], []) => true
+    | Sp _ (Fr _ _ [], []) => true
     | _ => false
     end.
 
@@ -905,7 +905,7 @@ Module LLPredictionFn (Import D : Defs.T).
     forall sp pred stk,
       sp = Sp pred stk
       -> finalConfig sp = true
-      -> exists x pre v, stk = (Fr x pre v [], []).
+      -> exists pre v, stk = (Fr pre v [], []).
   Proof.
     intros sp pred stk ? hf; subst; unfold finalConfig in hf; dms; tc; eauto.
   Qed.
@@ -997,7 +997,7 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma llTarget_preserves_ape:
-    forall g hw rm a x sps sps' (hk : all_sp_lhss_from_keyset rm sps),
+    forall g hw rm a x sps sps' (hk : all_sp_pushes_from_keyset rm sps),
     all_predictions_equal x sps
     -> llTarget g hw rm a sps hk = inr sps'
     -> all_predictions_equal x sps'.
@@ -1036,10 +1036,10 @@ Module LLPredictionFn (Import D : Defs.T).
   Lemma handleFinalSubparsers_succ_facts :
     forall sps rhs,
       handleFinalSubparsers sps = PredSucc rhs
-      -> exists sp x pre v,
+      -> exists sp pre v,
         In sp sps
         /\ sp.(prediction) = rhs
-        /\ sp.(stack) = (Fr x pre v [], []).
+        /\ sp.(stack) = (Fr pre v [], []).
   Proof.
     intros sps rhs hh.
     unfold handleFinalSubparsers in hh.
@@ -1072,7 +1072,7 @@ Module LLPredictionFn (Import D : Defs.T).
            (rm  : rhs_map)
            (sps : list subparser)
            (ts  : list token)
-           (hk  : all_sp_lhss_from_keyset rm sps) : prediction_result :=
+           (hk  : all_sp_pushes_from_keyset rm sps) : prediction_result :=
     match ts with
     | []            => handleFinalSubparsers sps
     | t :: ts' =>
@@ -1086,7 +1086,7 @@ Module LLPredictionFn (Import D : Defs.T).
           | inl e     => fun _ => PredError e
           | inr sps'' =>
             fun ht =>
-              llPredict' g hw rm sps'' ts' (llTarget_preserves_ulk _ _ _ _ _ _ hk ht)
+              llPredict' g hw rm sps'' ts' (llTarget_preserves_pki _ _ _ _ _ _ hk ht)
           end eq_refl
       end
     end.
@@ -1097,22 +1097,22 @@ Module LLPredictionFn (Import D : Defs.T).
       | inl e     => fun _ => PredError e
       | inr sps'' =>
         fun ht =>
-          llPredict' g hw rm sps'' ts' (llTarget_preserves_ulk _ _ _ _ _ _ hk ht)
+          llPredict' g hw rm sps'' ts' (llTarget_preserves_pki _ _ _ _ _ _ hk ht)
       end heq = pr
       -> match pr with
          | PredSucc ys =>
            (exists sps'' (heq' : llTarget g hw rm a sps hk = inr sps''),
-               llPredict' g hw rm sps'' ts' (llTarget_preserves_ulk _ _ _ _ _ _ hk heq') = PredSucc ys)
+               llPredict' g hw rm sps'' ts' (llTarget_preserves_pki _ _ _ _ _ _ hk heq') = PredSucc ys)
          | PredAmbig ys =>
            (exists sps'' (heq' : llTarget g hw rm a sps hk = inr sps''),
-               llPredict' g hw rm sps'' ts' (llTarget_preserves_ulk _ _ _ _ _ _ hk heq') = PredAmbig ys)
+               llPredict' g hw rm sps'' ts' (llTarget_preserves_pki _ _ _ _ _ _ hk heq') = PredAmbig ys)
          | PredReject =>
            (exists sps'' (heq' : llTarget g hw rm a sps hk = inr sps''),
-               llPredict' g hw rm sps'' ts' (llTarget_preserves_ulk _ _ _ _ _ _ hk heq') = PredReject)         
+               llPredict' g hw rm sps'' ts' (llTarget_preserves_pki _ _ _ _ _ _ hk heq') = PredReject)         
          | PredError e =>
            llTarget g hw rm a sps hk = inl e
            \/ (exists sps'' (heq' : llTarget g hw rm a sps hk = inr sps''),
-               llPredict' g hw rm sps'' ts' (llTarget_preserves_ulk _ _ _ _ _ _ hk heq') = PredError e)
+               llPredict' g hw rm sps'' ts' (llTarget_preserves_pki _ _ _ _ _ _ hk heq') = PredError e)
          end.
   Proof.
     intros g hw rm a sps hk ts' pr t heq; dms; intros heq'; inv heq'; eauto.
@@ -1126,7 +1126,7 @@ Module LLPredictionFn (Import D : Defs.T).
     intros g hw rm ts gamma.
     induction ts as [| (a, l) ts IH]; intros sps hk hl; sis.
     - apply handleFinalSubparsers_succ_facts in hl.
-      destruct hl as [sp [x [pre [v [hi [heq heq']]]]]]; eauto.
+      destruct hl as [sp [pre [v [hi [heq heq']]]]]; eauto.
     - destruct sps as [| sp' sps'] eqn:hs; tc; dmeq hall; subst.
       + inv hl; exists sp'; split; auto.
         apply in_eq.
@@ -1220,49 +1220,47 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Definition llInitSps
              (rm  : rhs_map)
-             (x   : nonterminal)
              (pre : list symbol)
              (vs  : symbols_semty pre)
-             (y   : nonterminal)
+             (x   : nonterminal)
              (suf : list symbol)
              (frs : list parser_frame) : list subparser :=
-    let cr' := Fr x pre vs suf 
-    in  map (fun rhs => Sp rhs (Fr y [] tt rhs, cr' :: frs))
-            (rhssFor y rm).
+    let cr := Fr pre vs (NT x :: suf)
+    in  map (fun rhs => Sp rhs (Fr [] tt rhs, cr :: frs))
+            (rhssFor x rm).
 
   Lemma llInitSps_prediction_in_rhssFor :
-    forall rm x pre vs y suf frs sp,
-      In sp (llInitSps rm x pre vs y suf frs)
-      -> In sp.(prediction) (rhssFor y rm).
+    forall rm pre vs x suf frs sp,
+      In sp (llInitSps rm pre vs x suf frs)
+      -> In sp.(prediction) (rhssFor x rm).
   Proof.
-    intros rm x pre vs y suf frs sp hi; unfold llInitSps in hi.
+    intros rm pre vs x suf frs sp hi; unfold llInitSps in hi.
     eapply in_map_iff in hi; firstorder; subst; auto.
   Qed.
 
   Lemma llInitSps_result_incl_all_rhss :
-    forall g rm fr x pre vs y suf rhs frs,
+    forall g rm pre vs x suf rhs frs,
       rhs_map_correct rm g
-      -> fr = Fr x pre vs suf 
-      -> PM.In (y, rhs) g
-      -> In (Sp rhs (Fr y [] tt rhs, Fr x pre vs suf :: frs)) 
-            (llInitSps rm x pre vs y suf frs).
+      -> PM.In (x, rhs) g
+      -> In (Sp rhs (Fr [] tt rhs, Fr pre vs (NT x :: suf) :: frs)) 
+            (llInitSps rm pre vs x suf frs).
   Proof.
-    intros g rm fr x pre vs y suf rhs frs hc ? hi; subst. 
+    intros g rm pre vs x suf rhs frs hc hi.
     apply in_map_iff; exists rhs; split; auto.
     eapply rhssFor_in_iff; eauto.
   Qed.
 
-  Lemma llInitSps_preserves_ulk :
-    forall rm x pre vs y suf frs,
-      stack_lhss_from_keyset rm (Fr x pre vs (NT y :: suf), frs)
-      -> all_sp_lhss_from_keyset rm (llInitSps rm x pre vs y suf frs).
+  Lemma llInitSps_preserves_pki :
+    forall rm pre vs x suf frs,
+      stack_pushes_from_keyset rm (Fr pre vs (NT x :: suf), frs)
+      -> all_sp_pushes_from_keyset rm (llInitSps rm pre vs x suf frs).
   Proof.
-    intros rm x pre vs y suf frs hk sp hi.
+    intros rm pre vs x suf frs hk sp hi.
     unfold llInitSps in hi.
     apply in_map_iff in hi. 
     destruct hi as [ys [heq hi]]; subst.
     red in hk; sis.
-    eapply sll_push_preserves_keyset_invar; eauto.
+    eapply push_preserves_keyset_invar; eauto.
     eapply rhssFor_keySet; eauto.
   Qed.
     
@@ -1270,111 +1268,109 @@ Module LLPredictionFn (Import D : Defs.T).
              (g   : grammar)
              (hw  : grammar_wf g)
              (rm  : rhs_map)
-             (x   : nonterminal)
              (pre : list symbol)
              (vs  : symbols_semty pre)
-             (y   : nonterminal)
+             (x   : nonterminal)
              (suf : list symbol)
              (frs : list parser_frame)
-             (hk  : stack_lhss_from_keyset rm (Fr x pre vs (NT y :: suf), frs)) :
+             (hk  : stack_pushes_from_keyset rm (Fr pre vs (NT x :: suf), frs)) :
     sum prediction_error (list subparser) :=
-    llClosure g hw rm (llInitSps rm x pre vs y suf frs) (llInitSps_preserves_ulk rm x pre vs y suf frs hk).
+    llClosure g hw rm (llInitSps rm pre vs x suf frs) (llInitSps_preserves_pki _ _ _ _ _ _ hk).
   
   Lemma llStartState_sp_prediction_in_rhssFor :
-    forall g hw rm x pre vs y suf frs hk sp' sps',
-      llStartState g hw rm x pre vs y suf frs hk = inr sps'
+    forall g hw rm pre vs x suf frs hk sp' sps',
+      llStartState g hw rm pre vs x suf frs hk = inr sps'
       -> In sp' sps'
-      -> In sp'.(prediction) (rhssFor y rm).
+      -> In sp'.(prediction) (rhssFor x rm).
   Proof.
-    intros g hw rm x pre vs y suf frs hk sp' sps' hf hi. 
+    intros g hw rm pre vs x suf frs hk sp' sps' hf hi. 
     unfold llStartState in hf.
     eapply llClosure_preserves_prediction in hf; eauto.
     destruct hf as [sp [hin heq]]; rewrite heq.
     eapply llInitSps_prediction_in_rhssFor; eauto.
   Qed.
 
-  Lemma llStartState_preserves_ulk :
-    forall g hw rm x pre vs y suf frs hk sps',
-      llStartState g hw rm x pre vs y suf frs hk = inr sps'
-      -> all_sp_lhss_from_keyset rm sps'.
+  Lemma llStartState_preserves_pki :
+    forall g hw rm pre vs x suf frs hk sps',
+      llStartState g hw rm  pre vs x suf frs hk = inr sps'
+      -> all_sp_pushes_from_keyset rm sps'.
   Proof.
-    intros g hw rm x pre vs y suf frs hk sps' hl. 
-    eapply llClosure_preserves_ulk; eauto.
+    intros g hw rm pre vs x suf frs hk sps' hl. 
+    eapply llClosure_preserves_pki; eauto.
   Qed.
   
   Definition llPredict
              (g   : grammar)
              (hw  : grammar_wf g)
              (rm  : rhs_map)
-             (x   : nonterminal)
              (pre : list symbol)
              (vs  : symbols_semty pre)
-             (y   : nonterminal)
+             (x   : nonterminal)
              (suf : list symbol)
              (frs : list parser_frame)
              (ts  : list token)
-             (hk  : stack_lhss_from_keyset rm (Fr x pre vs (NT y :: suf), frs)) : prediction_result :=
-    match llStartState g hw rm x pre vs y suf frs hk as s return llStartState g hw rm x pre vs y suf frs hk = s -> _ with
+             (hk  : stack_pushes_from_keyset rm (Fr pre vs (NT x :: suf), frs)) : prediction_result :=
+    match llStartState g hw rm pre vs x suf frs hk as s return llStartState g hw rm pre vs x suf frs hk = s -> _ with
     | inl msg => fun _   => PredError msg
     | inr sps => fun heq => llPredict' g hw rm sps ts
-                                       (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq)
+                                       (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq)
     end eq_refl.
 
   Lemma llPredict_cases' :
-    forall g hw rm x pre vs y suf frs ts hk cr (heq : llStartState g hw rm x pre vs y suf frs hk = cr) pr,
-      match cr as s return llStartState g hw rm x pre vs y suf frs hk = s -> _ with
+    forall g hw rm pre vs x suf frs ts hk cr (heq : llStartState g hw rm pre vs x suf frs hk = cr) pr,
+      match cr as s return llStartState g hw rm pre vs x suf frs hk = s -> _ with
       | inl msg => fun _   => PredError msg
       | inr sps => fun heq => llPredict' g hw rm sps ts
-                                         (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq)
+                                         (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq)
       end heq = pr
       -> match pr with
          | PredSucc ys =>
-           (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk = inr sps),
-               llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredSucc ys)
+           (exists sps (heq : llStartState g hw rm pre vs x suf frs hk = inr sps),
+               llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredSucc ys)
          | PredAmbig ys =>
-           (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk = inr sps),
-               llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredAmbig ys)
+           (exists sps (heq : llStartState g hw rm pre vs x suf frs hk = inr sps),
+               llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredAmbig ys)
          | PredReject =>
-           (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk= inr sps),
-               llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredReject)
+           (exists sps (heq : llStartState g hw rm pre vs x suf frs hk= inr sps),
+               llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredReject)
          | PredError e =>
-           llStartState g hw rm x pre vs y suf frs hk = inl e
-           \/ (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk = inr sps),
-                  llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredError e)
+           llStartState g hw rm pre vs x suf frs hk = inl e
+           \/ (exists sps (heq : llStartState g hw rm pre vs x suf frs hk = inr sps),
+                  llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredError e)
          end.
   Proof.
-    intros g hw rm x pre vs y suf frs ts hk cr heq pr. 
+    intros g hw rm pre vs x suf frs ts hk cr heq pr. 
     dms; intros heq'; inv heq'; eauto.
   Qed.
 
   Lemma llPredict_cases :
-    forall g hw rm x pre vs y suf frs ts hk pr,
-      llPredict g hw rm x pre vs y suf frs ts hk = pr
+    forall g hw rm pre vs x suf frs ts hk pr,
+      llPredict g hw rm pre vs x suf frs ts hk = pr
       -> match pr with
          | PredSucc ys =>
-           (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk = inr sps),
-               llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredSucc ys)
+           (exists sps (heq : llStartState g hw rm pre vs x suf frs hk = inr sps),
+               llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredSucc ys)
          | PredAmbig ys =>
-           (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk = inr sps),
-               llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredAmbig ys)
+           (exists sps (heq : llStartState g hw rm pre vs x suf frs hk = inr sps),
+               llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredAmbig ys)
          | PredReject =>
-           (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk = inr sps),
-               llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredReject)
+           (exists sps (heq : llStartState g hw rm pre vs x suf frs hk = inr sps),
+               llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredReject)
          | PredError e =>
-           llStartState g hw rm x pre vs y suf frs hk = inl e
-           \/ (exists sps (heq : llStartState g hw rm x pre vs y suf frs hk = inr sps),
-                  llPredict' g hw rm sps ts (llStartState_preserves_ulk _ _ _ _ _ _ _ _ _ _ _ heq) = PredError e)
+           llStartState g hw rm pre vs x suf frs hk = inl e
+           \/ (exists sps (heq : llStartState g hw rm pre vs x suf frs hk = inr sps),
+                  llPredict' g hw rm sps ts (llStartState_preserves_pki _ _ _ _ _ _ _ _ _ _ heq) = PredError e)
          end.
   Proof.
     intros; eapply llPredict_cases'; eauto.
   Qed.
 
   Lemma llPredict_succ_in_rhssFor :
-    forall g hw rm x pre vs y suf frs ts hk gamma,
-      llPredict g hw rm x pre vs y suf frs ts hk = PredSucc gamma
-      -> In gamma (rhssFor y rm).
+    forall g hw rm pre vs x suf frs ts hk gamma,
+      llPredict g hw rm pre vs x suf frs ts hk = PredSucc gamma
+      -> In gamma (rhssFor x rm).
   Proof.
-    intros g hw rm x pre vs y suf frs ts hk gamma hp.
+    intros g hw rm pre vs x suf frs ts hk gamma hp.
     apply llPredict_cases in hp.
     destruct hp as [sps [heq hp]].
     apply llPredict'_success_result_in_original_subparsers in hp.
@@ -1383,11 +1379,11 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
   
   Lemma llPredict_ambig_in_rhssFor :
-    forall g hw rm x pre vs y suf frs ts hk gamma,
-      llPredict g hw rm x pre vs y suf frs ts hk = PredAmbig gamma
-      -> In gamma (rhssFor y rm).
+    forall g hw rm pre vs x suf frs ts hk gamma,
+      llPredict g hw rm pre vs x suf frs ts hk = PredAmbig gamma
+      -> In gamma (rhssFor x rm).
   Proof.
-    intros g hw rm x pre vs y suf frs ts hk gamma hp.
+    intros g hw rm pre vs x suf frs ts hk gamma hp.
     apply llPredict_cases in hp.
     destruct hp as [sps [heq hp]].
     apply llPredict'_ambig_result_in_original_subparsers in hp.
@@ -1396,20 +1392,20 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma llPredict_succ_in_grammar :
-    forall g hw rm x pre vs y suf frs ts hk ys,
+    forall g hw rm pre vs x suf frs ts hk ys,
       rhs_map_correct rm g
-      -> llPredict g hw rm x pre vs y suf frs ts hk = PredSucc ys
-      -> PM.In (y, ys) g.
+      -> llPredict g hw rm pre vs x suf frs ts hk = PredSucc ys
+      -> PM.In (x, ys) g.
   Proof.
     intros; eapply rhssFor_in_iff; eauto.
     eapply llPredict_succ_in_rhssFor; eauto.
   Qed.
 
   Lemma llPredict_ambig_in_grammar :
-    forall g hw rm x pre vs y suf frs ts hk ys,
+    forall g hw rm pre vs x suf frs ts hk ys,
       rhs_map_correct rm g
-      -> llPredict g hw rm x pre vs y suf frs ts hk = PredAmbig ys
-      -> PM.In (y, ys) g.
+      -> llPredict g hw rm pre vs x suf frs ts hk = PredAmbig ys
+      -> PM.In (x, ys) g.
   Proof.
     intros; eapply rhssFor_in_iff; eauto.
     eapply llPredict_ambig_in_rhssFor; eauto.
@@ -1422,43 +1418,62 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Inductive frames_wf (g : grammar) : list parser_frame -> Prop :=
   | WF_bottom_init :
-      forall x,
-        frames_wf g [Fr x [] tt [NT x]]
+      forall (x : nonterminal),
+        frames_wf g [Fr [] tt [NT x]]
   | WF_bottom_final :
-      forall x vs,
-      frames_wf g [Fr x [NT x] vs []]
+      forall (x : nonterminal) (v : nt_semty x),
+        frames_wf g [Fr [NT x] (v, tt) []]
   | WF_upper :
-      forall x y pre pre' vs vs' suf suf' frs,
-        PM.In (y, rev pre' ++ suf') g
-        -> frames_wf g (Fr x pre vs (NT y :: suf) :: frs)
-        -> frames_wf g (Fr y pre' vs' suf' :: Fr x pre vs (NT y :: suf) :: frs).
+      forall x pre pre' vs vs' suf suf' frs,
+        PM.In (x, rev pre' ++ suf') g
+        -> frames_wf g (                    Fr pre vs (NT x :: suf) :: frs)
+        -> frames_wf g (Fr pre' vs' suf' :: Fr pre vs (NT x :: suf) :: frs).
 
   Hint Constructors frames_wf : core.
 
   (* invert a frames_wf judgment *)
   Ltac inv_fwf hw  hi hw' :=
-    inversion hw as [ ? | ? ? | ? ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
+    inversion hw as [ ? | ? ? | ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
 
   Ltac wf_upper_nil := eapply WF_upper with (pre' := []); sis; eauto.
 
-  Fixpoint reconstr' (y : nonterminal) (frs : list parser_frame) : list parser_frame :=
-    match frs with
-    | [] => []
-    | Fr x pre vs suf :: frs' =>
-      Fr x pre vs (NT y :: suf) :: reconstr' x frs'
-    end.
+  Lemma return_preserves_frames_wf_invar :
+    forall g frs x pre pre' vs vs' suf (f : symbols_semty (rev pre') -> nt_semty x),
+      frames_wf g (Fr pre' vs' [] :: Fr pre vs (NT x :: suf) :: frs)
+      -> frames_wf g (Fr (NT x :: pre) (f (revTuple _ vs'), vs) suf :: frs).
+  Proof.
+    intros g frs x pre pre' vs vs' suf f hw; sis.
+    inv_fwf hw hi hw'; rew_anr.
+    inv_fwf hw' hi' hw''.
+    - destruct vs; auto.
+    - rewrite app_cons_group_l in hi'; auto.
+  Qed.
 
-  Definition reconstr (frs : list parser_frame) : list parser_frame :=
-    match frs with
-    | [] => []
-    | Fr x pre vs suf :: frs' => Fr x pre vs suf :: reconstr' x frs'
-    end.
+  Lemma push_preserves_frames_wf_invar :
+    forall g pre vs x suf frs rhs, 
+      PM.In (x, rhs) g
+      -> frames_wf g (Fr pre vs (NT x :: suf) :: frs)
+      -> frames_wf g (Fr [] tt rhs :: Fr pre vs (NT x :: suf) :: frs).
+  Proof.
+    intros g pre vs x suf frs rhs hi hw.
+    constructor; auto.
+  Qed.
 
-  (* The stack well-formedness predicate *)
+  Lemma consume_preserves_frames_wf_invar :
+    forall g pre vs a suf vs' frs,
+      frames_wf g (Fr pre vs (T a :: suf) :: frs)
+      -> frames_wf g (Fr (T a :: pre) vs' suf :: frs).
+  Proof.
+    intros g pre vs a suf vs' frs hw; sis.
+    inv_fwf hw hi hw'.
+    rewrite app_cons_group_l in hi; auto.
+  Qed.
+
+  (* The parser stack well-formedness predicate *)
   Definition stack_wf (g : grammar) (stk : parser_stack) : Prop :=
     match stk with
     | (fr, frs) =>
-      frames_wf g (reconstr (fr :: frs))
+      frames_wf g (fr :: frs)
     end.
 
   (* Lift the predicate to a list of subparsers *)
@@ -1489,37 +1504,6 @@ Module LLPredictionFn (Import D : Defs.T).
   Definition all_stacks_wf (g : grammar) (sps: list subparser) : Prop :=
     forall sp, In sp sps -> stack_wf g sp.(stack).
  *)
-  Lemma return_preserves_frames_wf_invar :
-    forall g frs x y pre pre' vs vs' vs'' suf,
-      frames_wf g (reconstr (Fr y pre' vs' [] :: Fr x pre vs suf :: frs))
-      -> frames_wf g (reconstr (Fr x (NT y :: pre) vs'' suf :: frs)).
-  Proof.
-    intros g frs x y pre pre' vs vs' vs'' suf hw; sis.
-    inv_fwf hw hi hw'.
-    inv_fwf hw' hi' hw''; auto.
-    rewrite app_cons_group_l in hi'; eauto.
-  Qed.
-
-  Lemma push_preserves_frames_wf_invar :
-    forall g x pre vs y suf frs rhs, 
-      PM.In (y, rhs) g
-      -> frames_wf g (reconstr (Fr x pre vs (NT y :: suf) :: frs))
-      -> frames_wf g (reconstr (Fr y [] tt rhs :: Fr x pre vs suf :: frs)).
-  Proof.
-    intros g x pre vs y suf frs rhs hi hw.
-    constructor; auto.
-  Qed.
-
-  Lemma consume_preserves_frames_wf_invar :
-    forall g x pre vs a suf vs' frs,
-      frames_wf g (reconstr (Fr x pre vs (T a :: suf) :: frs))
-      -> frames_wf g (reconstr (Fr x (T a :: pre) vs' suf :: frs)).
-  Proof.
-    intros g x pre vs a suf vs' frs hw; sis.
-    inv_fwf hw hi hw'.
-    rewrite app_cons_group_l in hi. 
-    constructor; auto.
-  Qed.
 
   Lemma cstep_preserves_stack_wf_invar :
     forall g hw rm sp sp' sps' vi vi',
@@ -1541,13 +1525,13 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma llInitSps_preserves_stack_wf_invar :
-    forall g rm fr x pre vs y suf frs,
+    forall g rm fr pre vs x suf frs,
       rhs_map_correct rm g
-      -> fr = Fr x pre vs (NT y :: suf)
+      -> fr = Fr pre vs (NT x :: suf)
       -> stack_wf g (fr, frs)
-      -> all_stacks_wf g (llInitSps rm x pre vs y suf frs).
+      -> all_stacks_wf g (llInitSps rm pre vs x suf frs).
   Proof.
-    intros g rm fr x pre vs y suf frs hc ? hw sp hi; subst; unfold llInitSps in hi.
+    intros g rm fr pre vs x suf frs hc ? hw sp hi; subst; unfold llInitSps in hi.
     apply in_map_iff in hi.
     destruct hi as [rhs [? hi]]; subst; sis.
     apply push_preserves_frames_wf_invar; eauto.
@@ -1560,21 +1544,21 @@ Module LLPredictionFn (Import D : Defs.T).
   (* Auxiliary definition *)
     Inductive frames_repr_nullable_path (g : grammar) : list parser_frame -> Prop :=
   | FR_direct :
-      forall x y pre pre' vs vs' suf suf',
-        PM.In (y, rev pre' ++ suf') g
+      forall x pre pre' vs vs' suf suf',
+        PM.In (x, rev pre' ++ suf') g
         -> nullable_gamma g (rev pre')
-        -> frames_repr_nullable_path g [Fr y pre' vs' suf' ; Fr x pre vs (NT y :: suf)]
+        -> frames_repr_nullable_path g [Fr pre' vs' suf' ; Fr pre vs (NT x :: suf)]
   | FR_indirect :
-      forall x y pre pre' vs vs' suf suf' frs,
-        PM.In (y, rev pre' ++ suf') g
+      forall x pre pre' vs vs' suf suf' frs,
+        PM.In (x, rev pre' ++ suf') g
         -> nullable_gamma g (rev pre')
-        -> frames_repr_nullable_path g (Fr x pre vs (NT y :: suf) :: frs)
-        -> frames_repr_nullable_path g (Fr y pre' vs' suf' :: Fr x pre vs (NT y :: suf) :: frs).
+        -> frames_repr_nullable_path g (                    Fr pre vs (NT x :: suf) :: frs)
+        -> frames_repr_nullable_path g (Fr pre' vs' suf' :: Fr pre vs (NT x :: suf) :: frs).
 
   Hint Constructors frames_repr_nullable_path : core.
 
   Ltac inv_frnp hf hi hn hf' :=
-    inversion hf as [? ? ? ? ? ? ? ? hi hn | ? ? ? ? ? ? ? ? ? hi hn hf']; subst; clear hf.
+    inversion hf as [? ? ? ? ? ? ? hi hn | ? ? ? ? ? ? ? ? hi hn hf']; subst; clear hf.
 
   Lemma frnp_inv_two_head_frames :
     forall g fr fr' fr'' frs,
@@ -1588,19 +1572,19 @@ Module LLPredictionFn (Import D : Defs.T).
   Lemma frnp_second_frame_nt_head :
     forall g fr fr' frs,
       frames_repr_nullable_path g (fr' :: fr :: frs)
-      -> exists x pre vs y suf,
-        fr = Fr x pre vs (NT y :: suf).
+      -> exists pre vs x suf,
+        fr = Fr pre vs (NT x :: suf).
   Proof.
-    intros g fr fr' frs hf; inv hf; eauto 6.
+    intros g fr fr' frs hf; inv hf; eauto.
   Qed.
 
   Lemma frnp_shift_head_frame :
-    forall g x pre vs suf suf' vs' frs,
+    forall g pre vs suf suf' vs' frs,
       nullable_gamma g suf
-      -> frames_repr_nullable_path g (Fr x pre vs (suf ++ suf') :: frs)
-      -> frames_repr_nullable_path g (Fr x (rev suf ++ pre) vs' suf' :: frs).
+      -> frames_repr_nullable_path g (Fr pre vs (suf ++ suf') :: frs)
+      -> frames_repr_nullable_path g (Fr (rev suf ++ pre) vs' suf' :: frs).
   Proof.
-    intros g x pre vs suf suf' vs' frs hn hf; destruct frs as [| fr frs]; inv_frnp hf hi hn' hf'.
+    intros g pre vs suf suf' vs' frs hn hf; destruct frs as [| fr frs]; inv_frnp hf hi hn' hf'.
     - rewrite app_assoc in hi; constructor.
       + rewrite rev_app_distr.
         rewrite rev_involutive; auto.
@@ -1616,32 +1600,32 @@ Module LLPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma frnp_grammar_nullable_path :
-    forall g frs fr fr_cr w x y z pre pre' vs vs' suf suf',
-      fr       = Fr y pre' vs' (NT z :: suf')
-      -> fr_cr = Fr w pre vs (NT x :: suf)
+    forall g frs fr fr_cr x y pre pre' vs vs' suf suf',
+      fr       = Fr pre' vs' (NT y :: suf')
+      -> fr_cr = Fr pre vs (NT x :: suf)
       -> frames_repr_nullable_path g (fr :: frs ++ [fr_cr])
-      -> nullable_path g (NT x) (NT z).
+      -> nullable_path g (NT x) (NT y).
   Proof.
     intros g frs.
     induction frs as [| fr' frs IH];
-      intros fr fr_cr w x y z pre pre' vs vs' suf suf' ? ? hf; subst; sis.
+      intros fr fr_cr x y pre pre' vs vs' suf suf' ? ? hf; subst; sis.
     - inv_frnp hf hi hn hf'.
       + eapply DirectPath; eauto.
       + inv hf'.
     - pose proof hf as hf'; apply frnp_second_frame_nt_head in hf'.
-      destruct hf' as [x'' [pre'' [vs'' [y'' [suf'' ?]]]]]; subst. 
+      destruct hf' as [pre'' [vs'' [y'' [suf'' ?]]]]; subst. 
       apply nullable_path_trans with (y := NT y'').
       + apply frnp_inv_two_head_frames in hf; eauto.
       + inv_frnp hf hi hn hf'; eauto.
   Qed.
       
   Lemma frnp_caller_nt_nullable :
-    forall g x y pre pre' vs vs' suf suf' frs,
-      frames_repr_nullable_path g (Fr y pre' vs' suf' :: Fr x pre vs (NT y :: suf) :: frs)
+    forall g x pre pre' vs vs' suf suf' frs,
+      frames_repr_nullable_path g (Fr pre' vs' suf' :: Fr pre vs (NT x :: suf) :: frs)
       -> nullable_gamma g suf'
-      -> nullable_sym g (NT y).
+      -> nullable_sym g (NT x).
   Proof.
-    intros g x y pre pre' vs vs' suf suf' frs hf hng. 
+    intros g x pre pre' vs vs' suf suf' frs hf hng. 
     inv_frnp hf hi hn hf'.
     - econstructor; eauto.
       apply nullable_app; auto.
@@ -1656,9 +1640,9 @@ Module LLPredictionFn (Import D : Defs.T).
       forall (x : nonterminal),
         NtSet.In x (allNts g)
         -> NtSet.In x vi
-        -> exists frs_pre fr_cr frs_suf w pre vs suf,
-            reconstr (fr :: frs) = fr :: frs_pre ++ fr_cr :: frs_suf
-            /\ fr_cr = Fr w pre vs (NT x :: suf)
+        -> exists frs_pre fr_cr frs_suf pre vs suf,
+            frs = frs_pre ++ fr_cr :: frs_suf
+            /\ fr_cr = Fr pre vs (NT x :: suf)
             /\ frames_repr_nullable_path g (fr :: frs_pre ++ [fr_cr])
     end.
 
@@ -1673,52 +1657,44 @@ Module LLPredictionFn (Import D : Defs.T).
     forall sp, In sp sps -> unavailable_nts_invar g vi sp.
 
   Lemma return_preserves_unavailable_nts_invar :
-    forall g vi pr fr cr cr' x y pre pre' vs vs' vs'' suf frs,
-      fr     = Fr y pre' vs' []
-      -> cr  = Fr x pre vs suf
-      -> cr' = Fr x (NT y :: pre) vs'' suf
+    forall g vi pr fr cr cr' x pre pre' vs vs' vs'' suf frs,
+      fr     = Fr pre' vs' []
+      -> cr  = Fr pre vs (NT x :: suf)
+      -> cr' = Fr (NT x :: pre) vs'' suf
       -> unavailable_nts_invar g vi (Sp pr (fr, cr :: frs))
-      -> unavailable_nts_invar g (NtSet.remove y vi) (Sp pr (cr', frs)). 
+      -> unavailable_nts_invar g (NtSet.remove x vi) (Sp pr (cr', frs)). 
   Proof.
-    intros g vi pr fr cr cr' x y' pre pre' vs vs' vs'' suf frs ? ? ? hu; subst. 
-    intros y hi hn.
-    assert (hn' : NtSet.In y vi) by ND.fsetdec.
+    intros g vi pr fr cr cr' x' pre pre' vs vs' vs'' suf frs ? ? ? hu; subst. 
+    intros x hi hn.
+    assert (hn' : NtSet.In x vi) by ND.fsetdec.
     apply hu in hn'; auto.
-    destruct hn' as (frs_pre & fr_cr & frs_suf & w & ? & ? & ? & heq & ? & hf); subst; sis.
-    destruct frs_pre as [| fr' frs_pre]; sis.
-    - inv_frnp hf hi' hn' hf'; try solve [inv hf'].
-      ND.fsetdec.
-    - apply heads_eq_tails_eq__lists_eq in heq.
-      destruct heq as [? heq].
-      apply heads_eq_tails_eq__lists_eq in heq.
-      destruct heq as [hh ht]; subst; rewrite ht.
-      pose proof hf as hf'.
+    destruct hn' as (frs_pre & fr_cr & frs_suf & ? & ? & ? & heq & ? & hf); subst; sis.
+    destruct frs_pre as [| fr' frs_pre]; inv heq.
+    - ND.fsetdec. 
+    - pose proof hf as hf'.
       apply frnp_inv_two_head_frames in hf.
-      eapply frnp_shift_head_frame with (suf := [NT y']) in hf; eauto 10.
+      eapply frnp_shift_head_frame with (suf := [NT x']) in hf; eauto 9.
       constructor; auto.
       apply frnp_caller_nt_nullable in hf'; auto.
   Qed.
 
   Lemma push_preserves_unavailable_nts_invar :
-    forall g cr cr' ce vi pr x pre vs y suf rhs frs,
-      cr = Fr x pre vs (NT y :: suf)
-      -> cr' = Fr x pre vs suf
-      -> ce = Fr y [] tt rhs
-      -> PM.In (y, rhs) g
+    forall g cr ce vi pr pre vs x suf rhs frs,
+      cr    = Fr pre vs (NT x :: suf)
+      -> ce = Fr [] tt rhs
+      -> PM.In (x, rhs) g
       -> unavailable_nts_invar g vi (Sp pr (cr, frs))
-      -> unavailable_nts_invar g (NtSet.add y vi) (Sp pr (ce, cr' :: frs)).
+      -> unavailable_nts_invar g (NtSet.add x vi) (Sp pr (ce, cr :: frs)).
   Proof.
-    intros g cr cr' ce vi pr x pre vs y' suf rhs frs ? ? ? hi hu; subst. 
-    intros y hi' hn.
-    destruct (NF.eq_dec y' y); subst.
+    intros g cr ce vi pr pre vs x' suf rhs frs ? ? hi hu; subst. 
+    intros x hi' hn.
+    destruct (NF.eq_dec x' x); subst.
     - exists []; repeat eexists; eauto; sis.
       eapply FR_direct with (pre' := []); sis; auto.
-    - assert (hn' : NtSet.In y vi) by ND.fsetdec.
+    - assert (hn' : NtSet.In x vi) by ND.fsetdec.
       apply hu in hn'; simpl in hn'; clear hu; auto.
-      destruct hn' as (frs_pre & fr_cr & frs_suf & ? & ? & ? & ? & heq & heq' & hf); subst; sis.
-      apply heads_eq_tails_eq__lists_eq in heq.
-      destruct heq as [? ht]; rewrite ht.
-      exists (Fr x pre vs (NT y' :: suf) :: frs_pre); repeat eexists; sis; eauto.
+      destruct hn' as (frs_pre & fr_cr & frs_suf & ? & ? & ? & ? & ? & hf); subst; sis.
+      exists (Fr pre vs (NT x' :: suf) :: frs_pre); repeat eexists; sis; eauto.
   Qed.
 
   Lemma cstep_preserves_unavailable_nts_invar :

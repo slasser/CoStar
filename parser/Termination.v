@@ -9,18 +9,30 @@ Module TerminationFn (Export D : Defs.T).
 
   (* Definitions related to well-founded measures *)
 
-  Definition frameScore {A} (ys : list A) (b e : nat) : nat :=
-    length ys * (b ^ e).
+  Definition headFrameSize {A} (ys : list A) : nat :=
+    length ys.
+  
+  Definition headFrameScore {A} (ys : list A) (b e : nat) : nat :=
+    headFrameSize ys * (b ^ e).
 
-  Fixpoint framesScore {A} (yss : list (list A)) (b e : nat) : nat :=
+  Definition tailFrameSize {A} (ys : list A) : nat :=
+    match ys with
+    | []       => 0
+    | _ :: suf => length suf
+    end.
+                                                  
+  Definition tailFrameScore {A} (ys : list A) (b e : nat) : nat :=
+    tailFrameSize ys * (b ^ e).
+
+  Fixpoint tailFramesScore {A} (yss : list (list A)) (b e : nat) : nat :=
     match yss with
     | []         => 0
-    | ys :: yss' => frameScore ys b e + framesScore yss' b (1 + e)
+    | ys :: yss' => tailFrameScore ys b e + tailFramesScore yss' b (1 + e)
     end.
 
   Definition stackScore {A} (stk : list A * list (list A)) (b e : nat) : nat :=
     match stk with
-    | (fr, frs) => framesScore (fr :: frs) b e
+    | (fr, frs) => headFrameScore fr b e + tailFramesScore frs b (1 + e)
     end.
 
   Definition stackHeight {A} (stk : A * list A) : nat :=
@@ -41,54 +53,58 @@ Module TerminationFn (Export D : Defs.T).
     - apply Nat.pow_le_mono_r; auto. 
   Qed.
   
-  Lemma nonzero_exponents_le__frameScore_le :
+  Lemma nonzero_exponents_le__tailFrameScore_le :
     forall A (fr : list A) b e1 e2,
       0 < e1 <= e2
-      -> frameScore fr b e1 <= frameScore fr b e2.
+      -> tailFrameScore fr b e1 <= tailFrameScore fr b e2.
   Proof.
     intros A fr b e1 e2 Hlt.
-    unfold frameScore. 
+    unfold tailFrameScore. 
     apply Nat.mul_le_mono_l.
     apply nonzero_exponents_le__powers_le; auto.
   Qed.
 
-  Lemma nonzero_exponents_le__framesScore_le' :
+  Lemma nonzero_exponents_le__tailFramesScore_le :
     forall A (frs : list (list A)) b e1 e2,
       0 < e1 <= e2
-      -> framesScore frs b e1 <= framesScore frs b e2.
+      -> tailFramesScore frs b e1 <= tailFramesScore frs b e2.
   Proof.
     intros A frs.
     induction frs as [| fr frs' IH]; intros b e1 e2 Hlt; simpl; auto.
     apply plus_le_compat.
-    - apply nonzero_exponents_le__frameScore_le; auto.
+    - apply nonzero_exponents_le__tailFrameScore_le; auto.
     - apply IH; omega.
   Qed.
 
-  Lemma nonzero_exponents_le__framesScore_le :
+  Lemma nonzero_exponents_le__stackScore_le :
     forall A v b e1 e2 e3 e4 (frs : list (list A)),
       0 < e1 <= e2
       -> 0 < e3 <= e4
-      -> v * (b ^ e1) + framesScore frs b e3 <= 
-         v * (b ^ e2) + framesScore frs b e4.
+      -> v * (b ^ e1) + tailFramesScore frs b e3 <= 
+         v * (b ^ e2) + tailFramesScore frs b e4.
   Proof.
     intros A v b e1 e2 e3 e4 frs [H0e1 He1e2] [H0e3 He3e4].
     apply plus_le_compat.
     - apply Nat.mul_le_mono_l. 
       apply nonzero_exponents_le__powers_le; auto.
-    - apply nonzero_exponents_le__framesScore_le'; auto.
+    - apply nonzero_exponents_le__tailFramesScore_le; auto.
   Qed.
 
+  (*
   Lemma nonzero_exponents_le__stackScore_le :
-    forall A v b e1 e2 e3 e4 (stk : list A * list (list A)),
+    forall A v b e1 e2 e3 e4 (frs : list (list A)),
       0 < e1 <= e2
       -> 0 < e3 <= e4
-      -> v * (b ^ e1) + stackScore stk b e3 <= 
-         v * (b ^ e2) + stackScore stk b e4.
+      -> v * (b ^ e1) + tailFramesScore frs b e3 <= 
+         v * (b ^ e2) + tailFramesScore frs b e4.
   Proof.
-    intros ? ? ? ? ? ? ? (fr, frs); intros.
+    intros.
+    
+    intros ? ? ? ? ? ? ? ; intros.
     unfold stackScore.
-    apply nonzero_exponents_le__framesScore_le; auto.
+    apply nonzero_exponents_le__tailFramesScore_le; auto.
   Qed.
+   *)
   
   Lemma mem_true_cardinality_neq_0 :
     forall x s,
@@ -177,41 +193,45 @@ Module TerminationFn (Export D : Defs.T).
   Qed.
   
   Lemma stackScore_le_after_return :
-    forall A (callee_suf caller_suf : list A) x vi u locs b,
+    forall callee_suf caller_suf caller_suf' x suf vi u locs b,
       callee_suf = []
+      -> caller_suf = NT x :: suf
+      -> caller_suf' = suf
       -> NtSet.In x u
-      -> stackScore (caller_suf, locs) b (NtSet.cardinal (NtSet.diff u (NtSet.remove x vi)))
+      -> stackScore (caller_suf', locs) b (NtSet.cardinal (NtSet.diff u (NtSet.remove x vi)))
          <= stackScore (callee_suf, caller_suf :: locs) b (NtSet.cardinal (NtSet.diff u vi)).
   Proof.
-    intros A ce cr x vi u locs b hce hi; subst; sis.
-    unfold frameScore.
+    intros ce cr cr' x suf vi u locs b hce hcr hcr' hi; subst.
+    unfold stackScore; simpl.
+    unfold headFrameScore; unfold headFrameSize.
+    unfold tailFrameScore; unfold tailFrameSize.
     destruct (NtSet.mem x vi) eqn:hm.
     - apply NF.mem_iff in hm.
       assert (hi' : NtSet.In x u) by ND.fsetdec.
-      apply nonzero_exponents_le__framesScore_le; split; try omega.
+      apply nonzero_exponents_le__stackScore_le; split; try omega.
       + apply cardinal_diff_remove_gt_0; auto. 
       + apply cardinal_diff_remove_le; auto.
       + apply le_n_S; apply cardinal_diff_remove_le; auto. 
     - apply not_mem_iff in hm.
       rewrite diff_remove_equal_diff_2; auto.
-      apply nonzero_exponents_le__framesScore_le; split; try omega.
+      apply nonzero_exponents_le__stackScore_le; split; try omega.
       eapply cardinal_diff_gt_0; eauto.
   Qed.
 
   Lemma stackScore_le_after_return' :
-    forall A (suf_cr : list A) x b vi u frs,
+    forall x suf b vi u frs,
       NtSet.In x u 
-      -> stackScore (suf_cr, frs) 
+      -> stackScore (suf, frs) 
                     b 
                     (NtSet.cardinal (NtSet.diff u (NtSet.remove x vi)))
          <= 
-         stackScore ([], suf_cr :: frs) 
+         stackScore ([], (NT x :: suf) :: frs) 
                     b 
                     (NtSet.cardinal (NtSet.diff u vi)).
   Proof.
     intros; eapply stackScore_le_after_return; sis; eauto.
   Qed.
-
+  
   Lemma remove_cardinal_minus_1 :
     forall (x : nonterminal) (s : NtSet.t),
       NtSet.mem x s = true
@@ -284,12 +304,12 @@ Module TerminationFn (Export D : Defs.T).
   Qed.
   
   Lemma stackScore_lt_after_push :
-    forall all_rhss rhs caller_suf x caller_suf' u vi locs,
-      caller_suf = (NT x :: caller_suf')
+    forall all_rhss rhs caller_suf x suf' u vi locs,
+      caller_suf = NT x :: suf'
       -> NtSet.In x u
       -> ~ NtSet.In x vi
       -> In rhs all_rhss
-      -> stackScore (rhs, caller_suf' :: locs)
+      -> stackScore (rhs, caller_suf :: locs)
                     (1 + maxLength all_rhss)
                     (NtSet.cardinal (NtSet.diff u (NtSet.add x vi)))
          <
@@ -297,16 +317,17 @@ Module TerminationFn (Export D : Defs.T).
                     (1 + maxLength all_rhss)
                     (NtSet.cardinal (NtSet.diff u vi)).
   Proof.
-    intros all_rhss rhs cr_suf x cr_suf' u vi locs
+    intros all_rhss rhs cr_suf x suf' u vi locs
            hcr hi hn hi'; subst; simpl.
     rewrite cardinal_diff_minus_1; auto.
-    unfold frameScore.
+    unfold tailFrameScore.
     repeat rewrite plus_assoc; repeat apply plus_lt_compat_r.
     apply less_significant_value_lt_more_significant_digit.
     - eapply mem_length_lt_max_plus_1; eauto.
     - apply subset_cardinal_lt with (x := x); ND.fsetdec. 
   Qed.    
 
+  (*
   Lemma stackScore_lt_after_push' :
     forall all_rhss suf_cr rhs x u vi locs,
       NtSet.In x u
@@ -322,23 +343,25 @@ Module TerminationFn (Export D : Defs.T).
   Proof.
     intros; eapply stackScore_lt_after_push; sis; eauto.
   Qed.
-
+   *)
+  
   (* A subparser invariant used to prove termination *)
 
-  Inductive upper_lhss_from_keyset (rm : rhs_map) : list suffix_frame -> Prop :=
-  | LK_bottom :
-      forall o suf,
-        upper_lhss_from_keyset rm [SF o suf]
-  | LK_upper :
-      forall x suf fr frs,
+  Inductive pushes_from_keyset (rm : rhs_map) : list (list symbol) -> Prop :=
+  | PK_bottom :
+      forall suf,
+        pushes_from_keyset rm [suf]
+  | PK_upper :
+      forall x suf suf' sufs,
         NtSet.In x (keySet rm)
-        -> upper_lhss_from_keyset rm (fr :: frs)
-        -> upper_lhss_from_keyset rm (SF (Some x) suf :: fr :: frs).
+        -> pushes_from_keyset rm (        (NT x :: suf) :: sufs)
+        -> pushes_from_keyset rm (suf' :: (NT x :: suf) :: sufs).
 
-  Hint Constructors upper_lhss_from_keyset : core.
+  Hint Constructors pushes_from_keyset : core.
   
-  Ltac inv_ulk hk  hi hk' := inversion hk as [? ? | ? ? ? ? hi hk']; subst; clear hk.
+  Ltac inv_pk hk  hi hk' := inversion hk as [? | ? ? ? ? hi hk']; subst; clear hk.
   
+(*
   Definition sll_stack_lhss_from_keyset (rm : rhs_map) (stk : suffix_stack) : Prop :=
     match stk with
     | (fr, frs) => upper_lhss_from_keyset rm (fr :: frs)
@@ -360,7 +383,37 @@ Module TerminationFn (Export D : Defs.T).
   Proof.
     intros; auto.
   Qed.
+ *)
 
+  Lemma return_preserves_keyset_invar :
+    forall rm x suf frs,
+      pushes_from_keyset rm ([] :: (NT x :: suf) :: frs)
+      -> pushes_from_keyset rm (suf :: frs).
+  Proof.
+    intros rm x suf frs hk. 
+    inv_pk hk hi hk'.
+    inv hk'; auto.
+  Qed.
+
+  Lemma consume_preserves_keyset_invar :
+    forall rm s suf frs,
+      pushes_from_keyset rm ((s :: suf) :: frs)
+      -> pushes_from_keyset rm (suf :: frs).
+  Proof.
+    intros rm suf suf' frs hk.
+    inv_pk hk hi hk'; auto.
+  Qed.
+
+  Lemma push_preserves_keyset_invar :
+    forall rm x suf suf' frs,
+      NtSet.In x (keySet rm)
+      -> pushes_from_keyset rm ((NT x :: suf) :: frs)
+      -> pushes_from_keyset rm (suf' :: (NT x :: suf) :: frs).
+  Proof.
+    intros ? ? ? ? ? hi hk; inv hk; auto.
+  Qed.
+  
+(*
   Lemma sll_return_preserves_keyset_invar :
     forall rm o_ce o_cr suf_ce suf_cr frs,
       upper_lhss_from_keyset rm (SF o_ce suf_ce :: SF o_cr suf_cr :: frs)
@@ -388,12 +441,17 @@ Module TerminationFn (Export D : Defs.T).
   Proof.
     intros ? ? ? ? ? ? ? hi hk; inv hk; auto.
   Qed.
-
+ *)
+  
   (* Now lift the invariant to LL subparser and parser stacks *)
 
-  Definition stack_lhss_from_keyset (rm : rhs_map) (stk : parser_stack) : Prop :=
-    sll_stack_lhss_from_keyset rm (sllify stk).
+  Definition suffix_stack_pushes_from_keyset (rm : rhs_map) (stk : list symbol * list (list symbol)) : Prop :=
+    match stk with
+    | (fr, frs) =>
+      pushes_from_keyset rm (fr :: frs)
+    end.
 
+  (*
   Definition sp_lhss_from_keyset (rm : rhs_map) (sp : subparser) : Prop :=
     sll_sp_lhss_from_keyset rm (sllifySp sp).
 
@@ -409,25 +467,27 @@ Module TerminationFn (Export D : Defs.T).
     intros; auto.
   Qed.
 
-  (* A measure function for suffix stacks *)
+   *)
+  
+  (* A measure function *)
 
-  Definition ss_meas (rm : rhs_map) (vi : NtSet.t) (sk : suffix_stack) : nat * nat :=
+  Definition meas (rm : rhs_map) (vi : NtSet.t) (sk : list symbol * list (list symbol)) : nat * nat :=
     let m  := maxLength (allRhss rm) in
     let e  := NtSet.cardinal (NtSet.diff (keySet rm) vi)
-    in  (stackScore (sllSuffixes sk) (1 + m) e, stackHeight sk).
+    in  (stackScore sk (1 + m) e, stackHeight sk).
 
-  Lemma ss_meas_lt_after_return :
-    forall rm sk sk' vi vi' o suf x frs,
-      sk = (SF (Some x) [], SF o suf :: frs)
-      -> sk' = (SF o suf, frs)
+  Lemma meas_lt_after_return :
+    forall rm sk sk' vi vi' x suf frs,
+      sk = ([], (NT x :: suf) :: frs)
+      -> sk' = (suf, frs)
       -> vi' = NtSet.remove x vi
-      -> sll_stack_lhss_from_keyset rm sk
-      -> lex_nat_pair (ss_meas rm vi' sk') (ss_meas rm vi sk).
+      -> suffix_stack_pushes_from_keyset rm sk
+      -> lex_nat_pair (meas rm vi' sk') (meas rm vi sk).
   Proof.
-    intros rm sk sk' vi vi' o suf x frs ? ? ? hk; subst.
-    unfold ss_meas.
+    intros rm sk sk' vi vi' x suf frs ? ? ? hk; subst.
+    unfold meas.
     pose proof stackScore_le_after_return' as hle.
-    specialize hle with (suf_cr := suf) (x := x).
+    specialize hle with (suf := suf) (x := x).
     eapply le_lt_or_eq in hle; eauto.
     destruct hle as [hlt | heq]; sis.
     - apply pair_fst_lt; eauto.
@@ -435,23 +495,23 @@ Module TerminationFn (Export D : Defs.T).
     - inv hk; auto. 
   Defined.
 
-  Lemma ss_meas_lt_after_push :
-    forall rm vi vi' sk sk' fr_cr fr_cr' fr_ce o x suf rhs frs,
+  Lemma meas_lt_after_push :
+    forall rm vi vi' sk sk' fr_cr fr_ce x suf rhs frs,
       sk     = (fr_cr, frs)
-      -> sk' = (fr_ce, fr_cr' :: frs)
-      -> fr_cr  = SF o (NT x :: suf)
-      -> fr_cr' = SF o suf
-      -> fr_ce  = SF (Some x) rhs
+      -> sk' = (fr_ce, fr_cr :: frs)
+      -> fr_cr  = NT x :: suf
+      -> fr_ce  = rhs
       -> vi' = NtSet.add x vi
       -> ~ NtSet.In x vi
       -> NtSet.In x (keySet rm)
       -> In rhs (allRhss rm)
-      -> lex_nat_pair (ss_meas rm vi' sk') (ss_meas rm vi sk).
+      -> lex_nat_pair (meas rm vi' sk') (meas rm vi sk).
   Proof.
     intros; subst.
     apply pair_fst_lt.
     eapply stackScore_lt_after_push; sis; eauto.
   Defined.
+
 (*
   Definition sll_meas (rm : rhs_map) (vi : NtSet.t) (sp : sll_subparser) : nat * nat :=
     match sp with
@@ -497,4 +557,25 @@ Module TerminationFn (Export D : Defs.T).
     eapply stackScore_lt_after_push; sis; eauto.
   Defined.
   *)
+
+  Definition stack_pushes_from_keyset (rm : rhs_map) (stk : parser_stack) :=
+    suffix_stack_pushes_from_keyset rm (stackSuffixes stk).
+
+  Definition sp_pushes_from_keyset (rm : rhs_map) (sp : subparser) : Prop :=
+    match sp with
+    | Sp _ stk => stack_pushes_from_keyset rm stk
+    end.
+
+  Definition all_sp_pushes_from_keyset (rm : rhs_map) (sps : list subparser) : Prop :=
+    forall sp, In sp sps -> sp_pushes_from_keyset rm sp.
+
+  Lemma pki_list__pki_mem :
+    forall rm sps sp,
+      all_sp_pushes_from_keyset rm sps
+      -> In sp sps
+      -> sp_pushes_from_keyset rm sp.
+  Proof.
+    intros; auto.
+  Qed.
+  
 End TerminationFn.

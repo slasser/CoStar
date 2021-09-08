@@ -1160,17 +1160,26 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   (* The stack used in LL prediction and parsing *)
 
   Inductive parser_frame : Type :=
-  | Fr (x   : nonterminal)       (* lhs *)
-       (pre : list symbol)       (* rhs prefix *)
+  | Fr (pre : list symbol)       (* rhs prefix *)
        (sem : symbols_semty pre) (* sem value for prefix *)
        (suf : list symbol).      (* rhs suffix *)
+
+  Definition suffix (fr : parser_frame) : list symbol :=
+    match fr with
+    | Fr _ _ suf => suf
+    end.
 
   Definition parser_stack : Type :=
     (parser_frame * list parser_frame)%type.
 
+  Definition stackSuffixes (stk : parser_stack) : list symbol * list (list symbol) :=
+    match stk with
+    | (fr, frs) => (suffix fr, map suffix frs)
+    end.
+
   Definition bottomFrameSyms (stk : parser_stack) : list symbol := 
     match bottomElt stk with
-    | Fr _ pre _ suf => rev pre ++ suf
+    | Fr pre _ suf => rev pre ++ suf
     end.
 
   Record subparser := Sp { prediction : list symbol
@@ -1178,21 +1187,21 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   (* The stack used in SLL prediction *)
   
-  Inductive suffix_frame :=
-  | SF : option nonterminal -> list symbol -> suffix_frame.
+  Inductive sll_frame :=
+  | SllFr : option nonterminal -> list symbol -> sll_frame.
 
-  Definition sllSuffix (fr : suffix_frame) : list symbol :=
+  Definition sllSuffix (fr : sll_frame) : list symbol :=
     match fr with
-    | SF _ suf => suf
+    | SllFr _ suf => suf
     end.
 
-  Module SF_as_UOT <: UsualOrderedType.
+  Module SLL_Frame_as_UOT <: UsualOrderedType.
 
     Module O  := Option_as_UOT NT_as_UOT.
     Module L  := List_as_UOT Symbol_as_UOT.
     Module P  := Pair_as_UOT O L.
 
-    Definition t := suffix_frame.
+    Definition t := sll_frame.
 
     Definition eq       := @eq t.
     Definition eq_refl  := @eq_refl t.
@@ -1201,7 +1210,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
     Definition lt x y :=
       match x, y with
-      | SF o suf, SF o' suf' =>
+      | SllFr o suf, SllFr o' suf' =>
         P.lt (o, suf) (o', suf')
       end.
 
@@ -1219,9 +1228,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       eapply P.lt_not_eq; eauto.
     Qed.
 
-    Definition compare (x y : suffix_frame) : Compare lt eq x y.
+    Definition compare (x y : sll_frame) : Compare lt eq x y.
       refine (match x, y with
-              | SF o suf, SF o' suf' =>
+              | SllFr o suf, SllFr o' suf' =>
                 match P.compare (o, suf) (o', suf') with
                 | LT hl => LT _
                 | GT he => GT _
@@ -1230,9 +1239,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
               end); red; tc.
     Defined.
       
-    Definition eq_dec (x y : suffix_frame) : {x = y} + {x <> y}.
+    Definition eq_dec (x y : sll_frame) : {x = y} + {x <> y}.
       refine (match x, y with
-              | SF o suf, SF o' suf' =>
+              | SllFr o suf, SllFr o' suf' =>
                 match P.eq_dec (o, suf) (o', suf') with
                 | left he  => left _
                 | right hn => right _
@@ -1240,39 +1249,37 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
               end); tc.
     Defined.
 
-  End SF_as_UOT.
+  End SLL_Frame_as_UOT.
 
-  (* Finite sets of suffix frames *)
-  Module FS  := FSetAVL.Make SF_as_UOT.
+  (* Finite sets of SLL frames *)
+  Module FS  := FSetAVL.Make SLL_Frame_as_UOT.
   Module FSF := FSetFacts.Facts FS.
 
-  (* Finite maps with suffix frame keys *)
-  Module FM  := FMapAVL.Make SF_as_UOT.
+  (* Finite maps with SLL frame keys *)
+  Module FM  := FMapAVL.Make SLL_Frame_as_UOT.
   Module FMF := FMapFacts.Facts FM.
 
   (* Module for finding the transitive closure
-     of a finite graph with suffix frame nodes *)
+     of a finite graph with SLL frame nodes *)
   Module TC  := TransClos.Make FS FM.
 
-  Definition suffix_stack := (suffix_frame * list suffix_frame)%type.
-
-  Definition sllSuffixes' (frs : list suffix_frame) : list (list symbol) :=
-    map sllSuffix frs.
+  Definition sll_stack := (sll_frame * list sll_frame)%type.
   
-  Definition sllSuffixes (stk : suffix_stack) : list symbol * list (list symbol) :=
+  Definition sllSuffixes (stk : sll_stack) : list symbol * list (list symbol) :=
     match stk with
-    | (fr, frs) => (sllSuffix fr, sllSuffixes' frs)
+    | (fr, frs) => (sllSuffix fr, map sllSuffix frs)
     end.
 
   Record sll_subparser : Type :=
-    SllSp { sll_prediction : list symbol;
-            sll_stack      : suffix_stack }.
+    SllSp { sll_pred : list symbol;
+            sll_stk  : sll_stack }.
 
   (* Projecting an SLL subparser from an LL subparser *)
 
-  Definition sllify' (fr : parser_frame) : suffix_frame :=
+
+  (*Definition sllify' (fr : parser_frame) : suffix_frame :=
     match fr with
-    | Fr x _ _ suf => SF (Some x) suf
+    | Fr _ _ suf => SF None suf
     end.
 
   Definition sllify (stk : parser_stack) : suffix_stack :=
@@ -1283,9 +1290,10 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition sllifySp (sp : subparser) : sll_subparser :=
     match sp with
     | Sp pred stk => SllSp pred (sllify stk)
-    end.
-  
+    end. *)
+
   (*
+  
   Fixpoint unprocSyms (frs : list parser_frame) : list symbol :=
     match frs with 
     | []                         => []
