@@ -577,5 +577,27 @@ Module TerminationFn (Export D : Defs.T).
   Proof.
     intros; auto.
   Qed.
+
+  (* Lift the invariant to SLL stacks and subparsers *)
+
+  Definition sll_stack_pushes_from_keyset (rm : rhs_map) (stk : sll_stack) :=
+    suffix_stack_pushes_from_keyset rm (sllStackSuffixes stk).
+
+  Definition sll_sp_pushes_from_keyset (rm : rhs_map) (sp : sll_subparser) : Prop :=
+    match sp with
+    | SllSp _ stk => sll_stack_pushes_from_keyset rm stk
+    end.
+
+  Definition all_sll_sp_pushes_from_keyset (rm : rhs_map) (sps : list sll_subparser) : Prop :=
+    forall sp, In sp sps -> sll_sp_pushes_from_keyset rm sp.
+
+  Lemma sll_pki_list__pki_mem :
+    forall rm sps sp,
+      all_sll_sp_pushes_from_keyset rm sps
+      -> In sp sps
+      -> sll_sp_pushes_from_keyset rm sp.
+  Proof.
+    intros; auto.
+  Qed.
   
 End TerminationFn.

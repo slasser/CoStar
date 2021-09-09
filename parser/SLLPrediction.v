@@ -16,12 +16,12 @@ Module SllPredictionFn (Import D : Defs.T).
       match sp with
       | SllSp pred stk =>
         match stk with
-        | (SF _ [], [])            => MoveReject
-        | (SF _ [], _ :: _)        => MoveError SpInvalidState
-        | (SF _ (NT _ :: _), _)    => MoveError SpInvalidState
-        | (SF o (T a' :: suf), frs) =>
+        | (SllFr _ [], [])            => MoveReject
+        | (SllFr _ [], _ :: _)        => MoveError SpInvalidState
+        | (SllFr _ (NT _ :: _), _)    => MoveError SpInvalidState
+        | (SllFr o (T a' :: suf), frs) =>
           if t_eq_dec a' a then
-            MoveSucc (SllSp pred (SF o suf, frs))
+            MoveSucc (SllSp pred (SllFr o suf, frs))
           else
             MoveReject
         end
@@ -30,7 +30,7 @@ Module SllPredictionFn (Import D : Defs.T).
   Lemma sllMoveSp_preserves_prediction :
     forall t sp sp',
       sllMoveSp t sp = MoveSucc sp'
-      -> sp'.(sll_prediction) = sp.(sll_prediction).
+      -> sp'.(sll_pred) = sp.(sll_pred).
   Proof.
     intros t sp sp' hm; unfold sllMoveSp in hm.
     dms; tc; subst; inv hm; auto.
@@ -38,13 +38,14 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Lemma sllMoveSp_preserves_lhss_invar :
     forall rm a sp sp',
-      sll_sp_lhss_from_keyset rm sp
+      sll_sp_pushes_from_keyset rm sp
       -> sllMoveSp a sp = MoveSucc sp'
-      -> sll_sp_lhss_from_keyset rm sp'.
+      -> sll_sp_pushes_from_keyset rm sp'.
   Proof.
     intros rm a sp sp' hk hm.
     unfold sllMoveSp in hm; dms; tc; inv hm; sis.
-    eapply sll_consume_preserves_keyset_invar; eauto.
+    red; red in hk; sis.
+    eapply consume_preserves_keyset_invar; eauto.
   Qed.
 
   Definition sllMove (a : terminal) (sps : list sll_subparser) : move_result sll_subparser :=
@@ -54,7 +55,7 @@ Module SllPredictionFn (Import D : Defs.T).
     forall t sp' sps sps',
       sllMove t sps = inr sps'
       -> In sp' sps'
-      -> exists sp, In sp sps /\ sp'.(sll_prediction) = sp.(sll_prediction).
+      -> exists sp, In sp sps /\ sp'.(sll_pred) = sp.(sll_pred).
   Proof.
     intros t sp' sps sps' hm hi.
     unfold move in hm.
@@ -64,11 +65,11 @@ Module SllPredictionFn (Import D : Defs.T).
     eapply sllMoveSp_preserves_prediction; eauto.
   Qed.
 
-  Lemma sllMove_preserves_lhss_invar :
+  Lemma sllMove_preserves_pki :
     forall rm a sps sps',
-      all_sll_sp_lhss_from_keyset rm sps
+      all_sll_sp_pushes_from_keyset rm sps
       -> sllMove a sps = inr sps'
-      -> all_sll_sp_lhss_from_keyset rm sps'.
+      -> all_sll_sp_pushes_from_keyset rm sps'.
   Proof.
     intros rm a sps sps' hk hm sp' hi'.
     eapply aggrMoveResults_map_backwards in hm; eauto.
@@ -80,8 +81,8 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Definition simReturn (cm : closure_map) (sp : sll_subparser) : option (list sll_subparser) :=
     match sp with
-    | SllSp pred (SF (Some x) [], []) =>
-      let dsts := destFrames (SF (Some x) []) cm in
+    | SllSp pred (SllFr (Some x) [], []) =>
+      let dsts := destFrames (SllFr (Some x) []) cm in
       let sps' := map (fun d => SllSp pred (d, [])) dsts
       in  Some sps'
     | _ => None
@@ -91,7 +92,7 @@ Module SllPredictionFn (Import D : Defs.T).
     forall cm sp sp' sps',
       simReturn cm sp = Some sps'
       -> In sp' sps'
-      -> sll_prediction sp' = sll_prediction sp.
+      -> sll_pred sp' = sll_pred sp.
   Proof.
     intros cm [pred (fr, frs)] sp' sps' hs hi; sis; dms; tc; inv hs.
     apply in_map_iff in hi; destruct hi as [? [? ?]]; subst; auto.
@@ -100,15 +101,15 @@ Module SllPredictionFn (Import D : Defs.T).
   Lemma simReturn_stack_shape :
     forall cm sp sps',
       simReturn cm sp = Some sps'
-      -> exists x, sll_stack sp = (SF (Some x) [], []).
+      -> exists x, sp.(sll_stk) = (SllFr (Some x) [], []).
   Proof.
     intros cm sp sps' hr; unfold simReturn in hr; dms; inv hr; sis; eauto.
   Qed.
 
-  Lemma simReturn_lhss_invar :
+  Lemma simReturn_pki :
     forall pm cm sp sps',
       simReturn cm sp = Some sps'
-      -> all_sll_sp_lhss_from_keyset pm sps'.
+      -> all_sll_sp_pushes_from_keyset pm sps'.
   Proof.
     intros pm cm [pred (fr, frs)] sps' hr sp' hi; sis; dms; tc; inv hr.
     apply in_map_iff in hi; destruct hi as [[o suf] [heq hi]]; subst. 
@@ -120,15 +121,14 @@ Module SllPredictionFn (Import D : Defs.T).
     match sp with
     | SllSp pred (fr, frs) =>
       match fr, frs with
-      | SF _ [], [] => CstepDone
       (* return to caller frame *)
-      | SF (Some x) [], SF o_cr suf_cr :: frs_tl =>
-        let stk':= (SF o_cr suf_cr, frs_tl) 
+      | SllFr o [], SllFr o_cr (NT x :: suf_cr) :: frs_tl =>
+        let stk':= (SllFr o_cr suf_cr, frs_tl) 
         in  CstepK (NtSet.remove x vi) [SllSp pred stk']
       (* done case -- top stack symbol is a terminal *)
-      | SF _ (T _ :: _), _ => CstepDone
+      | SllFr _ (T _ :: _), _ => CstepDone
       (* push case *)
-      | SF o (NT x :: suf), _ =>
+      | SllFr o (NT x :: suf), _ =>
         if NtSet.mem x vi then
           (* Unreachable for a left-recursive grammar *)
           match NM.find x rm with
@@ -136,8 +136,7 @@ Module SllPredictionFn (Import D : Defs.T).
           | None   => CstepK NtSet.empty []
           end
         else
-          let fr'  := SF o suf in
-          let sps' := map (fun rhs => SllSp pred (SF (Some x) rhs, fr' :: frs))
+          let sps' := map (fun rhs => SllSp pred (SllFr (Some x) rhs, fr :: frs))
                           (rhssFor x rm)
           in  CstepK (NtSet.add x vi) sps'
       | _, _ => CstepError SpInvalidState
@@ -148,39 +147,35 @@ Module SllPredictionFn (Import D : Defs.T).
     forall rm sp sp' sps' vi vi',
       sllCstep rm vi sp = CstepK vi' sps'
       -> In sp' sps'
-      -> sp.(sll_prediction) = sp'.(sll_prediction).
+      -> sp.(sll_pred) = sp'.(sll_pred).
   Proof.
     intros rm sp sp' sps' vi vi' hs hi.
     unfold sllCstep in hs; dms; tc; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst; auto.
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst; auto.
-    - apply in_map_iff in hi.
-      destruct hi as [rhs [heq hi]]; subst; auto.
   Qed.
 
-  Lemma sllCstep_preserves_lhss_invar :
+  Lemma sllCstep_preserves_pki :
     forall rm vi sp vi' sp' sps',
-      sll_sp_lhss_from_keyset rm sp
+      sll_sp_pushes_from_keyset rm sp
       -> sllCstep rm vi sp = CstepK vi' sps'
       -> In sp' sps'
-      -> sll_sp_lhss_from_keyset rm sp'.
+      -> sll_sp_pushes_from_keyset rm sp'.
   Proof.
     intros rm vi sp vi' sp' sps' hk hs hi.
     unfold sllCstep in hs; dms; tc; inv hs; red; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
-      eapply sll_return_preserves_keyset_invar; eauto.
+      red; repeat red in hk; sis.
+      eapply return_preserves_keyset_invar; eauto.
     - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
-      eapply sll_push_preserves_keyset_invar; eauto.
-      eapply rhssFor_keySet; eauto.
-    - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.
-      eapply sll_push_preserves_keyset_invar; eauto.
+      eapply push_preserves_keyset_invar; eauto.
       eapply rhssFor_keySet; eauto.
   Qed.
 
   Definition sll_meas (rm : rhs_map) (vi : NtSet.t) (sp : sll_subparser) : nat * nat :=
     match sp with
-    | SllSp _ sk => ss_meas rm vi sk
+    | SllSp _ sk => meas rm vi (sllStackSuffixes sk)
     end.
 
   Lemma sllCstep_meas_lt :
@@ -188,24 +183,19 @@ Module SllPredictionFn (Import D : Defs.T).
            (sp sp' : sll_subparser)
            (sps'   : list sll_subparser)
            (vi vi' : NtSet.t),
-      sll_sp_lhss_from_keyset rm sp
+      sll_sp_pushes_from_keyset rm sp
       -> sllCstep rm vi sp = CstepK vi' sps'
       -> In sp' sps'
       -> lex_nat_pair (sll_meas rm vi' sp') (sll_meas rm vi sp).
   Proof.
-    intros rm sp sp' sps' vi vi' ha hs hi. 
+    intros rm sp sp' sps' vi vi' ha hs hi.
     unfold sllCstep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
-    - apply in_singleton_eq in hi; subst.
-      eapply ss_meas_lt_after_return; eauto.
+    - red; repeat red in ha; sis.
+      apply in_singleton_eq in hi; subst.
+      eapply meas_lt_after_return; eauto.
     - apply in_map_iff in hi.
-      destruct hi as [rhs [heq hi]]; subst.
-      eapply ss_meas_lt_after_push; eauto.
-      + apply not_mem_iff; auto.
-      + eapply rhssFor_keySet; eauto.
-      + eapply rhssFor_allRhss; eauto.
-    - apply in_map_iff in hi.
-      destruct hi as [rhs [heq hi]]; subst.
-      eapply ss_meas_lt_after_push; eauto.
+      destruct hi as [rhs [heq hi]]; subst; sis.
+      eapply meas_lt_after_push; eauto.
       + apply not_mem_iff; auto.
       + eapply rhssFor_keySet; eauto.
       + eapply rhssFor_allRhss; eauto.
@@ -213,7 +203,7 @@ Module SllPredictionFn (Import D : Defs.T).
 
   Lemma acc_after_sll_step :
     forall rm sp sp' sps' vi vi',
-      sll_sp_lhss_from_keyset rm sp
+      sll_sp_pushes_from_keyset rm sp
       -> sllCstep rm vi sp = CstepK vi' sps'
       -> In sp' sps'
       -> Acc lex_nat_pair (sll_meas rm vi sp)
@@ -228,7 +218,7 @@ Module SllPredictionFn (Import D : Defs.T).
                 (cm : closure_map)
                 (vi : NtSet.t)
                 (sp : sll_subparser)
-                (hk : sll_sp_lhss_from_keyset rm sp)
+                (hk : sll_sp_pushes_from_keyset rm sp)
                 (a  : Acc lex_nat_pair (sll_meas rm vi sp))
     : closure_result sll_subparser :=
     match simReturn cm sp with
@@ -241,7 +231,7 @@ Module SllPredictionFn (Import D : Defs.T).
         fun hs => 
           let crs := dmap sps' (fun sp' hi =>
                                   sllc rm cm vi' sp'
-                                       (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                       (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                        (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
           in  aggrClosureResults crs
       end eq_refl
@@ -260,7 +250,7 @@ Module SllPredictionFn (Import D : Defs.T).
           fun hs => 
             let crs := dmap sps' (fun sp' hi =>
                                     sllc rm cm vi' sp'
-                                         (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                         (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                           (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
             in  aggrClosureResults crs
         end eq_refl
@@ -274,7 +264,7 @@ Module SllPredictionFn (Import D : Defs.T).
            (cm  : closure_map)
            (vi  : NtSet.t)
            (sp  : sll_subparser)
-           (hk  : sll_sp_lhss_from_keyset rm sp)
+           (hk  : sll_sp_pushes_from_keyset rm sp)
            (a   : Acc lex_nat_pair (sll_meas rm vi sp))
            (sr  : subparser_closure_step_result)
            (cr  : closure_result sll_subparser)
@@ -288,7 +278,7 @@ Module SllPredictionFn (Import D : Defs.T).
         | CstepK vi' sps' => 
           fun hs => 
             let crs := dmap sps' (fun sp' hi => sllc rm cm vi' sp'
-                                                     (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                                     (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                                        (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
             in  aggrClosureResults crs
         end heq
@@ -302,7 +292,7 @@ Module SllPredictionFn (Import D : Defs.T).
                      (crs : list (closure_result sll_subparser)),
                crs = dmap sps (fun sp' hi => 
                                  sllc rm cm vi' sp'
-                                      (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                      (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                        (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
                /\ aggrClosureResults crs = inl e
          | inr sps =>
@@ -315,7 +305,7 @@ Module SllPredictionFn (Import D : Defs.T).
                             (crs  : list (closure_result sll_subparser)),
                      crs = dmap sps' (fun sp' hi => 
                                         sllc rm cm vi' sp'
-                                             (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                             (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                              (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
                      /\ aggrClosureResults crs = inr sps)
          end.
@@ -329,7 +319,7 @@ Module SllPredictionFn (Import D : Defs.T).
            (cm : closure_map)
            (sp : sll_subparser)
            (vi : NtSet.t)
-           (hk : sll_sp_lhss_from_keyset rm sp)
+           (hk : sll_sp_pushes_from_keyset rm sp)
            (a  : Acc lex_nat_pair (sll_meas rm vi sp))
            (cr : closure_result sll_subparser),
       sllc rm cm vi sp hk a = cr
@@ -342,7 +332,7 @@ Module SllPredictionFn (Import D : Defs.T).
                      (crs : list (closure_result sll_subparser)),
                crs = dmap sps (fun sp' hi => 
                                  sllc rm cm vi' sp'
-                                      (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                      (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                    (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
                /\ aggrClosureResults crs = inl e
          | inr sps =>
@@ -355,7 +345,7 @@ Module SllPredictionFn (Import D : Defs.T).
                             (crs  : list (closure_result sll_subparser)),
                      crs = dmap sps' (fun sp' hi => 
                                         sllc rm cm vi' sp'
-                                             (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                             (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                              (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
                      /\ aggrClosureResults crs = inr sps)
                   end.
@@ -377,7 +367,7 @@ Module SllPredictionFn (Import D : Defs.T).
                           (crs  : list (closure_result sll_subparser)),
                    crs = dmap sps' (fun sp' hi => 
                                       sllc rm cm vi' sp'
-                                           (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                           (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                            (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
                    /\ aggrClosureResults crs = inr sps).
   Proof.
@@ -394,7 +384,7 @@ Module SllPredictionFn (Import D : Defs.T).
                    (crs : list (closure_result sll_subparser)),
           crs = dmap sps (fun sp' hi => 
                             sllc rm cm vi' sp'
-                                 (sllCstep_preserves_lhss_invar _ _ _ _ _ _ hk hs hi)
+                                 (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
                                  (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
           /\ aggrClosureResults crs = inl e.
   Proof.
@@ -406,7 +396,7 @@ Module SllPredictionFn (Import D : Defs.T).
       pair = sll_meas rm vi sp
       -> sllc rm cm vi sp hk a' = inr sps'
       -> In sp' sps'
-      -> sp'.(sll_prediction) = sp.(sll_prediction).
+      -> sp'.(sll_pred) = sp.(sll_pred).
   Proof.
     intros rm cm pair a.
     induction a as [pair hlt IH]; intros vi sp sp' sps' hk a' heq hs hi; subst.
@@ -429,23 +419,23 @@ Module SllPredictionFn (Import D : Defs.T).
     forall rm cm vi sp sp' sps' hk (a : Acc lex_nat_pair (sll_meas rm vi sp)),
       sllc rm cm vi sp hk a = inr sps'
       -> In sp' sps'
-      -> sp'.(sll_prediction) = sp.(sll_prediction).
+      -> sp'.(sll_pred) = sp.(sll_pred).
   Proof.
     intros; eapply sllc_preserves_prediction'; eauto.
   Qed.
 
-  Lemma sllc_preserves_lhss_invar' :
+  Lemma sllc_preserves_pki' :
     forall rm cm pair (ha : Acc lex_nat_pair pair) vi sp hk ha' sps',
       pair = sll_meas rm vi sp
       -> sllc rm cm vi sp hk ha' = inr sps'
-      -> all_sll_sp_lhss_from_keyset rm sps'.
+      -> all_sll_sp_pushes_from_keyset rm sps'.
   Proof.
     intros rm cm pair a.
     induction a as [pair hlt IH].
     intros vi sp hk ha' sps'' heq hc; subst.
     pose proof hc as hc'; apply sllc_success_cases in hc.
     destruct hc as [hr | [hr [[hc heq] | [sps' [vi' [hc [crs [heq heq']]]]]]]]; subst; intros sp''' hi.
-    - eapply simReturn_lhss_invar; eauto. 
+    - eapply simReturn_pki; eauto. 
     - apply in_singleton_eq in hi; subst; auto.
     - eapply aggrClosureResults_succ_in_input in heq'; eauto.
       destruct heq' as [sps [hi' hi'']].
@@ -455,30 +445,30 @@ Module SllPredictionFn (Import D : Defs.T).
       eapply sllCstep_meas_lt; eauto.
   Qed.
 
-  Lemma sllc_preserves_lhss_invar :
+  Lemma sllc_preserves_pki :
     forall rm cm vi sp sps' hk ha,
       sllc rm cm vi sp hk ha = inr sps'
-      -> sll_sp_lhss_from_keyset rm sp
-      -> all_sll_sp_lhss_from_keyset rm sps'.
+      -> sll_sp_pushes_from_keyset rm sp
+      -> all_sll_sp_pushes_from_keyset rm sps'.
   Proof.
-    intros; eapply sllc_preserves_lhss_invar'; eauto.
+    intros; eapply sllc_preserves_pki'; eauto.
   Qed.
 
   Definition sllClosure (rm  : rhs_map)
                         (cm  : closure_map)
                         (sps : list sll_subparser)
-                        (hk  : all_sll_sp_lhss_from_keyset rm sps) :
+                        (hk  : all_sll_sp_pushes_from_keyset rm sps) :
                         sum prediction_error (list sll_subparser) :=
     aggrClosureResults (dmap sps (fun sp hi =>
                                     sllc rm cm NtSet.empty sp
-                                         (sll_ulk_list__ulk_mem _ _ sp hk hi)
+                                         (sll_pki_list__pki_mem _ _ sp hk hi)
                                          (lex_nat_pair_wf _))).
 
   Lemma sllClosure_preserves_prediction :
     forall rm cm sps hk sp' sps',
       sllClosure rm cm sps hk = inr sps'
       -> In sp' sps'
-      -> exists sp, In sp sps /\ sll_prediction sp' = sll_prediction sp.
+      -> exists sp, In sp sps /\ sll_pred sp' = sll_pred sp.
   Proof.
     intros rm cm sps hk sp' sps' hc hi.
     eapply aggrClosureResults_succ_in_input in hc; eauto.
@@ -489,23 +479,23 @@ Module SllPredictionFn (Import D : Defs.T).
     eapply sllc_preserves_prediction; eauto.
   Qed.
 
-  Lemma sllClosure_preserves_lhss_invar :
+  Lemma sllClosure_preserves_pki :
     forall rm cm sps hk sps',
       sllClosure rm cm sps hk = inr sps'
-      -> all_sll_sp_lhss_from_keyset rm sps
-      -> all_sll_sp_lhss_from_keyset rm sps'.
+      -> all_sll_sp_pushes_from_keyset rm sps
+      -> all_sll_sp_pushes_from_keyset rm sps'.
   Proof.
     intros rm cm sps hk sps'' hc ha sp' hi.
     eapply aggrClosureResults_succ_in_input in hc; eauto.
     destruct hc as [sps' [hi' hi'']].
     eapply dmap_in with (l := sps) in hi'; eauto; sis.
     destruct hi' as [sp [? [hi''' hspc]]].
-    eapply sllc_preserves_lhss_invar; eauto.
+    eapply sllc_preserves_pki; eauto.
   Qed.
 
   Module SLL_Subparser_as_UOT <: UsualOrderedType.
 
-    Module L := List_as_UOT SF_as_UOT.
+    Module L := List_as_UOT SllFr_as_UOT.
     Module P := Pair_as_UOT Gamma_as_UOT L.
 
     Definition t := sll_subparser.
@@ -618,13 +608,13 @@ Module SllPredictionFn (Import D : Defs.T).
                        (cm   : closure_map)
                        (a    : terminal)
                        (sps  : list sll_subparser)
-                       (hk   : all_sll_sp_lhss_from_keyset rm sps) :
+                       (hk   : all_sll_sp_pushes_from_keyset rm sps) :
                        sum prediction_error (list sll_subparser) :=
     match sllMove a sps as m return sllMove a sps = m -> _ with
     | inl e    => fun _ => inl e
     | inr sps' =>
       fun hm =>
-        match sllClosure rm cm sps' (sllMove_preserves_lhss_invar rm a sps sps' hk hm) with
+        match sllClosure rm cm sps' (sllMove_preserves_pki rm a sps sps' hk hm) with
         | inl e     => inl e
         | inr sps'' => inr sps''
         end
@@ -636,7 +626,7 @@ Module SllPredictionFn (Import D : Defs.T).
       | inl e    => fun _ => inl e
       | inr sps' =>
         fun hm =>
-          match sllClosure rm cm sps' (sllMove_preserves_lhss_invar rm a sps sps' hk hm) with
+          match sllClosure rm cm sps' (sllMove_preserves_pki rm a sps sps' hk hm) with
           | inl e     => inl e
           | inr sps'' => inr sps''
           end
@@ -676,7 +666,7 @@ Module SllPredictionFn (Import D : Defs.T).
     forall rm cm a sps hk sp' sps',
       sllTarget rm cm a sps hk = inr sps'
       -> In sp' sps'
-      -> exists sp, In sp sps /\ sll_prediction sp = sll_prediction sp'.
+      -> exists sp, In sp sps /\ sll_pred sp = sll_pred sp'.
   Proof.
     intros rm cm a sps hk sp' sps'' hs hi.
     apply sllTarget_cases in hs.
@@ -687,16 +677,16 @@ Module SllPredictionFn (Import D : Defs.T).
     destruct hm as [? [? ?]]; eauto.
   Qed.
 
-  Lemma sllTarget_preserves_lhss_invar :
+  Lemma sllTarget_preserves_pki :
     forall rm cm a sps hk sps',
       sllTarget rm cm a sps hk = inr sps'
-      -> all_sll_sp_lhss_from_keyset rm sps
-      -> all_sll_sp_lhss_from_keyset rm sps'.
+      -> all_sll_sp_pushes_from_keyset rm sps
+      -> all_sll_sp_pushes_from_keyset rm sps'.
   Proof.
     intros rm cm a sps hk sps'' ht ha.
     apply sllTarget_cases in ht.
     destruct ht as [sps' [hk' [hm hc]]].
-    eapply sllClosure_preserves_lhss_invar; eauto.
+    eapply sllClosure_preserves_pki; eauto.
   Qed.
 
   Definition cache_stores_target_results rm cm ca :=
@@ -716,21 +706,21 @@ Module SllPredictionFn (Import D : Defs.T).
     - rewrite CacheFacts.add_neq_o in hf; auto.
   Qed.
 
-  Lemma cache_lookup_preserves_lhss_invar :
+  Lemma cache_lookup_preserves_pki :
     forall rm cm sps a ca sps',
       cache_stores_target_results rm cm ca
       -> Cache.find (sps, a) ca = Some sps'
-      -> all_sll_sp_lhss_from_keyset rm sps'.
+      -> all_sll_sp_pushes_from_keyset rm sps'.
   Proof.
     intros rm cm sps a ca sps' hc hf.
     apply hc in hf.
     destruct hf as [hk ht].
-    eapply sllTarget_preserves_lhss_invar; eauto.
+    eapply sllTarget_preserves_pki; eauto.
   Qed.
 
   Definition sllFinalConfig (sp : sll_subparser) : bool :=
     match sp with
-    | SllSp _ (SF None [], []) => true
+    | SllSp _ (SllFr None [], []) => true
     | _ => false
     end.
 
@@ -738,22 +728,22 @@ Module SllPredictionFn (Import D : Defs.T).
     forall sp pred stk,
       sp = SllSp pred stk
       -> sllFinalConfig sp = true
-      -> stk = (SF None [], []).
+      -> stk = (SllFr None [], []).
   Proof.
     intros sp pred stk ? hf; subst; unfold sllFinalConfig in hf; dms; tc.
   Qed.
 
   Definition sllAllPredictionsEqual (sp : sll_subparser) (sps : list sll_subparser) : bool :=
-    allEqual _ beqGamma sp.(sll_prediction) (map sll_prediction sps).
+    allEqual _ beqGamma sp.(sll_pred) (map sll_pred sps).
 
   Definition sllHandleFinalSubparsers (sps : list sll_subparser) : prediction_result :=
     match filter sllFinalConfig sps with
     | []         => PredReject
     | sp :: sps' => 
       if sllAllPredictionsEqual sp sps' then
-        PredSucc sp.(sll_prediction)
+        PredSucc sp.(sll_pred)
       else
-        PredAmbig sp.(sll_prediction)
+        PredAmbig sp.(sll_pred)
     end.
 
   Lemma sllHandleFinalSubparsers_succ_facts :
@@ -761,8 +751,8 @@ Module SllPredictionFn (Import D : Defs.T).
       sllHandleFinalSubparsers sps = PredSucc rhs
       -> exists sp o,
         In sp sps
-        /\ sp.(sll_prediction) = rhs
-        /\ sp.(sll_stack) = (SF o [], []).
+        /\ sp.(sll_pred) = rhs
+        /\ sp.(sll_stk) = (SllFr o [], []).
   Proof.
     intros sps rhs hh.
     unfold sllHandleFinalSubparsers in hh.
@@ -780,7 +770,7 @@ Module SllPredictionFn (Import D : Defs.T).
   Lemma sllHandleFinalSubparsers_ambig_from_subparsers :
     forall sps gamma,
       sllHandleFinalSubparsers sps = PredAmbig gamma
-      -> exists sp, In sp sps /\ sp.(sll_prediction) = gamma.
+      -> exists sp, In sp sps /\ sp.(sll_pred) = gamma.
   Proof.
     intros sps gamma hh.
     unfold sllHandleFinalSubparsers in hh.
@@ -794,7 +784,7 @@ Module SllPredictionFn (Import D : Defs.T).
                        (sps : list sll_subparser)
                        (ts  : list token)
                        (ca  : cache)
-                       (hk  : all_sll_sp_lhss_from_keyset rm sps)
+                       (hk  : all_sll_sp_pushes_from_keyset rm sps)
                        (hc  : cache_stores_target_results rm cm ca) :
                        prediction_result * cache :=
     match ts with
@@ -804,14 +794,14 @@ Module SllPredictionFn (Import D : Defs.T).
       | []          => (PredReject, ca)
       | sp' :: sps' =>
         if sllAllPredictionsEqual sp' sps' then
-          (PredSucc sp'.(sll_prediction), ca)
+          (PredSucc sp'.(sll_pred), ca)
         else
           match Cache.find (sps, a) ca as f
                 return Cache.find (sps, a) ca = f -> _ with 
           | Some sps'' =>
             fun hf =>
                sllPredict' rm cm sps'' ts' ca
-                          (cache_lookup_preserves_lhss_invar _ _ _ _ _ _ hc hf) hc
+                          (cache_lookup_preserves_pki _ _ _ _ _ _ hc hf) hc
           | None =>
             fun _ =>
               match sllTarget rm cm a sps hk as t
@@ -821,7 +811,7 @@ Module SllPredictionFn (Import D : Defs.T).
                 fun ht => 
                   let ca' := Cache.add (sps, a) sps'' ca
                   in  sllPredict' rm cm sps'' ts' ca'
-                                  (sllTarget_preserves_lhss_invar _ _ _ _ _ _ ht hk)
+                                  (sllTarget_preserves_pki _ _ _ _ _ _ ht hk)
                                   (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht)
               end eq_refl
           end eq_refl
@@ -836,7 +826,7 @@ Module SllPredictionFn (Import D : Defs.T).
       | Some sps'' =>
         fun hf =>
           sllPredict' rm cm sps'' ts' ca
-                      (cache_lookup_preserves_lhss_invar _ _ _ _ _ _ hc hf) hc
+                      (cache_lookup_preserves_pki _ _ _ _ _ _ hc hf) hc
       | None =>
         fun _ =>
           match tr as t return sllTarget rm cm a sps hk = t -> _ with
@@ -845,7 +835,7 @@ Module SllPredictionFn (Import D : Defs.T).
             fun ht => 
               let ca' := Cache.add (sps, a) sps'' ca
               in  sllPredict' rm cm sps'' ts' ca'
-                              (sllTarget_preserves_lhss_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_preserves_pki _ _ _ _ _ _ ht hk)
                               (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht)
           end heq'
       end heq = pr
@@ -853,35 +843,35 @@ Module SllPredictionFn (Import D : Defs.T).
          | (PredSucc ys, ca') =>
            (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
                sllPredict' rm cm sps'' ts' ca
-                           (cache_lookup_preserves_lhss_invar _ _ _ _ _ _ hc hf) hc = (PredSucc ys, ca'))
+                           (cache_lookup_preserves_pki _ _ _ _ _ _ hc hf) hc = (PredSucc ys, ca'))
            \/ (exists sps'' (ht : sllTarget rm cm a sps hk = inr sps''),
                   sllPredict' rm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
-                              (sllTarget_preserves_lhss_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_preserves_pki _ _ _ _ _ _ ht hk)
                               (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredSucc ys, ca'))
          | (PredAmbig ys, ca') =>
            (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
                sllPredict' rm cm sps'' ts' ca
-                           (cache_lookup_preserves_lhss_invar _ _ _ _ _ _ hc hf) hc = (PredAmbig ys, ca'))
+                           (cache_lookup_preserves_pki _ _ _ _ _ _ hc hf) hc = (PredAmbig ys, ca'))
            \/ (exists sps'' (ht : sllTarget rm cm a sps hk = inr sps''),
                   sllPredict' rm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
-                              (sllTarget_preserves_lhss_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_preserves_pki _ _ _ _ _ _ ht hk)
                               (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredAmbig ys, ca'))
          | (PredReject, ca') =>
            (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
                sllPredict' rm cm sps'' ts' ca
-                           (cache_lookup_preserves_lhss_invar _ _ _ _ _ _ hc hf) hc = (PredReject, ca'))
+                           (cache_lookup_preserves_pki _ _ _ _ _ _ hc hf) hc = (PredReject, ca'))
            \/ (exists sps'' (ht : sllTarget rm cm a sps hk = inr sps''),
                   sllPredict' rm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
-                              (sllTarget_preserves_lhss_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_preserves_pki _ _ _ _ _ _ ht hk)
                               (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredReject, ca'))
          | (PredError e, ca') =>
            (exists sps'' (hf : Cache.find (sps, a) ca = Some sps''),
                sllPredict' rm cm sps'' ts' ca
-                           (cache_lookup_preserves_lhss_invar _ _ _ _ _ _ hc hf) hc = (PredError e, ca'))
+                           (cache_lookup_preserves_pki _ _ _ _ _ _ hc hf) hc = (PredError e, ca'))
            \/ sllTarget rm cm a sps hk = inl e
            \/ (exists sps'' (ht : sllTarget rm cm a sps hk = inr sps''),
                   sllPredict' rm cm sps'' ts' (Cache.add (sps, a) sps'' ca)
-                              (sllTarget_preserves_lhss_invar _ _ _ _ _ _ ht hk)
+                              (sllTarget_preserves_pki _ _ _ _ _ _ ht hk)
                               (sllTarget_add_preserves_cache_invar _ _ _ _ _ _ _ hc ht) = (PredError e, ca'))
          end.
   Proof.
@@ -905,7 +895,7 @@ Module SllPredictionFn (Import D : Defs.T).
   Lemma sllPredict'_success_result_in_original_subparsers :
     forall rm cm ts sps ca hk hc ys ca',
       sllPredict' rm cm sps ts ca hk hc = (PredSucc ys, ca')
-      -> exists sp, In sp sps /\ sp.(sll_prediction) = ys.
+      -> exists sp, In sp sps /\ sp.(sll_pred) = ys.
   Proof.
     intros rm cm ts. 
     induction ts as [| (a,l) ts IH]; intros sps ca hk hc ys ca' hp; sis.
@@ -925,21 +915,21 @@ Module SllPredictionFn (Import D : Defs.T).
   Qed.
   
   Definition sllInitSps (rm : rhs_map) (x : nonterminal) : list sll_subparser :=
-    map (fun rhs => SllSp rhs (SF (Some x) rhs, []))
+    map (fun rhs => SllSp rhs (SllFr (Some x) rhs, []))
         (rhssFor x rm).
 
   Lemma sllInitSps_prediction_in_rhssFor :
     forall rm x sp,
       In sp (sllInitSps rm x)
-      -> In sp.(sll_prediction) (rhssFor x rm).
+      -> In sp.(sll_pred) (rhssFor x rm).
   Proof.
     intros rm x sp hi; unfold sllInitSps in hi.
     apply in_map_iff in hi; firstorder; subst; auto.
   Qed.
 
-  Lemma sllInitSps_lhss_invar :
+  Lemma sllInitSps_pki :
     forall rm x,
-      all_sll_sp_lhss_from_keyset rm (sllInitSps rm x).
+      all_sll_sp_pushes_from_keyset rm (sllInitSps rm x).
   Proof.
     intros rm x sp hi.
     apply in_map_iff in hi; destruct hi as [? [heq hi]]; subst.
@@ -950,13 +940,13 @@ Module SllPredictionFn (Import D : Defs.T).
                            (cm : closure_map)
                            (x  : nonterminal) :
                            sum prediction_error (list sll_subparser) :=
-    sllClosure rm cm (sllInitSps rm x) (sllInitSps_lhss_invar rm x).
+    sllClosure rm cm (sllInitSps rm x) (sllInitSps_pki rm x).
 
   Lemma sllStartState_sp_prediction_in_rhssFor :
     forall rm cm x sp' sps',
       sllStartState rm cm x = inr sps'
       -> In sp' sps'
-      -> In sp'.(sll_prediction) (rhssFor x rm).
+      -> In sp'.(sll_pred) (rhssFor x rm).
   Proof.
     intros rm cm x sp' sps' hs hi.
     unfold sllStartState in hs.
@@ -965,14 +955,14 @@ Module SllPredictionFn (Import D : Defs.T).
     apply sllInitSps_prediction_in_rhssFor; auto.
   Qed.
 
-  Lemma sllStartState_lhss_invar :
+  Lemma sllStartState_pki :
     forall rm cm x sps,
       sllStartState rm cm x = inr sps
-      -> all_sll_sp_lhss_from_keyset rm sps.
+      -> all_sll_sp_pushes_from_keyset rm sps.
   Proof.
     intros rm cm x sps hs sp hi.
-    eapply sllClosure_preserves_lhss_invar; eauto.
-    apply sllInitSps_lhss_invar.
+    eapply sllClosure_preserves_pki; eauto.
+    apply sllInitSps_pki.
   Qed.
   
   Definition sllPredict (rm : rhs_map)
@@ -984,29 +974,29 @@ Module SllPredictionFn (Import D : Defs.T).
                         prediction_result * cache :=
     match sllStartState rm cm x as s return sllStartState rm cm x = s -> _ with
     | inl msg => fun _  => (PredError msg, ca)
-    | inr sps => fun hs => sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc
+    | inr sps => fun hs => sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc
     end eq_refl.
 
   Lemma sllPredict_cases' :
     forall rm cm x ts ca hc cr pr (heq : sllStartState rm cm x = cr),
       match cr as s return sllStartState rm cm x = s -> _ with
       | inl msg => fun _  => (PredError msg, ca)
-      | inr sps => fun hs => sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc
+      | inr sps => fun hs => sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc
       end heq = pr
       -> match pr with
          | (PredSucc ys, ca') =>
            (exists sps (hs : sllStartState rm cm x = inr sps),
-               sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredSucc ys, ca'))
+               sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredSucc ys, ca'))
          | (PredAmbig ys, ca') =>
            (exists sps (hs : sllStartState rm cm x = inr sps),
-               sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredAmbig ys, ca'))
+               sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredAmbig ys, ca'))
          | (PredReject, ca') =>
            (exists sps (hs : sllStartState rm cm x = inr sps),
-               sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredReject, ca'))
+               sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredReject, ca'))
          | (PredError e, ca') =>
            sllStartState rm cm x = inl e
            \/ (exists sps (hs : sllStartState rm cm x = inr sps),
-                  sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredError e, ca'))
+                  sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredError e, ca'))
          end.
   Proof.
     intros rm cm x ts ca hc cr pr heq; dms; intros heq'; inv heq'; eauto.
@@ -1018,17 +1008,17 @@ Module SllPredictionFn (Import D : Defs.T).
       -> match pr with
          | (PredSucc ys, ca') =>
            (exists sps (hs : sllStartState rm cm x = inr sps),
-               sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredSucc ys, ca'))
+               sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredSucc ys, ca'))
          | (PredAmbig ys, ca') =>
            (exists sps (hs : sllStartState rm cm x = inr sps),
-               sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredAmbig ys, ca'))
+               sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredAmbig ys, ca'))
          | (PredReject, ca') =>
            (exists sps (hs : sllStartState rm cm x = inr sps),
-               sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredReject, ca'))
+               sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredReject, ca'))
          | (PredError e, ca') =>
            sllStartState rm cm x = inl e
            \/ (exists sps (hs : sllStartState rm cm x = inr sps),
-                  sllPredict' rm cm sps ts ca (sllStartState_lhss_invar _ _ _ _ hs) hc = (PredError e, ca'))
+                  sllPredict' rm cm sps ts ca (sllStartState_pki _ _ _ _ hs) hc = (PredError e, ca'))
          end.
   Proof.
     intros; eapply sllPredict_cases'; eauto.
@@ -1063,39 +1053,38 @@ Module SllPredictionFn (Import D : Defs.T).
              (hw  : grammar_wf g)
              (rm  : rhs_map)
              (cm  : closure_map)
-             (x   : nonterminal)
              (pre : list symbol)
              (vs  : symbols_semty pre)
-             (y   : nonterminal)
+             (x   : nonterminal)
              (suf : list symbol)
              (frs : list parser_frame)
              (ts  : list token)
              (ca  : cache)
              (hc  : cache_stores_target_results rm cm ca)
-             (hk  : stack_lhss_from_keyset rm (Fr x pre vs (NT y :: suf), frs)) :
+             (hk  : stack_pushes_from_keyset rm (Fr pre vs (NT x :: suf), frs)) :
     prediction_result * cache :=
-    let sll_res := sllPredict rm cm y ts ca hc
+    let sll_res := sllPredict rm cm x ts ca hc
     in  match sll_res with
-        | (PredAmbig _, _) => (llPredict g hw rm x pre vs y suf frs ts hk, ca)
+        | (PredAmbig _, _) => (llPredict g hw rm pre vs x suf frs ts hk, ca)
         | _                => sll_res
         end.
   
   Lemma adaptivePredict_succ_in_rhssFor :
-    forall g hw rm cm x pre vs y suf frs ts ca hc hk ys ca',
-      adaptivePredict g hw rm cm x pre vs y suf frs ts ca hc hk = (PredSucc ys, ca')
-      -> In ys (rhssFor y rm).
+    forall g hw rm cm pre vs x suf frs ts ca hc hk ys ca',
+      adaptivePredict g hw rm cm pre vs x suf frs ts ca hc hk = (PredSucc ys, ca')
+      -> In ys (rhssFor x rm).
   Proof.
-    intros g hw rm cm x pre vs y suf frs ts ca hc hk ys ca' ha.
+    intros g hw rm cm pre vs x suf frs ts ca hc hk ys ca' ha.
     unfold adaptivePredict in ha; dmeqs h; tc; inv ha.
     - eapply sllPredict_succ_in_rhssFor; eauto.
     - eapply llPredict_succ_in_rhssFor; eauto.
   Qed.
   
   Lemma adaptivePredict_succ_in_grammar :
-    forall g hw rm cm x pre vs y suf frs ts ca hc hk ys ca',
+    forall g hw rm cm pre vs x suf frs ts ca hc hk ys ca',
       rhs_map_correct rm g
-      -> adaptivePredict g hw rm cm x pre vs y suf frs ts ca hc hk = (PredSucc ys, ca')
-      -> PM.In (y, ys) g.
+      -> adaptivePredict g hw rm cm pre vs x suf frs ts ca hc hk = (PredSucc ys, ca')
+      -> PM.In (x, ys) g.
   Proof.
     intros.
     eapply rhssFor_in_iff; eauto.
@@ -1103,34 +1092,33 @@ Module SllPredictionFn (Import D : Defs.T).
   Qed.
 
   Lemma adaptivePredict_ambig_in_grammar :
-    forall g hw rm cm x pre vs y suf frs ts ca hc hk ys ca',
+    forall g hw rm cm pre vs x suf frs ts ca hc hk ys ca',
       rhs_map_correct rm g
-      -> adaptivePredict g hw rm cm x pre vs y suf frs ts ca hc hk = (PredAmbig ys, ca')
-      -> PM.In (y, ys) g.
+      -> adaptivePredict g hw rm cm pre vs x suf frs ts ca hc hk = (PredAmbig ys, ca')
+      -> PM.In (x, ys) g.
   Proof.
-    intros g hw rm cm x pre vs y suf frs ts ca hc hk ys ca' hp ha.
+    intros g hw rm cm pre vs x suf frs ts ca hc hk ys ca' hp ha.
     unfold adaptivePredict in ha; dms; tc; inv ha.
     eapply llPredict_ambig_in_grammar; eauto.
   Qed.
 
   Lemma adaptivePredict_succ_preserves_cache_invar :
-    forall g hw rm cm x pre vs y suf frs ts ca hc hk ys ca',
-      adaptivePredict g hw rm cm x pre vs y suf frs ts ca hc hk = (PredSucc ys, ca')
+    forall g hw rm cm pre vs x suf frs ts ca hc hk ys ca',
+      adaptivePredict g hw rm cm pre vs x suf frs ts ca hc hk = (PredSucc ys, ca')
       -> cache_stores_target_results rm cm ca'.
   Proof.
-    intros g hw rm cm x pre vs y suf frs ts ca hc hk ys ca' ha.
+    intros g hw rm cm pre vs x suf frs ts ca hc hk ys ca' ha.
     unfold adaptivePredict in ha; dmeqs H; inv ha; auto.
     eapply sllPredict_succ_preserves_cache_invar; eauto.
   Qed.
 
   Lemma adaptivePredict_ambig_preserves_cache_invar :
-    forall g hw rm cm x pre vs y suf frs ts ca hc hk ys ca',
-      adaptivePredict g hw rm cm x pre vs y suf frs ts ca hc hk = (PredAmbig ys, ca')
+    forall g hw rm cm pre vs x suf frs ts ca hc hk ys ca',
+      adaptivePredict g hw rm cm pre vs x suf frs ts ca hc hk = (PredAmbig ys, ca')
       -> cache_stores_target_results rm cm ca'.
   Proof.
-    intros g hw rm cm x pre vs y suf frs ts ca hc hk ys ca' ha.
+    intros g hw rm cm pre vs x suf frs ts ca hc hk ys ca' ha.
     unfold adaptivePredict in ha; dmeqs H; inv ha; auto.
   Qed.
   
-End SllPredictionFn.
- 
+End SllPredictionFn. 

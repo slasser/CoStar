@@ -1195,7 +1195,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | SllFr _ suf => suf
     end.
 
-  Module SLL_Frame_as_UOT <: UsualOrderedType.
+  Module SllFr_as_UOT <: UsualOrderedType.
 
     Module O  := Option_as_UOT NT_as_UOT.
     Module L  := List_as_UOT Symbol_as_UOT.
@@ -1249,14 +1249,14 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
               end); tc.
     Defined.
 
-  End SLL_Frame_as_UOT.
+  End SllFr_as_UOT.
 
   (* Finite sets of SLL frames *)
-  Module FS  := FSetAVL.Make SLL_Frame_as_UOT.
+  Module FS  := FSetAVL.Make SllFr_as_UOT.
   Module FSF := FSetFacts.Facts FS.
 
   (* Finite maps with SLL frame keys *)
-  Module FM  := FMapAVL.Make SLL_Frame_as_UOT.
+  Module FM  := FMapAVL.Make SllFr_as_UOT.
   Module FMF := FMapFacts.Facts FM.
 
   (* Module for finding the transitive closure
@@ -1265,7 +1265,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Definition sll_stack := (sll_frame * list sll_frame)%type.
   
-  Definition sllSuffixes (stk : sll_stack) : list symbol * list (list symbol) :=
+  Definition sllStackSuffixes (stk : sll_stack) : list symbol * list (list symbol) :=
     match stk with
     | (fr, frs) => (sllSuffix fr, map sllSuffix frs)
     end.

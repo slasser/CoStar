@@ -471,9 +471,9 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     unfold TC.G.add_edge.
     red; intros s' d' hr; red in hr.
     destruct hr as [ds' [hfi hin]].
-    destruct (SLL_Frame_as_UOT.eq_dec s' s) as [he | hn]; subst.
+    destruct (SllFr_as_UOT.eq_dec s' s) as [he | hn]; subst.
     - rewrite FMF.add_eq_o in hfi; auto; inv hfi.
-      destruct (SLL_Frame_as_UOT.eq_dec d' d) as [he' | hn']; subst; auto.
+      destruct (SllFr_as_UOT.eq_dec d' d) as [he' | hn']; subst; auto.
       apply FS.add_3 in hin; auto.
       apply hs; apply TC.G.In_succs_rel; auto.
     - rewrite FMF.add_neq_o in hfi; auto.
@@ -622,8 +622,8 @@ Module GrammarAnalysisFn (Import D : Defs.T).
     intros x x' y y' cm hr; red; red in hr.
     destruct hr as [ys [hf hi]].
     unfold TC.G.add_edge.
-    destruct (SLL_Frame_as_UOT.eq_dec x' x) as [he | hn]; subst.
-    - destruct (SLL_Frame_as_UOT.eq_dec y' y) as [he' | hn']; subst.
+    destruct (SllFr_as_UOT.eq_dec x' x) as [he | hn]; subst.
+    - destruct (SllFr_as_UOT.eq_dec y' y) as [he' | hn']; subst.
       + eexists; split.
         * rewrite FMF.add_eq_o; auto.
         * apply FS.add_1; auto.
