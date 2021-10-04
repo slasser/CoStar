@@ -198,6 +198,117 @@ Module ParserSoundFn (Import D : Defs.T).
    lemma. The processed stack symbols and the semantic values stored
    in each frame comprise a unique partial derivation for the tokens that
    have been consumed. *)
+
+  Fixpoint lower_frames_accept_suffix
+           (gr  : grammar)
+           (rhs : list symbol)
+           (vs  : symbols_semty rhs)
+           (frs : list parser_frame)
+           (w   : list token) : Prop :=
+    match frs with
+    | [] => w = []
+    | Fr pre vs_pre (NT x :: suf) :: frs' =>
+      (exists wpre wsuf vs_suf,
+          w = wpre ++ wsuf
+          /\ sem_values_derivation gr suf wpre vs_suf
+          /\ ((exists p f,
+                  PM.MapsTo (x, rhs) (@existT _ _ (x, rhs) (Some p, f)) gr
+                  /\ p vs = true
+                  /\ lower_frames_accept_suffix gr
+                                                (rev pre ++ NT x :: suf)
+                                                (concatTuple (rev pre) (NT x :: suf) (revTuple _ vs_pre) (f vs, vs_suf))
+                                                frs'
+                                                wsuf)
+              \/ (exists f,
+                     PM.MapsTo (x, rhs) (@existT _ _ (x, rhs) (None, f)) gr
+                     /\ lower_frames_accept_suffix gr
+                                                   (rev pre ++ NT x :: suf)
+                                                   (concatTuple (rev pre) (NT x :: suf) (revTuple _ vs_pre) (f vs, vs_suf))
+                                                   frs'
+                                                   wsuf)))
+    | _ => True
+    end.
+
+  Definition stack_accepts_suffix (gr : grammar) (sk : parser_stack) (w : list token) : Prop :=
+    match sk with
+    | (Fr pre vs_pre suf, frs) =>
+      (exists wpre wsuf vs_suf,
+          w = wpre ++ wsuf
+          /\ sem_values_derivation gr suf wpre vs_suf
+          /\ lower_frames_accept_suffix gr
+                                        (rev pre ++ suf)
+                                        (concatTuple (rev pre) suf (revTuple pre vs_pre) vs_suf)
+                                        frs
+                                        wsuf)
+       end.
+  
+  Inductive unique_frames_derivation (gr : grammar) :
+    list parser_frame -> list token -> list token -> Prop :=
+  | UFD_init :
+      forall x w,
+        unique_frames_derivation gr [Fr [] tt [NT x]] [] w
+  | UFD_final :
+      forall x v wpre wsuf,
+        sem_value_derivation gr (NT x) wpre v
+        -> (forall v',
+               sem_value_derivation gr (NT x) wpre v'
+               -> v' = v)
+        -> unique_frames_derivation gr [Fr [NT x] (v, tt) []] wpre wsuf
+  | UFD_upper :
+      forall cr ce frs pre pre' x suf suf' wpre wmid wsuf vs vs',
+      cr    = Fr pre vs (NT x :: suf)
+      -> ce = Fr pre' vs' suf'
+      -> unique_frames_derivation gr (cr :: frs) wpre (wmid ++ wsuf)
+      -> PM.In (x, rev pre' ++ suf') gr
+      -> sem_values_derivation gr (rev pre') wmid (revTuple _ vs')
+      -> (forall vs'',
+             sem_values_derivation gr (rev pre') wmid (revTuple _ vs'')
+             -> stack_accepts_suffix gr (Fr pre' vs'' suf', cr :: frs) wsuf
+             -> revTuple _ vs'' = revTuple _ vs')
+      -> (forall pre'' suf'' vs'',
+             PM.In (x, rev pre'' ++ suf'') gr
+             -> sem_values_derivation gr (rev pre'') wmid (revTuple _ vs'')
+             -> stack_accepts_suffix gr (Fr pre'' vs'' suf'', cr :: frs) 
+             -> rev pre'' ++ suf'' = rev pre' ++ suf')
+      -> unique_frames_derivation gr (ce :: cr :: frs) (wpre ++ wmid) wsuf.
+
+  | USD_upper :
+      forall p_cr p_ce s_cr s_ce p_frs s_frs pre pre' suf suf' o x wpre wmid wsuf v v',
+        PF pre v              = p_cr
+        -> SF o (NT x :: suf) = s_cr
+        -> PF pre' v'         = p_ce 
+        -> SF (Some x) suf'   = s_ce
+        -> unique_frames_derivation g (p_cr :: p_frs) (s_cr :: s_frs) 
+                                    wpre (wmid ++ wsuf)
+        -> In (x, rev pre' ++ suf') g
+        -> gamma_derivation g (rev pre') wmid (rev v')
+        -> (forall wmid' wsuf' v'',
+               wmid' ++ wsuf' = wmid ++ wsuf
+               -> gamma_derivation g (rev pre') wmid' (rev v'')
+               -> gamma_recognize g (suf' ++ suf ++ unprocTailSyms s_frs) wsuf'
+               -> wmid' = wmid /\ wsuf' = wsuf /\ rev v'' = rev v')
+        (* Here's the interesting part -- all pushes are unique *)
+        -> (forall rhs,
+               In (x, rhs) g
+               -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms s_frs) (wmid ++ wsuf)
+               -> rhs = rev pre' ++ suf')
+        -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
+                                    (wpre ++ wmid) wsuf.
+  
+  Hint Constructors unique_frames_derivation : core.
+
+  Ltac inv_ufd hu  ha hg hi hpu hu' :=
+    let hp  := fresh "hp"  in
+    let hp' := fresh "hp'" in
+    let hs  := fresh "hs"  in
+    let hs' := fresh "hs'" in
+    inversion hu as [ ? ? ? ? ? hg ha 
+                    | ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?  
+                      hp hs hp' hs' hu' hi hg ha hpu
+                    ]; subst; clear hu.
+
+
+  
   Inductive unique_frames_derivation (g : grammar) :
     list prefix_frame -> list suffix_frame -> list token -> list token -> Prop :=
   | USD_bottom :
