@@ -250,8 +250,8 @@ Module LLPredictionFn (Import D : Defs.T).
   | CstepError  : prediction_error -> subparser_closure_step_result.
 
   Definition cstep
-             (g  : grammar)
-             (hw : grammar_wf g)
+             (gr : grammar)
+             (hw : grammar_wf gr)
              (rm : rhs_map)
              (vi : NtSet.t)
              (sp : subparser) : 
@@ -268,19 +268,15 @@ Module LLPredictionFn (Import D : Defs.T).
         | Fr pre_cr vs_cr (NT x :: suf_cr) :: frs' =>
           let pre' := rev pre in
           let vs'  := revTuple pre vs in
-          match findPredicateAndAction (x, pre') g hw with
+          match findPredicateAndAction (x, pre') gr hw with
           (* check semantic predicate and reduce *)
-          | Some (Some p, f) =>
+          | Some (p, f) =>
             if p vs' then
               let stk' := (Fr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
               in  CstepK (NtSet.remove x vi) [Sp pred stk']
             else
               (* failed semantic predicate *)
               CstepK NtSet.empty []
-          (* reduce *)
-          | Some (None, f) =>
-            let stk' := (Fr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
-            in  CstepK (NtSet.remove x vi) [Sp pred stk']
           | None =>
             (* impossible case *)
             CstepError SpInvalidState
@@ -313,7 +309,6 @@ Module LLPredictionFn (Import D : Defs.T).
     intros g hw rm sp sp' sps' vi vi' hs hi.
     unfold cstep in hs; dms; tc; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst; auto.
-    - apply in_singleton_eq in hi; subst; auto.
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst; auto.
   Qed.
@@ -327,9 +322,6 @@ Module LLPredictionFn (Import D : Defs.T).
   Proof.
     intros g hw rm sp sp' sps' vi vi' hk hs hi; red in hk.
     unfold cstep in hs; dms; tc; inv hs; red; try solve [inv hi].
-    - apply in_singleton_eq in hi; subst.
-      red; red in hk; sis.
-      eapply return_preserves_keyset_invar; eauto.
     - apply in_singleton_eq in hi; subst.
       red; red in hk; sis.
       eapply return_preserves_keyset_invar; eauto.
@@ -511,8 +503,6 @@ Module LLPredictionFn (Import D : Defs.T).
     unfold cstep in hs; dmeqs h; tc; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst.
       eapply meas_lt_after_return; sis; eauto.
-    - apply in_singleton_eq in hi; subst.
-      eapply meas_lt_after_return; sis; eauto.  
     - apply in_map_iff in hi.
       destruct hi as [rhs [heq hi]]; subst.
       eapply meas_lt_after_push; sis; eauto.
@@ -1517,8 +1507,6 @@ Module LLPredictionFn (Import D : Defs.T).
     unfold cstep in hs; dms; tc; sis; inv hs; try solve [inv hi].
     - apply in_singleton_eq in hi; subst; sis.
       eapply return_preserves_frames_wf_invar; eauto.
-    - apply in_singleton_eq in hi; subst; sis.
-      eapply return_preserves_frames_wf_invar; eauto.
     - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst; sis.
       apply push_preserves_frames_wf_invar; auto.
       eapply rhssFor_in_iff; eauto.
@@ -1707,8 +1695,6 @@ Module LLPredictionFn (Import D : Defs.T).
   Proof.
     intros g hw rm sp sp' sps' vi vi' hc hu hs hi.
     unfold cstep in hs; dmeqs h; inv hs; tc; try solve [inv hi].
-    - apply in_singleton_eq in hi; subst.
-      eapply return_preserves_unavailable_nts_invar; eauto.
     - apply in_singleton_eq in hi; subst.
       eapply return_preserves_unavailable_nts_invar; eauto.
     - apply in_map_iff in hi; destruct hi as [rhs [heq hi]]; subst.

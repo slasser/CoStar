@@ -488,11 +488,11 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   
   (* Grammars *)
 
-  (* Each grammar production includes an optional semantic 
-     predicate and a semantic action. The production's symbols
+  (* Each grammar production includes a semantic predicate 
+     and a semantic action. The production's symbols
      determine the types of these functions. *)
   Definition production_semty (p : production) : Type :=
-    option (predicate_semty p) * action_semty p.
+    predicate_semty p * action_semty p.
 
   Definition grammar_entry : Type :=
     {p : production & production_semty p}.
@@ -621,21 +621,15 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
           None
       end heq = o'
       -> match o' with
-         | Some (Some p, f) =>
-           PM.find (x, ys) gr = Some (@existT _ _ (x, ys) (Some p, f))
-         | Some (None, f) =>
-           PM.find (x, ys) gr = Some (@existT _ _ (x, ys) (None, f))
+         | Some (p, f) =>
+           PM.find (x, ys) gr = Some (@existT _ _ (x, ys) (p, f))
          | None =>
            PM.find (x, ys) gr = None
          end.
   Proof.
     intros gr hw x ys o hf o' heq.
     pose proof hf as hf'.
-    destruct o as [((x', ys'), ([p |], f)) |]; subst; auto.
-    - apply PMF.find_mapsto_iff in hf'.
-      apply hw in hf'; inv hf'.
-      destruct (cast_lookup_result _ _ _ _ _ _) as (o, f') eqn:hc.
-      apply cast_lookup_result_refl in hc; inv hc; auto.
+    destruct o as [((x', ys'), (p, f)) |]; subst; auto.
     - apply PMF.find_mapsto_iff in hf'.
       apply hw in hf'; inv hf'.
       destruct (cast_lookup_result _ _ _ _ _ _) as (o, f') eqn:hc.
@@ -650,10 +644,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
            (o   : option (production_semty (x, ys))),
       findPredicateAndAction (x, ys) gr hw = o
       -> match o with
-         | Some (Some p, f) =>
-           PM.find (x, ys) gr = Some (@existT _ _ (x, ys) (Some p, f))
-         | Some (None, f) =>
-           PM.find (x, ys) gr = Some (@existT _ _ (x, ys) (None, f))
+         | Some (p, f) =>
+           PM.find (x, ys) gr = Some (@existT _ _ (x, ys) (p, f))
          | None =>
            PM.find (x, ys) gr = None
          end.
@@ -661,22 +653,12 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     intros; eapply fpaa_cases'; eauto.
   Qed.
   
-  Lemma fpaa_mapsto_pred :
+  Lemma fpaa_mapsto :
     forall g hw x ys p f,
-      findPredicateAndAction (x, ys) g hw = Some (Some p, f)
-      -> PM.MapsTo (x, ys) (@existT _ _ (x, ys) (Some p, f)) g.
+      findPredicateAndAction (x, ys) g hw = Some (p, f)
+      -> PM.MapsTo (x, ys) (@existT _ _ (x, ys) (p, f)) g.
   Proof.
     intros g hw x ys p f hf.
-    apply fpaa_cases in hf.
-    apply PMF.find_mapsto_iff; auto.
-  Qed.
-
-  Lemma fpaa_mapsto :
-    forall g hw x ys f,
-      findPredicateAndAction (x, ys) g hw = Some (None, f)
-      -> PM.MapsTo (x, ys) (@existT _ _ (x, ys) (None, f)) g.
-  Proof.
-    intros g hw x ys f hf.
     apply fpaa_cases in hf.
     apply PMF.find_mapsto_iff; auto.
   Qed.
@@ -1808,18 +1790,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
              (ys : list symbol)
              (w  : list token)
              (vs : symbols_semty ys)
-             (f  : action_semty (x, ys)),
-        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (None, f)) g
-        -> sem_values_derivation g ys w vs
-        -> sem_value_derivation g (NT x) w (f vs)
-  | NT_der_pred : 
-      forall (x  : nonterminal)
-             (ys : list symbol)
-             (w  : list token)
-             (vs : symbols_semty ys)
              (p  : predicate_semty (x, ys))
              (f  : action_semty (x, ys)),
-        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (Some p, f)) g
+        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (p, f)) g
         -> sem_values_derivation g ys w vs
         -> p vs = true
         -> sem_value_derivation g (NT x) w (f vs)
@@ -1856,7 +1829,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       -> w = [@existT _ _ a v].
   Proof.
     intros g a w v hs.
-    inversion hs as [? ? h h' heq | |]; subst; clear hs.
+    inversion hs as [? ? h h' heq |]; subst; clear hs.
     apply Eqdep_dec.inj_pair2_eq_dec in heq; subst; auto.
     apply Symbol_as_UOT.eq_dec.
   Qed.
@@ -1864,16 +1837,13 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Lemma inv_nt_semder :
     forall g x w v,
       sem_value_derivation g (NT x) w v
-      -> (exists ys o f vs,
-             PM.MapsTo (x, ys) (@existT _ _ (x, ys) (o, f)) g
+      -> (exists ys p f vs,
+             PM.MapsTo (x, ys) (@existT _ _ (x, ys) (p, f)) g
              /\ sem_values_derivation g ys w vs
              /\ f vs = v).
   Proof.
     intros g x w v hd.
-    inversion hd as [| ? ? ? ? ? hm hd' h h' heq | ? ? ? ? ? ? hm hd' hp h h' heq]; subst; clear hd.
-    - repeat eexists; eauto.
-      apply Eqdep_dec.inj_pair2_eq_dec in heq; auto.
-      apply Symbol_as_UOT.eq_dec.
+    inversion hd as [| ? ? ? ? ? ? hm hd' hp h h' heq]; subst; clear hd.
     - repeat eexists; eauto.
       apply Eqdep_dec.inj_pair2_eq_dec in heq; auto.
       apply Symbol_as_UOT.eq_dec.
@@ -1955,9 +1925,9 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
              (w   : list token)
              (sts : forest)
              (vs  : symbols_semty ys)
-             (o   : option (predicate_semty (x, ys)))
+             (p   : predicate_semty (x, ys))
              (f   : action_semty (x, ys)),
-        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (o,f)) g
+        PM.MapsTo (x, ys) (@existT _ _ (x, ys) (p,f)) g
         -> forest_corresp_values g ys w sts vs
         -> tree_corresp_value g (NT x) w (Node x sts) (f vs)
   with forest_corresp_values (g : grammar) :
@@ -2020,8 +1990,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
                  exists t, tree_corresp_value g s w t v)
         (P0 := fun ss w vs hs =>
                  exists ts, forest_corresp_values g ss w ts vs); eauto.
-    - destruct IHhs as [sts hc].
-      eexists; eauto.
     - destruct IHhs as [sts hc].
       eexists; eauto.
     - destruct IHhs  as [st hc].
@@ -2118,7 +2086,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       apply t_eq_dec.
     - intros wpre' wsuf wsuf' v' hc heq.
       apply inv_nonterminal_corresp in hc.
-      destruct hc as [ys' [o' [f' [sts' [vs' [hm [heq' [heq'' hc]]]]]]]]; subst.
+      destruct hc as [ys' [p' [f' [sts' [vs' [hm [heq' [heq'' hc]]]]]]]]; subst.
       inv heq'.
       pose proof hc as hc'.
       eapply fcv__forests_eq__words_eq_rhss_eq
@@ -2128,7 +2096,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       eapply IHhc in hc'; eauto.
       destruct hc' as [_ [_ ?]]; subst.
       apply PMF.MapsTo_fun
-        with (e := @existT _ _ (x,ys) (o,f)) in hm; auto.
+        with (e := @existT _ _ (x,ys) (p,f)) in hm; auto.
       apply Eqdep_dec.inj_pair2_eq_dec in hm.
       + inv hm; auto.
       + apply Production_as_UOT.eq_dec.

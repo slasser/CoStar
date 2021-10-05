@@ -99,16 +99,12 @@ Module ParserFn (Import D : Defs.T).
               let vs'  := revTuple pre vs in
               match findPredicateAndAction (x, pre') gr hw with
               (* check predicate and reduce *)
-              | Some (Some p, f) =>
+              | Some (p, f) =>
                 if p vs' then
                   let sk' := (Fr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
                   in  StepK sk' ts (NtSet.remove x vi) un ca
                 else
                   StepReject "some failed predicate message here"
-              (* reduce *)
-              | Some (None, f) =>
-                let sk' := (Fr (NT x :: pre_cr) (f vs', vs_cr) suf_cr, frs')
-                in  StepK sk' ts (NtSet.remove x vi) un ca
               (* impossible case *)
               | None =>
                 StepError InvalidState
@@ -199,7 +195,6 @@ Module ParserFn (Import D : Defs.T).
     intros gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk hr hs.
     unfold step in hs; dmeqs H; tc; inv hs; red; red in hk; sis.
     - eapply return_preserves_keyset_invar; eauto.
-    - eapply return_preserves_keyset_invar; eauto.
     - eapply consume_preserves_keyset_invar; eauto.
     - eapply push_preserves_keyset_invar; eauto.
       eapply rhssFor_keySet.
@@ -269,7 +264,6 @@ Module ParserFn (Import D : Defs.T).
     intros gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk hs; unfold step in hs.
     destruct sk as ([pre vs suf], frs).
     dmeqs H; tc; inv hs.
-    - eapply parser_meas_lt_after_return with (pre'' := NT _ :: _); eauto.
     - eapply parser_meas_lt_after_return with (pre'' := NT _ :: _); eauto.
     - apply triple_fst_lt; auto.
     - eapply parser_meas_lt_after_push; eauto.
