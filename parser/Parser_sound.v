@@ -205,75 +205,224 @@ Module ParserSoundFn (Import D : Defs.T).
                                         frs
                                         wsuf)
        end.
-  
+
   Inductive unique_frames_derivation (gr : grammar) :
     list parser_frame -> list token -> list token -> Prop :=
-  | UFD_init :
-      forall x w,
-        unique_frames_derivation gr [Fr [] tt [NT x]] [] w
-  | UFD_final :
-      forall x v wpre wsuf,
-        sem_value_derivation gr (NT x) wpre v
-        -> (forall v',
-               sem_value_derivation gr (NT x) wpre v'
-               -> v' = v)
-        -> unique_frames_derivation gr [Fr [NT x] (v, tt) []] wpre wsuf
+  | UFD_bottom :
+      forall pre vs suf wpre wsuf,
+        sem_values_derivation gr (rev pre) wpre (revTuple _ vs)
+        -> (forall wpre' wsuf' pre' vs' (heq : rev pre' = rev pre),
+               wpre' ++ wsuf' = wpre ++ wsuf
+               -> sem_values_derivation gr (rev pre') wpre' (revTuple _ vs')
+               -> stack_accepts_suffix gr (Fr pre' vs' suf, []) wsuf'
+               -> wpre' = wpre /\ wsuf' = wsuf /\ cast_ss (rev pre') (rev pre) heq (revTuple _ vs') = revTuple _ vs)
+        -> unique_frames_derivation gr [Fr pre vs suf] wpre wsuf
   | UFD_upper :
       forall cr ce frs pre pre' x suf suf' wpre wmid wsuf vs vs',
-      cr    = Fr pre vs (NT x :: suf)
-      -> ce = Fr pre' vs' suf'
+      Fr pre vs (NT x :: suf) = cr
+      -> Fr pre' vs' suf'     = ce
       -> unique_frames_derivation gr (cr :: frs) wpre (wmid ++ wsuf)
       -> PM.In (x, rev pre' ++ suf') gr
       -> sem_values_derivation gr (rev pre') wmid (revTuple _ vs')
-      (* might need to quantify over alternative splits of the remaining input string *)
-      -> (forall vs'',
-             sem_values_derivation gr (rev pre') wmid (revTuple _ vs'')
-             -> stack_accepts_suffix gr (Fr pre' vs'' suf', cr :: frs) wsuf
-             -> revTuple _ vs'' = revTuple _ vs')
-      -> (forall pre'' suf'' vs'',
-             PM.In (x, rev pre'' ++ suf'') gr
-             -> sem_values_derivation gr (rev pre'') wmid (revTuple _ vs'')
-             -> stack_accepts_suffix gr (Fr pre'' vs'' suf'', cr :: frs) wsuf
+      -> (forall wmid' wsuf' pre'' vs'' (heq : rev pre'' = rev pre'),
+             wmid' ++ wsuf' = wmid ++ wsuf
+             -> sem_values_derivation gr (rev pre'') wmid' (revTuple _ vs'')
+             -> stack_accepts_suffix gr (Fr pre'' vs'' suf', cr :: frs) wsuf'
+             -> wmid' = wmid /\ wsuf' = wsuf /\ cast_ss (rev pre'') (rev pre') heq (revTuple _ vs'') = revTuple _ vs')
+      -> (forall wmid' wsuf' pre'' suf'' vs'',
+             wmid' ++ wsuf' = wmid ++ wsuf
+             -> PM.In (x, rev pre'' ++ suf'') gr
+             -> sem_values_derivation gr (rev pre'') wmid' (revTuple _ vs'')
+             -> stack_accepts_suffix gr (Fr pre'' vs'' suf'', cr :: frs) wsuf'
              -> rev pre'' ++ suf'' = rev pre' ++ suf')
       -> unique_frames_derivation gr (ce :: cr :: frs) (wpre ++ wmid) wsuf.
-
+  
   Hint Constructors unique_frames_derivation : core.
-
-  (* factor out repetition *)
+  
+  Ltac inv_ufd hu  hv ha hu' hi hvs hpu :=
+    inversion hu as [ ? ? ? ? ? hvs ha
+                    | ? ? ? ? ? ? ? ? ? ? ? ? ? heq heq' hu' hi hvs ha hpu]; subst; clear hu.
+    
+  
   Lemma return_preserves_unique_frames_derivation :
-    forall g p_ce p_cr p_cr' s_ce s_cr s_cr' p_frs s_frs pre pre' suf o o' x wpre wsuf v v',
-      ce = Fr pre' vs' []
-      -> cr = Fr pre vs (NT x :: suf)
-      -> cr' = Fr (NT x :: pre) 
-      p_ce     = PF pre' v'
-      -> s_ce  = SF o' []
-      -> p_cr  = PF pre v
-      -> p_cr' = PF (NT x :: pre) (Node x (rev v') :: v)
-      -> s_cr  = SF o (NT x :: suf)
-      -> s_cr' = SF o suf
-      -> unique_frames_derivation g (p_ce :: p_cr :: p_frs) (s_ce :: s_cr :: s_frs)
-                                  wpre wsuf
-      -> unique_frames_derivation g (p_cr' :: p_frs) (s_cr' :: s_frs) wpre wsuf.
+    forall gr hw ce cr cr' frs pre pre' vs vs' x suf p f wpre wsuf,
+      ce     = Fr pre' vs' []
+      -> cr  = Fr pre vs (NT x :: suf)
+      -> cr' = Fr (NT x :: pre) (f (revTuple _ vs'), vs) suf
+      -> findPredicateAndAction (x, rev pre') gr hw = Some (p, f)
+      -> p (revTuple _ vs') = true
+      -> unique_frames_derivation gr (ce :: cr :: frs) wpre wsuf
+      -> unique_frames_derivation gr (cr'      :: frs) wpre wsuf.
   Proof.
-    intros g ? ? ? ? ? ? p_frs s_frs pre pre' suf o o' x wpre wsuf v v' 
-           ? ? ? ? ? ? hu; subst. 
-    inv_ufd hu ha hg hi hpu hu'; inv hp; inv hs; inv hp'; inv hs'; sis; 
-      rewrite app_nil_r in *.
-    inv_ufd hu' ha' hg' hi' hpu' hu''; sis; try rewrite app_nil_r in *.
-    - apply USD_bottom; sis.
-      + apply gamma_derivation_app; auto.
-        rew_nil_r wmid; eauto.
-      + intros wpre' wsuf' v'' heq hd hr; subst; sis.
-        apply gamma_derivation_split in hd.
+    intros gr hw ? ? ? frs pre pre' vs vs' x suf p f wpre wsuf ? ? ? hf hp hu; subst.
+    inv_ufd hu  hv ha hu' hi hvs hpu;
+      inv heq; inv heq'; repeat ss_inj; rew_anr.
+    apply fpaa_mapsto in hf.
+    inv_ufd hu'  hv' ha' hu'' hi' hvs' hpu'; sis; rew_anr; repeat ss_inj.
+    - (* return to initial frame *)
+      apply UFD_bottom; sis.
+      + apply sem_values_derivation_app; auto.
+        rew_nil_r wmid.
+        econstructor; eauto.
+      + intros wpre' wsuf' pre'' v'' h heq hd hr; subst; sis.
+        destruct pre''; try (pose proof h as h'; apply app_cons_not_nil in h'; destruct h').
+        sis.
+        pose proof h as h'.
+        eapply rev_heads_eq_tails_eq__lists_eq
+          with (xs := rev pre'') (x := s) (ys := rev pre) (y := NT x) in h'.
+        destruct h'; subst.
+        apply svd_split in hd.
         destruct hd as (w & w' & v''' & v'''' & ? & heq' & hd & hd'); subst.
         repeat rewrite <- app_assoc in heq.
-        apply gamma_derivation_singleton_nt in hd'.
-        destruct hd' as (ys & sts & hi' & heq'' & hd'); subst.
-        eapply ha' with (v' := rev v''') in heq; 
+        apply svd_singleton_nt in hd'.
+        destruct hd' as (v & ys & sts & p' & f' & ? & hi' & hd' & ? & ?); subst.
+        assert (H' : rev (rev (rev pre'')) = rev pre).
+        { rewrite rev_involutive; auto. }
+        eapply ha' with (vs' := revTuple _ v''')
+                        (heq := H') in heq; 
           try rewrite rev_involutive in *; subst; eauto.
         * destruct heq as (? & heq & ?); subst.
           assert (ys = rev pre').
-          { rewrite <- heq in hpu; apply hpu in hi'; auto.
+          { rewrite <- heq in hpu.
+            pose proof hi' as hm.
+            apply pm_mapsto_in in hi'.
+            assert (ys = rev (rev ys) ++ []).
+            { rewrite rev_involutive.
+              apps. }
+            rewrite H in hi'.
+            eapply hpu with (vs'' := revTuple _ sts) in hi'; eauto.
+            - rewrite rev_involutive in hi'.
+              rew_anr; auto.
+            - admit.
+            - destruct hr as [w1 [w2 [vs_suf [? [hd'' ?]]]]]; subst.
+              exists []; exists w1; exists tt.
+              rewrite app_nil_r; sis.
+              repeat split; auto.
+              exists w1; exists []; exists vs_suf.
+              assert ((x, ys) = (x, rev (rev ys) ++ [])) by admit.
+              exists (cast_predicate (x, ys) (x, rev (rev ys) ++ []) H3 p').
+              exists (cast_action (x, ys) (x, rev (rev ys) ++ []) H3 f').
+              rewrite app_nil_r; repeat split; auto.
+              + eapply mapsto_cast'; eauto.
+                rewrite rev_involutive. rew_anr; auto.
+              + erewrite predicate_appl_eq_cast
+                  with (heq := H3) (heq' := H0) in H1.
+                rewrite <- H1.
+                f_equal.
+                assert (anr' : forall A (xs : list A),
+                           xs = xs ++ []).
+                { intros. rewrite app_nil_r; auto. }
+                assert (foo : forall (xs : list symbol)
+                                   (vs : symbols_semty xs),
+                           concatTuple xs [] vs tt =
+                           cast_ss xs (xs ++ []) (anr' _ xs) vs).
+                { admit. }
+                rewrite foo.
+                assert (ri' : forall A (xs : list A),
+                           xs = rev (rev xs)).
+                { intros. rewrite rev_involutive. auto. }
+                assert (bar : forall xs vs,
+                           revTuple (rev xs) (revTuple xs vs) =
+                           cast_ss xs (rev (rev xs)) (ri' _ xs) vs).
+                { admit. }
+                rewrite bar.
+                assert (baz : forall xs ys zs vs
+                                     (heq : xs = ys)
+                                     (heq' : ys = zs)
+                                     (heq'' : xs = zs),
+                           cast_ss ys zs heq' (cast_ss xs ys heq vs) = cast_ss xs zs heq'' vs).
+                { intros a b c v ? ? ?; subst.
+                  unfold cast_ss.
+                  unfold eq_rect_r.
+                  repeat rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
+                  apply Gamma_as_UOT.eq_dec.
+                  apply Gamma_as_UOT.eq_dec. }
+                apply baz.
+          }
+          subst.
+          eapply ha with (vs'' := revTuple _ sts) in heq; 
+            try rewrite rev_involutive in *; eauto.
+          -- destruct heq as (? & ? & ?); subst; auto.
+             repeat split; auto.
+             unfold revTuple_cons_case.
+             unfold eq_rect_r.
+             repeat rewrite <- Eqdep_dec.eq_rect_eq_dec.
+             destruct v''.
+             assert (foo : f' = f).
+             { eapply PMF.MapsTo_fun in hf; eauto.
+               apply Eqdep_dec.inj_pair2_eq_dec in hf.
+               - inv hf; auto.
+               - apply Production_as_UOT.eq_dec. }
+             subst.
+             unfold revTuple_cons_case in heq'.
+             unfold eq_rect_r in heq'; sis.
+             rewrite heq'.
+             rewrite <- H2.
+             rewrite <- H4.
+             admit.
+             apply Gamma_as_UOT.eq_dec.
+             apply Gamma_as_UOT.eq_dec.
+          -- admit.
+          -- exists []; exists wsuf'; exists tt.
+             repeat split; auto.
+             destruct hr as [w1 [w2 [vs_suf [? [? ?]]]]]; subst.
+             exists w1; exists []; exists vs_suf.
+             assert (foo : (x, rev pre') = (x, rev (rev (rev pre')) ++ [])).
+             { rewrite rev_involutive. apps. }
+             exists (cast_predicate (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo p').
+             exists (cast_action (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo f').
+             repeat split; auto.
+             ++ eapply mapsto_cast'.
+                rewrite rev_involutive.
+                apps.
+             ++ pose proof foo as foo'.
+                symmetry in foo'.
+                assert (bar : rev (rev (rev pre')) ++ [] = rev pre').
+                { rewrite rev_involutive.
+                  apps. }
+                erewrite predicate_appl_eq_cast with (ys' := rev pre') (heq := foo') (heq' := bar).
+                admit.
+        * subst.
+          assert (foo : forall gr ys w vs,
+                     sem_values_derivation gr ys w vs
+                     -> sem_values_derivation gr (rev (rev ys)) w (revTuple _ (revTuple _ vs))).
+          { admit. }
+          apply foo. auto.
+        * destruct hr as [w1 [w2 [vs_suf [? [? ?]]]]]; subst.
+          exists (w' ++ w1); exists []; exists (f' sts, vs_suf).
+          repeat split.
+          -- apps.
+          -- constructor; auto.
+             econstructor; eauto.
+    - 
+          exists w'; exists []; 
+                unfold cast_predicate.
+                repeat unfold eq_rect_r.
+                
+                sy
+              exists (cast_action (x, ys) (x, rev (rev ys) ++ []) H3 f').
+             
+                  
+
+             assert (foo : forall xs xs' ys ys' (heq : xs ++ ys = xs' ++ ys') vs ws,
+                        cast_ss (xs ++ ys) (xs' ++ ys') heq (concatTuple xs ys vs ws) = concatTuple xs' ys' vs' ws').
+             assert (foo : forall xs 
+             unfold revTuple_cons_case in heq'.
+             unfold eq_rect_r in heq'.
+             sis.
+             rewrite heq'.
+             rewrite <- H4.
+
+             { 
+             unfold cast_ss.
+             unfold eq_rect_r.
+             rewrite <- Eqdep_dec.eq_rect_eq_dec.
+             
+             apply H4.
+          eapply H1.
+                eauto.
+              exists []; exists wsuf'; exists tt.
+              repeat split; auto.
             apply gamma_recognize_app; auto.
             eapply gamma_derivation__gamma_recognize; eauto. }
           subst.
@@ -282,29 +431,7 @@ Module ParserSoundFn (Import D : Defs.T).
           destruct heq as (? & ? & ?); subst; auto.
         * repeat (econstructor; eauto).
           eapply gamma_derivation__gamma_recognize; eauto.
-    - inv hp'; inv hs'. 
-      rewrite <- app_assoc; eapply USD_upper; eauto; sis; apps.
-      + apply gamma_derivation_app; auto.
-        rew_nil_r wmid; eauto.
-      + intros wpre' wsuf' v'' heq hd hr; subst; sis.
-        apply gamma_derivation_split in hd.
-        destruct hd as (w & w' & v''' & v'''' & ? & ? & hd & hd'); subst.
-        apply gamma_derivation_singleton_nt in hd'.
-        destruct hd' as (ys & sts & hi'' & heq'' & hd'); subst.
-        repeat rewrite <- app_assoc in heq.
-        eapply ha' with (v'' := rev v''') in heq; 
-          try rewrite rev_involutive in *; subst; eauto.
-        * destruct heq as (? & heq & ?); subst.
-          assert (ys = rev pre').
-          { rewrite <- heq in hpu; apply hpu in hi''; auto.
-            apply gamma_recognize_app; auto.
-            eapply gamma_derivation__gamma_recognize; eauto. }
-          subst; eapply ha with (v'' := rev sts) in heq; 
-            try rewrite rev_involutive in *; eauto.
-          destruct heq as (? & ? & ?); subst; auto.
-        * repeat (econstructor; eauto).
-          eapply gamma_derivation__gamma_recognize; eauto.
-  Qed.
+        
     
   
   Inductive unique_frames_derivation (g : grammar) :

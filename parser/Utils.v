@@ -358,3 +358,24 @@ Lemma fold_left_preserves_list_invar' :
     intros A x y xs ys; split; [intros [h h'] | intros h]; subst; auto.
     inv h; auto.
   Qed.
+
+  Lemma rev_cons_rev_eq_app :
+    forall A (x : A) (xs : list A),
+      xs ++ [x] = rev (x :: (rev xs)).
+  Proof.
+    intros A x xs.
+    rewrite <- rev_unit.
+    rewrite rev_involutive; auto.
+  Qed.
+  
+  Lemma rev_heads_eq_tails_eq__lists_eq :
+    forall (A : Type) (x y : A) (xs ys : list A),
+      (x = y /\ xs = ys) <-> xs ++ [x] = ys ++ [y].
+  Proof.
+    intros A x y xs ys; split; [intros [h h'] | intros h]; subst; auto.
+    repeat rewrite rev_cons_rev_eq_app in h.
+    apply rev_eq__eq in h.
+    apply heads_eq_tails_eq__lists_eq in h.
+    destruct h as [? h]; subst.
+    apply rev_eq__eq in h; auto.
+  Qed.
