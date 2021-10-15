@@ -379,3 +379,10 @@ Lemma fold_left_preserves_list_invar' :
     destruct h as [? h]; subst.
     apply rev_eq__eq in h; auto.
   Qed.
+
+  Lemma pair_split_eq :
+    forall A B (a a' : A) (b b' : B),
+      a = a' -> b = b' -> (a, b) = (a', b').
+  Proof.
+    intros A B a a' b b' ? ?; subst; auto.
+  Qed.

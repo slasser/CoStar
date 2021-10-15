@@ -264,6 +264,47 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
     apply Gamma_as_UOT.eq_dec.
   Qed.
+
+  Lemma cast_ss_prop_eq :
+    forall (xs ys : list symbol)
+           (heq   : xs = ys)
+           (vs    : symbols_semty xs)
+           (vs'   : symbols_semty ys)
+           (heq'  : vs' = cast_ss xs ys heq vs)
+           (P     : forall (xs : list symbol) (vs : symbols_semty xs), Prop),
+      P xs vs -> P ys vs'.
+  Proof.
+    intros xs ys ? vs vs' ? P hp; subst.
+    rewrite cast_ss_refl; auto.
+  Qed.
+
+  Lemma cast_ss_ins_trans :
+    forall xs ys zs (heq : xs = zs) (heq' : ys = zs) (heq'' : xs = ys) vs,
+      cast_ss xs zs heq vs = cast_ss ys zs heq' (cast_ss xs ys heq'' vs).
+  Proof.
+    intros xs ys zs ? ? ? vs; subst.
+    repeat rewrite cast_ss_refl; auto.
+  Qed.
+
+  Lemma cast_ss_roundtrip :
+    forall xs ys (heq : xs = ys) (heq' : ys = xs) vs,
+      cast_ss ys xs heq' (cast_ss xs ys heq vs) = vs.
+  Proof.
+    intros xs ys heq heq' vs; subst.
+    repeat rewrite cast_ss_refl; auto.
+  Qed.
+
+  Lemma cast_ss_cons :
+    forall x ys zs (heq : (x :: ys) = (x :: zs)) v (vs : symbols_semty ys),
+      (exists (heq' : ys = zs),
+          cast_ss (x :: ys) (x :: zs) heq (v, vs) =
+          (v, cast_ss ys zs heq' vs)).
+  Proof.
+    intros x ys zs heq v vs.
+    pose proof heq as heq'; inv heq'.
+    exists eq_refl.
+    repeat rewrite cast_ss_refl; auto.
+  Qed.
   
   Lemma symbols_semty_inj :
     forall (ys : list symbol) (vs vs' : symbols_semty ys),
@@ -365,6 +406,102 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
         concatTuple_rec_case x xs' xs ys vs vs' concatTuple heq
     end eq_refl.
 
+  Ltac unct' :=
+    match goal with
+    | |- context[concatTuple_nil_case] => unfold concatTuple_nil_case
+    | |- context[concatTuple_rec_case] => unfold concatTuple_rec_case
+    end.
+
+  Ltac unct :=
+    unct'; unfold eq_rect_r; sis.
+
+  Lemma cast_ss_snoc :
+    forall ys zs x (heq : ys ++ [x] = zs ++ [x]) (vs : symbols_semty ys) (v : symbol_semty x),
+      (exists heq' : ys = zs,
+          cast_ss (ys ++ [x]) (zs ++ [x]) heq (concatTuple ys [x] vs (v, tt)) =
+          concatTuple zs [x] (cast_ss ys zs heq' vs) (v, tt)).
+  Proof.
+    intros ys zs x heq vs v.
+    pose proof heq as heq'.
+    apply app_inj_tail in heq'.
+    destruct heq'; subst.
+    exists eq_refl.
+    repeat rewrite cast_ss_refl; auto.
+  Qed.
+
+  (* Why does rewriting the goal not work at the end of this proof? *)
+  Lemma concatTuple_nil_r :
+    forall xs vs (heq : xs = xs ++ []),
+      concatTuple xs [] vs tt = cast_ss _ _ heq vs.
+  Proof.
+    intros xs; induction xs as [| x xs IH]; intros vs heq; sis.
+    - destruct vs.
+      rewrite cast_ss_refl; auto.
+    - destruct vs as (v, vs).
+      unfold concatTuple_rec_case.
+      unfold eq_rect_r; sis.
+      pose proof (cast_ss_cons x xs (xs ++ []) heq v vs) as hc.
+      destruct hc as [heq' heq''].
+      rewrite <- IH in heq''; auto.
+  Qed.
+
+  Lemma concatTuple_assoc :
+    forall xs ys zs (heq : (xs ++ ys) ++ zs = xs ++ ys ++ zs) vs vs' vs'',
+      concatTuple xs (ys ++ zs) vs (concatTuple ys zs vs' vs'') =
+      cast_ss ((xs ++ ys) ++ zs) (xs ++ ys ++ zs) heq (concatTuple (xs ++ ys) zs (concatTuple xs ys vs vs') vs'').
+  Proof.
+    intros xs; induction xs as [| x xs IH]; intros ys zs heq vs vs' vs''; sis.
+    - destruct vs.
+      unfold concatTuple_nil_case.
+      unfold eq_rect_r; sis.
+      rewrite cast_ss_refl; auto.
+    - destruct vs as (v, vs).
+      unfold concatTuple_rec_case.
+      unfold eq_rect_r; sis.
+      pose proof (cast_ss_cons x ((xs ++ ys) ++ zs) (xs ++ ys ++ zs) heq v
+                               (concatTuple (xs ++ ys) zs (concatTuple xs ys vs vs') vs'')) as hc.
+      destruct hc as [heq' heq''].
+      rewrite <- IH in heq''; auto.
+  Qed.
+
+  Lemma concatTuple_assoc' :
+    forall xs ys zs (heq : xs ++ ys ++ zs = (xs ++ ys) ++ zs) vs vs' vs'',
+      concatTuple (xs ++ ys) zs (concatTuple xs ys vs vs') vs'' =
+      cast_ss (xs ++ ys ++ zs) ((xs ++ ys) ++ zs) heq (concatTuple xs (ys ++ zs) vs (concatTuple ys zs vs' vs'')).
+  Proof.
+    intros xs ys zs heq vs vs' vs''.
+    assert (heq' : (xs ++ ys) ++ zs = xs ++ ys ++ zs) by apps.
+    rewrite concatTuple_assoc with (heq := heq').
+    rewrite cast_ss_roundtrip; auto.
+  Qed.
+
+  Lemma concatTuple_eq :
+    forall xs xs' ys ys' (heq : xs = xs') (heq' : ys = ys') (heq'' : xs ++ ys = xs' ++ ys') vx vx' vy vy',
+      vx' = cast_ss xs xs' heq vx
+      -> vy' = cast_ss ys ys' heq' vy
+      -> concatTuple xs' ys' vx' vy' = cast_ss _ _ heq'' (concatTuple xs ys vx vy).
+  Proof.
+    intros xs xs' ys ys' heq heq' heq'' vx vx' vy vy' h h'; subst.
+    repeat rewrite cast_ss_refl; auto.
+  Qed.
+
+  (*
+  Lemma concatTuple_app_singleton_cons_eq :
+    forall xs xs' s ys ys'
+           (heq : xs = xs')
+           (heq' : ys = ys')
+           (heq'' : (xs' ++ [s]) ++ ys' = xs ++ s :: ys)
+           vx vx' v v' vy vy',
+      vx' = cast_ss xs xs' heq vx
+      -> vy' = cast_ss ys ys' heq' vy
+      -> v' = cast_
+      -> concatTuple xs (s :: ys) vx (v, vy) = cast_ss _ _ heq'' (concatTuple (xs' ++ [s]) ys' (concatTuple xs' [s] vx' (v' ,tt)) vy').
+
+  Proof.
+    intros xs xs' s ys ys' heq heq'
+
+   *)
+  
   Definition revTuple_nil_case :
     forall (xs : list symbol)
            (vs : symbols_semty xs)
@@ -392,50 +529,158 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | x :: xs' => fun heq => revTuple_cons_case xs x xs' heq vs revTuple
     end eq_refl.
 
-  (*
-  Lemma ri :
-    forall A (l : list A),
-      l = rev (rev l).
+  Lemma revTuple_concatTuple_distr :
+    forall xs ys (heq : rev ys ++ rev xs = rev (xs ++ ys)) (vs : symbols_semty xs) (vs' : symbols_semty ys),
+      revTuple _ (concatTuple _ _ vs vs') =
+      cast_ss _ _ heq (concatTuple _ _ (revTuple _ vs') (revTuple _ vs)).
   Proof.
-    intros A l.
-    rewrite rev_involutive; auto.
+    intros xs; induction xs as [| x xs IH]; intros ys heq vs vs'; sis.
+    - destruct vs.
+      unfold revTuple_nil_case.
+      unfold concatTuple_nil_case.
+      unfold eq_rect_r; sis.
+      assert (h : rev ys = rev ys ++ []) by auto.
+      rewrite concatTuple_nil_r with (heq := h).
+      rewrite cast_ss_roundtrip; auto.
+    - destruct vs as (v, vs).
+      unfold revTuple_cons_case.
+      unfold concatTuple_rec_case.
+      unfold eq_rect_r; sis.
+      assert (h : (rev ys ++ rev xs) ++ [x] = rev ys ++ rev xs ++ [x]).
+      { rewrite <- app_assoc; auto. }
+      rewrite concatTuple_assoc with (heq := h).
+      assert (h' : (rev ys ++ rev xs) ++ [x] = rev (xs ++ ys) ++ [x]) by apps.
+      rewrite <- cast_ss_ins_trans with (heq := h').
+      pose proof cast_ss_snoc as hs.
+      specialize (hs (rev ys ++ rev xs) (rev (xs ++ ys)) x h'
+                     (concatTuple _ _ (revTuple _ vs') (revTuple _ vs)) v).
+      destruct hs as [heq' heq''].
+      rewrite  heq''.
+      rewrite <- IH; auto.
   Qed.
 
   Lemma revTuple_unit :
-    forall (xs : list symbol)
-           (x : symbol)
-           (vs : symbols_semty xs)
-           (v : symbol_semty x),
+    forall x xs (heq : x :: rev xs = rev (xs ++ [x])) v vs,
       revTuple (xs ++ [x]) (concatTuple xs [x] vs (v, tt)) =
-      (cast_ss (xs ++ [x]) (x :: rev xs) (rev_unit _ xs x) (v, revTuple xs vs).
-
-  Lemma revTuple_involutive :
-    forall xs vs,
-      revTuple (rev xs) (revTuple xs vs) = (cast_ss xs (rev (rev xs)) (ri _ xs) vs).
+      cast_ss (x :: rev xs) (rev (xs ++ [x])) heq (v, revTuple _ vs).
   Proof.
-    intros xs; induction xs as [| x xs IH]; intros vs; sis.
+    intros x xs heq v vs.
+    apply revTuple_concatTuple_distr.
+  Qed.
+  
+  Lemma revTuple_involutive :
+    forall xs (heq : xs = rev (rev xs)) (vs : symbols_semty xs),
+      revTuple _ (revTuple _ vs) = cast_ss xs (rev (rev xs)) heq vs.
+  Proof. intros xs.
+    induction xs as [| x xs IH]; intros heq vs; sis.
     - destruct vs.
-      unfold revTuple_nil_case.
-      unfold eq_rect_r; sis.
       unfold cast_ss.
       unfold eq_rect_r.
-      rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
-      apply Gamma_as_UOT.eq_dec.
-    - destruct vs.
-      specialize (IH t).
-      unfold revTuple_cons_case.
-      repeat unfold eq_rect_r; sis.
-      
-      rwerite 
-      sis.
       rewrite <- Eqdep_dec.eq_rect_eq_dec.
-      + unfold eq_sym.
-        sis.
-   *)
+      + unfold revTuple_nil_case.
+        unfold eq_rect_r.
+        rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
+        apply Gamma_as_UOT.eq_dec.
+      + apply Gamma_as_UOT.eq_dec.
+    - destruct vs.
+      unfold revTuple_cons_case.
+      unfold eq_rect_r; sis.
+      assert (heq' : x :: rev (rev xs) = rev (rev xs ++ [x])).
+      { rewrite rev_unit; auto. }
+      rewrite revTuple_unit with (xs := rev xs) (heq := heq').
+      assert (heq'' : x :: xs = x :: rev (rev xs)).
+      { rewrite rev_involutive; auto. }
+      rewrite cast_ss_ins_trans with
+          (heq := heq) (heq' := heq') (heq'' := heq'').
+      pose proof cast_ss_cons as hc.
+      specialize (hc x xs (rev (rev xs)) heq'' s t).
+      destruct hc as [heq4 heq5].
+      rewrite IH with (heq := heq4).
+      rewrite <- heq5; auto.
+  Qed.
+
+  Lemma rr_anr_expand :
+    forall A (xs : list A),
+      xs = rev (rev xs) ++ [].
+  Proof.
+    intros.
+    rew_anr.
+    rewrite rev_involutive; auto.
+  Qed.
+
+  Lemma rr_expand :
+    forall A (xs : list A),
+      xs = rev (rev xs).
+  Proof.
+    intros A xs.
+    rewrite rev_involutive; auto.
+  Qed.
+
+  Lemma anr_expand :
+    forall A (xs : list A),
+      xs = xs ++ [].
+  Proof.
+    intros; apps.
+  Qed.
+  
+  Lemma rrt_anr :
+    forall xs vs (heq : xs = rev (rev xs) ++ []),
+      concatTuple _ [] (revTuple _ (revTuple _ vs)) tt =
+      cast_ss xs (rev (rev xs) ++ []) heq vs.
+  Proof.
+    intros xs vs heq.
+    rewrite concatTuple_nil_r with (heq := anr_expand _ (rev (rev xs))).
+    rewrite revTuple_involutive with (heq := rr_expand _ xs).
+    erewrite <- cast_ss_ins_trans; eauto.
+  Qed.
   
   (* Grammar productions *)
   
   Definition production := (nonterminal * list symbol)%type.
+
+  Module Production_as_UOT <: UsualOrderedType := Pair_as_UOT NT_as_UOT Gamma_as_UOT.
+
+  (* Finite maps with productions as keys *)
+  Module PM  := FMapAVL.Make Production_as_UOT.
+  Module PMF := FMapFacts.Facts PM.
+
+  Lemma pm_mapsto_in :
+    forall (p : production)
+           (A : Type)
+           (a : A)
+           (m : PM.t A),
+      PM.MapsTo p a m -> PM.In p m.
+  Proof.
+    intros x A a m hm.
+    apply PMF.in_find_iff.
+    intros hf.
+    apply PMF.find_mapsto_iff in hm; tc.
+  Qed.
+
+  Lemma grammar_eq_key_elt_equivalence :
+    forall (A : Type),
+      Equivalence (PM.eq_key_elt (elt:=A)).
+  Proof.
+    constructor; try firstorder.
+    - intros x y z heq heq'.
+      repeat red in heq; repeat red in heq'; repeat red.
+      destruct heq as [h1 h2]; destruct heq' as [h3 h4].
+      rewrite h1; rewrite h3; rewrite h2; rewrite h4; auto.
+  Qed.
+
+  Lemma pm_InA__In :
+    forall A x ys e prs,
+      InA (PM.eq_key_elt (elt:=A)) ((x, ys), e) prs
+      -> In ((x, ys), e) prs.
+  Proof.
+    intros A x ys e prs hi; induction prs as [| ((x', ys'), e') prs Ih]; sis.
+    - inv hi.
+    - inversion hi as [pr' prs' heq | pr' prs' hi']; subst; clear hi.
+      + repeat red in heq; sis.
+        destruct heq as [heq ?]; subst.
+        inv heq; auto.
+      + right; auto.
+  Qed.
 
   Definition lhs' (p : production) : nonterminal :=
     let (x, _) := p in x.
@@ -519,7 +764,58 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
              (heq  : x = y)
              (p    : predicate_semty x) : predicate_semty y.
     subst; exact p.
-  Defined.  
+  Defined.
+
+    Lemma cast_predicate_refl :
+    forall xs (heq : xs = xs) p,
+      cast_predicate xs xs heq p = p.
+  Proof.
+    intros xs heq p.
+    unfold cast_predicate.
+    unfold eq_rect_r.
+    rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
+    apply Production_as_UOT.eq_dec.
+  Qed.
+
+  Lemma cast_predicate_prop_eq :
+    forall (x y   : production)
+           (heq   : x = y)
+           (p     : predicate_semty x)
+           (p'    : predicate_semty y)
+           (heq'  : p' = cast_predicate x y heq p)
+           (P     : forall (x : production) (p : predicate_semty x), Prop),
+      P x p -> P y p'.
+  Proof.
+    intros; subst.
+    rewrite cast_predicate_refl; auto.
+  Qed.
+
+  Lemma cast_predicate_ins_trans :
+    forall x y z (heq : x = z) (heq' : y = z) (heq'' : x = y) p,
+      cast_predicate x z heq p = cast_predicate y z heq' (cast_predicate x y heq'' p).
+  Proof.
+    intros; subst.
+    repeat rewrite cast_predicate_refl; auto.
+  Qed.
+
+  Lemma cast_predicate_roundtrip :
+    forall x y (heq : x = y) (heq' : y = x) p,
+      cast_predicate y x heq' (cast_predicate x y heq p) = p.
+  Proof.
+    intros; subst.
+    repeat rewrite cast_predicate_refl; auto.
+  Qed.
+
+  Lemma cast_predicate_eq_true :
+    forall x ys ys' (heq : ys = ys') (heq' : (x, ys) = (x, ys')) (vs : symbols_semty ys) (vs' : symbols_semty ys') (p : predicate_semty (x, ys)),
+      vs' = cast_ss ys ys' heq vs
+      -> p vs = true
+      -> (cast_predicate (x, ys) (x, ys') heq' p) vs' = true.
+  Proof.
+    intros x ys ys' heq heq' vs vs' p heq'' hp; subst.
+    rewrite cast_predicate_refl.
+    rewrite cast_ss_refl; auto.
+  Qed.
   
   (* The type of a semantic action for a production *)
   Definition action_semty (p : production) : Type :=
@@ -531,49 +827,26 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
              (f    : action_semty x) : action_semty y.
     subst; exact f.
   Defined.
-  
-  Module Production_as_UOT <: UsualOrderedType := Pair_as_UOT NT_as_UOT Gamma_as_UOT.
 
-  (* Finite maps with productions as keys *)
-  Module PM  := FMapAVL.Make Production_as_UOT.
-  Module PMF := FMapFacts.Facts PM.
-
-  Lemma pm_mapsto_in :
-    forall (p : production)
-           (A : Type)
-           (a : A)
-           (m : PM.t A),
-      PM.MapsTo p a m -> PM.In p m.
+  Lemma cast_action_refl :
+    forall x (heq : x = x) f,
+      cast_action x x heq f = f.
   Proof.
-    intros x A a m hm.
-    apply PMF.in_find_iff.
-    intros hf.
-    apply PMF.find_mapsto_iff in hm; tc.
+    intros xs heq p.
+    unfold cast_action.
+    unfold eq_rect_r.
+    rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
+    apply Production_as_UOT.eq_dec.
   Qed.
 
-  Lemma grammar_eq_key_elt_equivalence :
-    forall (A : Type),
-      Equivalence (PM.eq_key_elt (elt:=A)).
+  Lemma cast_action_eq :
+    forall x ys ys' (heq : ys = ys') (heq' : (x, ys) = (x, ys')) (vs : symbols_semty ys) (vs' : symbols_semty ys') (f : action_semty (x, ys)),
+      vs' = cast_ss ys ys' heq vs
+      -> f vs = (cast_action _ _ heq' f) vs'.
   Proof.
-    constructor; try firstorder.
-    - intros x y z heq heq'.
-      repeat red in heq; repeat red in heq'; repeat red.
-      destruct heq as [h1 h2]; destruct heq' as [h3 h4].
-      rewrite h1; rewrite h3; rewrite h2; rewrite h4; auto.
-  Qed.
-
-  Lemma pm_InA__In :
-    forall A x ys e prs,
-      InA (PM.eq_key_elt (elt:=A)) ((x, ys), e) prs
-      -> In ((x, ys), e) prs.
-  Proof.
-    intros A x ys e prs hi; induction prs as [| ((x', ys'), e') prs Ih]; sis.
-    - inv hi.
-    - inversion hi as [pr' prs' heq | pr' prs' hi']; subst; clear hi.
-      + repeat red in heq; sis.
-        destruct heq as [heq ?]; subst.
-        inv heq; auto.
-      + right; auto.
+    intros x ys ys' heq heq' vs vs' f heq''; subst.
+    rewrite cast_action_refl.
+    rewrite cast_ss_refl; auto.
   Qed.
   
   (* Grammars *)
@@ -597,38 +870,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition grammar : Type :=
     PM.t grammar_entry.
 
-  Lemma mapsto_cast :
-    forall (p p' : production)
-           (heq  : p = p')
-           (fs   : production_semty p)
-           (g    : grammar),
-      PM.MapsTo p (@existT _ _ p fs) g
-      -> PM.MapsTo p (@existT _ _ p' (cast_production_semty p p' heq fs)) g.
-  Proof.
-    intros p p' heq fs g hm; subst.
-    unfold cast_production_semty.
-    unfold eq_rect_r.
-    rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
-    apply Production_as_UOT.eq_dec.
-  Qed.
-
-  Lemma mapsto_cast' :
-    forall (x y  z : production)
-           (heq  : y = z)
-           (p    : predicate_semty y)
-           (f    : action_semty y)
-           (g    : grammar),
+  Lemma mapsto_cast  :
+    forall (g        : grammar)
+           (x x' y z : production)
+           (heq      : x = x')
+           (heq'     : y = z)
+           (p        : predicate_semty y)
+           (f        : action_semty y),
       PM.MapsTo x (@existT _ _ y (p, f)) g
-      -> PM.MapsTo x (@existT _ _ z
-                              (cast_predicate y z heq p,
-                               cast_action y z heq f)) g.
+      -> PM.MapsTo x' (@existT _ _ z (cast_predicate y z heq' p, cast_action y z heq' f)) g.
   Proof.
-    intros x y z heq p f g hm; subst.
-    unfold cast_predicate.
-    unfold cast_action.
-    repeat unfold eq_rect_r.
-    repeat rewrite <- Eqdep_dec.eq_rect_eq_dec; auto;
-    apply Production_as_UOT.eq_dec.
+    intros g x x' y z heq heq' p f hm; subst.
+    rewrite cast_predicate_refl.
+    rewrite cast_action_refl; auto.
   Qed.
     
   (* might not be necessary *)
@@ -696,6 +950,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition wf_grammar : Type :=
     {g : grammar | grammar_wf g}.
 
+  (*
   Definition cast_predicate_from_lookup :
     forall (gr   : grammar)
            (x y  : production)
@@ -707,7 +962,8 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     intros g x y p f hw hm. 
     apply hw in hm; subst; auto.
   Defined.
-
+   *)
+  
   Lemma predicate_appl_eq_cast :
     forall (x : nonterminal)
            (ys ys' : list symbol)
@@ -719,29 +975,10 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Proof.
     intros x ys ys' vs p heq heq'.
     subst.
-    unfold cast_predicate.
-    unfold eq_rect_r.
-    rewrite <- Eqdep_dec.eq_rect_eq_dec.
-    - unfold cast_ss.
-      unfold eq_rect_r.
-      rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
-      apply Gamma_as_UOT.eq_dec.
-    - apply Production_as_UOT.eq_dec.
+    rewrite cast_predicate_refl.
+    rewrite cast_ss_refl; auto.
   Qed.
-  
-  Lemma cast_predicate_refl :
-    forall gr x p p' f hw hm ,
-      cast_predicate_from_lookup gr x x p f hw hm = p'
-      -> p' = p.
-  Proof.
-    intros gr x p p' f hw hm hc.
-    unfold cast_predicate_from_lookup in hc.
-    unfold eq_rect_r in hc.
-    unfold eq_sym in hc.
-    rewrite <- Eqdep_dec.eq_rect_eq_dec in hc; auto.
-    apply PMF.eq_dec.
-  Qed.
-  
+
   Definition cast_lookup_result :
     forall (gr   : grammar)
            (p p' : production)
@@ -766,7 +1003,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     rewrite <- Eqdep_dec.eq_rect_eq_dec in hc; auto.
     apply PMF.eq_dec.
   Qed.
-    
+  
   Lemma in_find_contra :
     forall (p : production)
            (g : grammar),
@@ -2152,164 +2389,17 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     rew_anr; eauto 10.
   Qed.
 
-  Lemma svd_cast :
-    forall gr ys ys' w vs' (heq : ys' = ys),
-      sem_values_derivation gr ys w (cast_ss ys' ys heq vs')
-      -> sem_values_derivation gr ys' w vs'.
+  Lemma svd_eq :
+    forall gr xs ys w vs vs'
+           (heq  : xs = ys)
+           (heq' : vs' = cast_ss xs ys heq vs),
+      sem_values_derivation gr xs w vs
+      -> sem_values_derivation gr ys w vs'.
   Proof.
-    intros; subst; auto.
+    intros gr xs ys w vs vs' heq heq' hd.
+    eapply cast_ss_prop_eq with (vs' := vs'); eauto.
   Qed.
-
-  Lemma rev_unit' :
-    forall A (x : A) (xs : list A),
-      x :: rev xs = rev (xs ++ [x]).
-  Proof.
-    intros.
-    rewrite rev_unit; auto.
-  Qed.
-
-  Lemma cast_ss_cons :
-    forall x ys zs (heq : (x :: ys) = (x :: zs)) v (vs : symbols_semty ys),
-      (exists (heq' : ys = zs),
-          cast_ss (x :: ys) (x :: zs) heq (v, vs) =
-          (v, cast_ss ys zs heq' vs)).
-  Proof.
-    intros x ys zs heq v vs.
-    pose proof heq as heq'; inv heq'.
-    exists eq_refl.
-    repeat rewrite cast_ss_refl; auto.
-  Qed.
-
-  (*
-  Lemma cast_ss_cons' :
-    forall x xs ys (heq : x :: xs = ys ++ [x]) v vs,
-      exists (heq' : xs = ys),
-        cast_ss (x :: xs) (ys ++ [x]) heq (v, vs) =
-        (v, cast_ss xs ys heq' vs).
-cast_ss (rev (rev xs ++ [x])) (x :: xs)
-  *)
-  (*
-  Lemma bar :
-    forall x v xs (vs : symbols_semty (xs ++ [])) (heq : x :: xs ++ [] = x :: xs),
-      cast_ss (x :: xs ++ []) (x :: xs) heq (v, vs) = (v, cast_ss (xs ++ []) xs (app_nil_r xs) vs).
-  Proof.
-    intros x v xs vs heq.
-    unfold cast_ss.
-    unfold eq_rect_r.
-   *)
-
-  Lemma concatTuple_nil_r :
-    forall xs vs (heq : xs = xs ++ []),
-      concatTuple xs [] vs tt = cast_ss _ _ heq vs.
-  Admitted.
-
-  (*
-  Lemma concatTuple_nil_r :
-    forall xs vs (heq : xs ++ [] = xs),
-      cast_ss (xs ++ []) xs heq (concatTuple xs [] vs tt) = vs.
-  Proof.
-    intros xs; induction xs as [| x xs IH]; intros vs heq; sis.
-    - destruct vs.
-      unfold concatTuple_nil_case.
-      unfold eq_rect_r.
-      rewrite <- Eqdep_dec.eq_rect_eq_dec.
-      + apply cast_ss_refl.
-      + apply Gamma_as_UOT.eq_dec.
-    - destruct vs as (v, vs).
-      unfold concatTuple_rec_case.
-      unfold eq_rect_r.
-      rewrite <- Eqdep_dec.eq_rect_eq_dec.
-      + pose proof cast_ss_cons as hc.
-        specialize (hc x (xs ++ []) xs heq v (concatTuple xs [] vs tt)).
-        destruct hc as [h h'].
-        rewrite IH in h'; auto.
-      + apply Gamma_as_UOT.eq_dec.
-  Qed.
-   *)
   
-  Lemma revTuple_concatTuple_distr :
-    forall xs ys (heq : rev (xs ++ ys) = (rev ys ++ rev xs)) (vs : symbols_semty xs) (vs' : symbols_semty ys),
-      cast_ss (rev (xs ++ ys)) (rev ys ++ rev xs) heq (revTuple _ (concatTuple _ _ vs vs')) =
-      concatTuple _ _ (revTuple _ vs') (revTuple _ vs).
-  Proof.
-    intros xs; induction xs as [| x xs IH]; intros ys heq vs vs'; destruct vs; sis.
-    - unfold concatTuple_nil_case.
-      unfold revTuple_nil_case. 
-      unfold eq_rect_r; sis.
-      rewrite concatTuple_nil_r with (heq := heq); auto.
-    - unfold revTuple_cons_case.
-      unfold eq_rect_r; sis.
-      pose proof heq as heq'.
-      rewrite app_assoc in heq'.
-      apply rev_heads_eq_tails_eq__lists_eq in heq'.
-      destruct heq' as [_ heq'].
-      assert (aa' : forall A (xs ys zs : list A),
-                 (xs ++ ys) ++ zs = xs ++ ys ++ zs).
-      { intros. rewrite app_assoc. auto. }
-      assert (assoc : forall xs ys zs vs vs' vs'',
-                 concatTuple xs (ys ++ zs) vs (concatTuple ys zs vs' vs'') = cast_ss ((xs ++ ys) ++ zs) (xs ++ (ys ++ zs)) (aa' _ _ _ _) (concatTuple (xs ++ ys) zs (concatTuple xs ys vs vs') vs'')).
-      { admit. }
-  Abort.
-
-  Lemma revTuple_unit :
-    forall x xs (heq : x :: rev xs = rev (xs ++ [x])) v vs,
-      revTuple (xs ++ [x]) (concatTuple xs [x] vs (v, tt)) =
-      cast_ss (x :: rev xs) (rev (xs ++ [x])) heq (v, revTuple _ vs).
-  Proof.
-    intros x xs heq v vs.
-    unfold cast_ss.
-    unfold eq_rect_r.
-    sis.
-  Admitted.
-
-  Lemma rev_involutive :
-    forall A (xs : list A),
-      rev (rev xs) = xs.
-  Proof.
-    intros A xs; induction xs as [| x xs IH].
-    - sis. auto.
-    - sis.
-      rewrite rev_unit.
-  Admitted.
-  
-  Lemma revTuple_involutive :
-    forall xs (heq : xs = rev (rev xs)) (vs : symbols_semty xs),
-      revTuple _ (revTuple _ vs) = cast_ss xs (rev (rev xs)) heq vs.
-  Proof. intros xs.
-    induction xs as [| x xs IH]; intros heq vs; sis.
-    - destruct vs.
-      unfold cast_ss.
-      unfold eq_rect_r.
-      rewrite <- Eqdep_dec.eq_rect_eq_dec.
-      + unfold revTuple_nil_case.
-        unfold eq_rect_r.
-        rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
-        apply Gamma_as_UOT.eq_dec.
-      + apply Gamma_as_UOT.eq_dec.
-    - destruct vs.
-      unfold revTuple_cons_case.
-      unfold eq_rect_r; sis.
-      assert (x :: rev (rev xs) = rev (rev xs ++ [x])).
-      { rewrite rev_unit. auto. }
-      rewrite revTuple_unit with (xs := rev xs) (heq := H).
-      assert (H' : x :: xs = x :: rev (rev xs)).
-      { rewrite rev_involutive. auto. }
-      assert (cast_ss (x :: xs) (rev (rev xs ++ [x])) heq (s, t) =
-              cast_ss (x :: rev (rev xs)) (rev (rev xs ++ [x])) H (cast_ss (x :: xs) (x :: rev (rev xs)) H' (s, t))).
-      { assert (foo : forall xs ys zs (heq : xs = zs) (heq' : ys = zs) (heq'' : xs = ys) vs,
-                   cast_ss xs zs heq vs = cast_ss ys zs heq' (cast_ss xs ys heq'' vs)).
-        { intros; subst.
-          repeat rewrite cast_ss_refl; auto. }
-        rewrite foo with (heq := heq) (heq' := H) (heq'' := H').
-        auto. }
-      rewrite H0.
-      pose proof cast_ss_cons as hc.
-      specialize (hc x xs (rev (rev xs)) H' s t).
-      destruct hc as [heq' heq''].
-      rewrite IH with (heq := heq').
-      rewrite <- heq''. auto.
-  Qed.
-
   Inductive tree_corresp_value (g : grammar) :
     forall (s : symbol), list token -> tree -> symbol_semty s -> Prop :=
   | Leaf_corresp :

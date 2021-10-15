@@ -193,6 +193,15 @@ Module ParserSoundFn (Import D : Defs.T).
     | _ => True
     end.
 
+  Lemma lfas_replace_head :
+    forall gr ys x zs vs v v' vs'' frs w,
+      lower_frames_accept_suffix gr (ys ++ NT x :: zs) (concatTuple ys (NT x :: zs) vs (v, vs'')) frs w
+      -> v = v'
+      -> lower_frames_accept_suffix gr (ys ++ NT x :: zs) (concatTuple ys (NT x :: zs) vs (v', vs'')) frs w.
+  Proof.
+    intros; subst; auto.
+  Qed.
+
   Definition stack_accepts_suffix (gr : grammar) (sk : parser_stack) (w : list token) : Prop :=
     match sk with
     | (Fr pre vs_pre suf, frs) =>
@@ -242,7 +251,35 @@ Module ParserSoundFn (Import D : Defs.T).
   Ltac inv_ufd hu  hv ha hu' hi hvs hpu :=
     inversion hu as [ ? ? ? ? ? hvs ha
                     | ? ? ? ? ? ? ? ? ? ? ? ? ? heq heq' hu' hi hvs ha hpu]; subst; clear hu.
-    
+
+  Ltac t :=
+    match goal with
+    | |- lower_frames_accept_suffix _ _ (concatTuple _ _ _ ((cast_action _ _ _ _) _, _)) _ _ =>
+      eapply lfas_replace_head; eauto
+    | |- concatTuple ?xs ?ys ?vx ?vy = cast_ss (?xs' ++ ?ys) (?xs ++ ?ys) ?pf (concatTuple ?xs' ?ys ?vx' ?vy') =>
+      eapply concatTuple_eq with (heq := app_inv_tail  _ _ _ pf)
+    | |- concatTuple ?pre (?s :: ?suf) _ _ = cast_ss _ _ _ (concatTuple ?pre' ([?s] ++ ?suf) _ _) =>
+      eapply concatTuple_eq
+    | |- context[cast_ss ?xs ?xs _ _] =>
+      rewrite cast_ss_refl
+    | |- (?a, ?b) = (?a', ?b') =>
+      apply pair_split_eq
+    | |- ?f ?vs = (cast_action _ _ _ ?f) ?vs' =>
+      eapply cast_action_eq
+    | |- context[concatTuple (rev (rev ?xs)) []] =>
+      erewrite rrt_anr
+    | |- (cast_predicate _ _ _ _) _ = true =>
+      eapply cast_predicate_eq_true; eauto
+    | |- context[concatTuple (_ ++ [_]) _ (concatTuple _ [_] _ _) _] => erewrite concatTuple_assoc'
+    | |- context[cast_ss _ _ _ (cast_ss _ _ _ _)] =>
+      erewrite <- cast_ss_ins_trans
+    | |- context[revTuple _ (revTuple _ _)] =>
+      erewrite revTuple_involutive
+    | |- PM.MapsTo _ (@existT _ _ _ (cast_predicate _ _ _ _, cast_action _ _ _ _)) _ =>
+      eapply mapsto_cast; eauto
+    end.
+
+  Ltac t' := repeat t.
   
   Lemma return_preserves_unique_frames_derivation :
     forall gr hw ce cr cr' frs pre pre' vs vs' x suf p f wpre wsuf,
@@ -293,20 +330,22 @@ Module ParserSoundFn (Import D : Defs.T).
             eapply hpu with (vs'' := revTuple _ sts) in hi'; eauto.
             - rewrite rev_involutive in hi'.
               rew_anr; auto.
-            - admit.
+            - rew_anr.
+              rewrite revTuple_involutive with (heq := H).
+              eapply svd_eq with (vs := sts) (heq := H); eauto.
             - destruct hr as [w1 [w2 [vs_suf [? [hd'' ?]]]]]; subst.
               exists []; exists w1; exists tt.
               rewrite app_nil_r; sis.
               repeat split; auto.
               exists w1; exists []; exists vs_suf.
-              assert ((x, ys) = (x, rev (rev ys) ++ [])) by admit.
+              assert ((x, ys) = (x, rev (rev ys) ++ [])).
+              { rewrite <- H; auto. }
               exists (cast_predicate (x, ys) (x, rev (rev ys) ++ []) H3 p').
               exists (cast_action (x, ys) (x, rev (rev ys) ++ []) H3 f').
               rewrite app_nil_r; repeat split; auto.
-              + eapply mapsto_cast'; eauto.
-                rewrite rev_involutive. rew_anr; auto.
+              + eapply mapsto_cast; eauto.
               + erewrite predicate_appl_eq_cast
-                  with (heq := H3) (heq' := H0) in H1.
+                  with (heq := H3) (heq' := H) in H1.
                 rewrite <- H1.
                 f_equal.
                 assert (anr' : forall A (xs : list A),
@@ -316,7 +355,8 @@ Module ParserSoundFn (Import D : Defs.T).
                                    (vs : symbols_semty xs),
                            concatTuple xs [] vs tt =
                            cast_ss xs (xs ++ []) (anr' _ xs) vs).
-                { admit. }
+                { intros xs vs0.
+                  apply concatTuple_nil_r. }
                 rewrite foo.
                 assert (ri' : forall A (xs : list A),
                            xs = rev (rev xs)).
@@ -324,7 +364,8 @@ Module ParserSoundFn (Import D : Defs.T).
                 assert (bar : forall xs vs,
                            revTuple (rev xs) (revTuple xs vs) =
                            cast_ss xs (rev (rev xs)) (ri' _ xs) vs).
-                { admit. }
+                { intros.
+                  apply revTuple_involutive. }
                 rewrite bar.
                 assert (baz : forall xs ys zs vs
                                      (heq : xs = ys)
@@ -340,15 +381,20 @@ Module ParserSoundFn (Import D : Defs.T).
                 apply baz.
           }
           subst.
-          eapply ha with (vs'' := revTuple _ sts) in heq; 
+          assert (foo : rev (rev (rev pre')) = rev pre').
+          { rewrite rev_involutive; auto. }
+          eapply ha with (vs'' := revTuple _ sts)
+                         (heq  := foo) in heq; 
             try rewrite rev_involutive in *; eauto.
           -- destruct heq as (? & ? & ?); subst; auto.
              repeat split; auto.
              unfold revTuple_cons_case.
              unfold eq_rect_r.
-             repeat rewrite <- Eqdep_dec.eq_rect_eq_dec.
+             repeat rewrite <- Eqdep_dec.eq_rect_eq_dec;
+               try apply Gamma_as_UOT.eq_dec.
              destruct v''.
-             assert (foo : f' = f).
+             symmetry.
+             assert (bar : f' = f).
              { eapply PMF.MapsTo_fun in hf; eauto.
                apply Eqdep_dec.inj_pair2_eq_dec in hf.
                - inv hf; auto.
@@ -357,81 +403,399 @@ Module ParserSoundFn (Import D : Defs.T).
              unfold revTuple_cons_case in heq'.
              unfold eq_rect_r in heq'; sis.
              rewrite heq'.
+             assert (revTuple pre' vs' = sts).
+             { rewrite <- H4.
+               pose proof foo as foo'.
+               symmetry in foo'.
+               rewrite revTuple_involutive with (heq := foo').
+               rewrite cast_ss_roundtrip; auto. }
+             rewrite H.
+             assert (bar : forall xs ys zs vs vs' vs''
+                                  (heq : ys ++ zs = xs ++ zs)
+                                  (heq' : ys = xs),
+                        vs = (cast_ss ys xs heq' vs')
+                        -> concatTuple xs zs vs vs'' =
+                           cast_ss (ys ++ zs) (xs ++ zs) heq (concatTuple ys zs vs' vs'')).
+             { intros xs ys zs v1 v2 v3 ? ? ?; subst.
+               repeat rewrite cast_ss_refl; auto. }
+             pose proof H' as H''.
+             rewrite rev_involutive in H''.
+             eapply bar with (heq' := H'').
+             clear ha. clear ha'. clear hpu.
+             assert (rev pre'' = rev (rev (rev pre''))).
+             { rewrite rev_involutive; auto. }
+             erewrite cast_ss_ins_trans with
+                 (ys := rev (rev (rev pre'')))
+                 (heq := H'')
+                 (heq' := H')
+                 (heq'' := H3).
              rewrite <- H2.
-             rewrite <- H4.
-             admit.
-             apply Gamma_as_UOT.eq_dec.
-             apply Gamma_as_UOT.eq_dec.
-          -- admit.
+             erewrite revTuple_involutive; eauto.
+          -- assert (rev pre' = rev (rev (rev pre'))).
+             { rewrite rev_involutive; auto. }
+             rewrite revTuple_involutive with (heq := H).
+             eapply svd_eq; eauto. 
           -- exists []; exists wsuf'; exists tt.
              repeat split; auto.
              destruct hr as [w1 [w2 [vs_suf [? [? ?]]]]]; subst.
              exists w1; exists []; exists vs_suf.
-             assert (foo : (x, rev pre') = (x, rev (rev (rev pre')) ++ [])).
+             assert (foo' : (x, rev pre') = (x, rev (rev (rev pre')) ++ [])).
              { rewrite rev_involutive. apps. }
-             exists (cast_predicate (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo p').
-             exists (cast_action (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo f').
+             exists (cast_predicate (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo' p').
+             exists (cast_action (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo' f').
              repeat split; auto.
-             ++ eapply mapsto_cast'.
-                rewrite rev_involutive.
-                apps.
-             ++ pose proof foo as foo'.
-                symmetry in foo'.
+             ++ eapply mapsto_cast with (heq' := foo') in hi'; eauto. 
+             ++ pose proof foo' as foo''.
+                symmetry in foo''.
                 assert (bar : rev (rev (rev pre')) ++ [] = rev pre').
                 { rewrite rev_involutive.
                   apps. }
-                erewrite predicate_appl_eq_cast with (ys' := rev pre') (heq := foo') (heq' := bar).
-                admit.
-        * subst.
-          assert (foo : forall gr ys w vs,
-                     sem_values_derivation gr ys w vs
-                     -> sem_values_derivation gr (rev (rev ys)) w (revTuple _ (revTuple _ vs))).
-          { admit. }
-          apply foo. auto.
+                erewrite predicate_appl_eq_cast with (ys' := rev pre') (heq := foo'') (heq' := bar).
+                assert (bar' : rev pre' = rev (rev (rev pre'))).
+                { rewrite rev_involutive; auto. }
+                rewrite revTuple_involutive with (heq := bar').
+                assert (rev (rev (rev pre')) = rev (rev (rev pre')) ++ []).
+                { rewrite app_nil_r; auto. }
+                rewrite concatTuple_nil_r with (heq := H).
+                assert (bar'' : rev (rev (rev pre')) = rev pre').
+                { rewrite <- bar'; auto. }
+                rewrite <- cast_ss_ins_trans with (heq := bar'').
+                rewrite cast_ss_roundtrip.
+                rewrite <- cast_predicate_ins_trans with (heq := eq_refl).
+                rewrite cast_predicate_refl; auto.
+        * assert (rev pre'' = rev (rev (rev pre''))).
+          { rewrite rev_involutive; auto. }
+          rewrite revTuple_involutive with (heq := H).
+          eapply svd_eq; eauto.
         * destruct hr as [w1 [w2 [vs_suf [? [? ?]]]]]; subst.
           exists (w' ++ w1); exists []; exists (f' sts, vs_suf).
           repeat split.
           -- apps.
           -- constructor; auto.
              econstructor; eauto.
-    - 
-          exists w'; exists []; 
-                unfold cast_predicate.
-                repeat unfold eq_rect_r.
-                
-                sy
-              exists (cast_action (x, ys) (x, rev (rev ys) ++ []) H3 f').
-             
-                  
-
-             assert (foo : forall xs xs' ys ys' (heq : xs ++ ys = xs' ++ ys') vs ws,
-                        cast_ss (xs ++ ys) (xs' ++ ys') heq (concatTuple xs ys vs ws) = concatTuple xs' ys' vs' ws').
-             assert (foo : forall xs 
-             unfold revTuple_cons_case in heq'.
-             unfold eq_rect_r in heq'.
-             sis.
-             rewrite heq'.
-             rewrite <- H4.
-
-             { 
-             unfold cast_ss.
-             unfold eq_rect_r.
-             rewrite <- Eqdep_dec.eq_rect_eq_dec.
-             
-             apply H4.
-          eapply H1.
-                eauto.
-              exists []; exists wsuf'; exists tt.
+    - inv heq'; ss_inj.
+      rewrite <- app_assoc.
+      eapply UFD_upper with (pre' := NT x :: pre); eauto; sis; apps.
+      + apply sem_values_derivation_app; auto.
+        rew_nil_r wmid.
+        econstructor; eauto.
+      + intros wpre' wsuf' pre'' v'' h heq hd hr; subst; sis.
+        destruct pre''; try (pose proof h as h'; apply app_cons_not_nil in h'; destruct h').
+        sis.
+        pose proof h as h'.
+        eapply rev_heads_eq_tails_eq__lists_eq
+          with (xs := rev pre'') (x := s) (ys := rev pre) (y := NT x) in h'.
+        destruct h'; subst.
+        apply svd_split in hd.
+        destruct hd as (w & w' & v''' & v'''' & ? & heq' & hd & hd'); subst.
+        repeat rewrite <- app_assoc in heq.
+        apply svd_singleton_nt in hd'.
+        destruct hd' as (v & ys & sts & p' & f' & ? & hi'' & hd' & ? & ?); subst.
+        assert (H' : rev (rev (rev pre'')) = rev pre).
+        { rewrite rev_involutive; auto. }
+        eapply ha' with (vs'' := revTuple _ v''')
+                        (heq := H') in heq; 
+          try rewrite rev_involutive in *; subst; eauto.
+        * destruct heq as (? & heq & ?); subst.
+          assert (ys = rev pre').
+          { rewrite <- heq in hpu.
+            pose proof hi'' as hm.
+            apply pm_mapsto_in in hi''.
+            assert (ys = rev (rev ys) ++ []).
+            { rewrite rev_involutive.
+              apps. }
+            rewrite H in hi''.
+            eapply hpu with (vs'' := revTuple _ sts) in hi''; eauto.
+            - rewrite rev_involutive in hi''.
+              rew_anr; auto.
+            - rew_anr.
+              rewrite revTuple_involutive with (heq := H).
+              eapply svd_eq with (vs := sts) (heq := H); eauto.
+            - destruct hr as [w1 [w2 [vs_suf [? [hd'' ?]]]]]; subst.
+              exists []; exists (w1 ++ w2); exists tt; sis.
               repeat split; auto.
-            apply gamma_recognize_app; auto.
-            eapply gamma_derivation__gamma_recognize; eauto. }
+              exists w1; exists w2; exists vs_suf.
+              assert ((x, ys) = (x, rev (rev ys) ++ [])).
+              { rewrite <- H; auto. }
+              exists (cast_predicate (x, ys) (x, rev (rev ys) ++ []) H3 p').
+              exists (cast_action (x, ys) (x, rev (rev ys) ++ []) H3 f').
+              repeat split; auto.
+              + eapply mapsto_cast; eauto.
+              + erewrite predicate_appl_eq_cast
+                  with (heq := H3) (heq' := H) in H1.
+                rewrite <- H1.
+                f_equal.
+                assert (anr' : forall A (xs : list A),
+                           xs = xs ++ []).
+                { intros. rewrite app_nil_r; auto. }
+                assert (foo : forall (xs : list symbol)
+                                   (vs : symbols_semty xs),
+                           concatTuple xs [] vs tt =
+                           cast_ss xs (xs ++ []) (anr' _ xs) vs).
+                { intros xs vs1.
+                  apply concatTuple_nil_r. }
+                rewrite foo.
+                assert (ri' : forall A (xs : list A),
+                           xs = rev (rev xs)).
+                { intros. rewrite rev_involutive. auto. }
+                assert (bar : forall xs vs,
+                           revTuple (rev xs) (revTuple xs vs) =
+                           cast_ss xs (rev (rev xs)) (ri' _ xs) vs).
+                { intros.
+                  apply revTuple_involutive. }
+                rewrite bar.
+                assert (baz : forall xs ys zs vs
+                                     (heq : xs = ys)
+                                     (heq' : ys = zs)
+                                     (heq'' : xs = zs),
+                           cast_ss ys zs heq' (cast_ss xs ys heq vs) = cast_ss xs zs heq'' vs).
+                { intros a b c v ? ? ?; subst.
+                  unfold cast_ss.
+                  unfold eq_rect_r.
+                  repeat rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
+                  apply Gamma_as_UOT.eq_dec.
+                  apply Gamma_as_UOT.eq_dec. }
+                apply baz.
+              + destruct H4 as [w3 [w4 [vs_suf' [p'' [f'' [? [hd''' [hm'' [hp'' ?]]]]]]]]]; subst.
+                exists w3; exists w4; exists vs_suf'.
+                assert (qux : (x0, (rev pre'' ++ [NT x]) ++ suf) =
+                              (x0, rev pre ++ NT x :: suf)).
+                { rewrite <- app_assoc.
+                  rewrite H0; sis; auto. }
+                exists (cast_predicate _ _ qux p'').
+                exists (cast_action _ _ qux f'').
+                repeat split; auto.
+                * eapply mapsto_cast with (heq' := qux) in hm''; eauto.
+                * assert (b : (rev pre'' ++ [NT x]) ++ suf =
+                              rev pre ++ NT x :: suf).
+                  { inv qux; auto. }
+                  eapply cast_predicate_eq_true with (heq := b); eauto.
+                  rewrite heq'.
+                  assert (c : rev pre'' ++ [NT x] ++ suf = (rev pre'' ++ [NT x]) ++ suf) by apps.
+                  rewrite concatTuple_assoc' with (heq := c); sis.
+                  assert (d : rev pre'' ++ NT x :: suf =
+                              rev pre   ++ NT x :: suf).
+                  { rewrite H0; auto. }
+                  rewrite <- cast_ss_ins_trans with (heq := d).
+                  unfold concatTuple_rec_case.
+                  unfold eq_rect_r; sis.
+                  unfold concatTuple_nil_case.
+                  unfold eq_rect_r; sis.
+                  eapply concatTuple_eq with (heq := H0) (heq' := eq_refl).
+                  -- rewrite <- H2.
+                     rewrite revTuple_involutive with (heq := rr_expand _ _).
+                     erewrite <- cast_ss_ins_trans; eauto.
+                  -- apply pair_split_eq; auto.
+                     symmetry.
+                     eapply cast_action_eq with (heq := H).
+                     erewrite rrt_anr; eauto.
+                * eapply lfas_replace_head; eauto.
+                  clear H5.
+                  clear hpu.
+                  clear ha ha'.
+                  assert (qux' : (rev pre'' ++ [NT x]) ++ suf =
+                                 rev pre ++ NT x :: suf).
+                  { inv qux; auto. }
+                  apply cast_action_eq with (heq := qux').
+                  rewrite heq'.
+                  assert (b : rev pre'' ++ [NT x] ++ suf =
+                              (rev pre'' ++ [NT x]) ++ suf) by apps.
+                  rewrite concatTuple_assoc' with (heq := b).
+                  assert (c : rev pre'' ++ [NT x] ++ suf =
+                              rev pre ++ NT x :: suf) by apps.
+                  rewrite <- cast_ss_ins_trans with (heq := c); sis.
+                  unfold concatTuple_rec_case.
+                  unfold eq_rect_r; sis.
+                  unfold concatTuple_nil_case.
+                  unfold eq_rect_r; sis.
+                  apply concatTuple_eq with
+                      (heq := H0)
+                      (heq' := eq_refl).
+                  -- rewrite <- H2.
+                     rewrite revTuple_involutive with (heq := rr_expand _ _).
+                     erewrite <- cast_ss_ins_trans; eauto.
+                  -- rewrite cast_ss_refl.
+                     symmetry.
+                     rewrite rrt_anr with (heq := rr_anr_expand _ _).
+                     apply pair_split_eq; auto.
+                     apply cast_action_eq with (heq := rr_anr_expand _ _).
+                     auto.
+          }
           subst.
-          eapply ha with (v'' := rev sts) in heq; 
+          assert (foo : rev (rev (rev pre')) = rev pre').
+          { rewrite rev_involutive; auto. }
+          eapply ha with (vs'' := revTuple _ sts)
+                         (heq  := foo) in heq; 
             try rewrite rev_involutive in *; eauto.
-          destruct heq as (? & ? & ?); subst; auto.
-        * repeat (econstructor; eauto).
-          eapply gamma_derivation__gamma_recognize; eauto.
-        
+          -- destruct heq as (? & ? & ?); subst; auto.
+             repeat split; auto.
+             unfold revTuple_cons_case.
+             unfold eq_rect_r.
+             repeat rewrite <- Eqdep_dec.eq_rect_eq_dec;
+               try apply Gamma_as_UOT.eq_dec.
+             destruct v''.
+             symmetry.
+             assert (bar : f' = f).
+             { eapply PMF.MapsTo_fun in hf; eauto.
+               apply Eqdep_dec.inj_pair2_eq_dec in hf.
+               - inv hf; auto.
+               - apply Production_as_UOT.eq_dec. }
+             subst.
+             unfold revTuple_cons_case in heq'.
+             unfold eq_rect_r in heq'; sis.
+             rewrite heq'.
+             assert (f (revTuple pre' vs') = f sts).
+             { rewrite <- H4.
+               pose proof foo as foo'.
+               symmetry in foo'.
+               rewrite revTuple_involutive with (heq := foo').
+               rewrite cast_ss_roundtrip; auto. }
+             rewrite H.
+             assert (bar : forall xs ys zs vs vs' vs''
+                                  (heq : ys ++ zs = xs ++ zs)
+                                  (heq' : ys = xs),
+                        vs = (cast_ss ys xs heq' vs')
+                        -> concatTuple xs zs vs vs'' =
+                           cast_ss (ys ++ zs) (xs ++ zs) heq (concatTuple ys zs vs' vs'')).
+             { intros xs ys zs v1 v2 v3 ? ? ?; subst.
+               repeat rewrite cast_ss_refl; auto. }
+             pose proof H' as H''.
+             rewrite rev_involutive in H''.
+             eapply bar with (heq' := H'').
+             clear ha. clear ha'. clear hpu.
+             assert (rev pre'' = rev (rev (rev pre''))).
+             { rewrite rev_involutive; auto. }
+             erewrite cast_ss_ins_trans with
+                 (ys := rev (rev (rev pre'')))
+                 (heq := H'')
+                 (heq' := H')
+                 (heq'' := H3).
+             rewrite <- H2.
+             erewrite revTuple_involutive; eauto.
+          -- assert (rev pre' = rev (rev (rev pre'))).
+             { rewrite rev_involutive; auto. }
+             rewrite revTuple_involutive with (heq := H).
+             eapply svd_eq; eauto. 
+          -- exists []; exists wsuf'; exists tt.
+             repeat split; auto.
+             destruct hr as [w1 [w2 [vs_suf [? [? ?]]]]]; subst.
+             destruct H4 as [w3 [w4 [vs_suf' [p'' [f'' [? [? [? [? ?]]]]]]]]].
+             exists w1; exists w2; exists vs_suf.
+             assert (foo' : (x, rev pre') = (x, rev (rev (rev pre')) ++ [])).
+             { rewrite rev_involutive. apps. }
+             exists (cast_predicate (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo' p').
+             exists (cast_action (x, rev pre') (x, rev (rev (rev pre')) ++ []) foo' f').
+             repeat split; auto.
+             ++ eapply mapsto_cast; eauto.
+             ++ pose proof foo' as foo''.
+                symmetry in foo''.
+                assert (bar : rev (rev (rev pre')) ++ [] = rev pre').
+                { rewrite rev_involutive.
+                  apps. }
+                erewrite predicate_appl_eq_cast with (ys' := rev pre') (heq := foo'') (heq' := bar).
+                rewrite <- cast_predicate_ins_trans with
+                    (heq := eq_refl).
+                rewrite cast_predicate_refl.
+                assert (rev pre' = rev (rev (rev pre'))).
+                { rewrite rev_involutive; auto. }
+                rewrite revTuple_involutive with (heq := H8).
+                assert (rev (rev (rev pre')) = rev (rev (rev pre')) ++ []).
+                { rew_anr; auto. }
+                rewrite concatTuple_nil_r with (heq := H9).
+                assert (rev (rev (rev pre')) = rev pre').
+                { rewrite rev_involutive; auto. }
+                rewrite <- cast_ss_ins_trans with (heq := H10).
+                rewrite cast_ss_roundtrip; auto.
+             ++ exists w3; exists w4; exists vs_suf'.
+                assert (a : (x0, (rev pre'' ++ [NT x]) ++ suf) =
+                            (x0, rev pre ++ NT x :: suf)).
+                { rewrite H0. apps. }
+                exists (cast_predicate _ _ a p'').
+                exists (cast_action _ _ a f''). 
+                repeat split; auto.
+                ** eapply mapsto_cast with (heq' := a) in H5; eauto.
+                ** assert (b : (rev pre'' ++ [NT x ]) ++ suf =
+                               rev pre ++ NT x :: suf).
+                   { inv a; auto. }
+                   eapply cast_predicate_eq_true with (heq := b); eauto.
+                   rewrite heq'.
+                   rewrite concatTuple_assoc' with (heq := app_assoc _ _ _); sis.
+                   unfold concatTuple_rec_case.
+                   unfold eq_rect_r; sis.
+                   unfold concatTuple_nil_case.
+                   unfold eq_rect_r; sis.
+                   assert (c : rev pre'' ++ NT x :: suf =
+                               rev pre ++ NT x :: suf).
+                   { rewrite <- b; apps. }
+                   erewrite <- cast_ss_ins_trans with (heq := c).
+                   eapply concatTuple_eq with
+                       (heq := H0)
+                       (heq' := eq_refl).
+                   --- rewrite <- H2.
+                       symmetry.
+                       assert (d : rev pre'' = rev (rev (rev pre''))).
+                       { rewrite rev_involutive; auto. }
+                       rewrite revTuple_involutive with (heq := d).
+                       erewrite <- cast_ss_ins_trans; eauto.
+                   --- apply pair_split_eq; auto.
+                       symmetry.
+                       eapply cast_action_eq with (heq := rr_anr_expand _ _).
+                       erewrite rrt_anr; eauto.
+                ** eapply lfas_replace_head; eauto.
+                   assert (b : (rev pre'' ++ [NT x ]) ++ suf =
+                               rev pre ++ NT x :: suf).
+                   { inv a; auto. }
+                   eapply cast_action_eq with (heq := b); eauto.
+                   rewrite heq'.
+                   rewrite concatTuple_assoc' with (heq := app_assoc _ _ _); sis.
+                   unfold concatTuple_rec_case.
+                   unfold eq_rect_r; sis.
+                   unfold concatTuple_nil_case.
+                   unfold eq_rect_r; sis.
+                   assert (c : rev pre'' ++ NT x :: suf =
+                               rev pre ++ NT x :: suf).
+                   { rewrite <- b; apps. }
+                   erewrite <- cast_ss_ins_trans with (heq := c).
+                   t.
+                   --- rewrite <- H2.
+                       erewrite revTuple_involutive.
+                       erewrite <- cast_ss_ins_trans; eauto.
+                   --- symmetry.
+                       t'; eauto.
+        * assert (rev pre'' = rev (rev (rev pre''))).
+          { rewrite rev_involutive; auto. }
+          rewrite revTuple_involutive with (heq := H).
+          eapply svd_eq; eauto.
+        * destruct hr as [w1 [w2 [vs_suf [? [? ?]]]]].
+          destruct H3 as [w3 [w4 [? [? [? [? [? [? [? ?]]]]]]]]]; subst.
+          exists (w' ++ w1); exists (w3 ++ w4); eexists.
+          repeat split; auto.
+          -- rewrite <- app_assoc.
+              rew_anr; auto.
+          -- constructor; eauto.
+          -- exists w3; exists w4; eexists.
+             assert (a : (x0, (rev pre'' ++ [NT x]) ++ suf) =
+                         (x0, rev (rev (rev pre'')) ++ NT x :: suf)).
+             { rewrite rev_involutive. apps. }
+             exists (cast_predicate _ _ a x2).
+             exists (cast_action _ _ a x3).
+             repeat split; auto.
+             ++ eauto.
+             ++ t.
+             ++ t.
+                rewrite heq'.
+                t'; eauto; sis.
+                repeat unct.
+                t'; auto.
+             ++ t'.
+                rewrite heq'.
+                t'; eauto; sis.
+                repeat unct.
+                t; auto.
+                Unshelve.
+                all: try auto.
+                all: repeat rewrite rev_involutive; apps.
+  Qed.
     
   
   Inductive unique_frames_derivation (g : grammar) :
