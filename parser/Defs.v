@@ -80,6 +80,22 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | right _ => false
     end.
 
+  Lemma t_semty_inj :
+    forall (a : terminal) (v v' : t_semty a),
+      @existT _ _ a v = @existT _ _ a v'
+      -> v = v'.
+  Proof.
+    intros a v v' heq.
+    apply Eqdep_dec.inj_pair2_eq_dec in heq; auto.
+    apply t_eq_dec.
+  Qed.
+
+  Ltac t_inj :=
+    match goal with
+    | H : @existT _ _ ?a ?v = @existT _ _ ?a ?v' |- _ =>
+      apply t_semty_inj in H; subst
+    end.
+
   (* Finite sets of nonterminals *)
 
   Module NtSet      := FSetList.Make NT_as_UOT.
@@ -305,6 +321,15 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     exists eq_refl.
     repeat rewrite cast_ss_refl; auto.
   Qed.
+
+  Lemma cast_elim_common :
+    forall xs ys zs (heq : xs = zs) (heq' : ys = zs) (heq'' : xs = ys) vs vs',
+      vs' = cast_ss _ _ heq'' vs
+      -> cast_ss _ _ heq vs = cast_ss _ _ heq' vs'.
+  Proof.
+    intros xs ys zs heq heq' heq'' vs vs' heq'''; subst.
+    repeat rewrite cast_ss_refl; auto.
+  Qed.
   
   Lemma symbols_semty_inj :
     forall (ys : list symbol) (vs vs' : symbols_semty ys),
@@ -321,53 +346,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | H : @existT (list symbol) _ ?ys ?vs = @existT (list symbol) _ ?ys ?vs' |- _ =>
       apply symbols_semty_inj in H; subst
     end.
-
-  (*
-  Definition revTuple'_nil_case :
-    forall (xs ys : list symbol)
-           (ys_vs : symbols_semty ys)
-           (heq   : xs = []),
-      symbols_semty (rev xs ++ ys).
-    intros; subst; auto.
-  Defined.
-
-  Definition revTuple'_rec_case :
-    forall (x         : symbol)
-           (xs' xs ys : list symbol)
-           (xs_vs     : symbols_semty xs)
-           (ys_vs     : symbols_semty ys)
-           (f         : (forall (xs ys : list symbol),
-                            symbols_semty xs
-                            -> symbols_semty ys
-                            -> symbols_semty (rev xs ++ ys)))
-           (heq       : xs = x :: xs'),
-      symbols_semty (rev xs ++ ys).
-    intros x xs' xs ys xs_vs ys_vs f heq; subst; sis.
-    destruct xs_vs as (x_v, xs'_vs).
-    rewrite <- app_assoc; sis.
-    apply (f xs' (x :: ys) xs'_vs (x_v, ys_vs)).
-  Defined.
-  
-  Fixpoint revTuple'
-           (xs ys : list symbol)
-           (xs_vs : symbols_semty xs)
-           (ys_vs : symbols_semty ys) : symbols_semty (rev xs ++ ys) :=
-    match xs as l return xs = l -> _ with
-    | []       => fun heq => revTuple'_nil_case xs ys ys_vs heq
-    | x :: xs' => fun heq => revTuple'_rec_case x xs' xs ys xs_vs ys_vs revTuple' heq
-    end eq_refl.
-
-  Definition revTuple_body :
-    forall (xs : list symbol)
-           (vs : symbols_semty xs), symbols_semty (rev xs).
-    intros xs vs.
-    rewrite <- app_nil_r.
-    apply (revTuple' xs [] vs tt).
-  Defined.
-  
-  Definition revTuple (xs : list symbol) (vs : symbols_semty xs) : symbols_semty (rev xs) :=
-    revTuple_body xs vs.
-   *)
   
   Definition concatTuple_nil_case :
     forall (xs ys : list symbol)
@@ -485,6 +463,28 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     repeat rewrite cast_ss_refl; auto.
   Qed.
 
+  Lemma concatTuple_cons_app_singleton :
+    forall x xs v vs (heq : [x] ++ xs = x :: xs),
+      (v, vs) = cast_ss _ _ heq (concatTuple [x] xs (v, tt) vs).
+  Proof.
+    intros x xs v vs heq; sis.
+    repeat unct.
+    rewrite cast_ss_refl; auto.
+  Qed.
+
+  Lemma concatTuple_shift_head_l :
+    forall s xs ys (heq : (xs ++ [s]) ++ ys = xs ++ s :: ys) v vs vs',
+      concatTuple xs (s :: ys) vs (v, vs') =
+      cast_ss _ _ heq (concatTuple (xs ++ [s]) ys (concatTuple xs [s] vs (v, tt)) vs').
+  Proof.
+    intros s xs ys heq v vs vs'.
+    erewrite concatTuple_assoc'; sis.
+    repeat unct.
+    rewrite cast_ss_roundtrip; auto.
+    Unshelve.
+    all : apps.
+  Qed.
+
   (*
   Lemma concatTuple_app_singleton_cons_eq :
     forall xs xs' s ys ys'
@@ -528,6 +528,15 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | [] => fun heq => revTuple_nil_case xs vs heq 
     | x :: xs' => fun heq => revTuple_cons_case xs x xs' heq vs revTuple
     end eq_refl.
+
+  Ltac unrt' :=
+    match goal with
+    | |- context[revTuple_nil_case] => unfold revTuple_nil_case
+    | |- context[revTuple_cons_case] => unfold revTuple_cons_case
+    end.
+
+  Ltac unrt :=
+    unrt'; unfold eq_rect_r; sis.
 
   Lemma revTuple_concatTuple_distr :
     forall xs ys (heq : rev ys ++ rev xs = rev (xs ++ ys)) (vs : symbols_semty xs) (vs' : symbols_semty ys),
@@ -2292,7 +2301,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       apply Symbol_as_UOT.eq_dec.
   Qed.
 
-  Lemma sem_values_derivation_app' :
+  Lemma svd_app' :
     forall gr ys1 w1 vs1,
       sem_values_derivation gr ys1 w1 vs1
       -> forall ys2 w2 vs2,
@@ -2304,13 +2313,13 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     rewrite <- app_assoc; constructor; auto.
   Qed.
 
-  Lemma sem_values_derivation_app :
+  Lemma svd_app :
     forall gr ys ys' w w' vs vs',
       sem_values_derivation gr ys w vs
       -> sem_values_derivation gr ys' w' vs'
       -> sem_values_derivation gr (ys ++ ys') (w ++ w') (concatTuple _ _ vs vs').
   Proof.
-    intros; eapply sem_values_derivation_app'; eauto.
+    intros; eapply svd_app'; eauto.
   Qed.
 
   Lemma svd_app_nil_r' :
@@ -2389,6 +2398,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     rew_anr; eauto 10.
   Qed.
 
+  Lemma svd_singleton_t :
+    forall g a w vs,
+      sem_values_derivation g [T a] w vs
+      -> (exists v,
+             w = [@existT _ _ a v]
+             /\ vs = (v, tt)).
+  Proof.
+    intros g a w vs hd.
+    inv_svs hd hs hd'.
+    inv hs; inv hd'; s_inj; repeat ss_inj.
+    rew_anr; eauto.
+  Qed.
+
   Lemma svd_eq :
     forall gr xs ys w vs vs'
            (heq  : xs = ys)
@@ -2399,7 +2421,41 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     intros gr xs ys w vs vs' heq heq' hd.
     eapply cast_ss_prop_eq with (vs' := vs'); eauto.
   Qed.
-  
+
+  Lemma svd_singleton :
+    forall g s w v,
+      sem_value_derivation g s w v
+      -> sem_values_derivation g [s] w (v, tt).
+  Proof.
+    intros g s w v hd.
+    rew_nil_r w.
+    constructor; auto.
+  Qed.
+
+  Lemma svd_split_eq :
+    forall gr ys ys' ys'' w'' vs''
+      (heq : ys'' = ys ++ ys'),
+      sem_values_derivation gr ys'' w'' vs''
+      -> (exists w w' vs vs',
+             w'' = w ++ w'
+             /\ cast_ss _ _ heq vs'' = concatTuple _ _ vs vs'
+             /\ sem_values_derivation gr ys w vs
+             /\ sem_values_derivation gr ys' w' vs').
+  Proof.
+    intros gr ys ys' ys'' w'' vs'' heq hd; subst.
+    apply svd_split in hd; auto.
+  Qed.
+
+  Lemma svd_inv_nil_syms :
+    forall gr ys w vs (heq : ys = []),
+      sem_values_derivation gr ys w vs
+      -> w = [] /\ cast_ss _ _ heq vs = tt.
+  Proof.
+    intros gr ys w vs heq hd; subst.
+    inv hd; ss_inj.
+    rewrite cast_ss_refl; auto.
+  Qed.
+        
   Inductive tree_corresp_value (g : grammar) :
     forall (s : symbol), list token -> tree -> symbol_semty s -> Prop :=
   | Leaf_corresp :
