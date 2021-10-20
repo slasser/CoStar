@@ -384,14 +384,10 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
         concatTuple_rec_case x xs' xs ys vs vs' concatTuple heq
     end eq_refl.
 
-  Ltac unct' :=
-    match goal with
-    | |- context[concatTuple_nil_case] => unfold concatTuple_nil_case
-    | |- context[concatTuple_rec_case] => unfold concatTuple_rec_case
-    end.
-
   Ltac unct :=
-    unct'; unfold eq_rect_r; sis.
+    try unfold concatTuple_nil_case in *;
+    try unfold concatTuple_rec_case in *;
+    try unfold eq_rect_r            in *; sis.
 
   Lemma cast_ss_snoc :
     forall ys zs x (heq : ys ++ [x] = zs ++ [x]) (vs : symbols_semty ys) (v : symbol_semty x),
@@ -529,14 +525,10 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | x :: xs' => fun heq => revTuple_cons_case xs x xs' heq vs revTuple
     end eq_refl.
 
-  Ltac unrt' :=
-    match goal with
-    | |- context[revTuple_nil_case] => unfold revTuple_nil_case
-    | |- context[revTuple_cons_case] => unfold revTuple_cons_case
-    end.
-
   Ltac unrt :=
-    unrt'; unfold eq_rect_r; sis.
+    try unfold revTuple_nil_case  in *;
+    try unfold revTuple_cons_case in *;
+    try unfold eq_rect_r          in *; sis.
 
   Lemma revTuple_concatTuple_distr :
     forall xs ys (heq : rev ys ++ rev xs = rev (xs ++ ys)) (vs : symbols_semty xs) (vs' : symbols_semty ys),
@@ -2422,14 +2414,30 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     eapply cast_ss_prop_eq with (vs' := vs'); eauto.
   Qed.
 
+  Lemma svd_inv_singleton :
+    forall g s w vs,
+      sem_values_derivation g [s] w vs
+      -> (exists v,
+             (v, tt) = vs
+             /\ sem_value_derivation g s w v).
+  Proof.
+    intros g s w vs hd; subst.
+    inv_svs hd hv hvs; ss_inj.
+    inv hvs; ss_inj.
+    rew_anr; eauto.
+  Qed.
+  
   Lemma svd_singleton :
     forall g s w v,
       sem_value_derivation g s w v
-      -> sem_values_derivation g [s] w (v, tt).
+      <-> sem_values_derivation g [s] w (v, tt).
   Proof.
-    intros g s w v hd.
-    rew_nil_r w.
-    constructor; auto.
+    intros g s w v; split; intros hd.
+    - rew_nil_r w.
+      constructor; auto.
+    - apply svd_inv_singleton in hd.
+      destruct hd as [v' [heq hd]].
+      inv heq; auto.
   Qed.
 
   Lemma svd_split_eq :

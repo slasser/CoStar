@@ -989,82 +989,97 @@ Module ParserSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma multistep_sound_unambig' :
-    forall (g      : grammar)
-           (pm     : production_map)
+    forall (gr     : grammar)
+           (hw     : grammar_wf gr)
+           (rm     : rhs_map)
+           (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
            (tri    : nat * nat * nat)
-           (a      : Acc lex_nat_triple tri)
-           (w wsuf : list token)
+           (ha     : Acc lex_nat_triple tri)
+           (w ts   : list token)
            (vi     : NtSet.t)
-           (p_stk  : prefix_stack)
-           (s_stk  : suffix_stack)
+           (sk     : parser_stack)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results pm cm ca)
-           (hk     : stack_pushes_from_keyset pm s_stk)
-           (a'     : Acc lex_nat_triple (meas pm s_stk wsuf vi))
-           (t      : tree),
-      tri = meas pm s_stk wsuf vi
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> stacks_wf g p_stk s_stk
-      -> unique_stack_prefix_derivation g w p_stk s_stk wsuf un
-      -> multistep pm cm p_stk s_stk wsuf vi un ca hc hk a' = Accept t
-      -> gamma_derivation g (bottomFrameSyms p_stk s_stk) w [t]
+           (hc     : cache_stores_target_results rm cm ca)
+           (hk     : stack_pushes_from_keyset rm sk)
+           (ha'    : Acc lex_nat_triple (parser_meas rm sk ts vi))
+           (x      : nonterminal)
+           (v      : nt_semty x),
+      tri = parser_meas rm sk ts vi
+(*      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stacks_wf g p_stk s_stk *)
+      -> unique_stack_prefix_derivation gr w sk ts un
+      -> multistep gr hw rm hr cm sk ts vi un ca hc hk ha' = Accept x v
+      -> sem_value_derivation gr (NT x) w v 
          /\ (forall v',
-                gamma_derivation g (bottomFrameSyms p_stk s_stk) w v'
-                -> v' = [t]).
+                sem_value_derivation gr (NT x) w v'
+                -> v' = v).
   Proof.
-    intros g pm cm tri a.
-    induction a as [tri hlt IH].
-    intros w wsuf vi p_stk s_stk un ca hc hk a' v ? hn hp hm hw hu hms; subst.
-    apply multistep_cases in hms.
-    destruct hms as [[hf hu'] | he]; subst.
+    intros gr hw rm hr cm tri ha.
+    induction ha as [tri hlt IH].
+    intros w ts vi sk un ca hc hk ha' x v ? hu hm; subst.
+    apply multistep_cases in hm.
+    destruct hm as [[hf hu'] | he]; subst.
     - apply step_StepAccept_facts in hf.
-      destruct hf as (? & o & ? & (pre & ?)); subst.
-      unfold bottomFrameSyms; simpl; rewrite app_nil_r.
+      destruct hf as [? ?]; subst.
       red in hu.
-      destruct hu as (wpre & ? & hu); subst; auto.
-      inv_ufd hu ha hg hi hpu hu'; try rewrite rev_involutive in hg; 
-        rewrite app_nil_r in *; split; auto.
-      intros v' hd.
-      assert (heq : v' = rev (rev v')) by (rewrite rev_involutive; auto).
-      rewrite heq in hd. 
-      eapply ha in hd; eauto; apps.
-      destruct hd as (? & ? & heq'); repeat rewrite rev_involutive in heq'; auto.
-    - destruct he as (ps' & ss' & ts' & vi' & un' & ca' & hc' & hk' & a'' & hs & hms).
-      eapply IH with (w := w) in hms; eauto.
-      + erewrite step_preserves_bottomFrameSyms_invar; eauto.
-      + eapply step_meas_lt with (ca := ca); eauto. 
-      + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto. 
-      + eapply step_preserves_unique_stack_prefix_derivation_invar with (ca := ca); eauto.
+      destruct hu as [wpre [? hu]]; subst; auto.
+      rew_anr.
+      inv_ufd hu hv ha hu' hi hvs hpu; ss_inj; sis; unrt; unct.
+      split.
+      + apply svd_singleton; auto.
+      + intros v' hd.
+        eapply svd_singleton in hd.
+        assert (foo : forall gr
+                             (ys : list symbol)
+                             w
+                             (vs : symbols_semty ys),
+                   sem_values_derivation gr ys w vs
+                   -> sem_values_derivation gr (rev (rev ys)) w (revTuple _ (revTuple _ vs))).
+        { intros.
+          eapply svd_eq with (heq := rr_expand _ _); eauto.
+          erewrite revTuple_involutive; eauto. }
+        apply foo in hd.
+        eapply ha with (heq := rev_involutive _) in hd; eauto.
+        * destruct hd as [? [? heq]]; subst.
+          rewrite revTuple_involutive with (heq := rr_expand _ _) in heq.
+          rewrite cast_ss_roundtrip in heq.
+          inv heq; auto.
+        * exists []; exists []; exists tt; repeat split; auto.
+    - destruct he as (sk' & ts' & vi' & un' & ca' & hc' & hk' & ha'' & hs & hm).
+      eapply IH with (w := w) in hm; eauto.
+      + eapply step_parser_meas_lt; eauto.
+      + eapply step_preserves_unique_stack_prefix_derivation_invar; eauto.
   Qed.
 
   Lemma multistep_sound_unambig :
-    forall (g      : grammar)
-           (pm     : production_map)
+    forall (gr     : grammar)
+           (hw     : grammar_wf gr)
+           (rm     : rhs_map)
+           (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
-           (w wsuf : list token)
+           (w ts   : list token)
            (vi     : NtSet.t)
-           (ps     : prefix_stack)
-           (ss     : suffix_stack)
+           (sk     : parser_stack)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results pm cm ca)
-           (hk     : stack_pushes_from_keyset pm ss)
-           (ha     : Acc lex_nat_triple (meas pm ss wsuf vi))
-           (t      : tree),
-      no_left_recursion g
-      -> production_map_correct pm g
+           (hc     : cache_stores_target_results rm cm ca)
+           (hk     : stack_pushes_from_keyset rm sk)
+           (ha     : Acc lex_nat_triple (parser_meas rm sk ts vi))
+           (x      : nonterminal)
+           (v      : nt_semty x),
+(*      no_left_recursion g
       -> closure_map_complete g cm
-      -> stacks_wf g ps ss
-      -> unique_stack_prefix_derivation g w ps ss wsuf un
-      -> multistep pm cm ps ss wsuf vi un ca hc hk ha = Accept t
-      -> gamma_derivation g (bottomFrameSyms ps ss) w [t]
+      -> stacks_wf g ps ss *)
+      unique_stack_prefix_derivation gr w sk ts un
+      -> multistep gr hw rm hr cm sk ts vi un ca hc hk ha = Accept x v
+      -> sem_value_derivation gr (NT x) w v
          /\ (forall v',
-                gamma_derivation g (bottomFrameSyms ps ss) w v'
-                -> v' = [t]).
+                sem_value_derivation gr (NT x) w v'
+                -> v' = v).
   Proof.
     intros; eapply multistep_sound_unambig'; eauto.
   Qed.
@@ -1249,7 +1264,7 @@ Module ParserSoundFn (Import D : Defs.T).
       eapply frames_wf__suffix_frames_wf; eauto.
   Qed.
    *)
-  
+  (*
   Definition unique_stack_prefix_derivation g w p_stk s_stk wsuf u :=
     match p_stk, s_stk with
     | (p_fr, p_frs), (s_fr, s_frs) =>
@@ -1814,4 +1829,6 @@ Module ParserSoundFn (Import D : Defs.T).
     intros; eapply multistep_sound_ambig'; eauto.
   Qed.
 
+   *)
+  
 End ParserSoundFn.
