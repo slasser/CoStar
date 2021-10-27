@@ -140,7 +140,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     eapply moveSp_never_returns_SpInvalidState_for_ready_sp; eauto.
   Qed.
 
-  Lemma moveSp_preserves_suffix_stack_wf_invar :
+  Lemma moveSp_preserves_stack_wf_invar :
     forall g t sp sp',
       stack_wf g sp.(stack)
       -> moveSp t sp = MoveSucc sp'
@@ -152,7 +152,7 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     rewrite app_cons_group_l in hi; eauto.
   Qed.
 
-  Lemma move_preserves_suffix_stack_wf_invar :
+  Lemma move_preserves_stack_wf_invar :
     forall g t sps sps',
       all_stacks_wf g sps
       -> move t sps = inr sps'
@@ -165,20 +165,20 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     eapply aggrMoveResults_succ_in_input in hm; eauto.
     apply in_map_iff in hm.
     destruct hm as [sp [hm hi']].
-    eapply moveSp_preserves_suffix_stack_wf_invar; eauto.
+    eapply moveSp_preserves_stack_wf_invar; eauto.
   Qed.
 
-  Lemma llc_preserves_suffix_stack_wf_invar :
-    forall g pm pr (a : Acc lex_nat_pair pr) vi sp sp' hk a' sps',
-      pr = meas pm vi sp
-      -> production_map_correct pm g
-      -> suffix_stack_wf g sp.(stack)
-      -> llc pm vi sp hk a' = inr sps'
+  Lemma llc_preserves_stack_wf_invar :
+    forall gr hw rm pr (a : Acc lex_nat_pair pr) vi sp sp' hk a' sps',
+      pr = ll_meas rm vi sp
+      -> rhs_map_correct rm gr
+      -> stack_wf gr sp.(stack)
+      -> llc gr hw rm vi sp hk a' = inr sps'
       -> In sp' sps'
-      -> suffix_stack_wf g sp'.(stack).
+      -> stack_wf gr sp'.(stack).
   Proof.
-    intros g pm pr a'.
-    induction a' as [pr hlt IH]; intros vi sp sp' hk a sps' heq hp hw hs hi; subst.
+    intros gr hw rm pr a'.
+    induction a' as [pr hlt IH]; intros vi sp sp' hk a sps' heq hp hw' hs hi; subst.
     apply llc_success_cases in hs.
     destruct hs as [[hd heq] | [sps'' [av' [hs [crs [heq heq']]]]]]; subst.
     - apply in_singleton_eq in hi; subst; auto.
@@ -188,49 +188,49 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       destruct hi' as [sp'' [hi' [hi''' heq]]].
       eapply IH in heq; eauto.
       + eapply cstep_meas_lt; eauto.
-      + eapply cstep_preserves_suffix_stack_wf_invar; eauto.
+      + eapply cstep_preserves_stack_wf_invar; eauto.
   Qed.
   
-  Lemma llClosure_preserves_suffix_stack_wf_invar :
-    forall g pm sps hk sps',
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
-      -> llClosure pm sps hk = inr sps'
-      -> all_suffix_stacks_wf g sps'.
+  Lemma llClosure_preserves_stack_wf_invar :
+    forall gr hw rm sps hk sps',
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
+      -> llClosure gr hw rm sps hk = inr sps'
+      -> all_stacks_wf gr sps'.
   Proof.
-    intros g pm sps hk sps' hp ha hc.
+    intros gr hw rm sps hk sps' hp ha hc.
     unfold llClosure in hc.
-    unfold all_suffix_stacks_wf.
+    unfold all_stacks_wf.
     intros sp' hi.
     eapply aggrClosureResults_succ_in_input in hc; eauto.
     destruct hc as [sps'' [hi' hi'']].
     eapply dmap_in in hi'; eauto.
     destruct hi' as [sp [hi' [_ hs]]].
-    eapply llc_preserves_suffix_stack_wf_invar; eauto.
+    eapply llc_preserves_stack_wf_invar; eauto.
     apply lex_nat_pair_wf.
   Qed.
 
   Lemma cstepDone_stable_config :
-    forall g pm vi sp,
-      suffix_stack_wf g sp.(stack)
-      -> cstep pm vi sp = CstepDone
+    forall gr hw rm vi sp,
+      stack_wf gr sp.(stack)
+      -> cstep gr hw rm vi sp = CstepDone
       -> stable_config sp.(stack).
   Proof.
-    intros g pm vi sp hw hs.
-    unfold cstep in hs; dms; tc; sis; inv hw; auto.
+    intros gr hw rm vi sp hw' hs.
+    unfold cstep in hs; dms; tc; sis; inv hw'; auto.
   Qed.
 
   Lemma sp_in_llc_result_stable_config :
-    forall g pm pr (a : Acc lex_nat_pair pr) vi sp sp' hk a' sps',
-      pr = meas pm vi sp
-      -> production_map_correct pm g
-      -> suffix_stack_wf g sp.(stack)
-      -> llc pm vi sp hk a' = inr sps'
+    forall gr hw rm pr (a : Acc lex_nat_pair pr) vi sp sp' hk a' sps',
+      pr = ll_meas rm vi sp
+      -> rhs_map_correct rm gr
+      -> stack_wf gr sp.(stack)
+      -> llc gr hw rm  vi sp hk a' = inr sps'
       -> In sp' sps'
       -> stable_config sp'.(stack).
   Proof.
-    intros g pm pr a'.
-    induction a' as [pr hlt IH]; intros vi sp sp' hk a sps' heq hp hw hs hi; subst.
+    intros gr hw rm pr a'.
+    induction a' as [pr hlt IH]; intros vi sp sp' hk a sps' heq hp hw' hs hi; subst.
     apply llc_success_cases in hs.
     destruct hs as [[hd heq] | [sps'' [av' [hs [crs [heq heq']]]]]]; subst.
     - apply in_singleton_eq in hi; subst; auto.
@@ -241,17 +241,17 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       destruct hi' as [sp'' [hi' [hi''' heq]]].
       eapply IH in heq; eauto.
       + eapply cstep_meas_lt; eauto.
-      + eapply cstep_preserves_suffix_stack_wf_invar; eauto.
+      + eapply cstep_preserves_stack_wf_invar; eauto.
   Qed.
 
   Lemma all_stacks_stable_after_closure :
-    forall g pm sps hk sps',
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
-      -> llClosure pm sps hk = inr sps'
+    forall gr hw rm sps hk sps',
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
+      -> llClosure gr hw rm sps hk = inr sps'
       -> all_stacks_stable sps'.
   Proof.
-    intros g pm sps hk sps' hp hw hc.
+    intros gr hw rm sps hk sps' hp hw' hc.
     unfold llClosure in hc.
     unfold all_stacks_stable.
     intros sp' hi.
@@ -264,57 +264,57 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma llTarget_never_returns_SpInvalidState :
-    forall g pm a sps hk,
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm t sps hk,
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> llTarget pm a sps hk <> inl SpInvalidState.
+      -> llTarget gr hw rm t sps hk <> inl SpInvalidState.
   Proof.
-    intros g pm a sps hk hp hw hs; unfold not; intros ht.
+    intros gr hw rm t sps hk hp hw' hs; unfold not; intros ht.
     apply llTarget_cases in ht.
     destruct ht as [hm | [sps' [hk' [hm hc]]]].
     - eapply move_never_returns_SpInvalidState_for_ready_sps; eauto.
-    - eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
+    - eapply move_preserves_stack_wf_invar in hm; eauto.
       eapply llClosure_never_returns_SpInvalidState; eauto.
   Qed.
 
-  Lemma llTarget_preserves_suffix_stacks_wf_invar :
-    forall g pm a sps hk sps',
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
-      -> llTarget pm a sps hk = inr sps'
-      -> all_suffix_stacks_wf g sps'.
+  Lemma llTarget_preserves_stacks_wf_invar :
+    forall gr hw rm t sps hk sps',
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
+      -> llTarget gr hw rm t sps hk = inr sps'
+      -> all_stacks_wf gr sps'.
   Proof.
-    intros g pm a sps hk sps' hp hw ht.
+    intros gr hw rm t sps hk sps' hp hw' ht.
     apply llTarget_cases in ht.
     destruct ht as [sps'' [hk' [hm hc]]].
-    eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
-    eapply llClosure_preserves_suffix_stack_wf_invar; eauto.
+    eapply move_preserves_stack_wf_invar in hm; eauto.
+    eapply llClosure_preserves_stack_wf_invar; eauto.
   Qed.
 
   Lemma llTarget_preserves_stacks_stable_invar :
-    forall g pm a sps hk sps',
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm t sps hk sps',
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> llTarget pm a sps hk = inr sps'
+      -> llTarget gr hw rm t sps hk = inr sps'
       -> all_stacks_stable sps'.
   Proof.
-    intros g pm a sps hk sps' hp hw hs ht; unfold llTarget in ht.
+    intros gr hw rm t sps hk sps' hp hw' hs ht; unfold llTarget in ht.
     apply llTarget_cases in ht.
     destruct ht as [sps'' [hk' [hm hc]]].
-    eapply move_preserves_suffix_stack_wf_invar in hm; eauto.
+    eapply move_preserves_stack_wf_invar in hm; eauto.
     eapply all_stacks_stable_after_closure; eauto.
   Qed.
 
   Lemma llPredict'_never_returns_SpInvalidState :
-    forall g pm ts sps hk,
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm ts sps hk,
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> llPredict' pm sps ts hk <> PredError SpInvalidState.
+      -> llPredict' gr hw rm sps ts hk <> PredError SpInvalidState.
   Proof.
-    intros g pm ts; induction ts as [| (a,l) ts IH]; intros sps hk hp ha ha';
+    intros gr hw rm ts; induction ts as [| (a,l) ts IH]; intros sps hk hp ha ha';
       unfold not; intros hl; sis.
     - eapply handleFinalSubparsers_never_returns_error; eauto.
     - destruct sps as [| sp sps']; tc.
@@ -323,45 +323,45 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       destruct hl as [ht | [sps'' [ht hl]]].
       + eapply llTarget_never_returns_SpInvalidState; eauto.
       + eapply IH in hl; eauto.
-        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+        * eapply llTarget_preserves_stacks_wf_invar; eauto.
         * eapply llTarget_preserves_stacks_stable_invar; eauto.
   Qed.
 
   Lemma llStartState_preserves_stacks_wf_invar :
-    forall g pm fr frs o x suf hk sps,
-      production_map_correct pm g
-      -> suffix_stack_wf g (fr, frs)
-      -> fr = SF o (NT x :: suf)
-      -> llStartState pm o x suf frs hk = inr sps
-      -> all_suffix_stacks_wf g sps.
+    forall gr hw rm fr frs pre vs x suf hk sps,
+      rhs_map_correct rm gr
+      -> stack_wf gr (fr, frs)
+      -> fr = Fr pre vs (NT x :: suf)
+      -> llStartState gr hw rm pre vs x suf frs hk = inr sps
+      -> all_stacks_wf gr sps.
   Proof.
-    intros g pm [suf'] frs o x suf hk sps hp hw heq hs; sis; subst.
-    eapply llClosure_preserves_suffix_stack_wf_invar; eauto.
-    unfold all_suffix_stacks_wf; intros sp hi.
-    eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+    intros gr hw rm  [pre' vs' suf'] frs o x suf hk sps hp hw' heq hs; sis; subst.
+    eapply llClosure_preserves_stack_wf_invar; eauto.
+    unfold all_stacks_wf; intros sp hi.
+    eapply llInitSps_preserves_stack_wf_invar; eauto.
   Qed.
 
   Lemma llStartState_all_stacks_stable :
-    forall g pm cr o x suf frs hk sps,
-      production_map_correct pm g
-      -> cr = SF o (NT x :: suf)
-      -> suffix_stack_wf g (cr, frs)
-      -> llStartState pm o x suf frs hk = inr sps
+    forall gr hw rm cr pre vs x suf frs hk sps,
+      rhs_map_correct rm gr
+      -> cr = Fr pre vs (NT x :: suf)
+      -> stack_wf gr (cr, frs)
+      -> llStartState gr hw rm pre vs x suf frs hk = inr sps
       -> all_stacks_stable sps.
   Proof.
-    intros g pm cr o x suf frs hk sps hp ? hw hs sp hi.
+    intros gr hw rm cr pre vs x suf frs hk sps hp ? hw' hs sp hi.
     eapply all_stacks_stable_after_closure; eauto.
-    eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+    eapply llInitSps_preserves_stack_wf_invar; eauto.
   Qed.
 
   Lemma llPredict_never_returns_SpInvalidState :
-    forall g pm fr frs o x suf ts hk,
-      production_map_correct pm g
-      -> suffix_stack_wf g (fr, frs)
-      -> fr = SF o (NT x :: suf)
-      -> llPredict pm o x suf frs ts hk <> PredError SpInvalidState.
+    forall gr hw rm fr frs pre vs x suf ts hk,
+      rhs_map_correct rm gr
+      -> stack_wf gr (fr, frs)
+      -> fr = Fr pre vs (NT x :: suf)
+      -> llPredict gr hw rm pre vs x suf frs ts hk <> PredError SpInvalidState.
   Proof.
-    intros g pm fr frs o x suf ts hk hp hw heq; unfold not; intros hl.
+    intros gr hw rm fr frs pre vs x suf ts hk hp hw' heq; unfold not; intros hl.
     apply llPredict_cases in hl.
     destruct hl as [hl | [sps [hs hl]]].
     - eapply llStartState_never_returns_SpInvalidState; eauto.
