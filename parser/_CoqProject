@@ -13,10 +13,10 @@ GrammarAnalysis.v
 SLLPrediction.v
 Parser.v
 
-Parser_sound.v
-
 LLPrediction_error_free.v
 LLPrediction_complete.v
+
+Parser_sound.v
 
 SLL_optimization_sound.v
 SLLPrediction_error_free.v

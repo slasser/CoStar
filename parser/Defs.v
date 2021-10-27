@@ -1745,6 +1745,16 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
        (sem : symbols_semty pre) (* sem value for prefix *)
        (suf : list symbol).      (* rhs suffix *)
 
+  Lemma frames_eq__semvals_eq :
+    forall pre vs vs' suf suf',
+      Fr pre vs suf = Fr pre vs' suf'
+      -> vs = vs'.
+  Proof.
+    intros pre vs vs' suf suf' heq.
+    inv heq.
+    ss_inj; auto.
+  Qed.
+  
   Definition suffix (fr : parser_frame) : list symbol :=
     match fr with
     | Fr _ _ suf => suf
@@ -1764,7 +1774,34 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     end.
 
   Record subparser := Sp { prediction : list symbol
-                         ; stack      : parser_stack }.
+                           ; stack      : parser_stack }.
+
+  Lemma sps_eq__head_frames_eq :
+    forall pred pred' fr fr' frs frs',
+      Sp pred (fr, frs) = Sp pred' (fr', frs')
+      -> fr = fr'.
+  Proof.
+    intros pred pred' fr fr' frs frs' heq; inv heq; auto.
+  Qed.
+
+  Lemma inv_sp_eq_terminal_head :
+    forall pred a pre v vs suf frs pred' pre' vs' suf' frs',
+      Sp pred (Fr (T a :: pre) (v, vs) suf, frs) = Sp pred' (Fr pre' vs' suf', frs')
+      -> pred = pred'
+         /\ suf = suf'
+         /\ frs = frs'
+         /\ exists (heq : T a :: pre = pre'),
+             (cast_ss _ _ heq (v, vs)) = vs'.
+  Proof.
+    intros pred a pre v vs suf frs pred' pre' vs' suf' frs' heq.
+    pose proof heq as heq'.
+    inv heq.
+    apply sps_eq__head_frames_eq in heq'.
+    apply frames_eq__semvals_eq in heq'; subst.
+    repeat split; auto.
+    exists eq_refl.
+    rewrite cast_ss_refl; auto.
+  Qed.
 
   (* The stack used in SLL prediction *)
   

@@ -1,21 +1,23 @@
 Require Import Bool List Omega.
 Require Import CoStar.Defs. 
 Require Import CoStar.Lex.
-Require Import CoStar.LLPrediction_error_free.
+(*Require Import CoStar.LLPrediction_error_free. *)
+Require Import CoStar.Parser.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
 
 Module LLPredictionCompleteFn (Import D : Defs.T).
 
-  Module Export LLPEF := LLPredictionErrorFreeFn D.
+  (*  Module Export LLPEF := LLPredictionErrorFreeFn D. *)
+  Module Export P := ParserFn D.
 
   Inductive move_step :
     subparser -> list token -> subparser -> list token -> Prop :=
   | MV_consume :
-      forall pred suf o a l ts frs,
-        move_step (Sp pred (SF o (T a :: suf), frs)) ((a, l) :: ts)
-                  (Sp pred (SF o suf, frs)) ts.
+      forall pred pre vs suf a v ts frs,
+        move_step (Sp pred (Fr pre vs (T a :: suf), frs)) (@existT _ _ a v :: ts)
+                  (Sp pred (Fr (T a :: pre) (v, vs) suf, frs)) ts.
 
   Hint Constructors move_step : core.
 
@@ -36,36 +38,40 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma move_func_refines_move_step :
-    forall a l ts sp sp' sps sps',
+    forall t ts sp sp' sps sps',
       In sp sps
-      -> move_step sp ((a,l) :: ts) sp' ts
-      -> move a sps = inr sps'
+      -> move_step sp (t :: ts) sp' ts
+      -> move t sps = inr sps'
       -> In sp' sps'.
   Proof.
-    intros a l ts sp sp' sps sps' hi hr hf.
+    intros t ts sp sp' sps sps' hi hr hf.
     inv hr.
     eapply move_succ_all_sps_step; eauto.
+    auto.
   Qed.
 
   Lemma moveSp_move_step :
-    forall a l w' sp sp',
-      move_step sp ((a,l) :: w') sp' w'
-      -> moveSp a sp = MoveSucc sp'.
+    forall t w' sp sp',
+      move_step sp (t :: w') sp' w'
+      -> moveSp t sp = MoveSucc sp'.
   Proof.
-    intros a l w' sp sp' hm.
+    intros t w' sp sp' hm.
     inv hm; unfold moveSp; dms; tc.
   Qed.
 
   Lemma move_step_moveSp :
-    forall a l w' sp sp',
-      moveSp a sp = MoveSucc sp'
-      -> move_step sp ((a,l) :: w') sp' w'.
+    forall t w' sp sp',
+      moveSp t sp = MoveSucc sp'
+      -> move_step sp (t :: w') sp' w'.
   Proof.
-    intros a l w' [pred ([o suf], frs)]
-           [pred' ([o' suf'], frs')] hm.
+    intros [a v] w' [pred ([pre vs suf], frs)] [pred' ([pre' vs' suf'], frs')] hm.
     unfold moveSp in hm.
     destruct suf as [| [a' | x] suf]; try (dms; tc); subst.
-    inv hm; constructor.
+    apply inv_MoveSucc_eq in hm.
+    apply inv_sp_eq_terminal_head in hm.
+    destruct hm as (? & ? & ? & [heq heq']); subst.
+    rewrite cast_ss_refl.
+    constructor.
   Qed.
 
   Lemma move_step_preserves_suffix_stack_wf_invar :

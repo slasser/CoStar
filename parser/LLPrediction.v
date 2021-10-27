@@ -40,6 +40,13 @@ Module LLPredictionFn (Import D : Defs.T).
   | MoveSucc   : A -> subparser_move_result 
   | MoveReject : subparser_move_result 
   | MoveError  : prediction_error -> subparser_move_result.
+
+  Lemma inv_MoveSucc_eq :
+    forall (sp sp' : subparser),
+      MoveSucc sp = MoveSucc sp' -> sp = sp'.
+  Proof.
+    intros sp sp' heq; inv heq; auto.
+  Qed.
   
   Definition moveSp (t  : token) (sp : subparser) : subparser_move_result :=
     match t with

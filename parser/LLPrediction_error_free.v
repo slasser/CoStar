@@ -1,26 +1,27 @@
 Require Import List.
 Require Import CoStar.Defs.
 Require Import CoStar.Lex.
-Require Import CoStar.LLPrediction.
+Require Import CoStar.Parser.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
 
 Module LLPredictionErrorFreeFn (Import D : Defs.T).
 
-  Module Export LLP := LLPredictionFn D.
+  Module Export P := ParserFn D.
 
   (* BREAKING THIS INTO TWO GROUPS OF LEMMAS
    FOR THE TWO TYPES OF PREDICTION ERRORS *)
 
   (* SP INVALID STATE CASE *)
 
-  Inductive stable_config : suffix_stack -> Prop :=
+  Inductive stable_config : parser_stack -> Prop :=
   | SC_empty :
-      stable_config (SF None [], [])
+      forall pre vs,
+      stable_config (Fr pre vs [], [])
   | SC_terminal :
-      forall o a suf frs,
-        stable_config (SF o (T a :: suf), frs).
+      forall pre vs a suf frs,
+        stable_config (Fr pre vs (T a :: suf), frs).
 
   Hint Constructors stable_config : core.
 
@@ -28,31 +29,38 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
     forall sp, In sp sps -> stable_config sp.(stack).
 
   Lemma cstep_never_returns_SpInvalidState :
-    forall g pm vi sp,
-      suffix_stack_wf g sp.(stack)
-      -> cstep pm vi sp <> CstepError SpInvalidState.
+    forall gr hw rm vi sp,
+      stack_wf gr sp.(stack)
+      -> cstep gr hw rm vi sp <> CstepError SpInvalidState.
   Proof.
-    intros g pm vi sp hw; unfold not; intros hs.
-    unfold cstep in hs; dms; tc; inv hw.
+    intros gr hw rm vi sp hw'; unfold not; intros hs.
+    unfold cstep in hs; dmeqs H; tc; inv hw'.
+    rew_anr.
+    match goal with
+    | H : findPredicateAndAction _ _ _ = None |- _ =>
+      apply fpaa_cases in H
+    end.
+    eapply in_find_contra; eauto.
   Qed.
 
   Lemma llc_never_returns_SpInvalidState :
-    forall (g    : grammar)
-           (pm   : production_map)
-           (pair : nat * nat)
-           (ha   : Acc lex_nat_pair pair)
+    forall (gr   : grammar)
+           (hw   : grammar_wf gr)
+           (rm   : rhs_map)
+           (pr   : nat * nat)
+           (ha   : Acc lex_nat_pair pr)
            (vi   : NtSet.t)
            (sp   : subparser)
-           (hk   : sp_pushes_from_keyset pm sp)
-           (ha'  : Acc lex_nat_pair (meas pm vi sp)),
-      pair = meas pm vi sp
-      -> production_map_correct pm g
-      -> suffix_stack_wf g sp.(stack)
-      -> llc pm vi sp hk ha' <> inl SpInvalidState.
+           (hk   : sp_pushes_from_keyset rm sp)
+           (ha'  : Acc lex_nat_pair (ll_meas rm vi sp)),
+      pr = ll_meas rm vi sp
+      -> rhs_map_correct rm gr
+      -> stack_wf gr sp.(stack)
+      -> llc gr hw rm vi sp hk ha' <> inl SpInvalidState.
   Proof.
-    intros g pm pair a'.
-    induction a' as [pair hlt IH].
-    intros vi sp hk ha heq hc hw; unfold not; intros hs; subst.
+    intros gr hw rm pr ha'. 
+    induction ha' as [pr hlt IH].
+    intros vi sp hk ha heq hc hw'; unfold not; intros hs; subst.
     apply llc_error_cases in hs.
     destruct hs as [hs | [sps [av' [hs [crs [heq heq']]]]]]; subst.
     - eapply cstep_never_returns_SpInvalidState; eauto.
@@ -61,16 +69,16 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
       destruct heq' as [sp' [hi [hi' heq]]].
       eapply IH with (sp := sp'); eauto.
       + eapply cstep_meas_lt; eauto.
-      + eapply cstep_preserves_suffix_stack_wf_invar; eauto.
+      + eapply cstep_preserves_stack_wf_invar; eauto.
   Qed.
   
   Lemma llClosure_never_returns_SpInvalidState :
-    forall g pm sps hk,
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
-      -> llClosure pm sps hk <> inl SpInvalidState.
+    forall gr hw rm sps hk,
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
+      -> llClosure gr hw rm sps hk <> inl SpInvalidState.
   Proof.
-    intros g pm sps hk hp hw; unfold not; intros hc.
+    intros gr hw rm sps hk hp hw'; unfold not; intros hc.
     unfold llClosure in hc.
     apply aggrClosureResults_error_in_input in hc.
     eapply dmap_in in hc; eauto.
@@ -80,21 +88,22 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma llStartState_never_returns_SpInvalidState :
-    forall g pm fr frs o x suf hk,
-      production_map_correct pm g
-      -> suffix_stack_wf g (fr, frs)
-      -> fr = SF o (NT x :: suf)
-      -> llStartState pm o x suf frs hk <> inl SpInvalidState.
+    forall gr hw rm fr frs pre vs x suf hk,
+      rhs_map_correct rm gr
+      -> stack_wf gr (fr, frs)
+      -> fr = Fr pre vs  (NT x :: suf)
+      -> llStartState gr hw rm pre vs x suf frs hk <> inl SpInvalidState.
   Proof.
-    intros g pm fr frs o x suf hk hp hw heq; unfold not; intros hss.
+    intros gr hw rm fr frs pre vs x suf hk hr hw' ?; unfold not; intros hss. 
     eapply llClosure_never_returns_SpInvalidState; eauto.
     intros sp hi.
     unfold llInitSps in hi.
     apply in_map_iff in hi.
     destruct hi as [rhs [heq' hi]]; subst; simpl.
     (* LEMMA *)
-    clear hss; inv hw; sis; subst.
-    - wf_upper_nil. 
+    clear hss; inv hw'; sis; subst.
+    - destruct vs.
+      wf_upper_nil. 
       eapply rhssFor_in_iff; eauto.
     - wf_upper_nil. 
       eapply rhssFor_in_iff; eauto.
@@ -133,24 +142,24 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
 
   Lemma moveSp_preserves_suffix_stack_wf_invar :
     forall g t sp sp',
-      suffix_stack_wf g sp.(stack)
+      stack_wf g sp.(stack)
       -> moveSp t sp = MoveSucc sp'
-      -> suffix_stack_wf g sp'.(stack).
+      -> stack_wf g sp'.(stack).
   Proof.
     intros g t sp sp' hw hm.
     unfold moveSp in hm; dms; tc; inv hm; sis.
-    inv_suffix_frames_wf hw hi hw'; auto.
+    inv_fwf hw hi hw'.
     rewrite app_cons_group_l in hi; eauto.
   Qed.
 
   Lemma move_preserves_suffix_stack_wf_invar :
     forall g t sps sps',
-      all_suffix_stacks_wf g sps
+      all_stacks_wf g sps
       -> move t sps = inr sps'
-      -> all_suffix_stacks_wf g sps'.
+      -> all_stacks_wf g sps'.
   Proof.
     intros g t sps sps' ha hm.
-    unfold all_suffix_stacks_wf.
+    unfold all_stacks_wf.
     intros sp' hi.
     unfold move in hm.
     eapply aggrMoveResults_succ_in_input in hm; eauto.
