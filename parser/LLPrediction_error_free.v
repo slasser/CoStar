@@ -373,26 +373,29 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   (* LEFT RECURSION CASE *)
 
   Lemma find_allNts :
-    forall g pm x ys,
-      production_map_correct pm g
-      -> NM.find x pm = Some ys
+    forall g rm x ys,
+      rhs_map_correct rm g
+      -> NM.find x rm = Some ys
       -> NtSet.In x (allNts g).
   Proof.
-    intros g pm x ys [hs [hs' hc]] hi.
+    intros g rm x ys [hs [hs' hc]] hi.
     apply allNts_lhss_iff.
-    apply hs; apply NMF.in_find_iff; tc.
+    apply find_Some__In in hi.
+    apply hs in hi.
+    destruct hi as [ys' hi].
+    eapply production_lhs_in_lhss; eauto.
   Qed.
 
   Lemma cstep_LeftRecursion_facts :
-    forall g pm vi pred fr frs x,
-      production_map_correct pm g
-      -> cstep pm vi (Sp pred (fr, frs)) = CstepError (SpLeftRecursion x)
+    forall gr hw rm vi pred fr frs x,
+      rhs_map_correct rm gr
+      -> cstep gr hw rm vi (Sp pred (fr, frs)) = CstepError (SpLeftRecursion x)
       -> NtSet.In x vi
-         /\ NtSet.In x (allNts g)
-         /\ exists o suf,
-             fr = SF o (NT x :: suf).
+         /\ NtSet.In x (allNts gr)
+         /\ exists pre vs suf,
+             fr = Fr pre vs (NT x :: suf).
   Proof.
-    intros g pm vi pred fr frs x hp hs.
+    intros gr hw rm vi pred fr frs x hp hs.
     unfold cstep in hs; repeat dmeq h; tc; inv hs; sis.
     repeat split; eauto.
     - apply NF.mem_iff; auto. 
@@ -400,31 +403,31 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma cstep_never_finds_left_recursion :
-    forall g pm vi sp x,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> unavailable_nts_invar g vi sp
-      -> cstep pm vi sp <> CstepError (SpLeftRecursion x).
+    forall gr hw rm vi sp x,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> unavailable_nts_invar gr vi sp
+      -> cstep gr hw rm vi sp <> CstepError (SpLeftRecursion x).
   Proof.
-    intros g pm vi [pred (fr, frs)] x hn hc hu; unfold not; intros hs.
+    intros gr hw rm vi [pred (fr, frs)] x hn hc hu; unfold not; intros hs.
     pose proof hs as hs'.
     eapply cstep_LeftRecursion_facts in hs'; eauto.
-    destruct hs' as [hn' [hi [o [suf' heq]]]]; subst.
+    destruct hs' as [hn' [hi [pre [vs [suf' heq]]]]]; subst.
     apply hu in hn'; auto.
-    destruct hn' as (frs_pre & fr_cr & frs_suf & ? & ? & ? & ? & hf); subst.
+    destruct hn' as (frs_pre & fr_cr & frs_suf & ? & ? & ? & ? & ? & hf); subst.
     eapply frnp_grammar_nullable_path in hf; eauto.
     firstorder.
   Qed.
 
   Lemma llc_never_finds_left_recursion :
-    forall g pm pr (a : Acc lex_nat_pair pr) vi sp hk a' x,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> unavailable_nts_invar g vi sp
-      -> pr = meas pm vi sp
-      -> llc pm vi sp hk a' <> inl (SpLeftRecursion x).
+    forall gr hw rm pr (a : Acc lex_nat_pair pr) vi sp hk a' x,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> unavailable_nts_invar gr vi sp
+      -> pr = ll_meas rm vi sp
+      -> llc gr hw rm vi sp hk a' <> inl (SpLeftRecursion x).
   Proof.
-    intros g pm pr a'; induction a' as [pr hlt IH]. 
+    intros gr hw rm pr a'; induction a' as [pr hlt IH]. 
     intros vi sp hk a x hn hc hu heq; unfold not; intros hs; subst.
     apply llc_error_cases in hs.
     destruct hs as [hs | [sps [av' [hs [crs [hc' ha]]]]]]; subst.
@@ -438,12 +441,12 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma closure_never_finds_left_recursion :
-    forall g pm sps hk x,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> llClosure pm sps hk <> inl (SpLeftRecursion x).
+    forall gr hw rm sps hk x,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> llClosure gr hw rm sps hk <> inl (SpLeftRecursion x).
   Proof.
-    intros g pm sps hk x hn hp; unfold not; intros hc.
+    intros gr hw rm sps hk x hn hp; unfold not; intros hc.
     unfold llClosure in hc.
     apply aggrClosureResults_error_in_input in hc.
     eapply dmap_in in hc; eauto.
@@ -474,12 +477,12 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma llTarget_never_returns_SpLeftRecursion :
-    forall g pm a sps hk x,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> llTarget pm a sps hk <> inl (SpLeftRecursion x).
+    forall gr hw rm a sps hk x,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> llTarget gr hw rm a sps hk <> inl (SpLeftRecursion x).
   Proof.
-    intros g pm a sps hk x hn hp; unfold not; intros ht.
+    intros gr hw rm a sps hk x hn hp; unfold not; intros ht.
     apply llTarget_cases in ht.
     destruct ht as [hm | [sps' [hk' [hm hc]]]].
     - eapply move_never_returns_SpLeftRecursion; eauto.
@@ -487,12 +490,12 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
   
   Lemma llPredict'_never_returns_SpLeftRecursion :
-    forall g pm ts sps hk x,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> llPredict' pm sps ts hk <> PredError (SpLeftRecursion x).
+    forall gr hw rm ts sps hk x,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> llPredict' gr hw rm sps ts hk <> PredError (SpLeftRecursion x).
   Proof.
-    intros g pm ts; induction ts as [| (a,l) ts IH];
+    intros gr hw rm ts; induction ts as [| (a,l) ts IH];
       intros sps hk x hn hp hl; sis.
     - eapply handleFinalSubparsers_never_returns_error; eauto.
     - destruct sps as [| sp sps']; tc; dm; tc.
@@ -503,12 +506,12 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
   Qed.
 
   Lemma llPredict_never_returns_SpLeftRecursion :
-    forall g pm o x suf frs ts hk x',
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> llPredict pm o x suf frs ts hk <> PredError (SpLeftRecursion x').
+    forall gr hw rm pre vs x suf frs ts hk x',
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> llPredict gr hw rm pre vs x suf frs ts hk <> PredError (SpLeftRecursion x').
   Proof.
-    intros g pm o x suf frs ts hk x' hn hp hl.
+    intros gr hw rm pre vs x suf frs ts hk x' hn hp hl.
     apply llPredict_cases in hl.
     destruct hl as [hs | [sps [hs hp']]].
     - eapply closure_never_finds_left_recursion; eauto.
@@ -519,53 +522,53 @@ Module LLPredictionErrorFreeFn (Import D : Defs.T).
      types of prediction errors *)
 
   Lemma llTarget_never_returns_error :
-    forall g pm a sps hk e,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm a sps hk e,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> llTarget pm a sps hk <> inl e.
+      -> llTarget gr hw rm a sps hk <> inl e.
   Proof.
-    unfold not; intros g pm a sps hk e hn hc hw hs hl; destruct e.
+    unfold not; intros gr hw rm a sps hk e hn hc hw' hs hl; destruct e.
     - eapply llTarget_never_returns_SpInvalidState ; eauto.
     - eapply llTarget_never_returns_SpLeftRecursion; eauto.
   Qed.
 
   Lemma llStartState_never_returns_error :
-    forall g pm o x suf fr frs hk e,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> suffix_stack_wf g (fr, frs)
-      -> fr = SF o (NT x :: suf)
-      -> llStartState pm o x suf frs hk <> inl e.
+    forall gr hw rm pre vs x suf fr frs hk e,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> stack_wf gr (fr, frs)
+      -> fr = Fr pre vs (NT x :: suf)
+      -> llStartState gr hw rm pre vs x suf frs hk <> inl e.
   Proof.
-    intros ? ? ? ? ? ? ? ? ? hn hp hw ? hs; subst; destruct e.
+    intros gr hw rm pre vs x suf fr frs hk e hn hp hw' ? hs; subst; destruct e.
     - eapply llStartState_never_returns_SpInvalidState; eauto.
     - eapply closure_never_finds_left_recursion; eauto.
   Qed.
 
   Lemma llPredict'_never_returns_error :
-    forall g pm sps ts hk e,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm sps ts hk e,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> llPredict' pm sps ts hk <> PredError e.
+      -> llPredict' gr hw rm sps ts hk <> PredError e.
   Proof.
-    intros g pm sps ts hk e hn hp hw hs hl; destruct e.
+    intros gr hw rm sps ts hk e hn hp hw' hs hl; destruct e.
     - eapply llPredict'_never_returns_SpInvalidState ; eauto.
     - eapply llPredict'_never_returns_SpLeftRecursion; eauto.
   Qed.
   
   Lemma llPredict_never_returns_error :
-    forall g pm o x suf fr frs ts hk e,
-      fr = SF o (NT x :: suf)
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> suffix_stack_wf g (fr, frs)
-      -> llPredict pm o x suf frs ts hk <> PredError e.
+    forall gr hw rm pre vs x suf fr frs ts hk e,
+      fr = Fr pre vs (NT x :: suf)
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> stack_wf gr (fr, frs)
+      -> llPredict gr hw rm pre vs x suf frs ts hk <> PredError e.
   Proof.
-    unfold not; intros g pm o x suf fr frs ts hk e ? hn hp hw hl; subst; destruct e.
+    unfold not; intros gr hw rm pre vs x suf fr frs ts hk e ? hn hp hw' hl; subst; destruct e.
     - eapply llPredict_never_returns_SpInvalidState;  eauto.
     - eapply llPredict_never_returns_SpLeftRecursion; eauto.
   Qed.

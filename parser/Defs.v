@@ -915,12 +915,31 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition lhss (g : grammar) : list nonterminal :=
     map fst (productions g).
 
+  Lemma production_lhs_in_lhss :
+    forall g x ys,
+      PM.In (x, ys) g -> In x (lhss g).
+  Proof.
+    intros g x ys hi.
+    apply in_map_iff.
+    exists (x, ys).
+    split; auto.
+    apply in_productions_iff; auto.
+  Qed.
+
   Definition rhss (g : grammar) : list (list symbol) :=
     map snd (productions g).
 
   Definition allNts (g : grammar) : NtSet.t :=
     fromNtList (lhss g).
 
+  Lemma allNts_lhss_iff :
+    forall (g : grammar) (x : nonterminal),
+      In x (lhss g)
+      <-> NtSet.In x (allNts g).
+  Proof.
+    intros g x; split; intros hi; apply fromNtList_in_iff; auto.
+  Qed.
+  
   Definition grammar_wf (g : grammar) : Prop :=
     forall p p' fs, PM.MapsTo p (@existT _ _ p' fs) g -> p = p'.
 
