@@ -386,3 +386,9 @@ Lemma fold_left_preserves_list_invar' :
   Proof.
     intros A B a a' b b' ? ?; subst; auto.
   Qed.
+
+  Ltac inv_pr_eq :=
+    match goal with
+    | H : (_, _) = (_, _) |- _ =>
+      inv H
+    end.

@@ -2299,11 +2299,16 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Ltac inv_sv hv  hm hvs hp :=
     inversion hv as [ ? ?
-                    | ? ? ? ? ? hm hvs
-                    | ? ? ? ? ? ? hm hvs hp]; subst; clear hv.
+                    | ? ? ? ? ? heq hm hvs hp]; subst; clear hv.
 
   Ltac inv_svs hvs  hv hvs' :=
     inversion hvs as [| ? ? ? ? ? ? hv hvs']; subst; clear hvs.
+
+  Ltac inv_t_der :=
+    match goal with
+    | H : sem_value_derivation _ (T _) _ _ |- _ =>
+      inv H
+    end.
 
   Lemma foo :
     forall g (ys : list symbol) w vs,
@@ -2519,7 +2524,36 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     inv hd; ss_inj.
     rewrite cast_ss_refl; auto.
   Qed.
-        
+
+  Lemma svd_inv_terminal_head :
+    forall gr a ys ts vs,
+      sem_values_derivation gr (T a :: ys) ts vs
+      -> exists v ts', ts = @existT _ _ a v :: ts'.
+  Proof.
+    intros gr a ys ts vs hd; subst.
+    inv hd; ss_inj.
+    inv_t_der; s_inj.
+    repeat eexists; split; eauto.
+  Qed.                                              
+
+  (*
+  Lemma svd_inv_terminal_head :
+    forall gr a ys ys' ts vs v vs' (heq : ys = T a :: ys'),
+      sem_values_derivation gr ys ts vs
+      -> (v, vs') = cast_ss _ _ heq vs
+      -> exists ts', ts = @existT _ _ a v :: ts' /\ sem_values_derivation gr (T a :: ys') (@existT _ _ a v :: ts') (v, vs').
+  Proof.
+    intros gr a ys ys' ts vs v vs' heq hd heq'; subst.
+    rewrite cast_ss_refl in heq'.
+    inv hd; ss_inj.
+    inv_t_der; s_inj.
+    inv_pr_eq; sis.
+    eexists; split; eauto.
+    rewrite cons_app_singleton with (x := @existT _ _ _ _).
+    constructor; auto.
+  Qed.                                              
+   *)
+  
   Inductive tree_corresp_value (g : grammar) :
     forall (s : symbol), list token -> tree -> symbol_semty s -> Prop :=
   | Leaf_corresp :
@@ -2891,6 +2925,66 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
                 exists t, tree_derivation g s w t);
       firstorder; repeat econstructor; eauto.
   Qed.
+
+  (* A stronger, predicate-aware notion of what it means 
+     for the stack to accept the remaining input. For the 
+     semantic predicate/action version of CoStar, we use 
+     this definition in place of the "remaining symbols 
+     recognize the remaining input" invariant. *)
+  
+  Fixpoint lower_frames_accept_suffix
+           (gr  : grammar)
+           (ss  : list symbol)
+           (vs  : symbols_semty ss)
+           (frs : list parser_frame)
+           (w   : list token) : Prop :=
+    match frs with
+    | [] => w = []
+    | Fr pre vs_pre (NT x :: suf) :: frs' =>
+      (exists wpre wsuf vs_suf p f,
+          w = wpre ++ wsuf
+          /\ sem_values_derivation gr suf wpre vs_suf
+          /\ PM.MapsTo (x, ss) (@existT _ _ (x, ss) (p, f)) gr
+          /\ p vs = true
+          /\ lower_frames_accept_suffix gr
+                                        (rev pre ++ NT x :: suf)
+                                        (concatTuple (rev pre) (NT x :: suf) (revTuple _ vs_pre) (f vs, vs_suf))
+                                        frs'
+                                        wsuf)
+    | _ => True
+    end.
+
+  Lemma lfas_eq :
+    forall gr ys ys' vs vs' frs ts (heq : ys = ys'),
+      vs' = cast_ss _ _ heq vs
+      -> lower_frames_accept_suffix gr ys vs frs ts
+      -> lower_frames_accept_suffix gr ys' vs' frs ts.
+  Proof.
+    intros gr ys ys' vs vs' frs ts ? ? hl; subst.
+    rewrite cast_ss_refl; auto.
+  Qed.
+  
+  Lemma lfas_replace_head :
+    forall gr ys x zs vs v v' vs'' frs w,
+      lower_frames_accept_suffix gr (ys ++ NT x :: zs) (concatTuple ys (NT x :: zs) vs (v, vs'')) frs w
+      -> v = v'
+      -> lower_frames_accept_suffix gr (ys ++ NT x :: zs) (concatTuple ys (NT x :: zs) vs (v', vs'')) frs w.
+  Proof.
+    intros; subst; auto.
+  Qed.
+
+  Definition stack_accepts_suffix (gr : grammar) (sk : parser_stack) (w : list token) : Prop :=
+    match sk with
+    | (Fr pre vs_pre suf, frs) =>
+      (exists wpre wsuf vs_suf,
+          w = wpre ++ wsuf
+          /\ sem_values_derivation gr suf wpre vs_suf
+          /\ lower_frames_accept_suffix gr
+                                        (rev pre ++ suf)
+                                        (concatTuple (rev pre) suf (revTuple pre vs_pre) vs_suf)
+                                        frs
+                                        wsuf)
+       end.
 
   (* Inductive definition of a nullable grammar symbol *)
   Inductive nullable_sym (g : grammar) : symbol -> Prop :=

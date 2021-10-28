@@ -171,50 +171,6 @@ Module ParserSoundFn (Import D : Defs.T).
    in each frame comprise a unique partial derivation for the tokens that
    have been consumed. *)
 
-  Fixpoint lower_frames_accept_suffix
-           (gr  : grammar)
-           (ss  : list symbol)
-           (vs  : symbols_semty ss)
-           (frs : list parser_frame)
-           (w   : list token) : Prop :=
-    match frs with
-    | [] => w = []
-    | Fr pre vs_pre (NT x :: suf) :: frs' =>
-      (exists wpre wsuf vs_suf p f,
-          w = wpre ++ wsuf
-          /\ sem_values_derivation gr suf wpre vs_suf
-          /\ PM.MapsTo (x, ss) (@existT _ _ (x, ss) (p, f)) gr
-          /\ p vs = true
-          /\ lower_frames_accept_suffix gr
-                                        (rev pre ++ NT x :: suf)
-                                        (concatTuple (rev pre) (NT x :: suf) (revTuple _ vs_pre) (f vs, vs_suf))
-                                        frs'
-                                        wsuf)
-    | _ => True
-    end.
-
-  Lemma lfas_replace_head :
-    forall gr ys x zs vs v v' vs'' frs w,
-      lower_frames_accept_suffix gr (ys ++ NT x :: zs) (concatTuple ys (NT x :: zs) vs (v, vs'')) frs w
-      -> v = v'
-      -> lower_frames_accept_suffix gr (ys ++ NT x :: zs) (concatTuple ys (NT x :: zs) vs (v', vs'')) frs w.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Definition stack_accepts_suffix (gr : grammar) (sk : parser_stack) (w : list token) : Prop :=
-    match sk with
-    | (Fr pre vs_pre suf, frs) =>
-      (exists wpre wsuf vs_suf,
-          w = wpre ++ wsuf
-          /\ sem_values_derivation gr suf wpre vs_suf
-          /\ lower_frames_accept_suffix gr
-                                        (rev pre ++ suf)
-                                        (concatTuple (rev pre) suf (revTuple pre vs_pre) vs_suf)
-                                        frs
-                                        wsuf)
-       end.
-
   Inductive unique_frames_derivation (gr : grammar) :
     list parser_frame -> list token -> list token -> Prop :=
   | UFD_bottom :

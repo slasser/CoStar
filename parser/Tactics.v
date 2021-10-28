@@ -43,3 +43,8 @@ Ltac apps := try solve [ repeat rewrite app_assoc; auto
 
 Ltac rew_anr := repeat rewrite app_nil_r in *.
 
+Ltac inv_cons_tokens_eq :=
+  match goal with
+  | H : @existT _ _ _ _ :: _ = @existT _ _ _ _ :: _ |- _ =>
+    inv H
+  end.

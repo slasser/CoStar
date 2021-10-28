@@ -1,17 +1,49 @@
 Require Import Bool List Omega.
 Require Import CoStar.Defs. 
 Require Import CoStar.Lex.
-(*Require Import CoStar.LLPrediction_error_free. *)
-Require Import CoStar.Parser.
+Require Import CoStar.LLPrediction_error_free.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
 
 Module LLPredictionCompleteFn (Import D : Defs.T).
 
-  (*  Module Export LLPEF := LLPredictionErrorFreeFn D. *)
-  Module Export P := ParserFn D.
+  Module Export LLPEF := LLPredictionErrorFreeFn D.
 
+  (* General-purpose tactic for solving equalities with dependent types *)
+  Ltac t :=
+    match goal with
+    | |- context[revTuple_cons_case] =>
+      unrt
+    | |- lower_frames_accept_suffix _ _ (concatTuple _ _ _ ((cast_action _ _ _ _) _, _)) _ _ =>
+      eapply lfas_replace_head; eauto
+    | |- concatTuple ?xs ?ys ?vx ?vy = cast_ss (?xs' ++ ?ys) (?xs ++ ?ys) ?pf (concatTuple ?xs' ?ys ?vx' ?vy') =>
+      eapply concatTuple_eq with (heq := app_inv_tail  _ _ _ pf)
+    | |- concatTuple ?pre (?s :: ?suf) _ _ = cast_ss _ _ _ (concatTuple ?pre' ([?s] ++ ?suf) _ _) =>
+      eapply concatTuple_eq
+    | |- context[cast_ss ?xs ?xs _ _] =>
+      rewrite cast_ss_refl
+    | |- (?a, ?b) = (?a', ?b') =>
+      apply pair_split_eq
+    | |- ?f ?vs = (cast_action _ _ _ ?f) ?vs' =>
+      eapply cast_action_eq
+    | |- context[concatTuple (rev (rev ?xs)) []] =>
+      erewrite rrt_anr
+    | |- (cast_predicate _ _ _ _) _ = true =>
+      eapply cast_predicate_eq_true; eauto
+    | |- context[concatTuple (_ ++ [_]) _ (concatTuple _ [_] _ _) _] => erewrite concatTuple_assoc'
+    | |- context[cast_ss _ _ _ (cast_ss _ _ _ _)] =>
+      erewrite <- cast_ss_ins_trans
+    | |- context[revTuple _ (revTuple _ _)] =>
+      erewrite revTuple_involutive
+    | |- PM.MapsTo _ (@existT _ _ _ (cast_predicate _ _ _ _, cast_action _ _ _ _)) _ =>
+      eapply mapsto_cast; eauto
+    end.
+
+  Ltac t' := repeat t.
+
+  (* Beginning of the proofs themselves *)
+  
   Inductive move_step :
     subparser -> list token -> subparser -> list token -> Prop :=
   | MV_consume :
@@ -74,14 +106,14 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     constructor.
   Qed.
 
-  Lemma move_step_preserves_suffix_stack_wf_invar :
+  Lemma move_step_preserves_stack_wf_invar :
     forall g sp sp' t w,
       move_step sp (t :: w) sp' w
-      -> suffix_stack_wf g sp.(stack)
-      -> suffix_stack_wf g sp'.(stack).
+      -> stack_wf g sp.(stack)
+      -> stack_wf g sp'.(stack).
   Proof.
-    intros g sp sp' (a,l) w' hm hw.
-    eapply moveSp_preserves_suffix_stack_wf_invar; eauto.
+    intros g sp sp' (a,v) w' hm hw.
+    eapply moveSp_preserves_stack_wf_invar; eauto.
     eapply moveSp_move_step; eauto.
   Qed.
 
@@ -92,34 +124,51 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       -> sp_pushes_from_keyset pm sp'.
   Proof.
     intros pm sp sp' (a,l) w' hm hp.
-    eapply moveSp_preserves_pfk; eauto.
+    eapply moveSp_preserves_pki; eauto.
     eapply moveSp_move_step; eauto.
   Qed.
-
-  Lemma move_step_preserves_unprocStackSyms_recognize :
-    forall g sp sp' t w',
+  
+  Lemma move_step_preserves_sas :
+    forall gr sp sp' t w',
       move_step sp (t :: w') sp' w'
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
-      -> gamma_recognize g (unprocStackSyms sp'.(stack)) w'.
+      -> stack_accepts_suffix gr sp.(stack) (t :: w')
+      -> stack_accepts_suffix gr sp'.(stack) w'.
   Proof.
-    intros g sp sp' t w' hm hg; inv hm; sis.
-    apply gamma_recognize_terminal_head in hg.
-    destruct hg as [l' [w'' [heq hg]]]; inv heq; auto.
+    intros gr [pred ([pre vs suf], frs)] [pred' (fr', frs')] t w' hm hs; red in hs; inv hm; ss_inj; sis.
+    destruct hs as (wpre & wsuf & vs_suf & heq & hd & hl).
+    pose proof hd as hts.
+    apply svd_inv_terminal_head in hts.
+    destruct hts as (v' & ts' & ?); subst; sis.
+    inv heq; t_inj.
+    inv hd; ss_inj.
+    inv_t_der; s_inj; sis.
+    inv_cons_tokens_eq; t_inj.
+    exists ts'; exists wsuf; eexists.
+    repeat split; eauto.
+    eapply lfas_eq; eauto.
+    t'; eauto.
+    Unshelve.
+    apps.
   Qed.
 
   Lemma move_step_recognize_cons :
     forall g sp t w',
       stable_config sp.(stack)
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
+      -> stack_accepts_suffix g sp.(stack) (t :: w')
       -> exists sp',
           move_step sp (t :: w') sp' w'.
   Proof.
-    intros g [pred stk] t w' hs hg; sis.
+    intros g [pred stk] t w' hs hs'; sis.
     inv hs; auto; sis.
-    - inv hg.
-    - apply gamma_recognize_terminal_head in hg.
-      destruct hg as (l & w'' & heq & hg); inv heq; eauto.
-  Qed. 
+    - destruct hs' as (wpre & wsuf & vs_suf & heq & hd & heq'); subst; rew_anr.
+      inv hd.
+      exfalso.
+      eapply nil_cons; eauto.
+    - destruct hs' as (wpre & wsuf & vs_suf & heq & hd & heq'); subst.
+      inv hd; ss_inj.
+      inv_t_der; s_inj; sis. 
+      inv heq; eauto.
+  Qed.
 
   Inductive closure_step (g : grammar) : NtSet.t -> subparser -> NtSet.t -> subparser -> Prop :=
   | CS_ret :
