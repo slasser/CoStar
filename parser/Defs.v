@@ -683,6 +683,12 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       + right; auto.
   Qed.
 
+  Ltac mapsto_fun heq :=
+    match goal with
+    | H : PM.MapsTo ?k ?v ?m, H' : PM.MapsTo ?k ?v' ?m |- _ =>
+      assert (heq : v = v') by (eapply PMF.MapsTo_fun in H; eauto)
+    end.
+
   Definition lhs' (p : production) : nonterminal :=
     let (x, _) := p in x.
 
@@ -867,7 +873,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Definition grammar_entry : Type :=
     {p : production & production_semty p}.
+
   
+  Lemma inv_grammar_entry_eq :
+    forall x ys (p p' : predicate_semty (x, ys)) (f f' : action_semty (x, ys)),
+      @existT _ production_semty (x, ys) (p, f) = @existT _ production_semty (x, ys) (p', f')
+      -> p = p' /\ f = f'.
+  Proof.
+    intros x ys p p' f f' heq.
+    apply Eqdep_dec.inj_pair2_eq_dec in heq; auto.
+    - inv heq; auto.
+    - apply Production_as_UOT.eq_dec.
+  Qed.
+    
   Definition grammar : Type :=
     PM.t grammar_entry.
 
@@ -1107,6 +1125,12 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     apply fpaa_cases in hf.
     apply PMF.find_mapsto_iff; auto.
   Qed.
+
+  Ltac appl_fpaa :=
+    match goal with
+    | H : findPredicateAndAction _ _ _ = Some _ |- _ =>
+      apply fpaa_mapsto in H
+    end.
 
   (* An rhs_map maps each grammar nonterminal to its
      right-hand sides. It provides an efficient way to look
@@ -2299,7 +2323,7 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
 
   Ltac inv_sv hv  hm hvs hp :=
     inversion hv as [ ? ?
-                    | ? ? ? ? ? heq hm hvs hp]; subst; clear hv.
+                    | ? ? ? ? ? ? hm hvs hp]; subst; clear hv.
 
   Ltac inv_svs hvs  hv hvs' :=
     inversion hvs as [| ? ? ? ? ? ? hv hvs']; subst; clear hvs.
@@ -2307,6 +2331,12 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Ltac inv_t_der :=
     match goal with
     | H : sem_value_derivation _ (T _) _ _ |- _ =>
+      inv H
+    end.
+
+  Ltac inv_nt_der :=
+    match goal with
+    | H : sem_value_derivation _ (NT _) _ _ |- _ =>
       inv H
     end.
 
@@ -2534,7 +2564,21 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     inv hd; ss_inj.
     inv_t_der; s_inj.
     repeat eexists; split; eauto.
-  Qed.                                              
+  Qed.
+
+  Lemma svd_inv_nonterminal_head :
+    forall gr x ys ys' ts vs v' vs' (heq : ys = NT x :: ys'),
+      sem_values_derivation gr ys ts vs
+      -> (v', vs') = cast_ss _ _ heq vs
+      -> exists ts' ts'',
+        ts = ts' ++ ts''
+        /\ sem_value_derivation gr (NT x) ts' v'
+        /\ sem_values_derivation gr ys' ts'' vs'.
+  Proof.
+    intros gr x ys ys' ts vs v' vs' heq hd heq'; subst.
+    inv hd; ss_inj.
+    rewrite cast_ss_refl in heq'; inv heq'; eauto.
+  Qed.
 
   (*
   Lemma svd_inv_terminal_head :
