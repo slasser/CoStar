@@ -2580,6 +2580,18 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     rewrite cast_ss_refl in heq'; inv heq'; eauto.
   Qed.
 
+  Lemma svd_terminal_head_contra :
+    forall gr a ys vs,
+      ~ sem_values_derivation gr (T a :: ys) [] vs.
+  Proof.
+    unfold not; intros gr a ys vs hd.
+    inv hd.
+    match goal with
+    | H : ?pre ++ ?suf = [] |- _ => apply app_eq_nil in H; destruct H; subst
+    end.
+    inv_t_der.
+  Qed.
+  
   (*
   Lemma svd_inv_terminal_head :
     forall gr a ys ys' ts vs v vs' (heq : ys = T a :: ys'),
