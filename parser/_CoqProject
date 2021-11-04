@@ -16,9 +16,10 @@ Parser.v
 LLPrediction_error_free.v
 LLPrediction_complete.v
 
+SLL_optimization_sound.v
+
 Parser_sound.v
 
-SLL_optimization_sound.v
 SLLPrediction_error_free.v
 SLLPrediction_complete.v
 

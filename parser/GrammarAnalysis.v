@@ -60,7 +60,6 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   (* Correspondence between closure_multistep and frame_step relations *)
 
-  (*
   Lemma closure_step__frame_step :
     forall g av av' sp sp' pr pr' fr fr' frs frs',
       sp     = Sp pr  (fr, frs)

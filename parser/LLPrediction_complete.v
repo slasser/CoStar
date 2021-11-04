@@ -1027,6 +1027,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       apply push_preserves_frames_wf_invar; auto.
   Qed.
 
+  (* Come back to this *)
+  (*
+  
   Inductive move_closure_multistep' (g : grammar) :
     subparser -> list token -> subparser -> list token -> Prop :=
   | MC_empty' :
@@ -1653,5 +1656,5 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     - eapply llStartState_all_stacks_stable; eauto.
     - eapply llStartState_preserves_esp_invar; eauto. 
   Qed.
-
+*)
 End LLPredictionCompleteFn.
