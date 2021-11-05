@@ -1,14 +1,14 @@
 Require Import List.
 Require Import CoStar.Defs.
 Require Import CoStar.Lex.
-Require Import CoStar.Parser.
+Require Import CoStar.LLPrediction.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
 
 Module LLPredictionErrorFreeFn (Import D : Defs.T).
 
-  Module Export P := ParserFn D.
+  Module Export LLP := LLPredictionFn D.
 
   (* BREAKING THIS INTO TWO GROUPS OF LEMMAS
    FOR THE TWO TYPES OF PREDICTION ERRORS *)

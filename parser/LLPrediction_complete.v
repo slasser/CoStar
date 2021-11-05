@@ -946,7 +946,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps hk rhs hp hi hl; sis.
     - unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| sp'' sps''] eqn:hf; tc.
-      destruct (allPredictionsEqual sp'' sps'') eqn:ha'; tc.
+      destruct (allPredictionsEqual _ _ sp'' sps'') eqn:ha'; tc.
       inv hl.
       exists wpre; exists []; split; auto.
       intros orig_sp curr_sp' hin hm.
@@ -959,8 +959,9 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         rewrite hf in hm.
         destruct hm as [hh | ht]; subst; auto.
         eapply allPredictionsEqual_prop; eauto.
+        apply beqGamma_eq_iff.
     - destruct curr_sps as [| curr_sp curr_sps]; tc.
-      destruct (allPredictionsEqual curr_sp curr_sps) eqn:ha.
+      destruct (allPredictionsEqual _ _ curr_sp curr_sps) eqn:ha.
       + inv hl; exists wpre; exists (@existT _ _ a l :: wsuf'); split; auto.
         intros orig_sp curr_sp' hin hm.
         apply eq_trans with (y := curr_sp'.(prediction)).
@@ -968,6 +969,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         * eapply hi in hm; eauto.
           destruct hm as [hh | ht]; subst; auto.
           eapply allPredictionsEqual_prop; eauto.
+          apply beqGamma_eq_iff.
       + apply llPredict'_cont_cases in hl.
         destruct hl as [sps'' [ht hl]]. 
         eapply IH with (wpre := wpre ++ [@existT _ _ a l]) in hl; eauto.

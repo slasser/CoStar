@@ -1,13 +1,13 @@
 Require Import List Relation_Operators Operators_Properties.
 Require Import CoStar.Lex.
-Require Import CoStar.LLPrediction_complete.
+Require Import CoStar.SLLPrediction.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
 
 Module SllOptimizationSoundFn (Import D : Defs.T).
 
-  Module Export LLPC := LLPredictionCompleteFn D.
+  Module Export SLLP := SllPredictionFn D.
 
   (* Definitions to capture the fact that SLL prediction overapproximates 
      LL prediction. For each LL subparser in play, there exists a corresponding
@@ -30,6 +30,17 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       end
     end.
 
+  Lemma sllifyHead_cons__sllify_cons : forall g fr frs,
+      stack_wf g (fr, frs)
+      -> sllifyHead (fr, frs) :: sllify frs = sllify (fr :: frs).
+  Proof.
+    intros g [pre vs suf] frs hw.
+    sis.
+    destruct frs as [| [pre_cr vs_cr suf_cr] frs].
+    - auto.
+    - destruct suf_cr as [| [a|x] suf_cr]; inv hw; auto.
+  Qed.
+
   Definition approx (sp' : sll_subparser) (sp : subparser) : Prop :=
     match sp', sp with
     | SllSp pred' (fr', frs'), Sp pred (fr, frs) =>
@@ -41,23 +52,23 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     forall pred pre vs suf frs pred' o' suf' frs',
       approx (SllSp pred' (SllFr o' suf', frs')) (Sp pred (Fr pre vs suf, frs))
       -> pred' = pred
-         /\ ((frs = [] /\ frs' = [] /\ o' = None /\ suf' = suf)
-             \/ (exists pre_cr vs_cr x suf_cr frs'',
+         /\ suf' = suf
+         /\ ((frs = [] /\ frs' = [] /\ o' = None)
+             \/ (exists pre_cr vs_cr x suf_cr frs'' ctx,
                     frs = Fr pre_cr vs_cr (NT x :: suf_cr) :: frs''
                     /\ o' = Some x
-                    /\ suf' = suf
-                    /\ (exists ctx, frs' ++ ctx = sllify (Fr pre_cr vs_cr (NT x :: suf_cr) :: frs'')))).
+                    /\ frs' ++ ctx = sllify (Fr pre_cr vs_cr (NT x :: suf_cr) :: frs''))).
   Proof.
     intros pred pre vs suf frs pred' o' suf' frs' ha.
     red in ha.
     destruct ha as [heq [ctx heq']]; subst.
     split; auto.
-    destruct frs as [| [pre_cr vs_cr [| [a|x] suf_cr]] frs'']; inv heq'.
-    + match goal with
-      | H : ?xs ++ ?ys = [] |- _ =>
-        apply app_eq_nil in H; destruct H; subst
-      end; auto.
-    + right; eauto 10.
+    eauto 20.
+    destruct frs as [| [pre_cr vs_cr [| [a|x] suf_cr]] frs'']; inv heq'; eauto 12.
+    match goal with
+    | H : ?xs ++ ?ys = [] |- _ =>
+      apply app_eq_nil in H; destruct H; subst
+    end; auto.
   Qed.
 
   Lemma approx_finalConfig_true :
@@ -92,13 +103,13 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Proof.
     intros a l [pred ([pre vs suf], frs)] x' [pred' ([o' suf'], frs')] hx hm; unfold moveSp in hm; dms; tc; inv hm.
     apply approx_inv in hx.
-    destruct hx as [? ho]; subst; destruct ho as [hl | hr].
-    - destruct hl as (? & ? & ? & ?); subst.
+    destruct hx as (? & ? & [hl | hr]); subst.
+    - destruct hl as (? & ? & ?); subst.
       unfold sllMoveSp; dm; tc.
       eexists; split; eauto.
       split; auto.
       exists []; auto.
-    - destruct hr as (pre_cr & vs_cr & x & suf_cr & frs'' & ? & ? & ? & (ctx & heq)); subst.
+    - destruct hr as (pre_cr & vs_cr & x & suf_cr & frs'' & ctx & ? & ? & heq); subst. 
       unfold sllMoveSp; dm; tc.
       eexists; split; eauto.
       split; auto.
@@ -129,9 +140,9 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     inv heq.
     destruct fr as [pre vs suf].
     apply approx_inv in ha.
-    destruct ha as [heq [hl | hr]]; subst.
-    - destruct hl as (? & ? & ? & ?); tc.
-    - destruct hr as (? & ? & ? & ? & ? & ? & ? & ? & [ctx ?]); subst; sis.
+    destruct ha as (? & ? & [hl | hr]); subst.
+    - destruct hl as (? & ? & ?); tc.
+    - destruct hr as (? & ? & ? & ? & ? & ? & ? & ? & ?); subst; sis. 
       inv hs.
   Qed.
 
@@ -145,10 +156,10 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     intros gr hw rm vi vi' vi'' [pr ([pre vs suf], frs)] [pr' ([o' suf'], frs')] sps'' hw' ha hs hs'.
     eapply cstepDone_stable_config in hs; eauto.
     apply approx_inv in ha.
-    destruct ha as [? [hl | hr]]; subst.
-    - destruct hl as (? & ? & ? & ?); subst.
+    destruct ha as (? & ? & [hl | hr]); subst.
+    - destruct hl as (? & ? & ?); subst.
       sis; dms; tc; inv hs; inv hs'.
-    - destruct hr as (? & ? & ? & ? & ? & ? & ? & ? & [ctx ?]); subst.
+    - destruct hr as (? & ? & ? & ? & ? & ? & ? & ? & ?); subst.
       sis; dms; tc; inv hs; inv hs'.
   Qed.
 
@@ -164,6 +175,7 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     sis; dms; tc; inv hs; inv hs'; destruct ha as [? [? heq]]; inv heq; inv hw.
   Qed.
 
+  (* to do -- refactor *)
   Lemma approx_cstep :
     forall gr hw rm ax ax' ay ay' x x' y xs' ys',
       rhs_map_correct rm gr
@@ -176,8 +188,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     intros gr hw rm ax ax' ay ay' [pr ([pre vs suf], frs)] x' [pr' ([o' suf'], frs')] xs' ys'
            hc ha hs hs' hi.
     apply approx_inv in ha.
-    destruct ha as [? [hl | hr]]; subst.
-    - destruct hl as (? & ? & ? & ?); subst.
+    destruct ha as (? & ? & [hl | hr]); subst.
+    - destruct hl as (? & ? & ?); subst.
       unfold cstep in *; unfold sllCstep in *; dmeqs H; tc; inv hs; inv hs'; try solve [inv hi].
       + exfalso.
         eapply NMF.in_find_iff; eauto.
@@ -197,13 +209,13 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         * apply in_map_iff; eauto.
         * split; auto.
           exists []; auto.
-    - destruct hr as (? & ? & ? & ? & ? & ? & ? & ? & [ctx ?]); subst.
+    - destruct hr as (? & ? & ? & ? & ? & ? & ? & ? & ?); subst.
       unfold cstep in *; unfold sllCstep in *; dmeqs H; tc; inv hs; inv hs'; try solve [inv hi].
       + apply in_singleton_eq in hi; subst.
         eexists; split.
         * apply in_eq.
         * split; auto.
-          destruct x3 as [| [pre_cr vs_cr [| [a'|x'] suf_cr]] frs'']; sis; inv H2; eauto.
+          destruct x3 as [| [pre_cr vs_cr [| [a'|x'] suf_cr]] frs'']; sis; inv H1; eauto.
       + exfalso.
         eapply NMF.in_find_iff; eauto.
         apply in_map_iff in hi; destruct hi as [ys [heq hi]]; subst.
@@ -221,12 +233,20 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         eexists; split.
         * apply in_map_iff; eauto.
         * split; auto.
-          exists ctx; auto.
+          eexists; auto.
           sis.
-          rewrite H2; auto.
+          rewrite H1; auto.
   Qed.
 
-    (* refactor -- this should probably be several lemmas *)
+  Lemma stable_config__stable_sllifyHead :
+    forall fr frs,
+      stable_config (fr, frs) -> stable (sllifyHead (fr, frs)) = true.
+  Proof.
+    intros fr frs hs; inv hs; auto.
+    destruct frs as [| [pre_cr vs_cr [| [a'|x'] suf_cr]] frs]; auto.
+  Qed.
+
+  (* refactor -- this should probably be several lemmas *)
   Lemma simReturn_approx :
     forall g cm av av' av'' x x' x'' y ys'',
       closure_map_complete g cm
@@ -237,79 +257,65 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       -> simReturn cm y = Some ys''
       -> exists y'', In y'' ys'' /\ approx y'' x''.
   Proof.
-    intros g cm av av' av'' [pr (fr, frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')]
-           [pr''' (fr''', frs''')] ys'' hcm hw ha hs hm hr; simpl in hw.
+    intros g cm av av' av'' [pr ([pre vs suf], frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')]
+           [pr''' ([o''' suf'''], frs''')] ys'' hcm hw ha hs hm hr; simpl in hw.
+    apply approx_inv in ha.
+    destruct ha as (? & ? & [hl | hr']); subst.
+    - exfalso.
+      destruct hl as (? & ? & ?); subst.
+      apply simReturn_stack_shape in hr.
+      destruct hr as [x heq]; inv heq.
+    - destruct hr' as (? & ? & ? & ? & ? & ? & ? & ? & ?); subst.
+      pose proof hr as hr'.
+      apply simReturn_stack_shape in hr'.
+      destruct hr' as [x' heq].
+      simpl in heq.
+      inv heq.
+      simpl in H1. subst.
     assert (heq : pr'' = pr).
     { apply closure_step_preserves_label in hs; sis; subst.
       apply closure_multistep_preserves_label in hm; sis; subst; auto. } subst.
     assert (hw' : stack_wf g (fr', frs')).
     { apply closure_step_preserves_stack_wf_invar in hs; sis; auto. }
+    assert (hw'' : stack_wf g (fr'', frs'')).
+    { apply closure_multistep_preserves_stack_wf_invar in hm; auto. }
     assert (hst : stable_config (fr'', frs'')).
     { apply stable_config_after_closure_multistep in hm; sis; auto. }
     eapply closure_step__frame_step in hs; eauto.
     eapply closure_multistep__frame_step_trc in hm; eauto.
-    assert (hfm : frame_multistep g fr fr'').
+    assert (sllifyHead (Fr pre vs [], Fr x x0 (NT x' :: x2) :: x3) = SllFr (Some x') []).
+    { simpl; auto. }
+    rewrite H in hs.
+    assert (hfm : frame_multistep g (SllFr (Some x') []) (sllifyHead (fr'', frs''))).
     { eapply clos_t_rt; eauto.
       apply clos_rt_rt1n_iff; auto. }
-    exists (Sp pr (fr'', [])); split; sis; eauto.
-    dms; tc; inv hr; sis.
-    destruct ha as [? [ctx heq]]; inv heq.
-    apply in_map_iff.
-    eexists; split; eauto.
-    unfold destFrames.
-    pose proof hfm as hfm'.
-    apply hcm in hfm'.
-    destruct hfm' as [v [hf hi]].
-    + eapply stable_config__stable_true; eauto.
-    + apply FMF.find_mapsto_iff in hf; rewrite hf; auto.
+    exists (SllSp pr (sllifyHead (fr'', frs''), [])); split.
+      + simpl in hr.
+        inv hr.
+        apply in_map_iff.
+        eexists; split; eauto.
+        unfold destFrames.
+        pose proof hfm as hfm'.
+        apply hcm in hfm'.
+        destruct hfm' as [v [hf hi]].
+        * apply stable_config__stable_sllifyHead; auto. 
+        * apply FMF.find_mapsto_iff in hf.
+          rewrite hf; auto.
+      + red.
+        split; auto.
+        exists (sllify frs'').
+        rewrite app_nil_l.
+        eapply sllifyHead_cons__sllify_cons; eauto.
   Qed.
 
-  (* refactor -- this should probably be several lemmas *)
-  Lemma simReturn_approx :
-    forall g cm av av' av'' x x' x'' y ys'',
-      closure_map_complete g cm
-      -> suffix_stack_wf g (stack x)
-      -> approx y x
-      -> closure_step g av x av' x'
-      -> closure_multistep g av' x' av'' x''
-      -> simReturn cm y = Some ys''
-      -> exists y'', In y'' ys'' /\ approx y'' x''.
-  Proof.
-    intros g cm av av' av'' [pr (fr, frs)] [pr' (fr', frs')] [pr'' (fr'', frs'')]
-           [pr''' (fr''', frs''')] ys'' hcm hw ha hs hm hr; simpl in hw.
-    assert (heq : pr'' = pr).
-    { apply closure_step_preserves_label in hs; sis; subst.
-      apply closure_multistep_preserves_label in hm; sis; subst; auto. } subst.
-    assert (hw' : suffix_stack_wf g (fr', frs')).
-    { apply closure_step_preserves_suffix_stack_wf_invar in hs; sis; auto. }
-    assert (hst : stable_config (fr'', frs'')).
-    { apply stable_config_after_closure_multistep in hm; sis; auto. }
-    eapply closure_step__frame_step in hs; eauto.
-    eapply closure_multistep__frame_step_trc in hm; eauto.
-    assert (hfm : frame_multistep g fr fr'').
-    { eapply clos_t_rt; eauto.
-      apply clos_rt_rt1n_iff; auto. }
-    exists (Sp pr (fr'', [])); split; sis; eauto.
-    dms; tc; inv hr; sis.
-    destruct ha as [? [ctx heq]]; inv heq.
-    apply in_map_iff.
-    eexists; split; eauto.
-    unfold destFrames.
-    pose proof hfm as hfm'.
-    apply hcm in hfm'.
-    destruct hfm' as [v [hf hi]].
-    + eapply stable_config__stable_true; eauto.
-    + apply FMF.find_mapsto_iff in hf; rewrite hf; auto.
-  Qed.
-
-  Definition overapprox (sps' sps : list subparser) : Prop :=
+  Definition overapprox (sps' : list sll_subparser) (sps : list subparser) : Prop :=
     forall sp, In sp sps -> exists sp', In sp' sps' /\ approx sp' sp.
   
   Lemma overapprox_finalConfig :
     forall sps sps' sps'' sps''',
       overapprox sps''' sps''
       -> filter finalConfig sps''  = sps
-      -> filter finalConfig sps''' = sps'
+      -> filter sllFinalConfig sps''' = sps'
       -> overapprox sps' sps.
   Proof.
     intros sps sps' sps'' sps''' ho hf hf' sp'' hi; subst.
@@ -322,29 +328,31 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Lemma overapprox_ape_pointwise :
     forall x y xs ys,
       overapprox (y :: ys) xs
-      -> allPredictionsEqual y ys = true
+      -> allPredictionsEqual beqGamma sll_pred y ys = true
       -> In x xs
-      ->  prediction y = prediction x.
+      ->  sll_pred y = prediction x.
   Proof.
     intros x y xs ys ho ha hi.
     apply ho in hi; destruct hi as [y' [hi he]].
-    apply eq_trans with (y := prediction y').
+    apply eq_trans with (y := sll_pred y').
     - inv hi; auto.
-      eapply allPredictionsEqual_prop in ha; firstorder.
+      eapply allPredictionsEqual_prop in ha.
+      + firstorder.
+      + apply beqGamma_eq_iff.
     - apply approx_predictions_eq; auto.
   Qed.
 
   Lemma overapprox_allPredictionsEqual_big_small :
     forall x y xs ys,
       overapprox (y :: ys) (x :: xs)
-      -> allPredictionsEqual y ys = true
-      -> allPredictionsEqual x xs = true.
+      -> allPredictionsEqual beqGamma sll_pred y ys = true
+      -> allPredictionsEqual beqGamma prediction x xs = true.
   Proof.
     intros x y xs ys ho ha; unfold allPredictionsEqual; unfold allEqual.
     apply forallb_forall; intros pred hi.
     apply beqGamma_eq_iff.
     apply in_map_iff in hi; destruct hi as [x' [? hi]]; subst.
-    apply eq_trans with (y := prediction y).
+    apply eq_trans with (y := sll_pred y).
     - symmetry; eapply overapprox_ape_pointwise; eauto; apply in_eq.
     - eapply overapprox_ape_pointwise; eauto; apply in_cons; auto.
   Qed.
@@ -352,15 +360,15 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Lemma overapprox_final_subparsers_succ_eq :
     forall sps sps' rhs rhs',
       overapprox sps' sps
-      -> handleFinalSubparsers sps  = PredSucc rhs
-      -> handleFinalSubparsers sps' = PredSucc rhs'
+      -> handleFinalSubparsers sps     = PredSucc rhs
+      -> sllHandleFinalSubparsers sps' = PredSucc rhs'
       -> rhs' = rhs.
   Proof.
-    intros sps sps' rhs rhs' ho hl hs; unfold handleFinalSubparsers in *.
+    intros sps sps' rhs rhs' ho hl hs; unfold handleFinalSubparsers in *; unfold sllHandleFinalSubparsers in *.
     destruct (filter _ sps ) as [| x xs] eqn:hf  ; tc.
     destruct (filter _ sps') as [| y ys] eqn:hf' ; tc.
-    destruct (allPredictionsEqual x xs)  eqn:ha  ; tc; inv hl.
-    destruct (allPredictionsEqual y ys)  eqn:ha' ; tc; inv hs.
+    destruct (allPredictionsEqual _ _ x xs)  eqn:ha  ; tc; inv hl.
+    destruct (allPredictionsEqual _ _ y ys)  eqn:ha' ; tc; inv hs.
     eapply overapprox_finalConfig in ho; eauto.
     eapply overapprox_ape_pointwise; eauto; apply in_eq.
   Qed.
@@ -368,23 +376,25 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Lemma overapprox_allPredictionsEqual_false :
     forall x y xs ys,
       overapprox (y :: ys) (x :: xs)
-      -> allPredictionsEqual x xs = false
-      -> allPredictionsEqual y ys = false.
+      -> allPredictionsEqual beqGamma prediction x xs = false
+      -> allPredictionsEqual beqGamma sll_pred y ys = false.
   Proof.
     intros x y xs ys ho ha.
     apply ape_false__allPredictionsEqual_false; intros ha'.
-    apply allPredictionsEqual_false_exists_diff_rhs in ha.
-    destruct ha as [x' [hi hneq]]; apply hneq; clear hneq.
-    apply eq_trans with (y := prediction y).
-    (* These could probably be lemmas *)
-    - apply in_cons with (a := x) in hi.
-      apply ho in hi; destruct hi as [y' [hi hx]].
-      apply approx_predictions_eq in hx.
-      apply ape_cons_head_eq in ha'; apply ha' in hi; tc.
-    - assert (hh : In x (x :: xs)) by apply in_eq.
-      apply ho in hh; destruct hh as [y' [hh hx]].
-      apply approx_predictions_eq in hx.
-      apply ape_cons_head_eq in ha'; apply ha' in hh; tc.
+    - apply beqGamma_eq_iff.
+    - apply allPredictionsEqual_false_exists_diff_rhs in ha.
+      destruct ha as [x' [hi hneq]]; apply hneq; clear hneq.
+      apply eq_trans with (y := sll_pred y).
+      (* These could probably be lemmas *)
+      + apply in_cons with (a := x) in hi.
+        apply ho in hi; destruct hi as [y' [hi hx]].
+        apply approx_predictions_eq in hx.
+        apply ape_cons_head_eq in ha'; apply ha' in hi; tc.
+      + assert (hh : In x (x :: xs)) by apply in_eq.
+        apply ho in hh; destruct hh as [y' [hh hx]].
+        apply approx_predictions_eq in hx.
+        apply ape_cons_head_eq in ha'; apply ha' in hh; tc.
+      + apply beqGamma_eq_iff.
   Qed.
 
   Lemma overapprox_handleFinalSubparsers_contra :

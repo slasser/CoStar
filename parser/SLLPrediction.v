@@ -733,14 +733,11 @@ Module SllPredictionFn (Import D : Defs.T).
     intros sp pred stk ? hf; subst; unfold sllFinalConfig in hf; dms; tc.
   Qed.
 
-  Definition sllAllPredictionsEqual (sp : sll_subparser) (sps : list sll_subparser) : bool :=
-    allEqual _ beqGamma sp.(sll_pred) (map sll_pred sps).
-
   Definition sllHandleFinalSubparsers (sps : list sll_subparser) : prediction_result :=
     match filter sllFinalConfig sps with
     | []         => PredReject
     | sp :: sps' => 
-      if sllAllPredictionsEqual sp sps' then
+      if allPredictionsEqual beqGamma sll_pred sp sps' then
         PredSucc sp.(sll_pred)
       else
         PredAmbig sp.(sll_pred)
@@ -757,7 +754,7 @@ Module SllPredictionFn (Import D : Defs.T).
     intros sps rhs hh.
     unfold sllHandleFinalSubparsers in hh.
     destruct (filter _ _) as [| sp sps'] eqn:hf; tc.
-    destruct (sllAllPredictionsEqual _ _); tc; inv hh.
+    destruct (allPredictionsEqual _ _ _ _); tc; inv hh.
     assert (hin : In sp (filter sllFinalConfig sps)).
     { rewrite hf; apply in_eq. }
     apply filter_In in hin.
@@ -793,7 +790,7 @@ Module SllPredictionFn (Import D : Defs.T).
       match sps with
       | []          => (PredReject, ca)
       | sp' :: sps' =>
-        if sllAllPredictionsEqual sp' sps' then
+        if allPredictionsEqual beqGamma sll_pred sp' sps' then
           (PredSucc sp'.(sll_pred), ca)
         else
           match Cache.find (sps, a) ca as f

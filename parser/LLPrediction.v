@@ -907,97 +907,106 @@ Module LLPredictionFn (Import D : Defs.T).
     intros sp pred stk ? hf; subst; unfold finalConfig in hf; dms; tc; eauto.
   Qed.
 
-  Definition allPredictionsEqual (sp : subparser) (sps : list subparser) : bool :=
-    allEqual _ beqGamma sp.(prediction) (map prediction sps).
+  Definition allPredictionsEqual {A B} (beq : B -> B -> bool) (f : A -> B) (x : A) (xs : list A) : bool :=
+    allEqual _ beq (f x) (map f xs). 
 
   Lemma allPredictionsEqual_inv_cons :
-    forall sp' sp sps,
-      allPredictionsEqual sp' (sp :: sps) = true
-      -> sp'.(prediction) = sp.(prediction)
-         /\ allPredictionsEqual sp' sps = true.
+    forall A B beq (f : A -> B) sp' sp sps,
+      (forall (x x' : B), beq x x' = true <-> x = x')
+      -> allPredictionsEqual beq f sp' (sp :: sps) = true
+      -> f sp' = f sp
+         /\ allPredictionsEqual beq f sp' sps = true.
   Proof.
-    intros sp' sp sps ha.
-    unfold allPredictionsEqual in ha; unfold allEqual in ha; sis.
-    apply andb_true_iff in ha; destruct ha as [hhd htl]; split; auto.
-    unfold beqGamma in *; dms; tc.
+    unfold allPredictionsEqual; intros.
+    apply allEqual_inv_cons; auto.
   Qed.
 
   Lemma allPredictionsEqual_in_tl :
-    forall sp sp' sps,
-      allPredictionsEqual sp sps = true
+    forall A B beq (f : A -> B) sp sp' sps,
+      (forall (x x' : B), beq x x' = true <-> x = x')
+      -> allPredictionsEqual beq f sp sps = true
       -> In sp' sps
-      -> sp'.(prediction) = sp.(prediction).
+      -> f sp' = f sp. 
   Proof.
-    intros sp sp' sps ha hi; induction sps as [| sp'' sps IH]; inv hi;
-      apply allPredictionsEqual_inv_cons in ha; destruct ha as [hhd htl]; auto.
+    unfold allPredictionsEqual; intros.
+    eapply allEqual_in_tl; eauto.
+    apply in_map_iff; eauto.
   Qed.
 
   Lemma allPredictionsEqual_false_exists_diff_rhs :
-    forall sp sps,
-      allPredictionsEqual sp sps = false
+    forall A B beq (f : A -> B) sp sps,
+      (forall (x x' : B), beq x x' = true <-> x = x')
+      -> allPredictionsEqual beq f sp sps = false
       -> exists sp',
         In sp' sps
-        /\ sp'.(prediction) <> sp.(prediction).
+        /\ f sp' <> f sp. 
   Proof.
-    intros sp sps ha; unfold allPredictionsEqual in ha.
-    induction sps as [| sp' sps IH]; simpl in ha.
-    - inv ha.
-    - apply andb_false_iff in ha; destruct ha as [hh | ht].
-      + exists sp'; split.
-        * apply in_eq.
-        * intros heq; symmetry in heq; apply beqGamma_eq_iff in heq; tc.
-      + apply IH in ht; destruct ht as [sp'' [hi hn]].
-        exists sp''; split; auto.
-        apply in_cons; auto.
+    unfold allPredictionsEqual; intros A B beq f sp sps hd ha. 
+    apply allEqual_false_exists_diff_rhs in ha; auto.
+    destruct ha as [ys [hi hn]].
+    apply in_map_iff in hi.
+    destruct hi as [sp' [heq hi]]; subst; eauto.
   Qed.
 
   (* propositional spec for allPredictionsEqual *)
-  Definition all_predictions_equal sp sps :=
-    forall sp', In sp' sps -> prediction sp' = prediction sp.
+  Definition all_predictions_equal {A B : Type} (f : A -> B) sp sps :=
+    forall sp', In sp' sps -> f sp' = f sp.
 
   Lemma ape_tail :
-    forall sp sp' sps,
-      all_predictions_equal sp (sp' :: sps)
-      -> all_predictions_equal sp sps.
+    forall A B (f : A -> B) sp sp' sps,
+      all_predictions_equal f sp (sp' :: sps)
+      -> all_predictions_equal f sp sps.
   Proof.
     firstorder.
   Qed.
 
   Lemma ape_cons_head_eq :
-    forall sp sps,
-      all_predictions_equal sp sps
-      -> all_predictions_equal sp (sp :: sps).
+    forall A B (f : A -> B) sp sps,
+      all_predictions_equal f sp sps
+      -> all_predictions_equal f sp (sp :: sps).
   Proof.
-    intros sp sps ha sp' hi; firstorder; subst; auto.
+    intros A B f sp sps ha sp' hi; firstorder; subst; auto.
   Qed.
   
   Lemma allPredictionsEqual_prop :
-    forall sp sps,
-      allPredictionsEqual sp sps = true
-      -> all_predictions_equal sp sps.
+    forall A B beq (f : A -> B) sp sps,
+      (forall (x x' : B), beq x x' = true <-> x = x')
+      -> allPredictionsEqual beq f sp sps = true
+      -> all_predictions_equal f sp sps.
   Proof.
-    intros sp sps ha sp' hi. 
+    intros A B beq f sp sps hd ha sp' hi. 
     unfold allPredictionsEqual, allEqual in ha.
-    eapply forallb_forall with (x := prediction sp') in ha; eauto.
-    - symmetry; apply beqGamma_eq_iff; auto.
+    eapply forallb_forall with (x := f sp') in ha; eauto.
+    - firstorder. 
     - apply in_map_iff; eauto.
   Qed.
 
   Lemma ape_false__allPredictionsEqual_false :
-    forall sp sps,
-      ~ all_predictions_equal sp sps
-      -> allPredictionsEqual sp sps = false.
+    forall A B beq (f : A -> B) sp sps,
+      (forall (x x' : B), beq x x' = true <-> x = x')
+      -> ~ all_predictions_equal f sp sps
+      -> allPredictionsEqual beq f sp sps = false.
   Proof.
-    intros sp sps hn; unfold not in hn.
-    destruct (allPredictionsEqual sp sps) eqn:ha; auto.
-    exfalso; apply hn; apply allPredictionsEqual_prop; auto.
+    intros A B beq f sp sps hd hn; unfold not in hn.
+    destruct (allPredictionsEqual _ _ sp sps) eqn:ha; auto.
+    exfalso; apply hn; eapply allPredictionsEqual_prop; auto.
+  Qed.
+
+  Lemma all_predictions_equal_filter :
+    forall A B sp sps sps' f (f' : A -> B),
+      all_predictions_equal f' sp sps
+      -> filter f sps = sps'
+      -> all_predictions_equal f' sp sps'.
+  Proof.
+    intros A B sp sps sps' f f' ha hf sp' hi; subst.
+    apply filter_In in hi; firstorder.
   Qed.
 
   Lemma llTarget_preserves_ape:
     forall g hw rm a x sps sps' (hk : all_sp_pushes_from_keyset rm sps),
-    all_predictions_equal x sps
+    all_predictions_equal prediction x sps
     -> llTarget g hw rm a sps hk = inr sps'
-    -> all_predictions_equal x sps'.
+    -> all_predictions_equal prediction x sps'.
   Proof.
     intros g hw rm a x sps sps'' hk ha hl sp'' hi''.
     red in ha.
@@ -1009,22 +1018,12 @@ Module LLPredictionFn (Import D : Defs.T).
     eapply move_preserves_prediction in hm; eauto.
     destruct hm as [sp [hi heq]]; rewrite heq; firstorder.
   Qed.
-
-  Lemma all_predictions_equal_filter :
-    forall sp sps sps' f,
-      all_predictions_equal sp sps
-      -> filter f sps = sps'
-      -> all_predictions_equal sp sps'.
-  Proof.
-    intros sp sps sps' f ha hf sp' hi; subst.
-    apply filter_In in hi; firstorder.
-  Qed.
       
   Definition handleFinalSubparsers (sps : list subparser) : prediction_result :=
     match filter finalConfig sps with
     | []         => PredReject
     | sp :: sps' => 
-      if allPredictionsEqual sp sps' then
+      if allPredictionsEqual beqGamma prediction sp sps' then
         PredSucc sp.(prediction)
       else
         PredAmbig sp.(prediction)
@@ -1076,7 +1075,7 @@ Module LLPredictionFn (Import D : Defs.T).
       match sps with
       | []          => PredReject
       | sp' :: sps' =>
-        if allPredictionsEqual sp' sps' then
+        if allPredictionsEqual beqGamma prediction sp' sps' then
           PredSucc sp'.(prediction)
         else
           match llTarget g hw rm t sps hk as t' return llTarget g hw rm t sps hk = t' -> _ with
@@ -1170,7 +1169,7 @@ Module LLPredictionFn (Import D : Defs.T).
 (*      no_left_recursion g
       -> all_suffix_stacks_wf g sps
       -> all_stacks_stable sps *)
-      all_predictions_equal sp sps
+      all_predictions_equal prediction sp sps
       -> llPredict' g hw rm sps ts hk = PredSucc ys
       -> ys = prediction sp.
   Proof.
@@ -1182,7 +1181,7 @@ Module LLPredictionFn (Import D : Defs.T).
       eapply all_predictions_equal_filter in hf; eauto.
       red in hf; firstorder.
     - destruct sps as [| sp' sps']; tc.
-      destruct (allPredictionsEqual sp' sps').
+      destruct (allPredictionsEqual _ _ sp' sps').
       + inv hl; apply ha; apply in_eq.
       + apply llPredict'_cont_cases in hl.
         destruct hl as [sps'' [ht hl]].
@@ -1192,7 +1191,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   Lemma all_predictions_equal__llPredict'_neq_ambig :
     forall g hw rm sp ys ts sps hk,
-      all_predictions_equal sp sps
+      all_predictions_equal prediction sp sps
       -> llPredict' g hw rm sps ts hk <> PredAmbig ys.
   Proof.
     intros g hw rm sp ys ts; induction ts as [| (a, l) ts IH]; intros sps hk ha hl; sis.
@@ -1207,6 +1206,7 @@ Module LLPredictionFn (Import D : Defs.T).
         eapply filter_In; rewrite hf; apply in_cons; auto.
       + symmetry; apply ha.
         eapply filter_In; rewrite hf; apply in_eq.
+      + apply beqGamma_eq_iff.
     - destruct sps as [| sp' sps']; tc.
       destruct (allPredictionsEqual _ _); tc.
       apply llPredict'_cont_cases in hl.

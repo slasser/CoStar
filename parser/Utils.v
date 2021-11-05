@@ -1,11 +1,59 @@
-Require Import List Omega Relations Relation_Operators.
+Require Import Bool List Omega Relations Relation_Operators.
 Require Import CoStar.Tactics.
         Import ListNotations.
 
 (* STANDARD LIBRARY-LIKE DEFINITIONS *)
 
-Definition allEqual (A : Type) (beq : A -> A -> bool) (x : A) (xs : list A) : bool :=
-  forallb (beq x) xs.
+Section AllEqual.
+
+  Variable A   : Type.
+  Variable beq : A -> A -> bool.
+  Variable beq_eq : forall (x x' : A), beq x x' = true <-> x = x'.
+  
+  Definition allEqual (x : A) (xs : list A) : bool :=
+    forallb (beq x) xs.
+
+  Lemma allEqual_inv_cons :
+    forall x' x xs,
+      allEqual x' (x :: xs) = true
+      -> x' = x /\ allEqual x' xs = true.
+  Proof.
+    intros x' x xs ha.
+    unfold allEqual in ha; sis.
+    apply andb_true_iff in ha; destruct ha as [hhd htl]; split; auto.
+    apply beq_eq; auto.
+  Qed.
+
+  Lemma allEqual_in_tl :
+    forall sp sp' sps,
+      allEqual sp sps = true
+      -> In sp' sps
+      -> sp' = sp.
+  Proof.
+    intros sp sp' sps ha hi; induction sps as [| sp'' sps IH]; inv hi;
+      apply allEqual_inv_cons in ha; destruct ha as [hhd htl]; auto.
+  Qed.
+
+  Lemma allEqual_false_exists_diff_rhs :
+    forall sp sps,
+      allEqual sp sps = false
+      -> exists sp',
+        In sp' sps
+        /\ sp' <> sp. 
+  Proof.
+    intros sp sps ha.
+    induction sps as [| sp' sps IH]; simpl in ha.
+    - inv ha.
+    - apply andb_false_iff in ha; destruct ha as [hh | ht].
+      + exists sp'; split.
+        * apply in_eq.
+        * intros heq; symmetry in heq; apply beq_eq in heq; tc. 
+      + apply IH in ht; destruct ht as [sp'' [hi hn]].
+        exists sp''; split; auto.
+        apply in_cons; auto.
+  Qed.
+
+End AllEqual.
 
 Definition dmap {A B : Type} :
   forall (l : list A) (f : forall (x : A), In x l -> B), list B.

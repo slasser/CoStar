@@ -1,6 +1,6 @@
 Require Import List MSets Relation_Operators Wf_nat.
 Require Import CoStar.Orders.
-Require Import CoStar.LLPrediction.
+Require Import CoStar.LLPrediction_complete.
 Require Import CoStar.Tactics.
 Require Import CoStar.Utils.
 Import ListNotations.
@@ -9,20 +9,20 @@ Require Import CoLoR.Util.FGraph.TransClos.
 
 Module GrammarAnalysisFn (Import D : Defs.T).
 
-  Module Export LLPC := LLPredictionFn D.
+  Module Export LLPC := LLPredictionCompleteFn D.
   
   (* The definition of "stability" for SLL stacks *)
-  Inductive stable_config : sll_stack -> Prop :=
-  | SC_empty :
-      stable_config (SllFr None [], [])
-  | SC_terminal :
+  Inductive sll_stable_config : sll_stack -> Prop :=
+  | SLL_SC_empty :
+      sll_stable_config (SllFr None [], [])
+  | SLL_SC_terminal :
       forall o a suf frs,
-        stable_config (SllFr o (T a :: suf), frs).
+        sll_stable_config (SllFr o (T a :: suf), frs).
 
-  Hint Constructors stable_config : core.
+  Hint Constructors sll_stable_config : core.
   
   Definition all_stable sps :=
-    forall sp, In sp sps -> stable_config sp.(sll_stk).
+    forall sp, In sp sps -> sll_stable_config sp.(sll_stk).
 
   (* Graph in which nodes are suffix frames, and edges 
      connect "closure-reachable" frames *)
@@ -60,72 +60,67 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   (* Correspondence between closure_multistep and frame_step relations *)
 
+  Definition sllifyHead (stk : parser_stack) : sll_frame :=
+    match stk with
+    | (Fr _ _ suf, frs) =>
+      match frs with
+      | [] => SllFr None suf
+      | Fr _ _ (NT x :: _) :: _ => SllFr (Some x) suf
+      (* impossible for a well-formed stack *)
+      | _ => SllFr None []
+      end
+    end.
+  
   Lemma closure_step__frame_step :
     forall g av av' sp sp' pr pr' fr fr' frs frs',
       sp     = Sp pr  (fr, frs)
       -> sp' = Sp pr' (fr', frs')
-      -> suffix_stack_wf g (fr, frs)
+      -> stack_wf g (fr, frs)
       -> closure_step g av sp av' sp'
-      -> frame_step g fr fr'.
+      -> frame_step g (sllifyHead (fr, frs)) (sllifyHead (fr', frs')). 
   Proof.
     intros g av av' ? ? pr pr' fr fr' frs frs' ? ? hw hc; subst; inv hc; eauto.
-    - inv_sll_frames_wf hw   hi  hw'  ; eauto.
-      inv_sll_frames_wf hw'  hi' hw'' ; eauto.
-    - inv_sll_frames_wf hw   hi  hw'  ; eauto.
+    - inv_fwf hw hi hw'; rew_anr.
+      inv_fwf hw' hi' hw''; rew_anr; sis; eauto.
+    - inv_fwf hw hi hw'; sis; eauto.
   Qed.
 
   Lemma closure_multistep__frame_step_trc' :
     forall g av av' sp sp',
-      suffix_stack_wf g (stack sp)
+      stack_wf g (stack sp)
       -> closure_multistep g av sp av' sp'
       -> (forall pr pr' fr fr' frs frs',
              sp     = Sp pr  (fr, frs)
              -> sp' = Sp pr' (fr', frs')
-             -> clos_refl_trans_1n _ (frame_step g) fr fr').
+             -> clos_refl_trans_1n _ (frame_step g) (sllifyHead (fr, frs)) (sllifyHead (fr', frs'))).
   Proof.
     intros g av av' sp sp' hw hc. 
-    induct_cm hc hs hc' IH; intros pr pr' fr fr' ? ? heq heq'; subst; sis.
+    induct_cm hc hs hc' IH; intros pr pr' fr fr' ? ? heq heq'; subst.
     - inv heq; inv heq'; apply rt1n_refl.
     - inv heq; inv heq'; apply rt1n_refl.
-    - pose proof hs as hs'.
-      inv hs'.
+    - pose proof hs as hs'; inv hs'. 
       + (* return case *)
         eapply closure_step__frame_step in hs; eauto.
-        inv hs.
-        * (* final return case *)
-          inv hw; rew_anr.
-          inv H7.
-          eapply rt1n_trans.
-          -- sis; eapply Fstep_final_ret; eauto.
-          -- eapply IH; eauto. sis; auto. 
-        * (* nonfinal return case *)
-          eapply rt1n_trans.
-          -- sis; eapply Fstep_nonfinal_ret; eauto.
-          -- eapply IH; eauto; sis.
-             eapply return_preserves_sll_frames_wf_invar; eauto.
+        econstructor; eauto.
+        eapply IH; eauto.
+        apply return_preserves_frames_wf_invar; eauto.
       + (* push case *)
-        eapply closure_step__frame_step in hs; eauto; sis.
-        inv hs.
-        * eapply rt1n_trans; eauto.
-          eapply IH; eauto.
-          apply push_preserves_sll_frames_wf_invar; auto.
-        * eapply rt1n_trans; eauto.
-          eapply IH; eauto.
-          apply push_preserves_sll_frames_wf_invar; auto.
+        eapply closure_step__frame_step in hs; eauto.
+        econstructor; eauto.
+        eapply IH; eauto.
+        apply push_preserves_frames_wf_invar; auto.
   Qed.
-
+  
   Lemma closure_multistep__frame_step_trc :
     forall g av av' sp sp' pr pr' fr fr' frs frs',
       sp     = Sp pr  (fr, frs)
       -> sp' = Sp pr' (fr', frs')
-      -> suffix_stack_wf g (stack sp)
+      -> stack_wf g (stack sp)
       -> closure_multistep g av sp av' sp'
-      -> clos_refl_trans_1n _ (frame_step g) fr fr'.
+      -> clos_refl_trans_1n _ (frame_step g) (sllifyHead (fr,frs)) (sllifyHead (fr', frs')).
   Proof.
     intros; eapply closure_multistep__frame_step_trc'; eauto.
   Qed.
-
-   *)
   
   (* COMPUTATION OF SINGLE-STEP FRAME CLOSURE EDGES *)
 
@@ -711,7 +706,7 @@ Module GrammarAnalysisFn (Import D : Defs.T).
 
   Lemma stable_config__stable_true :
     forall fr frs,
-      stable_config (fr, frs)
+      sll_stable_config (fr, frs)
       -> stable fr = true.
   Proof.
     intros fr frs hs; inv hs; auto.
