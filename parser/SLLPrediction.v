@@ -48,6 +48,23 @@ Module SllPredictionFn (Import D : Defs.T).
     eapply consume_preserves_keyset_invar; eauto.
   Qed.
 
+  Lemma aggrMoveResults_succ_all_sll_sps_step :
+    forall t sp sps sp' sps',
+      In sp sps
+      -> sllMoveSp t sp = MoveSucc sp'
+      -> aggrMoveResults (map (sllMoveSp t) sps) = inr sps'
+      -> In sp' sps'.
+  Proof.
+    intros t sp sps. 
+    induction sps as [| hd tl IH]; intros sp' sps' hi hm ha; inv hi; sis.
+    - dms; tc. 
+      inv hm; inv ha.
+      apply in_eq.
+    - dms; tc.
+      inv ha.
+      apply in_cons; auto.
+  Qed.
+
   Definition sllMove (a : terminal) (sps : list sll_subparser) : move_result sll_subparser :=
     aggrMoveResults (map (sllMoveSp a) sps).
 

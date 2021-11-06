@@ -364,7 +364,8 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       -> sllHandleFinalSubparsers sps' = PredSucc rhs'
       -> rhs' = rhs.
   Proof.
-    intros sps sps' rhs rhs' ho hl hs; unfold handleFinalSubparsers in *; unfold sllHandleFinalSubparsers in *.
+    intros sps sps' rhs rhs' ho hl hs;
+      unfold handleFinalSubparsers in *; unfold sllHandleFinalSubparsers in *.
     destruct (filter _ sps ) as [| x xs] eqn:hf  ; tc.
     destruct (filter _ sps') as [| y ys] eqn:hf' ; tc.
     destruct (allPredictionsEqual _ _ x xs)  eqn:ha  ; tc; inv hl.
@@ -400,32 +401,33 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Lemma overapprox_handleFinalSubparsers_contra :
     forall xs ys rhs rhs',
       overapprox ys xs
-      -> handleFinalSubparsers ys = PredSucc rhs'
+      -> sllHandleFinalSubparsers ys = PredSucc rhs'
       -> handleFinalSubparsers xs <> PredAmbig rhs.
   Proof.
-    intros xs ys rhs rhs' ho hh' hh; unfold handleFinalSubparsers in *.
+    intros xs ys rhs rhs' ho hh' hh;
+      unfold handleFinalSubparsers in *; unfold sllHandleFinalSubparsers in *.
     destruct (filter _ ys) as [| y' ys'] eqn:hf'; tc.
     destruct (filter _ xs) as [| x' xs'] eqn:hf ; tc.
     eapply overapprox_finalConfig in ho; eauto.
-    destruct (allPredictionsEqual x' xs') eqn:ha; tc; inv hh.
+    destruct (allPredictionsEqual _ _ x' xs') eqn:ha; tc; inv hh.
     eapply overapprox_allPredictionsEqual_false in ha; eauto.
     rewrite ha in hh'; tc.
   Qed.
   
   Lemma move_preserves_overapprox :
-    forall a xs xs' ys ys',
+    forall a l xs xs' ys ys',
       overapprox ys xs
-      -> move a xs = inr xs'
-      -> move a ys = inr ys'
+      -> move (@existT _ _ a l) xs = inr xs'
+      -> sllMove a ys = inr ys'
       -> overapprox ys' xs'.
   Proof.
-    intros a xs xs' ys ys' ho hm hm' x' hi.
+    intros a l xs xs' ys ys' ho hm hm' x' hi.
     eapply aggrMoveResults_map_backwards in hi; eauto.
     destruct hi as [x [hi hm'']].
     apply ho in hi; destruct hi as [y [hi hx]].
     eapply approx_moveSp in hm''; eauto.
     destruct hm'' as [y' [hm'' hx']].
-    eapply aggrMoveResults_succ_all_sps_step in hm''; eauto.
+    eapply aggrMoveResults_succ_all_sll_sps_step in hm''; eauto.
   Qed.
 
   Lemma approx_overapprox_singleton :
@@ -437,22 +439,22 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     eexists; split; [apply in_eq | auto].
   Qed.
 
-    (* Interesting and complicated lemma -- make sure to write
+  (* Interesting and complicated lemma -- make sure to write
      a note about it *)
   Lemma llc_sllc_approx_overapprox' :
-    forall g pm cm pr (a : Acc lex_nat_pair pr) vi vi' x y hk hk' xs' ys' a' a'',
-      pr = meas pm vi x
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (stack x)
+    forall gr hw rm cm pr (a : Acc lex_nat_pair pr) vi vi' x y hk hk' xs' ys' a' a'',
+      pr = ll_meas rm vi x
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (stack x)
       -> approx y x
-      -> llc pm vi x hk a' = inr xs'
-      -> sllc pm cm vi' y hk' a'' = inr ys'
+      -> llc gr hw rm vi x hk a' = inr xs'
+      -> sllc rm cm vi' y hk' a'' = inr ys'
       -> overapprox ys' xs'.
   Proof.
-    intros g pm cm pr a''; induction a'' as [pr hlt IH].
+    intros gr hw rm cm pr a''; induction a'' as [pr hlt IH].
     intros vix viy x y hk hk' xs''' ys''' a a'
-           ? hp hm hw hx hll hsll; subst.
+           ? hp hm hw' hx hll hsll; subst.
     apply llc_success_cases in hll.
     destruct hll as [[hs ?] | [xs' [vix' [hs [? [? ha]]]]]]; subst.
     - (* the LL subparser is done *)
@@ -477,13 +479,13 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         eapply dmap_in in hd; eauto.
         destruct hd as [x' [hi' [? hll]]].
         assert (Hcm : exists vix''',
-                   closure_step g vix x vix' x'
-                   /\ closure_multistep g vix' x' vix''' x''').
+                   closure_step gr vix x vix' x'
+                   /\ closure_multistep gr vix' x' vix''' x''').
         { pose proof hs as hs''.
           eapply cstep_sound in hs''; eauto.
           eapply llc_sound_wrt_closure_multistep in hll; eauto.
           - destruct hll as [vix''' hcm]; eauto.
-          - eapply closure_step_preserves_suffix_stack_wf_invar; eauto. }
+          - eapply closure_step_preserves_stack_wf_invar; eauto. }
         destruct Hcm as [vi''' [Hcs Hcm]].
         eapply simReturn_approx; eauto.
       + (* SLL subparser is done -- contradiction *)
@@ -501,38 +503,38 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         eapply IH with (ys' := ys'') in hll; eauto.
         * apply hll in hi''; destruct hi'' as [y'' [hiy'' hx'']]; eauto.
         * eapply cstep_meas_lt; eauto.
-        * eapply cstep_preserves_suffix_stack_wf_invar; eauto.
+        * eapply cstep_preserves_stack_wf_invar; eauto.
   Qed.
 
   Lemma llc_sllc_approx_overapprox :
-    forall g pm cm vi vi' x y hk hk' xs' ys' a a',
-      production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (stack x)
+    forall gr hw rm cm vi vi' x y hk hk' xs' ys' a a',
+      rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (stack x)
       -> approx y x
-      -> llc pm vi x hk a = inr xs'
-      -> sllc pm cm vi' y hk' a' = inr ys'
+      -> llc gr hw rm vi x hk a = inr xs'
+      -> sllc rm cm vi' y hk' a' = inr ys'
       -> overapprox ys' xs'.
   Proof.
-    intros; eapply llc_sllc_approx_overapprox' with (pr := meas _ _ x); eauto.
+    intros; eapply llc_sllc_approx_overapprox' with (pr := ll_meas _ _ _); eauto.
   Qed.
   
   Lemma closure_preserves_overapprox :
-    forall g pm cm xs xs' ys ys' hk hk',
-      production_map_correct pm g
-      -> closure_map_complete g cm
-      -> all_suffix_stacks_wf g xs
+    forall gr hw rm cm xs xs' ys ys' hk hk',
+      rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> all_stacks_wf gr xs
       -> overapprox ys xs
-      -> llClosure pm xs hk = inr xs'
-      -> sllClosure pm cm ys hk' = inr ys'
+      -> llClosure gr hw rm xs hk = inr xs'
+      -> sllClosure rm cm ys hk' = inr ys'
       -> overapprox ys' xs'.
   Proof.
-    intros g pm cm xs xs'' ys ys'' hk hk' hp hm hw ho hl hc x'' hi.
+    intros gr hw rm cm xs xs'' ys ys'' hk hk' hp hm hw' ho hl hc x'' hi.
     unfold llClosure in hl.
     unfold sllClosure in hc.
     eapply aggrClosureResults_dmap_backwards in hi; eauto.
     destruct hi as [x [hi [xs' [_ [hc' hi']]]]].
-    pose proof hi as hw'; apply hw in hw'.
+    pose proof hi as hw''; apply hw' in hw''.
     pose proof hi as hi''.
     apply ho in hi''; destruct hi'' as [y [hi'' hyx]].
     eapply aggrClosureResults_dmap_succ_elt_succ in hc; eauto.
@@ -542,30 +544,30 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma target_preserves_overapprox :
-    forall g pm cm sps sps' hk hk' sps'' sps''' a,
-      production_map_correct pm g
-      -> closure_map_complete g cm
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm cm sps sps' hk hk' sps'' sps''' a l,
+      rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> all_stacks_wf gr sps
       -> overapprox sps' sps
-      -> llTarget pm a sps hk = inr sps''
-      -> sllTarget pm cm a sps' hk' = inr sps'''
+      -> llTarget gr hw rm (@existT _ _ a l) sps hk = inr sps''
+      -> sllTarget rm cm a sps' hk' = inr sps'''
       -> overapprox sps''' sps''.
   Proof.
-    intros g pm cm xs ys hk hk' xs'' ys'' a hp hf hw ho hl hs.
+    intros gr hw rm cm xs ys hk hk' xs'' ys'' a l hp hf hw' ho hl hs.
     apply llTarget_cases in hl; destruct hl as [xs' [hk'' [hm hc]]].
     apply sllTarget_cases in hs; destruct hs as [ys' [hk''' [hm' hc']]].
     eapply move_preserves_overapprox in hm'; eauto.
-    eapply move_preserves_suffix_stack_wf_invar in hw; eauto.
+    eapply move_preserves_stack_wf_invar in hw'; eauto.
     eapply closure_preserves_overapprox; eauto.
   Qed.
 
   Lemma overapprox_initSps :
-    forall pm o x suf frs sps sps',
-      llInitSps pm o x suf frs = sps
-      -> sllInitSps pm x = sps'
+    forall rm pre vs x suf frs sps sps',
+      llInitSps rm pre vs x suf frs = sps
+      -> sllInitSps rm x = sps'
       -> overapprox sps' sps.
   Proof.
-    intros pm o x suf frs sps sps' hl hs sp hi; subst.
+    intros rm pre vs x suf frs sps sps' hl hs sp hi; subst.
     apply in_map_iff in hi; destruct hi as [ys [? hi]]; subst.
     eexists; split.
     - apply in_map_iff; eauto.
@@ -573,18 +575,18 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma overapprox_startState :
-    forall g pm cm fr o x suf frs hk sps sps',
-      fr = SF o (NT x :: suf)
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (fr, frs)
-      -> llStartState pm o x suf frs hk = inr sps
-      -> sllStartState pm cm x = inr sps'
+    forall gr hw rm cm fr pre vs x suf frs hk sps sps',
+      fr = Fr pre vs (NT x :: suf)
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (fr, frs)
+      -> llStartState gr hw rm pre vs x suf frs hk = inr sps
+      -> sllStartState rm cm x = inr sps'
       -> overapprox sps' sps.
   Proof.
-    intros g pm cm fr o x suf frs hk sps sps' ? hp hc hw hl hs; subst.
+    intros gr hw rm cm fr pre vs x suf frs hk sps sps' ? hp hc hw' hl hs; subst.
     eapply closure_preserves_overapprox; eauto.
-    - eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+    - eapply llInitSps_preserves_stack_wf_invar; eauto.
     - eapply overapprox_initSps; eauto.
   Qed.
 
