@@ -1336,57 +1336,72 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
         inv hst; auto.
       + eapply llInitSps_preserves_suffix_stack_wf_invar; eauto. 
   Qed.
-
+   *)
+  
   (* Now some facts about how prediction doesn't return Reject when the initial
    stack's unprocessed symbols recognize the input *)
 
   Definition exists_successful_sp g sps w :=
-    exists sp, In sp sps /\ gamma_recognize g (unprocStackSyms sp.(stack)) w.
+    exists sp, In sp sps /\ stack_accepts_suffix g sp.(stack) w. 
 
-  Lemma stable_config_recognize_nil__final_config :
+  Lemma stable_config_sas_nil__final_config :
     forall g sp,
-      gamma_recognize g (unprocStackSyms sp.(stack)) []
+      stack_accepts_suffix g sp.(stack) []
       -> stable_config sp.(stack)
       -> finalConfig sp = true.
   Proof.
-    intros g [pred ([o [| [a | x] suf]], frs)] hg hs; inv hs; sis; auto.
-    apply gamma_recognize_terminal_head in hg.
-    destruct hg as [l [w' [heq hg]]]; inv heq.
+    intros g [pred ([pre vs [| [a|x] suf]], frs)] hg hs; inv hs; sis; auto.
+    exfalso.
+    destruct hg as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+    aen.
+    apply svd_terminal_head_contra in hd; auto.
   Qed.
 
-  Lemma stable_config_gamma_recognize_terminal_inv :
+  Lemma stable_config_sas_terminal_inv :
     forall g sp t w',
       stable_config sp.(stack)
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) (t :: w')
-      -> exists o a suf frs,
-          sp.(stack) = (SF o (T a :: suf), frs).
+      -> stack_accepts_suffix g sp.(stack) (t :: w')
+      -> exists pre vs a suf frs,
+          sp.(stack) = (Fr pre vs (T a :: suf), frs).
   Proof.
-    intros g [pred ([o [| [a|x] suf]], frs)] t w' hs hg; sis.
-    - destruct frs; sis.
-      + inv hg.
-      + inv hs.
-    - repeat eexists; eauto. 
+    intros g [pred ([pre vs [| [a|x] suf]], frs)] t w' hs hg; sis.
+    - inv hs; ss_inj.
+      destruct hg as (wpre & wsuf & vs_suf & heq & hd & hl); sis; subst.
+      apply svd_inv_nil_syms in hd; subst; sis; tc; auto.
+    - repeat eexists; eauto.
     - inv hs.
   Qed.
   
   Lemma moveSp_preserves_successful_sp_invar :
     forall g sp a l w',
       stable_config sp.(stack)
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) ((a,l) :: w')
+      -> stack_accepts_suffix g sp.(stack) (@existT _ _ a l :: w') 
       -> exists sp',
-          moveSp a sp = MoveSucc sp'
-          /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w'.
+          moveSp (@existT _ _ a l) sp = MoveSucc sp'
+          /\ stack_accepts_suffix g sp'.(stack) w'. 
   Proof.
     intros g sp a l w' hs hg.
     pose proof hg as hg'.
-    apply stable_config_gamma_recognize_terminal_inv in hg; auto.
-    destruct hg as [o [a' [suf [frs heq]]]].
+    apply stable_config_sas_terminal_inv in hg; auto.
+    destruct hg as (pre & vs & a' & suf & frs & heq).
     unfold moveSp.
     destruct sp as [pred stk]; subst; sis.
     rewrite heq; rewrite heq in hg'; sis.
-    inversion hg' as [| ? ? ? ? hs' hg'' heq' heq'']; subst; clear hg'.
-    inv hs'; inv heq''.
-    dms; tc; eauto.
+    destruct hg' as (wpre & wsuf & vs_suf & heq' & hd & hl); subst.
+    pose proof hd as hd'.
+    apply svd_inv_terminal_head in hd.
+    destruct hd as (v' & ts' & ?); subst.
+    inv heq'; t_inj.
+    dm; tc.
+    eexists; split; eauto; simpl.
+    eapply svd_terminal_head__svd_tl in hd'; eauto.
+    destruct hd' as (vs' & heq & hd').
+    rewrite cast_ss_refl in heq; inv heq.
+    exists ts'; exists wsuf; eexists; repeat split; eauto.
+    t'.
+    eapply lfas_eq; eauto.
+    Unshelve.
+    all : auto; apps.
   Qed.
 
   (* refactor *)
@@ -1658,5 +1673,5 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     - eapply llStartState_all_stacks_stable; eauto.
     - eapply llStartState_preserves_esp_invar; eauto. 
   Qed.
-*)
+  
 End LLPredictionCompleteFn.

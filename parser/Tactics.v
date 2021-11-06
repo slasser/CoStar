@@ -1,4 +1,5 @@
 Require Import List.
+Import ListNotations.
 
 Ltac sis := simpl in *.
 
@@ -47,4 +48,12 @@ Ltac inv_cons_tokens_eq :=
   match goal with
   | H : @existT _ _ _ _ :: _ = @existT _ _ _ _ :: _ |- _ =>
     inv H
+  end.
+
+Ltac aen :=
+  match goal with
+  | H : ?xs ++ ?ys = [] |- _ =>
+    apply app_eq_nil in H; destruct H; subst
+  | H : [] = ?xs ++ ?ys |- _ =>
+    symmetry in H; apply app_eq_nil in H; destruct H; subst
   end.

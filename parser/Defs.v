@@ -2591,6 +2591,20 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     end.
     inv_t_der.
   Qed.
+
+  Lemma svd_terminal_head__svd_tl :
+    forall g ys a v ys' ts vs (heq : ys = T a :: ys'),
+      sem_values_derivation g ys (@existT _ _ a v :: ts) vs
+      -> (exists vs',
+             (v, vs') = cast_ss _ _ heq vs
+             /\ sem_values_derivation g ys' ts vs').
+  Proof.
+    intros g ys a v ys' ts vs ? hd; subst.
+    inv_svs hd hh ht; ss_inj.
+    inv hh; s_inj.
+    sis; inv_cons_tokens_eq; t_inj.
+    rewrite cast_ss_refl; eauto.
+  Qed.
   
   (*
   Lemma svd_inv_terminal_head :
