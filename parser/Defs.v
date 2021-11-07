@@ -3120,14 +3120,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     all : apps.
   Qed.
 
-  Lemma push_preserves_sas :
-    forall gr ce cr pre' vs' pre vs x suf frs ts,
-      ce = Fr pre' vs' []
-      -> cr = Fr pre vs (NT x :: suf)
-      -> stack_accepts_suffix gr (cr, frs) ts
-      -> stack_accepts_suffix gr (ce, cr :: frs) ts.
-  Proof.
-
   Lemma failed_predicate_contra :
     forall x ys ys' (p : predicate_semty (x, ys)) (p' : predicate_semty (x, ys')) vs vs'
            (heq : ys = ys') (heq' : (x, ys) = (x, ys')),

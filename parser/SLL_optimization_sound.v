@@ -594,27 +594,27 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
      between LL and SLL prediction *)
 
   Lemma sllPredict'_llPredict'_succ_eq :
-    forall g pm cm ts sps' sps ca hk hk' hc ys ca' ys',
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm cm ts sps' sps ca hk hk' hc ys ca' ys',
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> exists_successful_sp g sps ts
+      -> exists_successful_sp gr sps ts
       -> overapprox sps' sps
-      -> llPredict' pm sps ts hk = PredSucc ys
-      -> sllPredict' pm cm sps' ts ca hk' hc = (PredSucc ys', ca')
+      -> llPredict' gr hw rm sps ts hk = PredSucc ys
+      -> sllPredict' rm cm sps' ts ca hk' hc = (PredSucc ys', ca')
       -> ys' = ys.
   Proof.
-    intros g pm cm ts; induction ts as [| (a,l) ts IH];
-      intros sps' sps ca hk hk' hc ys ca' ys' hn hp hm hw hs he ho hll hsll;
+    intros gr hw rm cm ts; induction ts as [| (a,l) ts IH];
+      intros sps' sps ca hk hk' hc ys ca' ys' hn hp hm hw' hs he ho hll hsll;
       pose proof hll as hll'; simpl in hll, hsll.
     - inv hsll; eapply overapprox_final_subparsers_succ_eq; eauto.
     - destruct sps' as [| sp' sps']; tc.
       destruct sps  as [| sp  sps ]; tc.
-      destruct (allPredictionsEqual sp' sps') eqn:ha'.
+      destruct (allPredictionsEqual _ _ sp' sps') eqn:ha'.
       + inv hsll.
-        assert (ha : allPredictionsEqual sp sps = true).
+        assert (ha : allPredictionsEqual beqGamma prediction sp sps = true).
         { eapply overapprox_allPredictionsEqual_big_small; eauto. }
         rewrite ha in hll; inv hll.
         eapply overapprox_ape_pointwise; eauto.
@@ -626,12 +626,12 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
         * pose proof hf as hf'; apply hc in hf'.
           destruct hf' as [hk'' ht'].
           eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
-          -- eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+          -- eapply llTarget_preserves_stacks_wf_invar; eauto.
           -- eapply llTarget_preserves_stacks_stable_invar; eauto.
           -- eapply llTarget_preserves_successful_sp_invar; eauto.
           -- eapply target_preserves_overapprox; eauto.
         * eapply IH with (sps' := sps''') (sps := sps'') in hsll; eauto.
-          -- eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+          -- eapply llTarget_preserves_stacks_wf_invar; eauto.
           -- eapply llTarget_preserves_stacks_stable_invar; eauto.
           -- eapply llTarget_preserves_successful_sp_invar; eauto.
           -- eapply target_preserves_overapprox; eauto. 

@@ -1489,49 +1489,49 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
   
   Lemma move_closure_preserves_successful_sp_invar :
-    forall g pm sps sps' sps'' hk a l w',
-      production_map_correct pm g
+    forall gr hw rm sps sps' sps'' hk a l w',
+      rhs_map_correct rm gr
       -> all_stacks_stable sps
-      -> exists_successful_sp g sps ((a,l) :: w')
-      -> move a sps = inr sps'
-      -> llClosure pm sps' hk = inr sps''
-      -> exists_successful_sp g sps'' w'.
+      -> exists_successful_sp gr sps (@existT _ _ a l :: w')
+      -> move (@existT _ _ a l) sps = inr sps'
+      -> llClosure gr hw rm sps' hk = inr sps''
+      -> exists_successful_sp gr sps'' w'.
   Proof.
-    intros g pm sps sps' sps'' hk a l w' hp ha he hm hc.
+    intros gr hw rm sps sps' sps'' hk a l w' hp ha he hm hc.
     eapply move_preserves_successful_sp_invar in hm; eauto.
     eapply closure_preserves_successful_sp_invar; eauto.
   Qed.
 
   Lemma llTarget_preserves_successful_sp_invar :
-    forall g pm sps sps' hk a l w',
-      production_map_correct pm g
+    forall gr hw rm sps sps' hk a l w',
+      rhs_map_correct rm gr
       -> all_stacks_stable sps
-      -> exists_successful_sp g sps ((a,l) :: w')
-      -> llTarget pm a sps hk = inr sps'
-      -> exists_successful_sp g sps' w'.
+      -> exists_successful_sp gr sps (@existT _ _ a l :: w')
+      -> llTarget gr hw rm (@existT _ _ a l) sps hk = inr sps'
+      -> exists_successful_sp gr sps' w'.
   Proof.
-    intros g pm sps sps' hk a l w' hp hs he ht.
+    intros gr hw rm sps sps' hk a l w' hp hs he ht.
     apply llTarget_cases in ht.
     destruct ht as [sps'' [hk' [hm hc]]].
     eapply move_closure_preserves_successful_sp_invar; eauto.
   Qed.
   
   Lemma esp_llPredict'_neq_reject :
-    forall g pm w sps hk,
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm w sps hk,
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> exists_successful_sp g sps w
-      -> llPredict' pm sps w hk <> PredReject.
+      -> exists_successful_sp gr sps w
+      -> llPredict' gr hw rm sps w hk <> PredReject.
   Proof.
-    intros g pm w; induction w as [| (a,l) w' IH]; intros sps hk hp ha ha' hex;
+    intros gr hw rm w; induction w as [| (a,l) w' IH]; intros sps hk hp ha ha' hex;
       unfold not; intros hl; unfold exists_successful_sp in hex; sis.
     - destruct hex as [sp [hi hg]].
       destruct sps as [| sp' sps']; try solve [inv hi].
       (* lemma *)
       unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| sp'' sps''] eqn:hf; dms; tc.
-      apply stable_config_recognize_nil__final_config in hg; auto.
+      apply stable_config_sas_nil__final_config in hg; auto.
       eapply filter_In' in hg; eauto.
       rewrite hf in hg; inv hg.
     - destruct hex as [sp [hi hg]]. 
@@ -1540,24 +1540,24 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       apply llPredict'_cont_cases in hl.
       destruct hl as [sps'' [ht hl]].
       eapply IH in hl; eauto.
-      + eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+      + eapply llTarget_preserves_stacks_wf_invar; eauto.
       + eapply llTarget_preserves_stacks_stable_invar; eauto.
       + eapply llTarget_preserves_successful_sp_invar; eauto.
         exists sp; split; eauto.
   Qed.
 
   Lemma ape_esp_llPredict'_succ :
-    forall g pm sp sps ts hk,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm sp sps ts hk,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> all_predictions_equal sp sps
-      -> exists_successful_sp g sps ts
-      -> llPredict' pm sps ts hk = PredSucc (prediction sp).
+      -> all_predictions_equal prediction sp sps
+      -> exists_successful_sp gr sps ts
+      -> llPredict' gr hw rm sps ts hk = PredSucc (prediction sp).
   Proof.
-    intros g pm sp sps ts hk hn hp hw hs ha he.
-    destruct (llPredict' pm sps ts hk) as [rhs | rhs | | e] eqn:hl.
+    intros gr hw rm sp sps ts hk hn hp hw' hs ha he.
+    destruct (llPredict' gr hw rm sps ts hk) as [rhs | rhs | | e] eqn:hl.
     - f_equal; eapply llPredict'_succ__eq_all_predictions_equal in hl; eauto.
     - exfalso; eapply all_predictions_equal__llPredict'_neq_ambig; eauto. 
     - exfalso; eapply esp_llPredict'_neq_reject; eauto.
@@ -1565,71 +1565,75 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
   
   Lemma esp_llPredict'_succ__exists_target : 
-    forall g pm sps a l ts hk ys,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm sps a l ts hk ys,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> all_stacks_wf gr sps
       -> all_stacks_stable sps
-      -> exists_successful_sp g sps ((a, l) :: ts)
-      -> llPredict' pm sps ((a, l) :: ts) hk = PredSucc ys
-      -> exists sps' (ht : llTarget pm a sps hk = inr sps'),
-          llPredict' pm sps' ts (llTarget_preserves_spk pm a sps sps' hk ht) = PredSucc ys.
+      -> exists_successful_sp gr sps (@existT _ _ a l :: ts)
+      -> llPredict' gr hw rm sps (@existT _ _ a l :: ts) hk = PredSucc ys
+      -> exists sps' (ht : llTarget gr hw rm (@existT _ _ a l) sps hk = inr sps'),
+          llPredict' gr hw rm sps' ts (llTarget_preserves_pki gr hw rm (@existT _ _ a l) sps sps' hk ht) = PredSucc ys.
   Proof.
-    intros g pm sps a l ts hk ys hn hp hw hs he hl; sis.
+    intros gr hw rm sps a l ts hk ys hn hp hw' hs he hl; sis.
     destruct sps as [| sp sps]; tc.
     destruct (allPredictionsEqual _ _) eqn:ha.
     - inv hl; apply allPredictionsEqual_prop in ha.
-      pose proof (llTarget_destruct pm a (sp :: sps) hk) as ht.
+      pose proof (llTarget_destruct gr hw rm (@existT _ _ a l) (sp :: sps) hk) as ht.
       destruct ht as [[e ht] | [sps' ht]].
       + exfalso; eapply llTarget_never_returns_error; eauto.
       + exists sps'; exists ht. 
         eapply ape_esp_llPredict'_succ; eauto. 
-        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+        * eapply llTarget_preserves_stacks_wf_invar; eauto.
         * eapply llTarget_preserves_stacks_stable_invar; eauto.
         * eapply llTarget_preserves_ape in ht; eauto.
           apply ape_cons_head_eq; auto.
         * eapply llTarget_preserves_successful_sp_invar; eauto.
+      + apply beqGamma_eq_iff.
     - apply llPredict'_cont_cases in hl; eauto.
   Qed.
   
   Lemma llInitSps_preserves_esp_invar :
-    forall g pm fr o x suf frs w,
-      production_map_correct pm g
-      -> fr = SF o (NT x :: suf)
-      -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> exists_successful_sp g (llInitSps pm o x suf frs) w.
+    forall gr rm fr pre vs x suf frs w,
+      rhs_map_correct rm gr
+      -> fr = Fr pre vs (NT x :: suf)
+      -> stack_accepts_suffix gr (fr, frs) w
+      -> exists_successful_sp gr (llInitSps rm pre vs x suf frs) w.
   Proof.
-    intros g pm fr o x suf frs w hc ? hg; subst; sis.
-    apply gamma_recognize_nonterminal_head in hg.
-    destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst.
+    intros gr rm fr pre vs x suf frs w hc ? hg; subst; sis.
+    destruct hg as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+    inv_svs hd hh ht; ss_inj.
+    inv_sv hh hm hvs hp; s_inj.
     eexists; split.
     - apply in_map_iff; eexists; split; eauto.
       eapply rhssFor_in_iff; eauto.
-    - sis; apply gamma_recognize_app; auto.
+      eapply pm_mapsto_in; eauto.
+    - (* lemma *)
+      sis; rewrite <- app_assoc; eauto 16.
   Qed.
 
   Lemma llStartState_preserves_esp_invar :
-    forall g pm fr o x suf frs hk w sps,
-      production_map_correct pm g
-      -> fr = SF o (NT x :: suf)
-      -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> llStartState pm o x suf frs hk = inr sps
-      -> exists_successful_sp g sps w.
+    forall gr hw rm fr pre vs x suf frs hk w sps,
+      rhs_map_correct rm gr
+      -> fr = Fr pre vs (NT x :: suf)
+      -> stack_accepts_suffix gr (fr, frs) w
+      -> llStartState gr hw rm pre vs x suf frs hk = inr sps
+      -> exists_successful_sp gr sps w.
   Proof.
-    intros g pm fr o x suf frs hk w sps hp ? hr hs; subst.
+    intros gr hw rm fr pre vs x suf frs hk w sps hp ? hr hs; subst.
     eapply closure_preserves_successful_sp_invar; eauto.
     eapply llInitSps_preserves_esp_invar; eauto.
   Qed.
     
   Theorem ussr_llPredict_neq_reject :
-    forall g pm fr o x suf frs w hk,
-      production_map_correct pm g
-      -> fr = SF o (NT x :: suf)
-      -> suffix_stack_wf g (fr, frs)
-      -> gamma_recognize g (unprocStackSyms (fr, frs)) w
-      -> llPredict pm o x suf frs w hk <> PredReject.
+    forall gr hw rm fr pre vs x suf frs w hk,
+      rhs_map_correct rm gr
+      -> fr = Fr pre vs (NT x :: suf)
+      -> stack_wf gr (fr, frs)
+      -> stack_accepts_suffix gr (fr, frs) w
+      -> llPredict gr hw rm pre vs x suf frs w hk <> PredReject.
   Proof.
-    intros g pm fr o x suf frs w hk hp ? hw hg hl; subst.
+    intros gr hw rm fr pre vs x suf frs w hk hp ? hw' hg hl; subst.
     apply llPredict_cases in hl.
     destruct hl as [sps [hs hl]].
     eapply esp_llPredict'_neq_reject; eauto.
