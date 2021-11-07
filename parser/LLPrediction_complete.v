@@ -10,38 +10,6 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
 
   Module Export LLPEF := LLPredictionErrorFreeFn D.
 
-  (* General-purpose tactic for solving equalities with dependent types *)
-  Ltac t :=
-    match goal with
-    | |- context[revTuple_cons_case] =>
-      unrt
-    | |- lower_frames_accept_suffix _ _ (concatTuple _ _ _ ((cast_action _ _ _ _) _, _)) _ _ =>
-      eapply lfas_replace_head; eauto
-    | |- concatTuple ?xs ?ys ?vx ?vy = cast_ss (?xs' ++ ?ys) (?xs ++ ?ys) ?pf (concatTuple ?xs' ?ys ?vx' ?vy') =>
-      eapply concatTuple_eq with (heq := app_inv_tail  _ _ _ pf)
-    | |- concatTuple ?pre (?s :: ?suf) _ _ = cast_ss _ _ _ (concatTuple ?pre' ([?s] ++ ?suf) _ _) =>
-      eapply concatTuple_eq
-    | |- context[cast_ss ?xs ?xs _ _] =>
-      rewrite cast_ss_refl
-    | |- (?a, ?b) = (?a', ?b') =>
-      apply pair_split_eq
-    | |- ?f ?vs = (cast_action _ _ _ ?f) ?vs' =>
-      eapply cast_action_eq
-    | |- context[concatTuple (rev (rev ?xs)) []] =>
-      erewrite rrt_anr
-    | |- (cast_predicate _ _ _ _) _ = true =>
-      eapply cast_predicate_eq_true; eauto
-    | |- context[concatTuple (_ ++ [_]) _ (concatTuple _ [_] _ _) _] => erewrite concatTuple_assoc'
-    | |- context[cast_ss _ _ _ (cast_ss _ _ _ _)] =>
-      erewrite <- cast_ss_ins_trans
-    | |- context[revTuple _ (revTuple _ _)] =>
-      erewrite revTuple_involutive
-    | |- PM.MapsTo _ (@existT _ _ _ (cast_predicate _ _ _ _, cast_action _ _ _ _)) _ =>
-      eapply mapsto_cast; eauto
-    end.
-
-  Ltac t' := repeat t.
-
   (* Beginning of the proofs themselves *)
   
   Inductive move_step :
@@ -1404,25 +1372,25 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     all : auto; apps.
   Qed.
 
-  (* refactor *)
   Lemma aggrMoveResults_map_preserves_successful_sp_invar :
     forall g sp sps sps' a l w',
       all_stacks_stable sps
       -> In sp sps
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) ((a,l) :: w')
-      -> aggrMoveResults (map (moveSp a) sps) = inr sps'
+      -> stack_accepts_suffix g sp.(stack) (@existT _ _ a l :: w')
+      -> aggrMoveResults (map (moveSp (@existT _ _ a l)) sps) = inr sps'
       -> exists sp',
-          moveSp a sp = MoveSucc sp'
+          moveSp (@existT _ _ a l) sp = MoveSucc sp'
           /\ In sp' sps'
-          /\ gamma_recognize g (unprocStackSyms sp'.(stack)) w'.
+          /\ stack_accepts_suffix g sp'.(stack) w'. 
   Proof.
     intros g sp sps.
     induction sps as [| hd tl IH]; intros sps' a l w' ha hi hg hm.
     - inv hi.
     - destruct hi as [hh | ht]; subst.
-      + simpl in hm.
-        apply moveSp_preserves_successful_sp_invar in hg.
+      + apply moveSp_preserves_successful_sp_invar in hg.
         * destruct hg as [sp' [hmsp hg]].
+          unfold aggrMoveResults in hm.
+          rewrite map_cons in hm.
           rewrite hmsp in hm.
           dm; tc.
           inv hm.
@@ -1430,20 +1398,14 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
           apply in_eq.
         * firstorder. 
       + simpl in hm.
-        dm; tc.
-        * dmeq hag; tc.
-          inv hm.
-          eapply IH in hag; eauto; firstorder.
-        * dmeq hag; tc.
-          inv hm.
-          eapply IH in hag; eauto; firstorder.
+        dm; tc; dmeq hag; tc; inv hm; eapply IH in hag; eauto; firstorder.
   Qed.
 
   Lemma move_preserves_successful_sp_invar :
     forall g sps sps' a l w',
       all_stacks_stable sps
-      -> exists_successful_sp g sps ((a,l) :: w')
-      -> move a sps = inr sps'
+      -> exists_successful_sp g sps (@existT _ _ a l :: w')
+      -> move (@existT _ _ a l) sps = inr sps'
       -> exists_successful_sp g sps' w'.
   Proof.
     intros g sps sps' a l w' ha he hm.
@@ -1454,38 +1416,40 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma cstep_preserves_successful_sp_invar :
-    forall g pm vi vi' sp sps' w,
-      production_map_correct pm g
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) w
-      -> cstep pm vi sp = CstepK vi' sps'
-      -> exists_successful_sp g sps' w.
+    forall gr hw rm vi vi' sp sps' w,
+      rhs_map_correct rm gr
+      -> stack_accepts_suffix gr sp.(stack) w
+      -> cstep gr hw rm vi sp = CstepK vi' sps'
+      -> exists_successful_sp gr sps' w.
   Proof.
-    intros g pm vi vi' sp sps' w hc hg hs.
-    unfold cstep in hs; dmeqs h; tc; sis; inv hs.
-    - eexists; split; [apply in_eq | auto].
-    - exfalso.
-      apply gamma_recognize_nonterminal_head in hg. 
-      destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst.
-      eapply in_grammar_find_some in hi; eauto.
-      destruct hi as [? [? ?]]; tc.
-    - apply gamma_recognize_nonterminal_head in hg. 
-      destruct hg as [rhs [wpre [wsuf [? [hi [hg hg']]]]]]; subst. 
+    intros gr hw rm vi vi' sp sps' w hc hg hs.
+    unfold cstep in hs; dmeqs h; tc; inv hs; try appl_fpaa.
+    - eexists; split; [apply in_eq | ..].
+      eapply return_preserves_sas; eauto.
+      auto. 
+    - exfalso; eapply sas_failed_predicate_contra; eauto.
+    - exfalso; eapply sas_find_neq_None; eauto.
+    - destruct hg as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+      inv_svs hd hh ht; ss_inj.
+      inv_sv hh hm hvs hp; s_inj.
       eexists; split.
       + apply in_map_iff.
         eexists; split; eauto.
         eapply rhssFor_in_iff; eauto.
-      + sis; apply gamma_recognize_app; auto.
+        eapply pm_mapsto_in; eauto.
+      + sis.
+        exists w1; exists (w2 ++ wsuf); eexists; repeat split; eauto 12; apps.
   Qed.
 
   Lemma llc_preserves_successful_sp_invar' :
-    forall g pm pr (a : Acc lex_nat_pair pr) vi sp hk (a' : Acc lex_nat_pair (meas pm vi sp)) sps' w,
-      production_map_correct pm g
-      -> pr = meas pm vi sp
-      -> llc pm vi sp hk a' = inr sps'
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) w
-      -> exists_successful_sp g sps' w.
+    forall gr hw rm pr (a : Acc lex_nat_pair pr) vi sp hk (a' : Acc lex_nat_pair (ll_meas rm vi sp)) sps' w,
+      rhs_map_correct rm gr
+      -> pr = ll_meas rm vi sp
+      -> llc gr hw rm vi sp hk a' = inr sps'
+      -> stack_accepts_suffix gr sp.(stack) w
+      -> exists_successful_sp gr sps' w.
   Proof.
-    intros g pm pr a'.
+    intros gr hw rm pr a'.
     induction a' as [pr hlt IH]; intros vi sp hk a sps'' w hp ? hs hg; subst.
     apply llc_success_cases in hs.
     destruct hs as [[hdone heq] | [sps' [av' [hs [crs [heq ha]]]]]]; subst.
@@ -1502,23 +1466,23 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
   Qed.
 
   Lemma llc_preserves_successful_sp_invar :
-    forall g pm vi sp hk (a : Acc lex_nat_pair (meas pm vi sp)) sps' w,
-      production_map_correct pm g
-      -> llc pm vi sp hk a = inr sps'
-      -> gamma_recognize g (unprocStackSyms sp.(stack)) w
-      -> exists_successful_sp g sps' w.
+    forall gr hw rm vi sp hk (a : Acc lex_nat_pair (ll_meas rm vi sp)) sps' w,
+      rhs_map_correct rm gr
+      -> llc gr hw rm vi sp hk a = inr sps'
+      -> stack_accepts_suffix gr sp.(stack) w
+      -> exists_successful_sp gr sps' w.
   Proof.
     intros; eapply llc_preserves_successful_sp_invar'; eauto.
   Qed.
 
   Lemma closure_preserves_successful_sp_invar :
-    forall g pm sps sps' hk w,
-      production_map_correct pm g
-      -> exists_successful_sp g sps w
-      -> llClosure pm sps hk = inr sps'
-      -> exists_successful_sp g sps' w.
+    forall gr hw rm sps sps' hk w,
+      rhs_map_correct rm gr
+      -> exists_successful_sp gr sps w
+      -> llClosure gr hw rm sps hk = inr sps'
+      -> exists_successful_sp gr sps' w.
   Proof.
-    intros g pm sps sps'' hk w hp he hc; destruct he as [sp [hi hg]]; red.
+    intros gr hw rm sps sps'' hk w hp he hc; destruct he as [sp [hi hg]]; red.
     eapply aggrClosureResults_dmap_succ_elt_succ in hc; eauto.
     destruct hc as [hi' [sps' [hs ha]]].
     eapply llc_preserves_successful_sp_invar in hs; eauto; firstorder.

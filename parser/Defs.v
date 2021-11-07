@@ -3056,6 +3056,141 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
                                         wsuf)
        end.
 
+  (* General-purpose tactic for solving equalities with dependent types *)
+  Ltac t :=
+    match goal with
+    | |- context[revTuple_cons_case] =>
+      unrt
+    | |- lower_frames_accept_suffix _ _ (concatTuple _ _ _ ((cast_action _ _ _ _) _, _)) _ _ =>
+      eapply lfas_replace_head; eauto
+    | |- concatTuple ?xs ?ys ?vx ?vy = cast_ss (?xs' ++ ?ys) (?xs ++ ?ys) ?pf (concatTuple ?xs' ?ys ?vx' ?vy') =>
+      eapply concatTuple_eq with (heq := app_inv_tail  _ _ _ pf)
+    | |- concatTuple ?pre (?s :: ?suf) _ _ = cast_ss _ _ _ (concatTuple ?pre' ([?s] ++ ?suf) _ _) =>
+      eapply concatTuple_eq
+    | |- context[cast_ss ?xs ?xs _ _] =>
+      rewrite cast_ss_refl
+    | |- (?a, ?b) = (?a', ?b') =>
+      apply pair_split_eq
+    | |- ?f ?vs = (cast_action _ _ _ ?f) ?vs' =>
+      eapply cast_action_eq
+    | |- context[concatTuple (rev (rev ?xs)) []] =>
+      erewrite rrt_anr
+    | |- (cast_predicate _ _ _ _) _ = true =>
+      eapply cast_predicate_eq_true; eauto
+    | |- context[concatTuple (_ ++ [_]) _ (concatTuple _ [_] _ _) _] => erewrite concatTuple_assoc'
+    | |- context[cast_ss _ _ _ (cast_ss _ _ _ _)] =>
+      erewrite <- cast_ss_ins_trans
+    | |- context[revTuple _ (revTuple _ _)] =>
+      erewrite revTuple_involutive
+    | |- PM.MapsTo _ (@existT _ _ _ (cast_predicate _ _ _ _, cast_action _ _ _ _)) _ =>
+      eapply mapsto_cast; eauto
+    end.
+
+  Ltac t' := repeat t.
+  
+  Lemma return_preserves_sas :
+    forall gr ce cr cr' pre' vs' pre vs x suf frs p f ts,
+      ce = Fr pre' vs' []
+      -> cr = Fr pre vs (NT x :: suf)
+      -> cr' = Fr (NT x :: pre) (f (revTuple _ vs'), vs) suf
+      -> PM.MapsTo (x, rev pre') (@existT _ _ (x, rev pre') (p, f)) gr
+      -> p (revTuple _ vs') = true
+      -> stack_accepts_suffix gr (ce, cr :: frs) ts
+      -> stack_accepts_suffix gr (cr', frs) ts.
+  Proof.
+    intros gr ce cr cr' pre' vs' pre vs x suf frs p f ts ? ? ? hm hp hs; subst; sis.
+    destruct hs as (wpre & wsuf & vs_suf & heq & hd & hex); subst.
+    destruct hex as (wsuf' & wsuf'' & vs_suf' & p' & f' & heq & hd' & hm' & hp' & hl); subst.
+    destruct vs_suf.
+    apply svd_inv_nil_syms in hd; subst; sis; auto.
+    exists wsuf'; exists wsuf''; eexists; repeat split; eauto.
+    t'; sis; repeat unct.
+    eapply lfas_eq; eauto.
+    eapply lfas_replace_head; eauto.
+    eapply mapsto_cast with (x' := (x, rev pre'))
+                            (z  := (x, rev pre')) in hm'; eauto; apps.
+    eapply PMF.MapsTo_fun with (e := @existT _ _ (x, rev pre') (p, f)) in hm'; auto.
+    apply inv_grammar_entry_eq in hm'.
+    destruct hm' as [hpeq hfeq].
+    rewrite hfeq.
+    t'.
+    erewrite concatTuple_nil_r; eauto.
+    t'; auto.
+    Unshelve.
+    all : apps.
+  Qed.
+
+  Lemma push_preserves_sas :
+    forall gr ce cr pre' vs' pre vs x suf frs ts,
+      ce = Fr pre' vs' []
+      -> cr = Fr pre vs (NT x :: suf)
+      -> stack_accepts_suffix gr (cr, frs) ts
+      -> stack_accepts_suffix gr (ce, cr :: frs) ts.
+  Proof.
+
+  Lemma failed_predicate_contra :
+    forall x ys ys' (p : predicate_semty (x, ys)) (p' : predicate_semty (x, ys')) vs vs'
+           (heq : ys = ys') (heq' : (x, ys) = (x, ys')),
+      vs' = cast_ss _ _ heq vs
+      -> p' = cast_predicate _ _ heq' p
+      -> ~ p vs <> p' vs'.
+  Proof.
+    intros x ys ys' p p' vs vs' ? ? ? ?; subst.
+    unfold not; intros hp.
+    apply hp.
+    rewrite cast_predicate_refl.
+    rewrite cast_ss_refl; auto.
+  Qed.
+    
+  Lemma sas_failed_predicate_contra :
+    forall gr ce cr pre' vs' pre vs x suf frs p f ts,
+      ce = Fr pre' vs' []
+      -> cr = Fr pre vs (NT x :: suf)
+      -> stack_accepts_suffix gr (ce, cr :: frs) ts
+      -> PM.MapsTo (x, rev pre') (@existT _ _ (x, rev pre') (p, f)) gr
+      -> p (revTuple _ vs') <> false.
+  Proof.
+    intros gr ce cr pre' vs' pre vs x suf frs p f ts ? ? hs hm hp; subst.
+    red in hs.
+    destruct hs as (wpre & wsuf & vs_suf & heq & hd & hl); subst; sis.
+    destruct hl as (wsuf' & wsuf'' & vs_suf' & p' & f' & heq & hd' & hm' & hp' & hl); subst.
+    destruct vs_suf.
+    eapply failed_predicate_contra with
+        (x := x)
+        (p := p)
+        (vs := revTuple _ vs')
+        (p' := p')
+        (vs'  := concatTuple _ [] (revTuple _ vs') tt); tc.
+    - erewrite concatTuple_nil_r; eauto.
+    - eapply mapsto_cast with (x' := (x, rev pre'))
+                              (z  := (x, rev pre')) in hm'; eauto; apps.
+      eapply PMF.MapsTo_fun with (e := @existT _ _ (x, rev pre') (p, f)) in hm'; auto.
+    apply inv_grammar_entry_eq in hm'.
+    destruct hm' as [hpeq hfeq].
+    rewrite hpeq.
+    rewrite cast_predicate_roundtrip; auto.
+    Unshelve.
+    all : apps.
+  Qed.
+
+  Lemma sas_find_neq_None :
+    forall gr rm cr pre vs x suf frs ts,
+      cr = Fr pre vs (NT x :: suf)
+      -> rhs_map_correct rm gr
+      -> stack_accepts_suffix gr (cr, frs) ts
+      -> NM.find x rm <> None.
+  Proof.
+    intros gr rm cr pre vs x suf frs ts ? hr hs hf; subst.
+    destruct hs as (wpre & wsuf & vs_suf & heq & hd & hl); subst; sis.
+    inv_svs hd hh ht.
+    inv_sv hh hm hvs hp.
+    apply pm_mapsto_in in hm.
+    destruct hr as (_ & _ & hc).
+    apply hc in hm.
+    destruct hm as [yss [hm hi]].
+    apply NMF.find_mapsto_iff in hm; tc.
+  Qed.
+
   (* Inductive definition of a nullable grammar symbol *)
   Inductive nullable_sym (g : grammar) : symbol -> Prop :=
   | NullableSym : forall x ys,
