@@ -6,7 +6,7 @@ Import ListNotations.
 Module SllPredictionCompleteFn (Import D : Defs.T).
 
   Module Export SLLPEF := SllPredictionErrorFreeFn D.
-
+(*
   Lemma overapprox_nil_cons_contra :
     forall sp sps,
       ~ overapprox [] (sp :: sps).
@@ -184,5 +184,5 @@ Module SllPredictionCompleteFn (Import D : Defs.T).
     - eapply ussr_llPredict_neq_reject; eauto.
     - eapply ussr_sllPredict_neq_reject; eauto.
   Qed.
-
+*)
 End SllPredictionCompleteFn.

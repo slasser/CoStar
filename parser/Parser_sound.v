@@ -868,46 +868,48 @@ Module ParserSoundFn (Import D : Defs.T).
                 all: repeat rewrite rev_involutive; apps.
                 all: rewrite heq'; apps.
   Qed.
-
   
-  Lemma adaptivePredict_at_most_one_rhs_applies :
-    forall gr hw rm cm pre vs x suf rhs frs ts ca hc hk rhs' ca',
-      stack_accepts_suffix gr (Fr [] tt rhs, Fr pre vs (NT x :: suf) :: frs) ts
-      -> adaptivePredict gr hw rm cm pre vs x suf frs ts ca hc hk = (PredSucc rhs', ca')
-      -> rhs' = rhs.
-  Admitted.
-   
   Lemma adaptivePredict_at_most_one_rhs_applies_shift_head_frame :
     forall gr hw rm cm pre pre' vs vs' x suf suf' frs wmid wsuf ca hc hk rhs ca',
-      sem_values_derivation gr (rev pre') wmid (revTuple pre' vs')
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (Fr pre' vs' suf', Fr pre vs (NT x :: suf) :: frs)
+      -> PM.In (x, rhs) gr
+      -> sem_values_derivation gr (rev pre') wmid (revTuple pre' vs')
       -> stack_accepts_suffix gr (Fr pre' vs' suf', Fr pre vs (NT x :: suf) :: frs) wsuf
       -> adaptivePredict gr hw rm cm pre vs x suf frs (wmid ++ wsuf) ca hc hk = (PredSucc rhs, ca')
       -> rev pre' ++ suf' = rhs.
   Proof.
-    intros gr hw rm cm pre pre' vs vs' x suf suf' frs wmid wsuf ca hc hk rhs ca' hd hr ha.
+    intros gr hw rm cm pre pre' vs vs' x suf suf' frs wmid wsuf ca hc hk rhs ca'  hn hr' hc' hw' hi hd hr ha.
     red in hr.
     destruct hr as (w1 & w2 & vs_suf & ? & hd' & hl); subst; sis.
     destruct hl as (w3 & w4 & vs_suf' & p & f & ? & hd'' & hm & hp & hl); subst. 
-    eapply adaptivePredict_at_most_one_rhs_applies in ha; eauto.
-    red; sis; unct; unrt.
-    exists (wmid ++ w1).
-    exists (w3 ++ w4).
-    exists (concatTuple _ _ (revTuple _ vs') vs_suf).
-    repeat split; apps; auto.
-    - apply svd_app; auto.
-    - exists w3; exists w4; exists vs_suf'; exists p; exists f; auto.
+    eapply adaptivePredict_succ_at_most_one_rhs_applies in ha; eauto.
+    - inv hw'; ss_inj; auto.
+    - eapply pm_mapsto_in; eauto.
+    - red; sis; unct; unrt.
+      exists (wmid ++ w1).
+      exists (w3 ++ w4).
+      exists (concatTuple _ _ (revTuple _ vs') vs_suf).
+      repeat split; apps; auto.
+      + apply svd_app; auto.
+      + exists w3; exists w4; exists vs_suf'; exists p; exists f; auto.
   Qed.
-  
+
   Lemma push_preserves_ufd :
     forall gr cr ce hw rm cm pre vs x suf frs wpre wsuf ca hc hk rhs ca',
-      cr = Fr pre vs (NT x :: suf)
+      cr    = Fr pre vs (NT x :: suf)
       -> ce = Fr [] tt rhs
+      -> no_left_recursion gr
       -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (cr, frs)
       -> adaptivePredict gr hw rm cm pre vs x suf frs wsuf ca hc hk = (PredSucc rhs, ca')
       -> unique_frames_derivation gr (cr :: frs) wpre wsuf
       -> unique_frames_derivation gr (ce :: cr :: frs) wpre wsuf.
   Proof.
-    intros gr cr ce hw rm cm pre vs x suf frs wpre wsuf ca hc hk rhs ca' ? ? hr ha hu; subst.
+    intros gr cr ce hw rm cm pre vs x suf frs wpre wsuf ca hc hk rhs ca' ? ? hn hr hc' hw' ha hu; subst.
     assert (heq: wpre = wpre ++ []) by apps; rewrite heq.
     eapply UFD_upper with (pre' := []); eauto.
     - eapply adaptivePredict_succ_in_grammar; eauto.
@@ -918,6 +920,8 @@ Module ParserSoundFn (Import D : Defs.T).
     - intros wmid' wsuf' pre'' suf'' vs'' heq' hi hd hr'.
       simpl; simpl in heq'; subst.
       eapply adaptivePredict_at_most_one_rhs_applies_shift_head_frame; eauto.
+      + constructor; auto.
+      + eapply adaptivePredict_succ_in_grammar; eauto.
   Qed.
 
   Definition unique_stack_prefix_derivation gr w sk wsuf un :=
@@ -931,16 +935,15 @@ Module ParserSoundFn (Import D : Defs.T).
 
   Lemma step_preserves_unique_stack_prefix_derivation_invar :
     forall gr hw w rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk,
-      (*      no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> stacks_wf g p_stk s_stk *)
-      rhs_map_correct rm gr
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr sk
       -> unique_stack_prefix_derivation gr w sk ts un
       -> step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
       -> unique_stack_prefix_derivation gr w sk' ts' un'.
   Proof.
-    intros gr hw w rm cm (fr, frs) (fr', frs') ts ts' vi vi' un un' ca ca' hc hk hr hu hs; red; red in hu; intros hu'.
+    intros gr hw w rm cm (fr, frs) (fr', frs') ts ts' vi vi' un un' ca ca' hc hk hn hr hc' hw' hu hs; red; red in hu; intros hu'.
     unfold step in hs; dmeqs h; inv hs; tc;
       destruct hu as (wpre & heq & hu); subst; auto.
     - exists wpre; split; auto.
@@ -984,10 +987,10 @@ Module ParserSoundFn (Import D : Defs.T).
            (x      : nonterminal)
            (v      : nt_semty x),
       tri = parser_meas rm sk ts vi
-(*      -> no_left_recursion gr
+      -> no_left_recursion gr
       -> rhs_map_correct rm gr
       -> closure_map_complete gr cm
-      -> stacks_wf g p_stk s_stk *)
+      -> stack_wf gr sk
       -> unique_stack_prefix_derivation gr w sk ts un
       -> multistep gr hw rm hr cm sk ts vi un ca hc hk ha' = Accept x v
       -> sem_value_derivation gr (NT x) w v 
@@ -997,7 +1000,7 @@ Module ParserSoundFn (Import D : Defs.T).
   Proof.
     intros gr hw rm hr cm tri ha.
     induction ha as [tri hlt IH].
-    intros w ts vi sk un ca hc hk ha' x v ? hu hm; subst.
+    intros w ts vi sk un ca hc hk ha' x v ? hn hr' hc' hw' hu hm; subst.
     apply multistep_cases in hm.
     destruct hm as [[hf hu'] | he]; subst.
     - apply step_StepAccept_facts in hf.
@@ -1026,9 +1029,10 @@ Module ParserSoundFn (Import D : Defs.T).
           rewrite cast_ss_roundtrip in heq.
           inv heq; auto.
         * exists []; exists []; exists tt; repeat split; auto.
-    - destruct he as (sk' & ts' & vi' & un' & ca' & hc' & hk' & ha'' & hs & hm).
+    - destruct he as (sk' & ts' & vi' & un' & ca' & hc'' & hk' & ha'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.
       + eapply step_parser_meas_lt; eauto.
+      + eapply step_preserves_stack_wf_invar; eauto.
       + eapply step_preserves_unique_stack_prefix_derivation_invar; eauto.
   Qed.
 
@@ -1048,10 +1052,10 @@ Module ParserSoundFn (Import D : Defs.T).
            (ha     : Acc lex_nat_triple (parser_meas rm sk ts vi))
            (x      : nonterminal)
            (v      : nt_semty x),
-(*      no_left_recursion g
-      -> closure_map_complete g cm
-      -> stacks_wf g ps ss *)
-      unique_stack_prefix_derivation gr w sk ts un
+      no_left_recursion gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr sk
+      -> unique_stack_prefix_derivation gr w sk ts un
       -> multistep gr hw rm hr cm sk ts vi un ca hc hk ha = Accept x v
       -> sem_value_derivation gr (NT x) w v
          /\ (forall v',

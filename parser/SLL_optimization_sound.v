@@ -638,18 +638,18 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma sllPredict_llPredict_succ_eq :
-    forall g pm cm cr o x suf frs ts ca hk hc rhs rhs' ca',
-      cr = SF o (NT x :: suf)
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (cr, frs)
-      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) ts
-      -> llPredict pm o x suf frs ts hk = PredSucc rhs
-      -> sllPredict pm cm x ts ca hc = (PredSucc rhs', ca')
+    forall gr hw rm cm cr pre vs x suf frs ts ca hk hc rhs rhs' ca',
+      cr = Fr pre vs (NT x :: suf)
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (cr, frs)
+      -> stack_accepts_suffix gr (cr, frs) ts
+      -> llPredict gr hw rm pre vs x suf frs ts hk = PredSucc rhs
+      -> sllPredict rm cm x ts ca hc = (PredSucc rhs', ca')
       -> rhs' = rhs.
   Proof.
-    intros g pm cm cr o x suf frs ts ca hk hc rhs rhs' ca' ? hn hp hc' hw hg hl hs; subst.
+    intros gr hw rm cm cr pre vs x suf frs ts ca hk hc rhs rhs' ca' ? hn hp hc' hw' hg hl hs; subst.
     apply llPredict_cases in hl; destruct hl as [sps [hss hl]].
     apply sllPredict_cases in hs; destruct hs as [sps' [hss' hs]].
     eapply sllPredict'_llPredict'_succ_eq; eauto.
@@ -660,20 +660,20 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma sllPredict'_succ__llPredict'_neq_ambig :
-    forall g pm cm ts sps sps' ca hk hk' hc ca' ys ys',
-      production_map_correct pm g
-      -> closure_map_complete g cm
-      -> all_suffix_stacks_wf g sps
+    forall gr hw rm cm ts sps sps' ca hk hk' hc ca' ys ys',
+      rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> all_stacks_wf gr sps
       -> overapprox sps' sps
-      -> sllPredict' pm cm sps' ts ca hk' hc = (PredSucc ys, ca')
-      -> llPredict' pm sps ts hk <> PredAmbig ys'.
+      -> sllPredict' rm cm sps' ts ca hk' hc = (PredSucc ys, ca')
+      -> llPredict' gr hw rm sps ts hk <> PredAmbig ys'.
   Proof.
-    intros g pm cm ts; induction ts as [| (a, l) ts IH];
-      intros sps sps' ca hk hk' hc ca' ys ys' hp hm hw ho hs hl; sis.
+    intros gr hw rm cm ts; induction ts as [| (a, l) ts IH];
+      intros sps sps' ca hk hk' hc ca' ys ys' hp hm hw' ho hs hl; sis.
     - inv hs; eapply overapprox_handleFinalSubparsers_contra; eauto.
     - destruct sps' as [| sp' sps']; tc.
       destruct sps as [| sp sps]; tc.
-      destruct (allPredictionsEqual sp sps) eqn:ha; tc.
+      destruct (allPredictionsEqual _ _ sp sps) eqn:ha; tc.
       eapply overapprox_allPredictionsEqual_false in ha; eauto.
       rewrite ha in hs.
       apply llPredict'_cont_cases in hl.
@@ -683,23 +683,23 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
       + pose proof hf as hf'; apply hc in hf'.
         destruct hf' as [hk'' ht'].
         eapply IH in hs; eauto.
-        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+        * eapply llTarget_preserves_stacks_wf_invar; eauto.
         * eapply target_preserves_overapprox; eauto.
       + eapply IH in hs; eauto.
-        * eapply llTarget_preserves_suffix_stacks_wf_invar; eauto.
+        * eapply llTarget_preserves_stacks_wf_invar; eauto.
         * eapply target_preserves_overapprox; eauto. 
   Qed.
 
   Lemma sllPredict_succ__llPredict_neq_ambig :
-    forall g pm cm fr o x suf frs ts ca hk hc ys ca' ys',
-      fr = SF o (NT x :: suf)
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (fr, frs)
-      -> sllPredict pm cm x ts ca hc = (PredSucc ys, ca')
-      -> llPredict pm o x suf frs ts hk <> PredAmbig ys'.
+    forall gr hw rm cm fr pre vs x suf frs ts ca hk hc ys ca' ys',
+      fr = Fr pre vs (NT x :: suf)
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (fr, frs)
+      -> sllPredict rm cm x ts ca hc = (PredSucc ys, ca')
+      -> llPredict gr hw rm pre vs x suf frs ts hk <> PredAmbig ys'.
   Proof.
-    intros g pm cm fr o x suf frs ts ca hk hc ys ca' ys' ? hp hc' hw hs hl; subst.
+    intros gr hw rm cm fr pre vs x suf frs ts ca hk hc ys ca' ys' ? hp hc' hw' hs hl; subst.
     apply sllPredict_cases in hs; destruct hs as [sps' [hss' hs]].
     apply llPredict_cases in hl; destruct hl as [sps [hss hl]].
     eapply sllPredict'_succ__llPredict'_neq_ambig; eauto.
@@ -708,18 +708,18 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
   
   Lemma sllPredict_succ_eq_llPredict_succ :
-    forall g pm cm cr o x suf frs ts ca hk hc rhs ca',
-      cr = SF o (NT x :: suf)
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (cr, frs)
-      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) ts
-      -> sllPredict pm cm x ts ca hc = (PredSucc rhs, ca')
-      -> llPredict pm o x suf frs ts hk = PredSucc rhs.
+    forall gr hw rm cm cr pre vs x suf frs ts ca hk hc rhs ca',
+      cr = Fr pre vs (NT x :: suf)
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (cr, frs)
+      -> stack_accepts_suffix gr (cr, frs) ts
+      -> sllPredict rm cm x ts ca hc = (PredSucc rhs, ca')
+      -> llPredict gr hw rm pre vs x suf frs ts hk = PredSucc rhs.
   Proof.
-    intros g pm cm cr o x suf frs ts ca hk hc rhs' ca' ?
-           hn hp hc' hw hg hs; subst. 
+    intros gr hw rm cm cr pre vs x suf frs ts ca hk hc rhs' ca' ?
+           hn hp hc' hw' hg hs; subst. 
     destruct (llPredict _ _ _ _) as [rhs | rhs | | e] eqn:hl.
     - symmetry; f_equal; eapply sllPredict_llPredict_succ_eq; eauto.
     - exfalso; eapply sllPredict_succ__llPredict_neq_ambig; eauto.
@@ -728,74 +728,83 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
   Qed.
 
   Lemma adaptivePredict_succ_eq_llPredict_succ :
-    forall g pm cm cr o x suf frs ts ca hc hk rhs ca',
-      cr = SF o (NT x :: suf)
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (cr, frs)
-      -> gamma_recognize g (NT x :: suf ++ unprocTailSyms frs) ts
-      -> adaptivePredict pm cm o x suf frs ts ca hc hk = (PredSucc rhs, ca')
-      -> llPredict pm o x suf frs ts hk = PredSucc rhs.
+    forall gr hw rm cm cr pre vs x suf frs ts ca hc hk rhs ca',
+      cr = Fr pre vs (NT x :: suf)
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (cr, frs)
+      -> stack_accepts_suffix gr (cr, frs) ts
+      -> adaptivePredict gr hw rm cm pre vs x suf frs ts ca hc hk = (PredSucc rhs, ca')
+      -> llPredict gr hw rm pre vs x suf frs ts hk = PredSucc rhs.
   Proof.
-    intros g pm cm cr o x suf frs ts ca hc hk rhs ca' ? hn hp hc' hw hg ha; subst. 
+    intros gr hw rm cm cr pre vs x suf frs ts ca hc hk rhs ca' ? hn hp hc' hw' hg ha; subst. 
     unfold adaptivePredict in ha.
     destruct (sllPredict _ _ _ _ _) as ([? | ? | | ?], ?) eqn:hs; tc; inv ha.
     eapply sllPredict_succ_eq_llPredict_succ; eauto.
   Qed.
 
   Theorem adaptivePredict_succ_at_most_one_rhs_applies :
-    forall g pm cm cr o x suf frs ts ca hc hk rhs rhs' ca',
-      cr = SF o (NT x :: suf)
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_complete g cm
-      -> suffix_stack_wf g (cr, frs)
-      -> In (x, rhs) g
-      -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) ts
-      -> adaptivePredict pm cm o x suf frs ts ca hc hk = (PredSucc rhs', ca')
+    forall gr hw rm cm cr ce pre vs x suf frs ts ca hc hk rhs rhs' ca',
+      cr = Fr pre vs (NT x :: suf)
+      -> ce = Fr [] tt rhs
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_complete gr cm
+      -> stack_wf gr (cr, frs)
+      -> PM.In (x, rhs) gr
+      -> stack_accepts_suffix gr (ce, cr :: frs) ts
+      -> adaptivePredict gr hw rm cm pre vs x suf frs ts ca hc hk = (PredSucc rhs', ca')
       -> rhs' = rhs.
   Proof.
-    intros g pm cm cr o x suf frs ts ca hc hk rhs rhs' ca' ? hn hp hc' hw hi hg ha; subst.
+    intros gr hw rm cm cr ce pre vs x suf frs ts ca hc hk rhs rhs' ca' ? ? hn hr hc' hw' hi hg ha; subst.
     eapply adaptivePredict_succ_eq_llPredict_succ in ha; eauto.
     - eapply llPredict_succ_at_most_one_rhs_applies; eauto.
-    - eapply gamma_recognize_fold_head_nt; eauto.
+    - (* lemma *)
+      destruct hg as (wpre & wsuf & vs_suf & heq & hd & hl); subst; sis.
+      destruct hl as (wsuf' & wsuf'' & vs_suf' & p & f & heq & hd' & hm & hp & hl); subst; sis.
+      exists (wpre ++ wsuf'); exists wsuf''; eexists;
+        repeat split; eauto; apps; econstructor; eauto.
   Qed.
 
   Lemma adaptivePredict_ambig_llPredict_ambig :
-    forall pm cm o x suf frs ts ca hc hk rhs ca',
-      adaptivePredict pm cm o x suf frs ts ca hc hk = (PredAmbig rhs, ca')
-      -> llPredict pm o x suf frs ts hk = PredAmbig rhs.
+    forall gr hw rm cm pre vs x suf frs ts ca hc hk rhs ca',
+      adaptivePredict gr hw rm cm pre vs x suf frs ts ca hc hk = (PredAmbig rhs, ca')
+      -> llPredict gr hw rm pre vs x suf frs ts hk = PredAmbig rhs.
   Proof.
     unfold adaptivePredict; intros; dms; tc. 
   Qed.
 
+(*
   Theorem adaptivePredict_ambig_rhs_unproc_stack_syms:
-    forall (g   : grammar)
+    forall (gr  : grammar)
+           (hw  : grammar_wf gr)
            (cm  : closure_map)
-           (pm  : production_map)
-           (cr  : suffix_frame)
-           (o   : option nonterminal)
+           (rm  : rhs_map)
+           (cr  : parser_frame)
+           (ce  : parser_frame)
+           (pre : list symbol)
+           (vs  : symbols_semty pre)
            (x   : nonterminal)
            (suf : list symbol)
-           (frs : list suffix_frame)
+           (frs : list parser_frame)
            (ts  : list token)
            (ca  : cache)
-           (hc  : cache_stores_target_results pm cm ca)
-           (hk  : stack_pushes_from_keyset pm (SF o (NT x :: suf), frs))
+           (hc  : cache_stores_target_results rm cm ca)
+           (hk  : stack_pushes_from_keyset rm (Fr pre vs (NT x :: suf), frs))
            (rhs : list symbol)
            (ca' : cache),
-      cr = SF o (NT x :: suf) 
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> suffix_stack_wf g (cr, frs)
-      -> adaptivePredict pm cm o x suf frs ts ca hc hk = (PredAmbig rhs, ca')
-      -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) ts.
+      cr = Fr pre vs (NT x :: suf)
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> stack_wf gr (cr, frs)
+      -> adaptivePredict gr hw rm cm pre vs x suf frs ts ca hc hk = (PredAmbig rhs, ca')
+      -> stack_accepts_suffix gr (ce, cr :: frs) ts. 
   Proof.
-    intros g pm cm cr o x suf frs ts ca hc hk rhs ca' ? hn hp hw ha; subst.
+    intros gr hw rm cm cr ce pre vs x suf frs ts ca hc hk rhs ca' ? hn hp hw' ha; subst.
     apply adaptivePredict_ambig_llPredict_ambig in ha.
     eapply llPredict_ambig_rhs_unproc_stack_syms in ha; eauto.
     sis; auto.
-  Qed.
+  Qed. *)
     
 End SllOptimizationSoundFn.

@@ -8,7 +8,7 @@ Import ListNotations.
 Module SllPredictionErrorFreeFn (Import D : Defs.T).
 
   Module Export SLLS := SllOptimizationSoundFn D.
-
+(*
   (* A more permissive well-formedness invariant that 
      places fewer restrictions on the bottom frame *)
   Inductive frames_top_wf (g : grammar) : list suffix_frame -> Prop :=
@@ -562,5 +562,5 @@ Module SllPredictionErrorFreeFn (Import D : Defs.T).
     - eapply llPredict_never_returns_error; eauto.
     - eapply sllPredict_never_returns_error; eauto.
   Qed.
-
+*)
 End SllPredictionErrorFreeFn.

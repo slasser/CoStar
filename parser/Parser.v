@@ -1,7 +1,7 @@
 Require Import FMaps Omega PeanoNat String. 
 Require Import CoStar.Defs.
 Require Import CoStar.Lex.
-Require Import CoStar.SLLPrediction.
+Require Import CoStar.SLLPrediction_complete.
 Require Import CoStar.Tactics.
 Require Import CoStar.Termination.
 Require Import CoStar.Utils.
@@ -11,7 +11,7 @@ Open Scope string_scope.
 
 Module ParserFn (Import D : Defs.T).
 
-  Module Export SLLP := SllPredictionFn D.
+  Module Export SLLPC := SllPredictionCompleteFn D.
 
   Inductive parse_error :=
   | InvalidState    : parse_error
