@@ -943,7 +943,8 @@ Module ParserSoundFn (Import D : Defs.T).
       -> step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
       -> unique_stack_prefix_derivation gr w sk' ts' un'.
   Proof.
-    intros gr hw w rm cm (fr, frs) (fr', frs') ts ts' vi vi' un un' ca ca' hc hk hn hr hc' hw' hu hs; red; red in hu; intros hu'.
+    intros gr hw w rm cm (fr, frs) (fr', frs') ts ts' vi vi' un un' ca ca'
+           hc hk hn hr hc' hw' hu hs; red; red in hu; intros hu'.
     unfold step in hs; dmeqs h; inv hs; tc;
       destruct hu as (wpre & heq & hu); subst; auto.
     - exists wpre; split; auto.
@@ -1108,7 +1109,7 @@ Module ParserSoundFn (Import D : Defs.T).
         | ? ? ? ? ? ? ? ? ? ? ? ? heq hfrd hsvd hfod hfod' hr heq' hneq
         | ? ? ? ? ? ? ? ? heq hafd' hsvd]; subst; clear hafd.
 
-  Lemma return_preserves_ambiguous_frames_derivation_invar :
+  Lemma return_preserves_afd :
     forall gr hw ce cr cr' frs pre vs x suf pre' vs' p f wpre wsuf,
       ce     = Fr pre' vs' []
       -> cr  = Fr pre vs (NT x :: suf)
@@ -1129,10 +1130,10 @@ Module ParserSoundFn (Import D : Defs.T).
       apply gamma_recognize_split in hr.
       destruct hr as (w & w' & heq & hr & hr'); subst.
       apply gamma_recognize__exists_forest_derivation in hr.
-      destruct hr as (vs_alt & hr).
-      assert (hex : exists trs, forest_derivation gr (rev pre') wmid (rev trs)) by admit.
+      destruct hr as (vs_alt & hr).      
+      assert (hex : exists trs, forest_derivation gr (rev pre') wmid (rev trs)) by (eapply svd__exists_rev_forest_der; eauto).
       destruct hex as [trs hfod].
-      assert (hex : exists trs, forest_derivation gr (rev pre) wp' (rev trs)) by admit.
+      assert (hex : exists trs, forest_derivation gr (rev pre) wp' (rev trs)) by (eapply svd__exists_rev_forest_der; eauto).
       destruct hex as [trs_cr hfod_cr].
       rewrite <- app_assoc.
       eapply AFD_sem with
@@ -1159,7 +1160,7 @@ Module ParserSoundFn (Import D : Defs.T).
       eapply fd_inv_cons in hfrd.
       destruct hfrd as (wp & wp' & heq'' & hf' & hg'); subst.
       rewrite <- app_assoc.
-      assert (hex : exists trs_cr, forest_derivation gr (rev pre) wp' (rev trs_cr)) by admit.
+      assert (hex : exists trs_cr, forest_derivation gr (rev pre) wp' (rev trs_cr)) by (eapply svd__exists_rev_forest_der; eauto).
       destruct hex as (trs_cr & hfod'').
       eapply AFD_sem with
           (pre   := NT x :: pre)
@@ -1193,7 +1194,7 @@ Module ParserSoundFn (Import D : Defs.T).
         apply gamma_recognize__exists_forest_derivation in hg''.
         destruct hg'' as [vs_ys h_vs_ys].
         rewrite <- app_assoc.
-        assert (hex : exists trs'', forest_derivation gr (rev pre') wmid (rev trs'')) by admit.
+        assert (hex : exists trs'', forest_derivation gr (rev pre') wmid (rev trs'')) by (eapply svd__exists_rev_forest_der; eauto).
         destruct hex as (trs'' & hfod'').
         eapply AFD_sem with
             (pre   := NT x :: pre)
@@ -1218,46 +1219,45 @@ Module ParserSoundFn (Import D : Defs.T).
         * apply svd_app; auto.
           rew_nil_r wmid.
           constructor; eauto.
-  Admitted.
+  Qed.
 
-  Lemma consume_preserves_ambiguous_frames_derivation_invar :
-    forall g p_fr p_fr' s_fr s_fr' p_frs s_frs pre suf o a l v wpre wsuf,
-      p_fr     = PF pre v
-      -> p_fr' = PF (T a :: pre) (Leaf a l :: v)
-      -> s_fr  = SF o (T a :: suf)
-      -> s_fr' = SF o suf
-      -> ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) 
-                                     wpre ((a, l) :: wsuf)
-      -> ambiguous_frames_derivation g (p_fr' :: p_frs) (s_fr' :: s_frs)
-                                     (wpre ++ [(a, l)]) wsuf.
+  Lemma consume_preserves_afd :
+    forall gr fr fr' pre vs a v suf wpre wsuf frs,
+      fr     = Fr pre vs (T a :: suf)
+      -> fr' = Fr (T a :: pre) (v, vs) suf
+      -> ambiguous_frames_derivation gr (fr :: frs) wpre (@existT _ _ a v :: wsuf )
+      -> ambiguous_frames_derivation gr (fr' :: frs) (wpre ++ [@existT _ _ a v]) wsuf.
   Proof.
-    intros g ? ? ? ? p_frs s_frs pre suf o a l v wpre wsuf
-           ? ? ? ? ha; subst.
-    inv_afd ha ha' heq hf hg hg' hi hi' hneq hr; sis.
+    intros gr ? ? pre vs a v suf wpre wsuf frs ? ? hafd; subst. inv_afd hafd heq heq' hfrd hi hsvd hi' hneq hr hfod hfod' heq hafd'; sis.
     - (* push case *)
-      inv hp'; inv hs'; rewrite <- app_assoc.
-      eapply AFD_push; eauto; sis; apps.
-      apply gamma_derivation_app; auto.
-      rew_nil_r ([(a, l)]); eauto.
+      inv heq'; ss_inj.
+      rewrite <- app_assoc. 
+      eapply AFD_push with (pre' := T a :: pre); eauto; sis; apps.
+      apply svd_app; auto.
+      apply svd_singleton; auto.
     - (* sem case *)
-      inv hp; inv hs.
+      inv heq; ss_inj.
       inv_gr hr wmid'' wsuf'' hs hr'.
       inversion hs as [a' l' |]; subst; clear hs.
       rewrite <- app_assoc.
       eapply AFD_sem with
-          (wmid' := wmid' ++ [(a, l')])
-          (v'    := Leaf a l' :: v'); eauto; sis; apps.
-      + apply gamma_derivation_app; auto.
-        rew_nil_r ([(a, l)]); eauto.
-      + apply gamma_derivation_app; auto.
-        rew_nil_r ([(a, l')]); eauto.
-      + unfold not; intros heq'.
-        apply app_inj_tail in heq'; destruct heq'; tc.
-    - (* tail case *)
-      inv hp; inv hs; rewrite <- app_assoc.
-      eapply AFD_tail; eauto; sis; apps.
-      apply gamma_derivation_app; auto.
-      rew_nil_r ([(a, l)]); auto.
+          (pre   := T a :: pre)
+          (wmid' := wmid' ++ [@existT _ _ a l'])
+          (trs   := Leaf a :: trs)
+          (trs'  := Leaf a :: trs'); eauto; sis; apps.
+      + apply svd_app; auto.
+        apply svd_singleton; auto.
+      + apply forest_derivation_app; auto.
+        apply terminal_head_forest_derivation; auto.
+      + apply forest_derivation_app; auto.
+        apply terminal_head_forest_derivation; auto.
+      + intros heq''.
+        apply app_inj_tail in heq''; destruct heq''; tc.
+    - inv heq; ss_inj.
+      rewrite <- app_assoc.
+      eapply AFD_tail with (pre := T a :: pre); eauto; sis; apps.
+      apply svd_app; auto.
+      apply svd_singleton; auto.
   Qed.
 
   (* to do : these next lemmas should probably be in Prediction *)

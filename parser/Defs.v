@@ -2707,6 +2707,24 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       exists (st :: sts); auto.
   Qed.
 
+  Lemma svd__exists_corresp_forest_derivation :
+    forall g ys w vs,
+      sem_values_derivation g ys w vs
+      -> exists ts, forest_corresp_values g ys w ts vs.
+  Proof.
+    intros g ys w vs hs.
+    induction hs using sem_values_derivation_mutual_ind with
+        (P  := fun s w v hs =>
+                 exists t, tree_corresp_value g s w t v)
+        (P0 := fun ss w vs hs =>
+                 exists ts, forest_corresp_values g ss w ts vs); eauto.
+    - destruct IHhs as [sts hc].
+      eexists; eauto.
+    - destruct IHhs  as [st hc].
+      destruct IHhs0 as [sts hc'].
+      exists (st :: sts); auto.
+  Qed.
+
 (*  Lemma inv_nt_tcv :
     forall x t v,
       tree_corresp_value (NT x) t v
@@ -2748,6 +2766,30 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
                  tree_derivation g s w t); eauto.
     econstructor; eauto.
     eapply pm_mapsto_in; eauto.
+  Qed.
+
+  Lemma svd__exists_forest_der :
+    forall gr ys w vs,
+      sem_values_derivation gr ys w vs
+      -> exists ts, forest_derivation gr ys w ts.
+  Proof.
+    intros gr ys w vs hs.
+    apply svd__exists_corresp_forest_derivation in hs.
+    destruct hs as [ts hfcv].
+    apply corresp__forest_derivation in hfcv; eauto.
+  Qed.
+
+  Lemma svd__exists_rev_forest_der :
+    forall gr ys w vs,
+      sem_values_derivation gr (rev ys) w (revTuple _ vs)
+      -> exists ts, forest_derivation gr (rev ys) w (rev ts).
+  Proof.
+    intros gr ys w vs hs.
+    apply svd__exists_corresp_forest_derivation in hs.
+    destruct hs as [ts hfcv].
+    apply corresp__forest_derivation in hfcv.
+    exists (rev ts).
+    rewrite rev_involutive; auto.
   Qed.
 
   Lemma fcv__forests_eq__words_eq_rhss_eq :
