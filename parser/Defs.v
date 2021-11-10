@@ -1806,6 +1806,19 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
   Definition parser_stack : Type :=
     (parser_frame * list parser_frame)%type.
 
+  Fixpoint unprocTailSyms (frs : list parser_frame) : list symbol :=
+    match frs with 
+    | []                           => []
+    | Fr _ _ [] :: _               => [] (* impossible for a well-formed stack *)
+    | Fr _ _ (T _ :: _) :: _       => [] (* impossible for a well-formed stack *)
+    | Fr _ _ (NT x :: suf) :: frs' => suf ++ unprocTailSyms frs'
+    end.
+
+  Definition unprocStackSyms (stk : parser_stack) : list symbol :=
+    match stk with
+    | (Fr _ _ suf, frs) => suf ++ unprocTailSyms frs
+    end.
+
   Definition stackSuffixes (stk : parser_stack) : list symbol * list (list symbol) :=
     match stk with
     | (fr, frs) => (suffix fr, map suffix frs)
@@ -1952,20 +1965,6 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     match sp with
     | Sp pred stk => SllSp pred (sllify stk)
     end. *)
-
-  (*
-  
-  Fixpoint unprocSyms (frs : list parser_frame) : list symbol :=
-    match frs with 
-    | []                         => []
-    | Fr _ _ _ suf :: frs'       => suf ++ unprocSyms frs'
-    end.
-
-  Definition unprocStackSyms (stk : parser_stack) : list symbol :=
-    match stk with
-    | (fr, frs) => unprocSyms (fr :: frs)
-    end.
-   *)
 
   (* Grammatical derivation relations -- the main parser correctnes spec *)
 
