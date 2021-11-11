@@ -1519,8 +1519,12 @@ Module ParserSoundFn (Import D : Defs.T).
         unrt; unct.
         split.
         * apply svd_singleton; auto.
-        * (* lemma *)
-          admit.
+        * apply forest_der_singleton__tree_der in hfod.
+          destruct hfod as (tr & heq & htd).
+          apply forest_der_singleton__tree_der in hfod'.
+          destruct hfod' as (tr' & heq' & htd').
+          rewrite heq in hneq; rewrite heq' in hneq.
+          exists tr; exists tr'; repeat split; auto; tc.
       + inv hafd'.
     - destruct he as (sk' & ts' & vi' & un' & ca' & hc' & hk' & a'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.
@@ -1528,32 +1532,34 @@ Module ParserSoundFn (Import D : Defs.T).
       + eapply step_preserves_stack_wf_invar; eauto. 
       + eapply step_preserves_stack_prefix_derivation_invar; eauto. 
       + eapply step_preserves_ambiguous_stack_prefix_derivation_invar; eauto.
-  Admitted.
+  Qed.
 
   Lemma multistep_sound_ambig :
-    forall (g      : grammar)
-           (pm     : production_map)
+    forall (gr     : grammar)
+           (hw     : grammar_wf gr)
+           (rm     : rhs_map)
+           (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
            (w wsuf : list token)
            (vi     : NtSet.t)
-           (ps     : prefix_stack)
-           (ss     : suffix_stack)
+           (sk     : parser_stack)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results pm cm ca)
-           (hk     : stack_pushes_from_keyset pm ss)
-           (a      : Acc lex_nat_triple (meas pm ss wsuf vi))
-           (t      : tree),
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> stacks_wf g ps ss
-      -> stack_prefix_derivation g w ps ss wsuf
-      -> ambiguous_stack_prefix_derivation g w ps ss wsuf un
-      -> multistep pm cm ps ss wsuf vi un ca hc hk a = Ambig t
-      -> gamma_derivation g (bottomFrameSyms ps ss) w [t]
-         /\ (exists v',
-                gamma_derivation g (bottomFrameSyms ps ss) w v'
-                /\ v' <> [t]).
+           (hc     : cache_stores_target_results rm cm ca)
+           (hk     : stack_pushes_from_keyset rm sk)
+           (ha     : Acc lex_nat_triple (parser_meas rm sk wsuf vi))
+           (x      : nonterminal)
+           (v      : nt_semty x),
+      no_left_recursion gr
+      -> stack_wf gr sk
+      -> stack_prefix_derivation gr w sk wsuf
+      -> ambiguous_stack_prefix_derivation gr w sk wsuf un
+      -> multistep gr hw rm hr cm sk wsuf vi un ca hc hk ha = Ambig x v
+      -> sem_value_derivation gr (NT x) w v
+         /\ (exists t t' : tree,
+                tree_derivation gr (NT x) w t
+                /\ tree_derivation gr (NT x) w t'
+                /\ t <> t').
   Proof.
     intros; eapply multistep_sound_ambig'; eauto.
   Qed.

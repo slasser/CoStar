@@ -2280,6 +2280,16 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     inv hs; inv hg'; rewrite app_nil_r; eauto.
   Qed.
 
+  Lemma forest_der_singleton__tree_der :
+    forall gr x w ts,
+      forest_derivation gr [NT x] w ts
+      -> exists t, ts = [t] /\ tree_derivation gr (NT x) w t.
+  Proof.
+    intros gr x w ts hf.
+    apply forest_derivation_singleton_nt in hf.
+    destruct hf as (ys & ts' & hi & heq & hf); subst; eauto.
+  Qed.
+
   Definition unique_forest_derivation g ss w v :=
     forest_derivation g ss w v
     /\ forall v', forest_derivation g ss w v' -> v = v'.
