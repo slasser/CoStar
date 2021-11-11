@@ -1414,6 +1414,8 @@ Module LLPredictionFn (Import D : Defs.T).
    predicate over a list of locations *)
 
   Inductive frames_wf (g : grammar) : list parser_frame -> Prop :=
+  | WF_empty :
+      frames_wf g []
   | WF_bottom_init :
       forall (x : nonterminal),
         frames_wf g [Fr [] tt [NT x]]
@@ -1430,7 +1432,7 @@ Module LLPredictionFn (Import D : Defs.T).
 
   (* invert a frames_wf judgment *)
   Ltac inv_fwf hw  hi hw' :=
-    inversion hw as [ ? | ? ? | ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
+    inversion hw as [ | ? | ? ? | ? ? ? ? ? ? ? ? hi hw']; subst; clear hw.
 
   Ltac wf_upper_nil := eapply WF_upper with (pre' := []); sis; eauto.
 

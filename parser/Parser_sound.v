@@ -989,7 +989,6 @@ Module ParserSoundFn (Import D : Defs.T).
            (v      : nt_semty x),
       tri = parser_meas rm sk ts vi
       -> no_left_recursion gr
-      -> rhs_map_correct rm gr
       -> closure_map_complete gr cm
       -> stack_wf gr sk
       -> unique_stack_prefix_derivation gr w sk ts un
@@ -1001,7 +1000,7 @@ Module ParserSoundFn (Import D : Defs.T).
   Proof.
     intros gr hw rm hr cm tri ha.
     induction ha as [tri hlt IH].
-    intros w ts vi sk un ca hc hk ha' x v ? hn hr' hc' hw' hu hm; subst.
+    intros w ts vi sk un ca hc hk ha' x v ? hn hc' hw' hu hm; subst.
     apply multistep_cases in hm.
     destruct hm as [[hf hu'] | he]; subst.
     - apply step_StepAccept_facts in hf.
@@ -1264,28 +1263,28 @@ Module ParserSoundFn (Import D : Defs.T).
 
   (* refactor *)
   Lemma llPredict'_ambig_rhs_leads_to_successful_parse' :
-    forall g pm orig_sps wsuf wpre curr_sps rhs hk,
-      production_map_correct pm g
-      -> all_suffix_stacks_wf g orig_sps
-      -> subparsers_sound_wrt_originals g orig_sps wpre curr_sps wsuf
-      -> llPredict' pm curr_sps wsuf hk = PredAmbig rhs
+    forall gr hw rm orig_sps wsuf wpre curr_sps rhs hk,
+      rhs_map_correct rm gr
+      -> all_stacks_wf gr orig_sps
+      -> subparsers_sound_wrt_originals gr orig_sps wpre curr_sps wsuf
+      -> llPredict' gr hw rm curr_sps wsuf hk = PredAmbig rhs
       -> exists orig_sp final_sp orig_sp' final_sp' rhs',
           In orig_sp orig_sps
           /\ orig_sp.(prediction) = rhs
-          /\ move_closure_multistep' g orig_sp (wpre ++ wsuf) final_sp []
+          /\ move_closure_multistep' gr orig_sp (wpre ++ wsuf) final_sp []
           /\ finalConfig final_sp = true
           /\ In orig_sp' orig_sps
           /\ orig_sp'.(prediction) = rhs'
-          /\ move_closure_multistep' g orig_sp' (wpre ++ wsuf) final_sp' []
+          /\ move_closure_multistep' gr orig_sp' (wpre ++ wsuf) final_sp' []
           /\ finalConfig final_sp' = true
           /\ rhs' <> rhs.
   Proof.
-    intros g pm orig_sps wsuf.
+    intros gr hw rm orig_sps wsuf.
     induction wsuf as [| (a,l) wsuf' IH]; intros wpre curr_sps rhs hk hp ha hi hl; sis; tc.
     - (* lemma *)
       unfold handleFinalSubparsers in hl.
       destruct (filter _ _) as [| csp' csps'] eqn:hf; tc.
-      destruct (allPredictionsEqual csp' csps') eqn:ha''; tc.
+      destruct (allPredictionsEqual _ _ csp' csps') eqn:ha''; tc.
       inv hl.
       unfold subparsers_sound_wrt_originals in hi.
       pose proof hf as hf'.
@@ -1308,11 +1307,12 @@ Module ParserSoundFn (Import D : Defs.T).
       + assert (hi'''' : In csp'' (filter finalConfig curr_sps)). 
         { rewrite hf'; apply in_cons; auto. }
         eapply filter_In in hi''''; destruct hi''''; auto.
+      + apply beqGamma_eq_iff.
     - destruct curr_sps as [| csp csps]; tc.
       destruct (allPredictionsEqual _ _); tc.
       apply llPredict'_cont_cases in hl.
       destruct hl as [sps'' [ht hl]].
-      eapply IH with (wpre := wpre ++ [(a,l)]) in hl; eauto.
+      eapply IH with (wpre := wpre ++ [@existT _ _ a l]) in hl; eauto.
       + destruct hl as [osp [fsp [osp' [fsp' [rhs' [hi' [heq [hm' [hf [hi'' [heq' [hm'' [hf' hn]]]]]]]]]]]]]; subst.
         rewrite <- app_assoc in *; sis.
         exists osp; exists fsp; exists osp'; exists fsp';
@@ -1320,22 +1320,22 @@ Module ParserSoundFn (Import D : Defs.T).
       + eapply llTarget_preserves_subparsers_sound_invar; eauto.
    Qed.
 
-  Lemma llPredict_ambig_rhs_unproc_stack_syms' :
-    forall g pm cr ce o x suf frs w hk rhs,
-      cr    = SF o (NT x :: suf)
-      -> ce = SF (Some x) rhs
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> suffix_stack_wf g (cr, frs)
-      -> llPredict pm o x suf frs w hk = PredAmbig rhs
-      -> gamma_recognize g (rhs ++ suf ++ unprocTailSyms frs) w
+  Lemma llPredict_ambig_two_rhss_sas:
+    forall gr hw rm cr ce pre vs x suf frs w hk rhs,
+      cr    = Fr pre vs (NT x :: suf)
+      -> ce = Fr [] tt rhs
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> stack_wf gr (cr, frs)
+      -> llPredict gr hw rm pre vs x suf frs w hk = PredAmbig rhs
+      -> stack_accepts_suffix gr (ce, cr :: frs) w
          /\ (exists rhs',
-                In (x, rhs') g
+                PM.In (x, rhs') gr
                 /\ rhs' <> rhs
-                /\ gamma_recognize g (rhs' ++ suf ++ unprocTailSyms frs) w).
+                /\ stack_accepts_suffix gr (Fr [] tt rhs', cr :: frs) w).
   
   Proof.
-    intros g pm cr ce o x suf frs w hk rhs ? ? hn hp hw hl; subst; sis.
+    intros gr hw rm cr ce pre vs x suf frs w hk rhs ? ? hn hp hw' hl; subst; sis.
     pose proof hl as hl'; eapply llPredict_ambig_in_grammar in hl'; eauto.
     apply llPredict_cases in hl.
     destruct hl as [sps [hss hl]].
@@ -1352,7 +1352,7 @@ Module ParserSoundFn (Import D : Defs.T).
           apply closure_multistep_preserves_label in hc; sis; subst; auto.
         * (* lemma *)
           red. intros init_sp hi''.
-          eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+          eapply llInitSps_preserves_stack_wf_invar; eauto.
       + exists osp'.(prediction); repeat split; auto.
         * eapply llStartState_sp_prediction_in_rhssFor
             with (sp' := osp') in hss; eauto.
@@ -1365,7 +1365,7 @@ Module ParserSoundFn (Import D : Defs.T).
              destruct hi'' as [rhs [heq hi'']]; subst; sis.
              apply closure_multistep_preserves_label in hc; sis; subst; auto.
           -- red; intros init_sp hi''.
-             eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+             eapply llInitSps_preserves_stack_wf_invar; eauto.
     - eapply llStartState_preserves_stacks_wf_invar; eauto. 
     - red. intros sp' hi; sis.
       exists sp'; split; auto.
@@ -1373,119 +1373,162 @@ Module ParserSoundFn (Import D : Defs.T).
       + destruct hi as [av'' [sp [hi hc]]].
         assert (hst : stable_config sp'.(stack)).
         { eapply stable_config_after_closure_multistep; eauto.
-          eapply llInitSps_preserves_suffix_stack_wf_invar; eauto. }
+          eapply llInitSps_preserves_stack_wf_invar; eauto. }
         destruct sp' as [pred ([suf'], frs')]; inv hst; auto.
-      + intros sp hi'; eapply llInitSps_preserves_suffix_stack_wf_invar; eauto.
+      + intros sp hi'; eapply llInitSps_preserves_stack_wf_invar; eauto.
   Qed.
 
-  Definition ambiguous_stack_prefix_derivation g w p_stk s_stk wsuf u :=
-    match p_stk, s_stk with
-    | (p_fr, p_frs), (s_fr, s_frs) =>
-      u = false
+  Definition ambiguous_stack_prefix_derivation gr w sk wsuf un :=
+    match sk with
+    | (fr, frs) => 
+      un = false
       -> exists wpre,
           w = wpre ++ wsuf
-          /\ ambiguous_frames_derivation g (p_fr :: p_frs) (s_fr :: s_frs) wpre wsuf
+          /\ ambiguous_frames_derivation gr (fr :: frs) wpre wsuf
     end.
 
   Lemma ambiguous_stack_prefix_derivation_invar_starts_true :
-    forall g ys ts,
-      ambiguous_stack_prefix_derivation g ts (PF [] [], []) (SF None ys, []) ts true.
+    forall gr ys ts,
+      ambiguous_stack_prefix_derivation gr ts (Fr [] tt ys, []) ts true.
   Proof.
     intros g ys ts hc; inv hc.
   Qed.
 
-    Lemma step_preserves_ambiguous_stack_prefix_derivation_invar :
-    forall g pm cm w ps ps' ss ss' ts ts' vi vi' un un' ca hc hk ca',
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> stacks_wf g ps ss
-      -> stack_prefix_derivation g w ps ss ts
-      -> ambiguous_stack_prefix_derivation g w ps ss ts un
-      -> step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-      -> ambiguous_stack_prefix_derivation g w ps' ss' ts' un'.
+  Lemma lfas_recognize :
+    forall gr frs fr ss vs ts,
+      frames_wf gr (fr :: frs)
+      -> lower_frames_accept_suffix gr ss vs frs ts
+      -> gamma_recognize gr (unprocTailSyms frs) ts.
   Proof.
-    intros g pm cm w (p_fr, p_frs) (p_fr', p_frs') (s_fr, s_frs) (s_fr', s_frs') 
-           ts ts' vi vi' un un' ca hc hk ca' hn hp' hw hp ha hs; red; red in ha; intros hu.
+    intros gr frs.
+    induction frs as [| [pre vs suf] frs IH]; intros fr ss vs' ts hw hl; subst; tc.
+    - simpl; red in hl; subst; auto.
+    - inv hw; ss_inj.
+      red in hl.
+      destruct hl as (wpre & wsuf & vs_suf & p & f & heq & hd & hm & hp & hl); subst; simpl.
+      fold lower_frames_accept_suffix in hl.
+      apply gamma_recognize_app.
+      + apply svd__exists_forest_der in hd.
+        destruct hd as (trs & hfod).
+        eapply forest_derivation__gamma_recognize; eauto.
+      + eapply IH; eauto.
+  Qed.
+  
+  Lemma step_preserves_ambiguous_stack_prefix_derivation_invar :
+    forall gr hw rm cm w sk sk' ts ts' vi vi' un un' ca hc hk ca',
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> stack_wf gr sk
+      -> stack_prefix_derivation gr w sk ts
+      -> ambiguous_stack_prefix_derivation gr w sk ts un
+      -> step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+      -> ambiguous_stack_prefix_derivation gr w sk' ts' un'.
+  Proof.
+    intros gr hw rm cm w (fr, frs) (fr', frs') ts ts' vi vi' un un' ca
+           hc hk ca' hn hp' hw' hp ha hs; red; red in ha; intros hu.
     unfold step in hs; dmeqs h; inv hs; tc.
     - (* return *)
       destruct ha as (wpre & heq & ha); subst; sis; auto.
       exists wpre.
-      eapply return_preserves_ambiguous_frames_derivation_invar in ha; eauto.
+      eapply return_preserves_afd in ha; eauto.
     - (* consume *)
       destruct ha as (wpre & heq & ha); subst; sis; auto.
       eexists; split.
       + rewrite cons_app_singleton; rewrite app_assoc; eauto.
-      + eapply consume_preserves_ambiguous_frames_derivation_invar; eauto.
+      + eapply consume_preserves_afd; eauto.
     - (* unambiguous push *)
       destruct ha as (wpre & heq & ha); subst; sis; auto. 
       eexists; split; eauto.
-      rew_nil_r wpre; eapply AFD_tail; eauto.
+      rew_nil_r wpre; eapply AFD_tail with (pre := []); eauto.
     - (* ambiguous push *)
       destruct hp as (wpre & heq & hd); subst.
       exists wpre; split; auto.
       rew_nil_r wpre.
-      apply adaptivePredict_ambig_llPredict_ambig in h4.
-      pose proof h4 as h4'; apply llPredict_ambig_in_grammar with (g := g) in h4'; auto.
-      eapply llPredict_ambig_rhs_unproc_stack_syms' in h4; auto.
-      + destruct h4 as [hr [rhs' [hi [hneq hr']]]].
-        eapply AFD_push; eauto.
-      + auto.
-      + auto.
-      + eapply frames_wf__suffix_frames_wf; eauto.
+      match goal with
+      | H : adaptivePredict _ _ _ _ _ _ _ _ _ _ _ _ _ = (PredAmbig _, _) |- _ =>
+        pose proof H as hllp; apply adaptivePredict_ambig_llPredict_ambig in hllp
+      end.
+      pose proof hllp as hllp'.
+      apply llPredict_ambig_in_grammar in hllp'; auto.
+      eapply llPredict_ambig_two_rhss_sas in hllp; eauto.
+      destruct hllp as (hsas & rhs' & hi & hneq & hsas').
+      eapply AFD_push with (pre' := []); eauto.
+      (* todo -- lemma -- sas --> gamma_recognize *)
+      simpl.
+      red in hsas'.
+      destruct hsas' as (wpre' & wsuf' & vs_suf & heq & hd' & hl); subst.
+      red in hl.
+      destruct hl as (wsuf'' & wsuf''' & vs_suf' & p & f & heq & hd'' & hm & hp & hl); subst.
+      fold lower_frames_accept_suffix in hl; sis.
+      apply gamma_recognize_app.
+      + apply svd__exists_forest_der in hd'.
+        destruct hd' as (trs & hfod).
+        eapply forest_derivation__gamma_recognize; eauto.
+      + apply gamma_recognize_app.
+        * apply svd__exists_forest_der in hd''.
+          destruct hd'' as (trs' & hfod').
+          eapply forest_derivation__gamma_recognize; eauto.
+        * eapply lfas_recognize; eauto.
   Qed.
 
   Lemma multistep_sound_ambig' :
-    forall (g      : grammar)
-           (pm     : production_map)
+    forall (gr     : grammar)
+           (hw     : grammar_wf gr)
+           (rm     : rhs_map)
+           (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
            (w wsuf : list token)
            (vi     : NtSet.t)
-           (ps     : prefix_stack)
-           (ss     : suffix_stack)
+           (sk     : parser_stack)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results pm cm ca)
-           (hk     : stack_pushes_from_keyset pm ss)
-           (a'     : Acc lex_nat_triple (meas pm ss wsuf vi))
-           (t      : tree),
-      tri = meas pm ss wsuf vi
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> stacks_wf g ps ss
-      -> stack_prefix_derivation g w ps ss wsuf
-      -> ambiguous_stack_prefix_derivation g w ps ss wsuf un
-      -> multistep pm cm ps ss wsuf vi un ca hc hk a' = Ambig t
-      -> gamma_derivation g (bottomFrameSyms ps ss) w [t]
-         /\ (exists v',
-                gamma_derivation g (bottomFrameSyms ps ss) w v'
-                /\ v' <> [t]).
+           (hc     : cache_stores_target_results rm cm ca)
+           (hk     : stack_pushes_from_keyset rm sk)
+           (a'     : Acc lex_nat_triple (parser_meas rm sk wsuf vi))
+           (x      : nonterminal)
+           (v      : nt_semty x),
+      tri = parser_meas rm sk wsuf vi
+      -> no_left_recursion gr
+      -> stack_wf gr sk
+      -> stack_prefix_derivation gr w sk wsuf
+      -> ambiguous_stack_prefix_derivation gr w sk wsuf un
+      -> multistep gr hw rm hr cm sk wsuf vi un ca hc hk a' = Ambig x v
+      -> sem_value_derivation gr (NT x) w v
+         /\ (exists t t' : tree,
+                tree_derivation gr (NT x) w t
+                /\ tree_derivation gr (NT x) w t'
+                /\ t <> t').
   Proof.
-    intros g pm cm tri a.
+    intros gr hw rm hr cm tri a.
     induction a as [tri hlt IH].
-    intros w wsuf vi ps ss un ca hc hk a' v ? hn hp' hw hd ha hm; subst.
+    intros w wsuf vi sk un ca hc hk a' x v ? hn hw' hd ha hm; subst.
     apply multistep_cases in hm.
     destruct hm as [[hs hu] | he]; subst.
     - apply step_StepAccept_facts in hs.
-      destruct hs as (? & ? & ? & (pre & ?)); subst.
-      unfold bottomFrameSyms; simpl; rewrite app_nil_r.
+      destruct hs as [? ?]; subst.
       red in ha.
-      destruct ha as [wpre [heq ha]]; subst; auto; rew_anr.
+      destruct ha as (wpre & heq & ha); subst; auto; rew_anr.
       clear IH. clear a'. clear hlt.
-      (* lemma *)
-      inv_afd ha  ha' heq hf hg hg' hi hi' hneq hr.
-      + inv hp; inv hs; rew_anr; subst.
-        inv hr; inv hf; rew_anr; sis; eauto.
-      + inv ha'.
-    - destruct he as (ps' & ss' & ts' & vi' & un' & ca' & hc' & hk' & a'' & hs & hm).
+      inv_afd ha heq heq' hfrd hi hsvd hi' hneq hr' hfod hfod' heq hafd'.
+      + rew_anr; subst.
+        inv heq; ss_inj.
+        inv hfrd; sis.
+        inv hr'; rew_anr; sis.
+        unrt; unct.
+        split.
+        * apply svd_singleton; auto.
+        * (* lemma *)
+          admit.
+      + inv hafd'.
+    - destruct he as (sk' & ts' & vi' & un' & ca' & hc' & hk' & a'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.
-      + erewrite step_preserves_bottomFrameSyms_invar; eauto.
-      + eapply step_meas_lt with (ca := ca); eauto.
-      + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
-      + eapply step_preserves_stack_prefix_derivation_invar with (ca := ca); eauto.
+      + eapply step_parser_meas_lt; eauto.
+      + eapply step_preserves_stack_wf_invar; eauto. 
+      + eapply step_preserves_stack_prefix_derivation_invar; eauto. 
       + eapply step_preserves_ambiguous_stack_prefix_derivation_invar; eauto.
-  Qed.
+  Admitted.
 
   Lemma multistep_sound_ambig :
     forall (g      : grammar)
@@ -1514,7 +1557,5 @@ Module ParserSoundFn (Import D : Defs.T).
   Proof.
     intros; eapply multistep_sound_ambig'; eauto.
   Qed.
-
-   *)
   
 End ParserSoundFn.
