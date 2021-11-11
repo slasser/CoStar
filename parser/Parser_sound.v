@@ -166,6 +166,14 @@ Module ParserSoundFn (Import D : Defs.T).
       eapply push_preserves_frames_derivation; eauto.
   Qed.
 
+  Lemma stack_prefix_derivation_start_true :
+    forall gr w x,
+      stack_prefix_derivation gr w (Fr [] tt [NT x], []) w.
+  Proof.
+    intros gr w x; red.
+    exists []; split; auto.
+  Qed.
+    
   (* Invariant for proving the "unambiguous" version of the parser soundness
    lemma. The processed stack symbols and the semantic values stored
    in each frame comprise a unique partial derivation for the tokens that
@@ -975,6 +983,7 @@ Module ParserSoundFn (Import D : Defs.T).
            (rm     : rhs_map)
            (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
+           (x      : nonterminal)
            (tri    : nat * nat * nat)
            (ha     : Acc lex_nat_triple tri)
            (w ts   : list token)
@@ -984,23 +993,23 @@ Module ParserSoundFn (Import D : Defs.T).
            (ca     : cache)
            (hc     : cache_stores_target_results rm cm ca)
            (hk     : stack_pushes_from_keyset rm sk)
+           (hb     : bottom_stack_sym_eq_start_sym sk x)
            (ha'    : Acc lex_nat_triple (parser_meas rm sk ts vi))
-           (x      : nonterminal)
            (v      : nt_semty x),
       tri = parser_meas rm sk ts vi
       -> no_left_recursion gr
       -> closure_map_complete gr cm
       -> stack_wf gr sk
       -> unique_stack_prefix_derivation gr w sk ts un
-      -> multistep gr hw rm hr cm sk ts vi un ca hc hk ha' = Accept x v
+      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha' = Accept x v
       -> sem_value_derivation gr (NT x) w v 
          /\ (forall v',
                 sem_value_derivation gr (NT x) w v'
                 -> v' = v).
   Proof.
-    intros gr hw rm hr cm tri ha.
+    intros gr hw rm hr cm x tri ha.
     induction ha as [tri hlt IH].
-    intros w ts vi sk un ca hc hk ha' x v ? hn hc' hw' hu hm; subst.
+    intros w ts vi sk un ca hc hk hb ha' v ? hn hc' hw' hu hm; subst.
     apply multistep_cases in hm.
     destruct hm as [[hf hu'] | he]; subst.
     - apply step_StepAccept_facts in hf.
@@ -1029,7 +1038,7 @@ Module ParserSoundFn (Import D : Defs.T).
           rewrite cast_ss_roundtrip in heq.
           inv heq; auto.
         * exists []; exists []; exists tt; repeat split; auto.
-    - destruct he as (sk' & ts' & vi' & un' & ca' & hc'' & hk' & ha'' & hs & hm).
+    - destruct he as (sk' & ts' & vi' & un' & ca' & hc'' & hk' & hb' & ha'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.
       + eapply step_parser_meas_lt; eauto.
       + eapply step_preserves_stack_wf_invar; eauto.
@@ -1041,6 +1050,7 @@ Module ParserSoundFn (Import D : Defs.T).
            (hw     : grammar_wf gr)
            (rm     : rhs_map)
            (hr     : rhs_map_correct rm gr)
+           (x      : nonterminal)
            (cm     : closure_map)
            (w ts   : list token)
            (vi     : NtSet.t)
@@ -1049,14 +1059,14 @@ Module ParserSoundFn (Import D : Defs.T).
            (ca     : cache)
            (hc     : cache_stores_target_results rm cm ca)
            (hk     : stack_pushes_from_keyset rm sk)
+           (hb     : bottom_stack_sym_eq_start_sym sk x)
            (ha     : Acc lex_nat_triple (parser_meas rm sk ts vi))
-           (x      : nonterminal)
            (v      : nt_semty x),
       no_left_recursion gr
       -> closure_map_complete gr cm
       -> stack_wf gr sk
       -> unique_stack_prefix_derivation gr w sk ts un
-      -> multistep gr hw rm hr cm sk ts vi un ca hc hk ha = Accept x v
+      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha = Accept x v
       -> sem_value_derivation gr (NT x) w v
          /\ (forall v',
                 sem_value_derivation gr (NT x) w v'
@@ -1477,6 +1487,7 @@ Module ParserSoundFn (Import D : Defs.T).
            (rm     : rhs_map)
            (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
+           (x      : nonterminal)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
            (w wsuf : list token)
@@ -1485,25 +1496,25 @@ Module ParserSoundFn (Import D : Defs.T).
            (un     : bool)
            (ca     : cache)
            (hc     : cache_stores_target_results rm cm ca)
+           (hb     : bottom_stack_sym_eq_start_sym sk x)
            (hk     : stack_pushes_from_keyset rm sk)
            (a'     : Acc lex_nat_triple (parser_meas rm sk wsuf vi))
-           (x      : nonterminal)
            (v      : nt_semty x),
       tri = parser_meas rm sk wsuf vi
       -> no_left_recursion gr
       -> stack_wf gr sk
       -> stack_prefix_derivation gr w sk wsuf
       -> ambiguous_stack_prefix_derivation gr w sk wsuf un
-      -> multistep gr hw rm hr cm sk wsuf vi un ca hc hk a' = Ambig x v
+      -> multistep gr hw rm hr cm x sk wsuf vi un ca hc hk hb a' = Ambig x v
       -> sem_value_derivation gr (NT x) w v
          /\ (exists t t' : tree,
                 tree_derivation gr (NT x) w t
                 /\ tree_derivation gr (NT x) w t'
                 /\ t <> t').
   Proof.
-    intros gr hw rm hr cm tri a.
+    intros gr hw rm hr cm x tri a.
     induction a as [tri hlt IH].
-    intros w wsuf vi sk un ca hc hk a' x v ? hn hw' hd ha hm; subst.
+    intros w wsuf vi sk un ca hc hk hb a' v ? hn hw' hd ha hm; subst.
     apply multistep_cases in hm.
     destruct hm as [[hs hu] | he]; subst.
     - apply step_StepAccept_facts in hs.
@@ -1526,7 +1537,7 @@ Module ParserSoundFn (Import D : Defs.T).
           rewrite heq in hneq; rewrite heq' in hneq.
           exists tr; exists tr'; repeat split; auto; tc.
       + inv hafd'.
-    - destruct he as (sk' & ts' & vi' & un' & ca' & hc' & hk' & a'' & hs & hm).
+    - destruct he as (sk' & ts' & vi' & un' & ca' & hc' & hk' & hb' & a'' & hs & hm).
       eapply IH with (w := w) in hm; eauto.
       + eapply step_parser_meas_lt; eauto.
       + eapply step_preserves_stack_wf_invar; eauto. 
@@ -1540,6 +1551,7 @@ Module ParserSoundFn (Import D : Defs.T).
            (rm     : rhs_map)
            (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
+           (x      : nonterminal)
            (w wsuf : list token)
            (vi     : NtSet.t)
            (sk     : parser_stack)
@@ -1547,14 +1559,14 @@ Module ParserSoundFn (Import D : Defs.T).
            (ca     : cache)
            (hc     : cache_stores_target_results rm cm ca)
            (hk     : stack_pushes_from_keyset rm sk)
+           (hb     : bottom_stack_sym_eq_start_sym sk x)
            (ha     : Acc lex_nat_triple (parser_meas rm sk wsuf vi))
-           (x      : nonterminal)
            (v      : nt_semty x),
       no_left_recursion gr
       -> stack_wf gr sk
       -> stack_prefix_derivation gr w sk wsuf
       -> ambiguous_stack_prefix_derivation gr w sk wsuf un
-      -> multistep gr hw rm hr cm sk wsuf vi un ca hc hk ha = Ambig x v
+      -> multistep gr hw rm hr cm x sk wsuf vi un ca hc hk hb ha = Ambig _ v
       -> sem_value_derivation gr (NT x) w v
          /\ (exists t t' : tree,
                 tree_derivation gr (NT x) w t

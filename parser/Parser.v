@@ -201,18 +201,40 @@ Module ParserFn (Import D : Defs.T).
       eapply adaptivePredict_succ_in_rhssFor; eauto.
     - eapply push_preserves_keyset_invar; eauto.
       eapply rhssFor_keySet.
-      (* lemma relating SLL and LL prediction *)
-      (*
       eapply llPredict_ambig_in_rhssFor; eauto.
       eapply adaptivePredict_ambig_llPredict_ambig; eauto.
-       *)
-      unfold adaptivePredict in H4.
-      destruct (sllPredict _ _ _ _ _ _) in H4.
-      destruct p in H4; try solve [inv H4].
-      inv H4.
-      eapply llPredict_ambig_in_rhssFor; eauto.
   Qed.
 
+  Definition bottom_stack_sym_eq_start_sym (sk : parser_stack) (x : nonterminal) : Prop :=
+    bottomFrameSyms sk = [NT x].
+
+  Lemma step_preserves_bfs_invar :
+    forall gr hw x rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk,
+      bottom_stack_sym_eq_start_sym sk x
+      -> step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+      -> bottom_stack_sym_eq_start_sym sk' x.
+  Proof.
+    intros gr hw x rm cm (fr, frs) (fr', frs') ts ts' vi vi' un un' ca ca' hc hk hb hs.
+    unfold step in hs; dmeqs H; tc; inv hs; inv hb;
+      unfold bottom_stack_sym_eq_start_sym in *; unfold bottomFrameSyms in *; auto.
+    - destruct frs'; sis; auto; apps.
+    - destruct frs'; sis; auto; apps.
+  Qed.
+
+  Lemma step_accept_result_eq_start :
+    forall gr hw rm cm sk ts vi un ca hc hk x x' v,
+      bottom_stack_sym_eq_start_sym sk x
+      -> step gr hw rm cm sk ts vi un ca hc hk = StepAccept x' v
+      -> x' = x.
+  Proof.
+    intros gr hw rm cm sk ts vi un ca hc hk x x' v hb hs.
+    apply step_StepAccept_facts in hs.
+    destruct hs as (heq & heq'); subst.
+    inv hb; auto.
+  Qed.
+        
+  (* termination-related lemmas for the multistep function below *)
+  
   Definition parser_meas
              (rm : rhs_map)
              (sk : parser_stack)
@@ -269,16 +291,8 @@ Module ParserFn (Import D : Defs.T).
     - eapply parser_meas_lt_after_push; eauto.
       eapply adaptivePredict_succ_in_rhssFor; eauto.
     - eapply parser_meas_lt_after_push; eauto.
-      (* lemma relating SLL and LL prediction *)
-      (*
       eapply llPredict_ambig_in_rhssFor; eauto.
       eapply adaptivePredict_ambig_llPredict_ambig; eauto.
-       *)
-      unfold adaptivePredict in H2.
-      destruct (sllPredict _ _ _ _ _ _) in H2.
-      destruct p in H2; try solve [inv H2].
-      inv H2.
-      eapply llPredict_ambig_in_rhssFor; eauto.
   Qed.
 
   Lemma StepK_result_acc :
@@ -291,27 +305,28 @@ Module ParserFn (Import D : Defs.T).
     eapply step_parser_meas_lt; eauto.
   Defined.
 
-  Inductive parse_result : Type :=
-  | Accept : forall (x : nonterminal), nt_semty x -> parse_result
-  | Ambig  : forall (x : nonterminal), nt_semty x -> parse_result
-  | Reject : string -> parse_result
-  | Error  : parse_error -> parse_result. 
+  Inductive parse_result (x : nonterminal) : Type :=
+  | Accept : nt_semty x  -> parse_result x
+  | Ambig  : nt_semty x  -> parse_result x
+  | Reject : string      -> parse_result x
+  | Error  : parse_error -> parse_result x.
   
   (* For validation *)
-  Definition showResult (pr : parse_result) : string :=
+  Definition showResult (x : nonterminal) (pr : parse_result x) : string :=
     match pr with
-    | Accept x v => "Accept"
-    | Ambig x v  => "Ambig"
-    | Reject s   => "Reject: " ++ s
-    | Error e    => "Error:  " ++ showParseError e
+    | Accept _ v => "Accept"
+    | Ambig  _ v => "Ambig"
+    | Reject _ s => "Reject: " ++ s
+    | Error  _ e => "Error:  " ++ showParseError e
     end.
-  
+
   Fixpoint multistep
            (gr : grammar)
            (hw : grammar_wf gr)
            (rm : rhs_map)
            (hr : rhs_map_correct rm gr)
            (cm : closure_map)
+           (x  : nonterminal)
            (sk : parser_stack)
            (ts : list token)
            (vi : NtSet.t)
@@ -319,30 +334,39 @@ Module ParserFn (Import D : Defs.T).
            (ca : cache)
            (hc : cache_stores_target_results rm cm ca)
            (hk : stack_pushes_from_keyset rm sk)
+           (hb : bottom_stack_sym_eq_start_sym sk x)
            (ha : Acc lex_nat_triple (parser_meas rm sk ts vi))
-           {struct ha} : parse_result :=
+           {struct ha} : parse_result x :=
     match step gr hw rm cm sk ts vi un ca hc hk as res return step gr hw rm cm sk ts vi un ca hc hk = res -> _ with
-    | StepAccept x v            => fun _  => if un then Accept x v else Ambig x v
-    | StepReject s              => fun _  => Reject s
-    | StepError e               => fun _  => Error e
+    | StepAccept x' v' =>
+      fun hs  =>
+        let v := cast_nt_semty x' x (step_accept_result_eq_start _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs) v'
+        in  if un then Accept x v else Ambig x v
+    | StepReject s              => fun _  => Reject _ s
+    | StepError e               => fun _  => Error  _ e
     | StepK sk' ts' vi' un' ca' =>
-      fun hs => multistep gr hw rm hr cm sk' ts' vi' un' ca'
+      fun hs => multistep gr hw rm hr cm x sk' ts' vi' un' ca'
                           (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
                           (step_preserves_pki _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hr hs)
+                          (step_preserves_bfs_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs)
                           (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk ha hs)
     end eq_refl.
 
   Lemma multistep_unfold :
-    forall gr hw rm hr cm sk ts vi un ca hc hk ha,
-      multistep gr hw rm hr cm sk ts vi un ca hc hk ha =
+    forall gr hw rm hr cm x sk ts vi un ca hc hk hb ha,
+      multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha =
       match step gr hw rm cm sk ts vi un ca hc hk as res return step gr hw rm cm sk ts vi un ca hc hk = res -> _ with
-      | StepAccept x v                => fun _  => if un then Accept x v else Ambig x v
-      | StepReject s                  => fun _  => Reject s
-      | StepError e                   => fun _  => Error e
+      | StepAccept x' v' =>
+        fun hs =>
+          let v := cast_nt_semty x' x (step_accept_result_eq_start _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs) v'
+          in  if un then Accept x v else Ambig x v
+      | StepReject s                  => fun _  => Reject _ s
+      | StepError e                   => fun _  => Error  _ e
       | StepK sk' ts' vi' un' ca' =>
-        fun hs => multistep gr hw rm hr cm sk' ts' vi' un' ca'
+        fun hs => multistep gr hw rm hr cm x sk' ts' vi' un' ca'
                             (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
                             (step_preserves_pki _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hr hs)
+                            (step_preserves_bfs_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs)
                             (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk ha hs)
       end eq_refl.
   Proof.
@@ -355,6 +379,7 @@ Module ParserFn (Import D : Defs.T).
            (rm  : rhs_map)
            (hr  : rhs_map_correct rm gr)
            (cm  : closure_map)
+           (x   : nonterminal)
            (sk  : parser_stack)
            (ts  : list token)
            (vi  : NtSet.t)
@@ -362,42 +387,56 @@ Module ParserFn (Import D : Defs.T).
            (ca  : cache)
            (hc  : cache_stores_target_results rm cm ca)
            (hk  : stack_pushes_from_keyset rm sk)
+           (hb  : bottom_stack_sym_eq_start_sym sk x)
            (ha  : Acc lex_nat_triple (parser_meas rm sk ts vi))
+           
            (sr  : step_result)
-           (pr  : parse_result)
+           (pr  : parse_result x)
            (heq : step gr hw rm cm sk ts vi un ca hc hk = sr),
-      match sr as res return (step gr hw rm cm sk ts vi un ca hc hk = res -> parse_result) with
-      | StepAccept x sv                 => fun _ => if un then Accept x sv else Ambig x sv
-      | StepReject s                  => fun _ => Reject s
-      | StepError s                   => fun _ => Error s
+      match sr as res return (step gr hw rm cm sk ts vi un ca hc hk = res -> parse_result x) with
+      | StepAccept x' v' =>
+        fun hs =>
+          let v := cast_nt_semty x' x (step_accept_result_eq_start _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs) v'
+          in  if un then Accept x v else Ambig x v
+      | StepReject s                  => fun _ => Reject _ s
+      | StepError s                   => fun _ => Error _ s
       | StepK sk' ts' vi' un' ca' =>
-        fun hs => multistep gr hw rm hr cm sk' ts' vi' un' ca'
+        fun hs => multistep gr hw rm hr cm x sk' ts' vi' un' ca'
                             (step_preserves_cache_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hs)
                             (step_preserves_pki _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk hr hs)
+                            (step_preserves_bfs_invar _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs)
                             (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk ha hs)
       end heq = pr
       -> match pr with
-         | Accept x f => (sr = StepAccept x f /\ un = true)
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+         | Accept _ f => (sr = StepAccept x f /\ un = true)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                               sr = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Accept x f)
-         | Ambig x f  => (sr = StepAccept x f /\ un = false)
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Accept x f)
+         | Ambig _ f  => (sr = StepAccept x f /\ un = false)
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                               sr = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Ambig x f)
-         | Reject s => sr = StepReject s
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Ambig x f)
+         | Reject _ s => sr = StepReject s
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                               sr = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Reject s)
-         | Error s  => sr = StepError s
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Reject _ s)
+         | Error _ s  => sr = StepError s
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                               sr = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Error s)
+                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Error _ s)
          end.
   Proof.
-    intros gr hw rm hr cm sk ts vi un ca hc hk ha sr pr heq.
+    intros gr hw rm hr cm x sk ts vi un ca hc hk hb ha sr pr heq.
     destruct pr; destruct sr; destruct un;
       try solve [ intros; tc | intros h; inv h; auto | intros h; right; eauto 12].
+    - pose proof heq as heq'.
+      eapply step_accept_result_eq_start in heq'; eauto; subst.
+      rewrite cast_nt_semty_refl; simpl.
+      intros heq'; inv heq'; auto.
+    - pose proof heq as heq'.
+      eapply step_accept_result_eq_start in heq'; eauto; subst.
+      rewrite cast_nt_semty_refl; simpl.
+      intros heq'; inv heq'; auto.
   Qed.
 
   Lemma multistep_cases :
@@ -407,35 +446,37 @@ Module ParserFn (Import D : Defs.T).
            (hr  : rhs_map_correct rm gr)
            (cm  : closure_map)
            (sk  : parser_stack)
+           (x   : nonterminal)
            (ts  : list token)
            (vi  : NtSet.t)
            (un  : bool)
            (ca  : cache)
            (hc  : cache_stores_target_results rm cm ca)
+           (hb  : bottom_stack_sym_eq_start_sym sk x)
            (hk  : stack_pushes_from_keyset rm sk)
            (ha  : Acc lex_nat_triple (parser_meas rm sk ts vi))
-           (pr  : parse_result),
-      multistep gr hw rm hr cm sk ts vi un ca hc hk ha = pr
+           (pr  : parse_result x),
+      multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha = pr
       -> match pr with
-         | Accept x f => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = true)
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
+         | Accept _ f => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = true)
+                         \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
+                                step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+                                /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Accept x f)
+         | Ambig _ f  => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = false)
+                         \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
+                                step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+                                /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Ambig x f)
+         | Reject _ s => step gr hw rm cm sk ts vi un ca hc hk = StepReject s
+                         \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
+                                step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Reject x s)
+         | Error _ s  => step gr hw rm cm sk ts vi un ca hc hk = StepError s
+                       \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                               step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Accept x f)
-         | Ambig x f  => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = false)
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
-                              step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Ambig x f)
-         | Reject s => step gr hw rm cm sk ts vi un ca hc hk = StepReject s
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
-                              step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Reject s)
-         | Error s  => step gr hw rm cm sk ts vi un ca hc hk = StepError s
-                       \/ (exists sk' ts' vi' un' ca' hc' hk' ha',
-                              step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm sk' ts' vi' un' ca' hc' hk' ha' = Error s)
+                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Error x s)
          end.
   Proof.
-    intros gr hw rm hr cm sk ts vi un ca hc hk ha pr hm; subst.
+    intros gr hw rm hr cm x sk ts vi un ca hc hk hb ha pr hm; subst.
     rewrite multistep_unfold.
     eapply multistep_cases'; eauto.
   Qed.
@@ -455,17 +496,25 @@ Module ParserFn (Import D : Defs.T).
     intros rm x; repeat red; sis; auto.
   Qed.
 
+  Lemma bottom_stack_sym_invar_start_true :
+    forall x,
+      bottom_stack_sym_eq_start_sym (Fr [] tt [NT x], []) x.
+  Proof.
+    intros x; red; auto.
+  Qed.
+
   (* This curried pattern enables us to partially apply the parser to a grammar
      and compute the closure map once, instead of each time we parse an input *)
-  Definition parse (gr : grammar) (hw : grammar_wf gr) : nonterminal -> list token -> parse_result :=
+  Definition parse (gr : grammar) (hw : grammar_wf gr) : forall (x : nonterminal), list token -> parse_result x :=
     let rm := mkRhsMap gr         in
     let hr := mkRhsMap_correct gr in
     let cm := mkClosureMap gr     in
     fun (x : nonterminal) (ts : list token) =>
       let sk0 := (Fr [] tt [NT x], []) in
-      multistep gr hw rm hr cm sk0 ts NtSet.empty true empty_cache
+      multistep gr hw rm hr cm x sk0 ts NtSet.empty true empty_cache
                 (cache_invar_starts_true rm cm)
                 (push_invar_starts_true _ _)
+                (bottom_stack_sym_invar_start_true _)
                 (lex_nat_triple_wf _).
 
 End ParserFn.

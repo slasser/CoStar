@@ -16,75 +16,60 @@ Module Make (Export D : Defs.T).
      and ambiguous derivations *)
 
   Theorem parse_sound__unique_derivation :
-    forall (g  : grammar)
-           (x  : nonterminal)
-           (ts : list token)
-           (v  : tree),
-      no_left_recursion g
-      -> parse g x ts = Accept v
-      -> sym_derivation g (NT x) ts v
-         /\ (forall v',
-                sym_derivation g (NT x) ts v'
-                -> v' = v).
+    forall (gr    : grammar)
+           (hw    : grammar_wf gr)
+           (start : nonterminal)
+           (word  : list token)
+           (sem_v : nt_semty start),
+      no_left_recursion gr
+      -> parse gr hw start word = Accept _ sem_v
+      -> sem_value_derivation gr (NT start) word sem_v
+         /\ (forall sem_v',
+                sem_value_derivation gr (NT start) word sem_v'
+                -> sem_v' = sem_v).
   Proof.
-    intros g x ts v hn hp.
+    intros gr hw x w v hn hp.
     unfold parse in hp.
-    eapply multistep_sound_unambig with (w := ts) in hp; eauto.
-    - destruct hp as [hg hu]; unfold bottomFrameSyms in *; sis.
-      (* lemma *)
-      inv hg. inv H5; rew_anr.
-      split; auto.
-      intros v' hs.
-      assert (hg : gamma_derivation g [NT x] wpre [v']).
-      { rew_nil_r wpre; eauto. }
-      apply hu in hg; inv hg; auto.
-    - apply mkProductionMap_correct.
-    - apply mkClosureMap_result_correct.
+    eapply multistep_sound_unambig in hp; eauto.
+    - apply mkClosureMap_correct.
     - constructor.
     - apply unique_stack_prefix_derivation_invar_starts_true.
   Qed.
 
   Theorem parse_sound__ambiguous_derivation :
-    forall (g  : grammar)
-           (x  : nonterminal)
-           (ts : list token)
-           (t  : tree),
-      no_left_recursion g
-      -> parse g x ts = Ambig t
-      -> sym_derivation g (NT x) ts t
-         /\ (exists t',
-                sym_derivation g (NT x) ts t'
-                /\ t' <> t).
+    forall (gr    : grammar)
+           (hw    : grammar_wf gr)
+           (start : nonterminal)
+           (word  : list token)
+           (sem_v : nt_semty start),
+      no_left_recursion gr
+      -> parse gr hw start word = Ambig _ sem_v
+      -> sem_value_derivation gr (NT start) word sem_v
+         /\ (exists tr tr',
+                tree_derivation gr (NT start) word tr
+                /\ tree_derivation gr (NT start) word tr'
+                /\ tr <> tr').
   Proof.
-    intros g x ts v hn hp.
+    intros g hw x w v hn hp.
     unfold parse in hp.
-    eapply multistep_sound_ambig with (w := ts) in hp; eauto.
-    - destruct hp as [hg [v' [hg' hneq]]]. unfold bottomFrameSyms in *; sis.
-      (* lemma *)
-      inv hg.
-      inv H5; rew_anr.
-      split; auto.
-      inv hg'.
-      inv H5; rew_anr.
-      eexists; split; eauto.
-      intros heq; subst; tc.
-    - apply mkProductionMap_correct.
+    eapply multistep_sound_ambig in hp; eauto.
     - constructor.
-    - exists []; eauto. 
+    - apply stack_prefix_derivation_start_true. 
     - apply ambiguous_stack_prefix_derivation_invar_starts_true.
   Qed.
 
   (* Error-free termination theorem *)
 
   Theorem parse_terminates_without_error :
-    forall (g  : grammar)
-           (x  : nonterminal)
-           (ts : list token)
-           (e  : parse_error),
-      no_left_recursion g
-      -> parse g x ts <> Error e.
+    forall (gr    : grammar)
+           (hw    : grammar_wf gr)
+           (start : nonterminal)
+           (word  : list token)
+           (e     : parse_error),
+      no_left_recursion gr
+      -> parse gr hw start word <> Error _ e.
   Proof.
-    intros g x ts e hn hp; destruct e.
+    intros gr hw x ts e hn hp; destruct e.
     - (* invalid state case *)
       eapply parse_never_reaches_invalid_state; eauto.
     - (* left recursion case *)

@@ -138,6 +138,8 @@ Module SllPredictionFn (Import D : Defs.T).
     match sp with
     | SllSp pred (fr, frs) =>
       match fr, frs with
+      (* should be unreachable *)
+      | SllFr o [], [] =>  CstepDone 
       (* return to caller frame *)
       | SllFr o [], SllFr o_cr (NT x :: suf_cr) :: frs_tl =>
         let stk':= (SllFr o_cr suf_cr, frs_tl) 
@@ -301,17 +303,18 @@ Module SllPredictionFn (Import D : Defs.T).
         end heq
       end = cr
       -> match cr with
-         | inl e => 
-           sr = CstepError e
-           \/ exists (sps : list sll_subparser)
-                     (vi' : NtSet.t)
-                     (hs  : sllCstep rm vi sp = CstepK vi' sps)
-                     (crs : list (closure_result sll_subparser)),
-               crs = dmap sps (fun sp' hi => 
-                                 sllc rm cm vi' sp'
-                                      (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
-                                       (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
-               /\ aggrClosureResults crs = inl e
+         | inl e =>
+           simReturn cm sp = None 
+           /\ (sr = CstepError e
+               \/ exists (sps : list sll_subparser)
+                         (vi' : NtSet.t)
+                         (hs  : sllCstep rm vi sp = CstepK vi' sps)
+                         (crs : list (closure_result sll_subparser)),
+                  crs = dmap sps (fun sp' hi => 
+                                    sllc rm cm vi' sp'
+                                         (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
+                                         (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
+                  /\ aggrClosureResults crs = inl e)
          | inr sps =>
            simReturn cm sp = Some sps
            \/ simReturn cm sp = None
@@ -342,16 +345,17 @@ Module SllPredictionFn (Import D : Defs.T).
       sllc rm cm vi sp hk a = cr
       -> match cr with
          | inl e => 
-           sllCstep rm vi sp = CstepError e
-           \/ exists (sps : list sll_subparser)
-                     (vi' : NtSet.t)
-                     (hs  : sllCstep rm vi sp = CstepK vi' sps)
-                     (crs : list (closure_result sll_subparser)),
-               crs = dmap sps (fun sp' hi => 
-                                 sllc rm cm vi' sp'
-                                      (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
-                                   (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
-               /\ aggrClosureResults crs = inl e
+           simReturn cm sp = None
+           /\ (sllCstep rm vi sp = CstepError e
+               \/ exists (sps : list sll_subparser)
+                         (vi' : NtSet.t)
+                         (hs  : sllCstep rm vi sp = CstepK vi' sps)
+                         (crs : list (closure_result sll_subparser)),
+                  crs = dmap sps (fun sp' hi => 
+                                    sllc rm cm vi' sp'
+                                         (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
+                                         (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
+                  /\ aggrClosureResults crs = inl e)
          | inr sps =>
            simReturn cm sp = Some sps
            \/ simReturn cm sp = None
@@ -394,16 +398,17 @@ Module SllPredictionFn (Import D : Defs.T).
   Lemma sllc_error_cases :
     forall rm cm sp vi hk a e,
       sllc rm cm vi sp hk a = inl e
-      -> sllCstep rm vi sp = CstepError e
-         \/ exists (sps : list sll_subparser)
-                   (vi' : NtSet.t)
-                   (hs  : sllCstep rm vi sp = CstepK vi' sps)
-                   (crs : list (closure_result sll_subparser)),
-          crs = dmap sps (fun sp' hi => 
-                            sllc rm cm vi' sp'
-                                 (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
-                                 (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
-          /\ aggrClosureResults crs = inl e.
+      -> simReturn cm sp = None
+         /\ (sllCstep rm vi sp = CstepError e
+             \/ exists (sps : list sll_subparser)
+                       (vi' : NtSet.t)
+                       (hs  : sllCstep rm vi sp = CstepK vi' sps)
+                       (crs : list (closure_result sll_subparser)),
+                crs = dmap sps (fun sp' hi => 
+                                  sllc rm cm vi' sp'
+                                       (sllCstep_preserves_pki _ _ _ _ _ _ hk hs hi)
+                                       (acc_after_sll_step _ _ _ _ _ _ hk hs hi a))
+                /\ aggrClosureResults crs = inl e).
   Proof.
     intros rm cm sp vi hk a e hs; apply sllc_cases with (cr := inl e); auto.
   Qed.

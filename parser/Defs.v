@@ -96,6 +96,24 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
       apply t_semty_inj in H; subst
     end.
 
+  Definition cast_nt_semty
+             (x y : nonterminal)
+             (heq : x = y)
+             (v   : nt_semty x) : nt_semty y.
+    subst; auto.
+  Defined.
+
+  Lemma cast_nt_semty_refl :
+    forall x (heq : x = x) v,
+      cast_nt_semty x x heq v = v.
+  Proof.
+    intros x heq v.
+    unfold cast_nt_semty.
+    unfold eq_rect_r.
+    rewrite <- Eqdep_dec.eq_rect_eq_dec; auto.
+    apply nt_eq_dec. 
+  Qed.
+
   (* Finite sets of nonterminals *)
 
   Module NtSet      := FSetList.Make NT_as_UOT.
@@ -1131,6 +1149,16 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     | H : findPredicateAndAction _ _ _ = Some _ |- _ =>
       apply fpaa_mapsto in H
     end.
+
+  Lemma fpaa_none_contra :
+    forall gr hw p,
+      findPredicateAndAction p gr hw = None
+      -> ~ PM.In p gr.
+  Proof.
+    intros gr hw (x, ys) hf hi.
+    eapply in_find_contra; eauto.
+    apply fpaa_cases in hf; auto.
+  Qed.
 
   (* An rhs_map maps each grammar nonterminal to its
      right-hand sides. It provides an efficient way to look

@@ -8,7 +8,7 @@ Import ListNotations.
 Module ParserCompleteFn (Import D : Defs.T).
 
   Module Export PEF := ParserErrorFreeFn D.
-
+(*
   (* To do: encapsulate "gamma_recognize unprocStackSyms..." in a definition *)
   Lemma return_preserves_ussr :
     forall g ce cr cr' frs o o' x suf w,
@@ -212,5 +212,6 @@ Module ParserCompleteFn (Import D : Defs.T).
       + eapply parse_doesn't_find_left_recursion_in_non_left_recursive_grammar; eauto.
       + eapply parse_never_returns_prediction_error; eauto.
   Qed.
-
+ *)
+  
 End ParserCompleteFn.
