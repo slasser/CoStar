@@ -12,8 +12,7 @@ Module Make (Export D : Defs.T).
 
   Module Export ParserAndProofs := ParserCompleteFn D.
 
-  (* Soundness theorems for unique 
-     and ambiguous derivations *)
+  (* Soundness theorems for unique and ambiguous derivations *)
 
   Theorem parse_sound__unique_derivation :
     forall (gr    : grammar)
@@ -78,54 +77,38 @@ Module Make (Export D : Defs.T).
       eapply parse_never_returns_prediction_error; eauto.
   Qed.
 
-  (* Completeness theorems for unique
-     and ambiguous derivations *)
+  (* Completeness theorem for unique and ambiguous derivations *)
 
-  Theorem parse_complete__unique_derivation :
-    forall (g  : grammar)
-           (x  : nonterminal)
-           (w  : list token)
-           (t  : tree),
-      no_left_recursion g
-      -> sym_derivation g (NT x) w t
-      -> (forall t', sym_derivation g (NT x) w t' -> t' = t)
-      -> parse g x w = Accept t.
+  Theorem parse_complete :
+    forall (gr : grammar)
+           (hw : grammar_wf gr)
+           (start : nonterminal)
+           (word  : list token)
+           (sem_v : nt_semty start),
+      no_left_recursion gr
+      -> sem_value_derivation gr (NT start) word sem_v
+      -> (parse gr hw start word = Accept _ sem_v
+          /\ (forall sem_v', sem_value_derivation gr (NT start) word sem_v' -> sem_v' = sem_v))
+         \/
+         ((exists sem_v',
+              parse gr hw start word = Ambig _ sem_v')
+          /\ (exists (t t' : tree),
+                 tree_derivation gr (NT start) word t
+                 /\ tree_derivation gr (NT start) word t'
+                 /\ t <> t')).
   Proof.
-    intros g x w v hn hg hu.
-    apply parse_complete in hg; auto.
-    destruct hg as (v' & [hp | hp]); pose proof hp as hp'.
-    - apply parse_sound__unique_derivation in hp; auto.
-      destruct hp as (hg & _).
-      apply hu in hg; subst; auto.
-    - exfalso.
-      apply parse_sound__ambiguous_derivation in hp; auto.
-      destruct hp as (hg' & (v'' & hg & hneq)).
-      apply hu in hg; apply hu in hg'; subst; tc.
-  Qed.
-
-  Theorem parse_complete__ambiguous_derivation :
-    forall (g    : grammar)
-           (x    : nonterminal)
-           (w    : list token)
-           (t t' : tree),
-      no_left_recursion g
-      -> sym_derivation g (NT x) w t
-      -> sym_derivation g (NT x) w t'
-      -> t <> t'
-      -> exists t'',
-          parse g x w = Ambig t''
-          /\ sym_derivation g (NT x) w t''.
-  Proof.
-    intros g x w v v' hn hg hg'' hneq.
-    pose proof hg as hg'.
-    apply parse_complete in hg; auto.
-    destruct hg as (v'' & [hp | hp]); eauto.
-    - exfalso.
+    intros gr hw start word sem_v hn hd.
+    pose proof hd as hd'.
+    eapply parse_complete with (hw := hw) in hd; eauto.
+    destruct hd as (sem_v' & [hp | hp]).
+    - left.
+      pose proof hp as hp'.
       apply parse_sound__unique_derivation in hp; auto.
-      destruct hp as (hg & ha).
-      apply ha in hg'; apply ha in hg''; subst; tc.
-    - eexists; split; eauto.
-      eapply parse_sound__ambiguous_derivation; eauto.
+      destruct hp as [hd hu].
+      apply hu in hd'; subst; auto.
+    - right; split; eauto.
+      apply parse_sound__ambiguous_derivation in hp; auto.
+      destruct hp as (_ & t & t' & htd & htd' & hneq); eauto.
   Qed.
 
 End Make.

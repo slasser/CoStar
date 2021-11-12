@@ -76,7 +76,7 @@ Module ParserCompleteFn (Import D : Defs.T).
     - eapply push_ambig_preserves_sas; eauto.
   Qed.
 
-  Lemma ussr__step_neq_reject :
+  Lemma sas__step_neq_reject :
     forall gr hw rm cm sk ts vi un ca hc hk s,
       no_left_recursion gr
       -> rhs_map_correct rm gr
@@ -118,105 +118,107 @@ Module ParserCompleteFn (Import D : Defs.T).
       apply hrc in hm'.
       destruct hm' as (yss & hm' & hi).
       apply NMF.find_mapsto_iff in hm'; tc.
-    - admit.
-  Admitted.
+    - eapply sas_adaptivePredict_neq_reject; eauto.
+  Qed.
 
-  Lemma ussr__multistep_doesn't_reject' :
-    forall (g      : grammar)
-           (pm     : production_map)
+  Lemma sas__multistep_doesn't_reject' :
+    forall (gr     : grammar)
+           (hw     : grammar_wf gr)
+           (rm     : rhs_map)
+           (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
+           (x      : nonterminal)
            (tri    : nat * nat * nat)
            (a      : Acc lex_nat_triple tri)
-           (ps     : prefix_stack)
-           (ss     : suffix_stack)
+           (sk     : parser_stack)
            (ts     : list token)
            (vi     : NtSet.t)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results pm cm ca)
-           (hk     : stack_pushes_from_keyset pm ss)
-           (a'     : Acc lex_nat_triple (meas pm ss ts vi))
+           (hc     : cache_stores_target_results rm cm ca)
+           (hb     : bottom_stack_sym_eq_start_sym sk x)
+           (hk     : stack_pushes_from_keyset rm sk)
+           (a'     : Acc lex_nat_triple (parser_meas rm sk ts vi))
            (s      : string),
-      tri = meas pm ss ts vi
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_correct g cm
-      -> stacks_wf g ps ss
-      -> gamma_recognize g (unprocStackSyms ss ) ts
-      -> multistep pm cm ps ss ts vi un ca hc hk a' <> Reject s.
+      tri = parser_meas rm sk ts vi
+      -> no_left_recursion gr
+      -> closure_map_correct gr cm
+      -> stack_wf gr sk
+      -> stack_accepts_suffix gr sk ts
+      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb a' <> Reject _ s.
   Proof.
-    intros g pm cm tri a'.
+    intros gr hw rm hr cm x tri a'.
     induction a' as [tri hlt IH].
-    intros ps ss ts vi un ca hc hk a s ? hn hp hcm hw hg hm; subst. 
+    intros sk ts vi un ca hc hk hb a s ? hn hcm hw' hg hm; subst. 
     apply multistep_cases in hm.
-    destruct hm as [hs | (ps' & ss' & ts' & vi' & un' & ca' & hc' & hk' & a'' & hs & hm)]. 
-    - eapply ussr__step_neq_reject; eauto.
-    - eapply IH with (y := meas pm ss' ts' vi'); eauto. 
-      + eapply step_meas_lt with (ca := ca); eauto.
-      + eapply step_preserves_stacks_wf_invar with (ca := ca); eauto.
-      + eapply step_preserves_ussr with (ca := ca); eauto.
-        eapply stacks_wf__suffix_stack_wf; eauto.
+    destruct hm as [hs | (sk' & ts' & vi' & un' & ca' & hc' & hk' & hb' & a'' & hs & hm)]. 
+    - eapply sas__step_neq_reject; eauto.
+    - eapply IH with (y := parser_meas rm sk' ts' vi'); eauto. 
+      + eapply step_parser_meas_lt; eauto. 
+      + eapply step_preserves_stack_wf_invar; eauto.  
+      + eapply step_preserves_sas; eauto.
   Qed.
 
-  Lemma ussr_implies_multistep_doesn't_reject :
-    forall (g      : grammar)
-           (pm     : production_map)
+  Lemma sas_implies_multistep_doesn't_reject :
+    forall (gr     : grammar)
+           (hw     : grammar_wf gr)
+           (rm     : rhs_map)
+           (hr     : rhs_map_correct rm gr)
            (cm     : closure_map)
-           (ps     : prefix_stack)
-           (ss     : suffix_stack)
+           (x      : nonterminal)
+           (sk     : parser_stack)
            (ts     : list token)
            (vi     : NtSet.t)
            (un     : bool)
            (ca     : cache)
-           (hc     : cache_stores_target_results pm cm ca)
-           (hk     : stack_pushes_from_keyset pm ss)
-           (a      : Acc lex_nat_triple (meas pm ss ts vi))
+           (hc     : cache_stores_target_results rm cm ca)
+           (hk     : stack_pushes_from_keyset rm sk)
+           (hb     : bottom_stack_sym_eq_start_sym sk x)
+           (a      : Acc lex_nat_triple (parser_meas rm sk ts vi))
            (s      : string),
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_correct g cm
-      -> stacks_wf g ps ss
-      -> gamma_recognize g (unprocStackSyms ss) ts
-      -> multistep pm cm ps ss ts vi un ca hc hk a <> Reject s.
+      no_left_recursion gr
+      -> closure_map_correct gr cm
+      -> stack_wf gr sk
+      -> stack_accepts_suffix gr sk ts
+      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb a <> Reject _ s.
   Proof.
-    intros; eapply ussr__multistep_doesn't_reject'; eauto.
+    intros; eapply sas__multistep_doesn't_reject'; eauto.
   Qed.
 
-  Theorem valid_derivation_implies_parser_doesn't_reject :
-    forall g x w s,
+  Theorem init_state_sas__parser_doesn't_reject :
+    forall g Hwf x w s,
       no_left_recursion g
-      -> sym_recognize g (NT x) w
-      -> parse g x w <> Reject s.
+      -> stack_accepts_suffix g (Fr [] tt [NT x], []) w
+      -> parse g Hwf x w <> Reject _ s.
   Proof.
-    intros g x w s hn hg hp; unfold parse in hp.
-    eapply ussr_implies_multistep_doesn't_reject; eauto; simpl; apps.
-    - apply mkProductionMap_correct.
-    - apply mkClosureMap_result_correct.
-    - (* lemma *)
-      rew_nil_r w; eauto.
+    intros g hw x w s hn hsas hp; unfold parse in hp.
+    eapply sas_implies_multistep_doesn't_reject; eauto; simpl; apps.
+    apply mkClosureMap_correct.
   Qed.
 
   Theorem parse_complete :
     forall (g  : grammar)
+           (hw : grammar_wf g)
            (x  : nonterminal)
            (w  : list token)
-           (t  : tree),
+           (v  : nt_semty x),
       no_left_recursion g
-      -> sym_derivation g (NT x) w t
-      -> exists (t' : tree),
-          parse g x w = Accept t'
-          \/ parse g x w = Ambig t'.
+      -> sem_value_derivation g (NT x) w v
+      -> exists (v' : nt_semty x),
+          parse g hw x w = Accept _ v'
+          \/ parse g hw x w = Ambig _ v'.
   Proof.
-    intros g x w v hn hg.
-    destruct (parse g x w) as [v' | v' | s | e] eqn:hp; eauto.
+    intros g hw x w v hn hd.
+    destruct (parse g hw x w) as [v' | v' | s | e] eqn:hp; eauto.
     - exfalso.
-      apply sym_derivation__sym_recognize in hg.
-      apply valid_derivation_implies_parser_doesn't_reject in hp; auto.
+      eapply init_state_sas__parser_doesn't_reject; eauto.
+      red.
+      exists w; exists []; exists (v, tt); repeat split; auto; apps.
+      apply svd_singleton; auto.
     - exfalso; destruct e.
       + eapply parse_never_reaches_invalid_state; eauto.
       + eapply parse_doesn't_find_left_recursion_in_non_left_recursive_grammar; eauto.
       + eapply parse_never_returns_prediction_error; eauto.
   Qed.
- *)
   
 End ParserCompleteFn.
