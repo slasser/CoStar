@@ -8,113 +8,118 @@ Import ListNotations.
 Module ParserCompleteFn (Import D : Defs.T).
 
   Module Export PEF := ParserErrorFreeFn D.
-(*
-  (* To do: encapsulate "gamma_recognize unprocStackSyms..." in a definition *)
-  Lemma return_preserves_ussr :
-    forall g ce cr cr' frs o o' x suf w,
-      ce     = SF o' []
-      -> cr  = SF o (NT x :: suf)
-      -> cr' = SF o suf
-      -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w
-      -> gamma_recognize g (unprocStackSyms (cr', frs)) w.
+
+  Lemma push_succ_preserves_sas :
+    forall gr hw rm cm cr ce frs pre vs x suf rhs w ca hc hk ca',
+      cr    = Fr pre vs (NT x :: suf)
+      -> ce = Fr [] tt rhs
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_correct gr cm
+      -> stack_wf gr (cr, frs)
+      -> adaptivePredict gr hw rm cm pre vs x suf frs w ca hc hk = (PredSucc rhs, ca')
+      -> stack_accepts_suffix gr (cr, frs) w
+      -> stack_accepts_suffix gr (ce, cr :: frs) w.
   Proof.
-    intros; subst; auto.
+    intros gr hw rm cm cr ce frs pre vs x suf rhs w ca hc hk ca' ? ? hn hr hc' hw' ha hs; subst; sis.
+    destruct hc' as [hcs hcc].
+    destruct hs as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+    destruct vs_suf as (v_suf, vs_suf).
+    eapply svd_inv_nonterminal_head with
+        (x   := x)
+        (v'  := v_suf)
+        (vs' := vs_suf)
+        (heq := eq_refl) in hd; eauto.
+    destruct hd as (wpre' & wpre'' & heq & hh & ht); subst.
+    inv_sv hh hm hvs hp; s_inj.
+    pose proof hm as hm'.
+    apply pm_mapsto_in in hm.
+    eapply adaptivePredict_succ_at_most_one_rhs_applies in ha; eauto; subst.
+    - exists wpre'; exists (wpre'' ++ wsuf); eexists; repeat split; eauto; apps.
+      exists wpre''; exists wsuf; repeat eexists; repeat split; eauto.
+    - red.
+      exists wpre'; exists (wpre'' ++ wsuf); eexists; repeat split; eauto; apps.
+      repeat eexists; repeat split; eauto.
   Qed.
 
-  Lemma consume_preserves_ussr :
-    forall g fr fr' frs suf o a l w,
-      fr     = SF o (T a :: suf)
-      -> fr' = SF o suf
-      -> gamma_recognize g (unprocStackSyms (fr, frs)) ((a, l) :: w)
-      -> gamma_recognize g (unprocStackSyms (fr', frs)) w.
+  Lemma push_ambig_preserves_sas :
+    forall gr hw rm cm cr ce pre vs x suf frs w ca hc hk rhs ca',
+      cr    = Fr pre vs (NT x :: suf)
+      -> ce = Fr [] tt rhs
+      -> no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> stack_wf gr (cr, frs)
+      -> adaptivePredict gr hw rm cm pre vs x suf frs w ca hc hk = (PredAmbig rhs, ca')
+      -> stack_accepts_suffix gr (cr, frs) w
+      -> stack_accepts_suffix gr (ce, cr :: frs) w.
   Proof.
-    intros g ? ? frs suf o a l w ? ? hg; subst; sis.
-    apply gamma_recognize_terminal_head in hg.
-    destruct hg as (? & ? & heq & ?); inv heq; auto.
-  Qed.
-
-  Lemma push_succ_preserves_ussr :
-    forall g pm cm cr ce frs o x suf rhs w ca hc hk ca',
-      cr    = SF o (NT x :: suf)
-      -> ce = SF (Some x) rhs
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_correct g cm
-      -> suffix_stack_wf g (cr, frs)
-      -> adaptivePredict pm cm o x suf frs w ca hc hk = (PredSucc rhs, ca')
-      -> gamma_recognize g (unprocStackSyms (cr, frs)) w
-      -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
-  Proof.
-    intros g pm cm ? ? frs o x suf rhs w ca hci hk ca'
-           ? ? hn hpm [hms hmc] hw hp hg; subst; sis.
-    apply gamma_recognize_nonterminal_head in hg.
-    destruct hg as (rhs' & wp & wms & ? & hi' & hg & hg'); subst.
-    apply gamma_recognize_split in hg'.
-    destruct hg' as (wm & ws & ? & hg' & hg''); subst.
-    eapply adaptivePredict_succ_at_most_one_rhs_applies in hp; eauto;
-    subst; repeat (apply gamma_recognize_app; auto).
-  Qed.
-
-  Lemma push_ambig_preserves_ussr :
-    forall g pm cm cr ce o x suf frs w ca hc hk rhs ca',
-      cr    = SF o (NT x :: suf)
-      -> ce = SF (Some x) rhs
-      -> no_left_recursion g
-      -> production_map_correct pm g
-      -> suffix_stack_wf g (cr, frs)
-      -> adaptivePredict pm cm o x suf frs w ca hc hk = (PredAmbig rhs, ca')
-      -> gamma_recognize g (unprocStackSyms (cr, frs)) w
-      -> gamma_recognize g (unprocStackSyms (ce, cr :: frs)) w.
-  Proof.
-    intros g pm cm ? ? o x suf frs w ca hc hk rhs ca'
-           ? ? hn hp hw hl hg; subst; sis.
+    intros gr hw rm cm cr ce pre vs x suf frs w ca hc hk rhs ca' ? ? hn hr hw' ha hs; subst.
     eapply adaptivePredict_ambig_rhs_unproc_stack_syms; eauto.
   Qed.
-
-  Lemma step_preserves_ussr :
-    forall g pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca' hc hk,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_correct g cm
-      -> suffix_stack_wf g ss
-      -> gamma_recognize g (unprocStackSyms ss) ts
-      -> step pm cm ps ss ts vi un ca hc hk = StepK ps' ss' ts' vi' un' ca'
-      -> gamma_recognize g (unprocStackSyms ss') ts'.
+  
+  Lemma step_preserves_sas :
+    forall gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca' hc hk,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_correct gr cm
+      -> stack_wf gr sk
+      -> stack_accepts_suffix gr sk ts
+      -> step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
+      -> stack_accepts_suffix gr sk' ts'. 
   Proof.
-    intros g pm cm ps ps' ss ss' ts ts' vi vi' un un' ca ca'
-           hc hk hn hp hm hw hr hs.
+    intros gr hw rm cm sk sk' ts ts' vi vi' un un' ca ca'
+           hc hk hn hp hm hw' hr hs.
     unfold step in hs; dmeqs h; tc; inv hs.
-    - eapply return_preserves_ussr; eauto.
-    - eapply consume_preserves_ussr; eauto.
-    - eapply push_succ_preserves_ussr; eauto.
-    - eapply push_ambig_preserves_ussr; eauto.
+    - appl_fpaa; eapply return_preserves_sas; eauto; auto.
+    - eapply consume_preserves_sas; eauto; auto.
+    - eapply push_succ_preserves_sas; eauto.
+    - eapply push_ambig_preserves_sas; eauto.
   Qed.
 
   Lemma ussr__step_neq_reject :
-    forall g pm cm ps ss ts vi un ca hc hk s,
-      no_left_recursion g
-      -> production_map_correct pm g
-      -> closure_map_correct g cm
-      -> stacks_wf g ps ss
-      -> gamma_recognize g (unprocStackSyms ss) ts
-      -> step pm cm ps ss ts vi un ca hc hk <> StepReject s.
+    forall gr hw rm cm sk ts vi un ca hc hk s,
+      no_left_recursion gr
+      -> rhs_map_correct rm gr
+      -> closure_map_correct gr cm
+      -> stack_wf gr sk
+      -> stack_accepts_suffix gr sk ts
+      -> step gr hw rm cm sk ts vi un ca hc hk <> StepReject s.
   Proof.
-    intros g pm cm ps ss ts vi un ca hc hk s
-           hn hp hm hw hg hs.
+    intros gr hw rm cm sk ts vi un ca hc hk s
+           hn hr hm hw' hsas hs.
     unfold step in hs; dmeqs h; tc; inv hs; sis.
-    - inv hg.
-    - inversion hg as [| ? ? wpre wsuf hs hg' heq heq']; subst; clear hg.
-      inv hs; inv heq'.
-    - inversion hg as [| ? ? wpre wsuf hs hg' heq heq']; subst; clear hg.
-      inv hs; inv heq'; tc.
-    - inversion hg as [| ? ? wpre wsuf hs hg' heq heq']; subst; clear hg.
-      inv_sr hs  hi hg''.
-      (* lemma? *)
-      apply hp in hi. destruct hi as [yss [hm' hi]].
+    - destruct hsas as (wpre & wsuf & vs_suf & heq & hd & heq'); subst; sis; rew_anr; subst.
+      inv hd.
+    - pose proof hsas as hsas'.
+      destruct hsas as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+      destruct hl as (wsuf' & wsuf'' & vs_suf' & p & f & heq & hd' & hm' & hp' & hl); subst.
+      appl_fpaa.
+      eapply sas_failed_predicate_contra; eauto.
+    - destruct hsas as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+      symmetry in heq; apply app_eq_nil in heq; destruct heq; subst.
+      eapply svd_terminal_head_contra; eauto.
+    - destruct hsas as (wpre & wsuf & vs_suf & heq & hd & hl).
+      apply svd_inv_terminal_head in hd.
+      destruct hd as (v & ts' & heq'); subst; sis.
+      inv_cons_tokens_eq; tc.
+    - destruct hsas as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+      destruct vs_suf as (v_suf, vs_suf).
+      eapply svd_inv_nonterminal_head with
+          (v'  := v_suf)
+          (vs' := vs_suf)
+          (heq := eq_refl) in hd; eauto.
+      destruct hd as (ts' & ts'' & heq & hh & ht); subst.
+      inv_sv hh hm' hd' hp'.
+      (* lemma *)
+      red in hr.
+      destruct hr as (_ & _ & hrc).
+      red in hrc.
+      apply pm_mapsto_in in hm'.
+      apply hrc in hm'.
+      destruct hm' as (yss & hm' & hi).
       apply NMF.find_mapsto_iff in hm'; tc.
-    - eapply ussr_adaptivePredict_neq_reject; eauto.
-      eapply frames_wf__suffix_frames_wf; eauto.
-  Qed.
+    - admit.
+  Admitted.
 
   Lemma ussr__multistep_doesn't_reject' :
     forall (g      : grammar)

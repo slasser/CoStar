@@ -3199,6 +3199,33 @@ Module DefsFn (Export Ty : SYMBOL_TYPES).
     all : apps.
   Qed.
 
+  Lemma consume_preserves_sas :
+    forall gr fr fr' frs pre a v vs suf ts,
+      fr = Fr pre vs (T a :: suf)
+      -> fr' = Fr (T a :: pre) (v, vs) suf
+      -> stack_accepts_suffix gr (fr, frs) (@existT _ _ a v :: ts)
+      -> stack_accepts_suffix gr (fr', frs) ts.
+  Proof.
+    intros gr fr fr' frs pre a v vs suf ts ? ? hs; subst.
+    red in hs.
+    destruct hs as (wpre & wsuf & vs_suf & heq & hd & hl); subst.
+    pose proof hd as hd'.
+    apply svd_inv_terminal_head in hd.
+    destruct hd as (v' & ts' & heq'); subst.
+    inv_svs hd' hh ht; ss_inj.
+    inv_sv hh hm hvs hp; s_inj; sis.
+    inv_cons_tokens_eq; t_inj.
+    inv heq; t_inj.
+    exists ts'; exists wsuf; eexists; repeat split; eauto.
+    eapply lfas_eq; eauto.
+    t'.
+    eapply cast_elim_common.
+    t'; auto; sis.
+    t'; repeat unct; auto.
+    Unshelve.
+    all : apps.
+  Qed.
+
   Lemma failed_predicate_contra :
     forall x ys ys' (p : predicate_semty (x, ys)) (p' : predicate_semty (x, ys')) vs vs'
            (heq : ys = ys') (heq' : (x, ys) = (x, ys')),

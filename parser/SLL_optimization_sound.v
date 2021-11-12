@@ -775,7 +775,6 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
     unfold adaptivePredict; intros; dms; tc. 
   Qed.
 
-(*
   Theorem adaptivePredict_ambig_rhs_unproc_stack_syms:
     forall (gr  : grammar)
            (hw  : grammar_wf gr)
@@ -795,16 +794,16 @@ Module SllOptimizationSoundFn (Import D : Defs.T).
            (rhs : list symbol)
            (ca' : cache),
       cr = Fr pre vs (NT x :: suf)
+      -> ce = Fr [] tt rhs
       -> no_left_recursion gr
       -> rhs_map_correct rm gr
       -> stack_wf gr (cr, frs)
       -> adaptivePredict gr hw rm cm pre vs x suf frs ts ca hc hk = (PredAmbig rhs, ca')
       -> stack_accepts_suffix gr (ce, cr :: frs) ts. 
   Proof.
-    intros gr hw rm cm cr ce pre vs x suf frs ts ca hc hk rhs ca' ? hn hp hw' ha; subst.
-    apply adaptivePredict_ambig_llPredict_ambig in ha.
-    eapply llPredict_ambig_rhs_unproc_stack_syms in ha; eauto.
-    sis; auto.
-  Qed. *)
+    intros gr hw rm cm cr ce pre vs x suf frs ts ca hc hk rhs ca' ? ? hn hp hw' ha; subst.
+    eapply llPredict_ambig_rhs_unproc_stack_syms; eauto.
+    eapply adaptivePredict_ambig_llPredict_ambig; eauto.
+  Qed. 
     
 End SllOptimizationSoundFn.
