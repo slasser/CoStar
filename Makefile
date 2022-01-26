@@ -1,14 +1,15 @@
-all: parser evaluation
+all: parser # evaluation
 
 parser:
-	$(MAKE) -C parser
+	$(MAKE) -f CoqMakefile
+	mv *.mli *.ml Evaluation
 
 evaluation:
-	$(MAKE) -C evaluation
+	cd Evaluation && dune build --profile release runEval.exe 
 
 clean:
-	$(MAKE) -C parser clean
-	$(MAKE) -C evaluation clean
+	$(MAKE) -f CoqMakefile clean
+#	$(MAKE) -C evaluation clean
 
 # Run "make" to build the parser and the evaluation framework
 # before running these benchmarks

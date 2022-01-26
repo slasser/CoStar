@@ -142,9 +142,23 @@ Definition ppmGrammarEntries : list grammar_entry :=
                end)
   ].
 
-Definition lex_sem := Verbatim.Examples.PPM.Lexer.Semantic.SemLexer.Impl.lex_sem.
-Definition lex_rus := Verbatim.Examples.PPM.Lexer.Literal.rus.
-Definition lex_ppm := lex_sem lex_rus. 
+Definition notWS (t : token) : bool :=
+  match t with
+  | @existT _ _ WS _ => false
+  | _ => true
+  end.
+
+Definition lex_sem  := Verbatim.Examples.PPM.Lexer.Semantic.SemLexer.Impl.lex_sem.
+Definition lex_rus  := Verbatim.Examples.PPM.Lexer.Literal.rus.
+Definition lex_ppm' := lex_sem lex_rus.
+Definition lex_ppm  (s : String) : option (list token) * String :=
+  let res' := lex_ppm' s in
+  match res' with
+  | (Some ts, rem) => (Some (List.filter notWS ts), rem)
+  | (None, _) => res'
+  end.
 
 Definition parse := PPM_Parser.ParserAndProofs.PEF.PS.P.parse.
 Definition parse_ppm := parse (grammarOfEntryList ppmGrammarEntries) (grammarOfEntryList_wf _) Document.
+
+Definition show_ppm_result := PPM_Parser.ParserAndProofs.PEF.PS.P.showResult Document.
