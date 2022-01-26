@@ -1,0 +1,150 @@
+Require Import List String.
+Import ListNotations.
+Require Import Verbatim.Examples.PPM.Lexer.Literal.
+Require Import Verbatim.Examples.PPM.Lexer.Semantic.
+Require Import CoStar.Tactics CoStar.Defs CoStar.Main.
+
+Record rgb_triple : Type :=
+  mkRGBTriple { red   : nat
+              ; green : nat
+              ; blue  : nat
+              }.
+
+Record ppm_value : Type :=
+  mkPPMValue { width   : nat
+             ; height  : nat
+             ; max     : nat
+             ; triples : list rgb_triple
+             }.  
+
+Module PPM_Symbol_Types <: SYMBOL_TYPES.
+
+  Definition terminal := Label.
+
+  Definition compareT (x y : terminal) : comparison :=
+    match x, y with
+    | NAT, NAT => Eq
+    | NAT, _ => Lt
+    | P3, NAT => Gt
+    | P3, P3 => Eq
+    | P3, WS => Lt
+    | WS, WS => Eq
+    | WS, _ => Gt
+    end.
+
+  Lemma compareT_eq :
+    forall x y : terminal,
+      compareT x y = Eq <-> x = y.
+  Proof.
+    intros x y; split; intros heq; destruct x; destruct y; auto; sis; tc.
+  Qed.
+
+  Lemma compareT_trans :
+    forall (c : comparison) (x y z : terminal),
+      compareT x y = c -> compareT y z = c -> compareT x z = c.
+  Proof.
+    intros c x y z h1 h2; destruct x; destruct y; destruct z; auto; sis; tc. 
+  Qed.
+  
+  Inductive nonterminal' :=
+  | Document
+  | Triples.
+
+  Definition nonterminal := nonterminal'.
+
+  Definition compareNT (x y : nonterminal) : comparison :=
+    match x, y with
+    | Document, Triples => Lt
+    | Triples, Document => Gt
+    | _, _ => Eq
+    end.
+                             
+  Lemma compareNT_eq :
+    forall x y : nonterminal,
+      compareNT x y = Eq <-> x = y.
+  Proof.
+    intros x y; split; intros heq; destruct x; destruct y; auto; sis; tc.
+  Qed.
+
+  Lemma compareNT_trans :
+    forall (c : comparison) (x y z : nonterminal),
+      compareNT x y = c -> compareNT y z = c -> compareNT x z = c.
+  Proof.
+    intros c x y z h1 h2; destruct x; destruct y; destruct z; auto; sis; tc. 
+  Qed.
+  
+  Definition showT (x : terminal) : string :=
+    match x with
+    | P3 => "P3"
+    | NAT => "NAT"
+    | WS => "WS"
+    end.
+
+  Definition showNT (x : nonterminal) : string :=
+    match x with
+    | Document => "Document"
+    | Triples => "Triples"
+    end.
+
+  Definition t_semty : terminal -> Type :=
+    Verbatim.Examples.PPM.Lexer.Semantic.USER.sem_ty.
+
+  Definition nt_semty (x : nonterminal) : Type :=
+    match x with
+    | Document => ppm_value
+    | Triples  => list rgb_triple
+    end.
+
+End PPM_Symbol_Types.
+
+Module D <: Defs.T.
+  Module        SymTy := PPM_Symbol_Types.
+  Module Export Defs  := DefsFn SymTy.
+End D.
+
+Module Export PPM_Parser := Make D.
+
+Definition prod : production := (Document, [T NAT ; T NAT ; T NAT ; NT Triples]).
+Compute predicate_semty prod.
+Definition p    : predicate_semty prod :=
+  fun tup =>
+    match tup with
+    | (w, (h, (m, (tpls, _)))) =>
+      Nat.eqb (Nat.mul w h) (List.length tpls)
+    end.
+
+Definition ppmGrammarEntries : list grammar_entry :=
+  [
+    @existT _ _
+            (Document, [T P3; T NAT ; T NAT ; T NAT ; NT Triples])
+            (fun tup =>
+               match tup with
+               | (_, (w, (h, (m, (ts, _))))) =>
+                 Nat.eqb (Nat.mul w h) (List.length ts)
+               end,
+             fun tup =>
+               match tup with
+               | (_, (w, (h, (m, (ts, _))))) =>
+                 mkPPMValue w h m ts
+               end)
+            
+  ; @existT _ _
+            (Triples, [])
+            (fun _ => true, fun _ => [])
+            
+  ; @existT _ _
+            (Triples, [T NAT; T NAT; T NAT; NT Triples])
+            (fun _ => true,
+             fun tup =>
+               match tup with
+               | (x, (y, (z, (tpls, _)))) =>
+                 mkRGBTriple x y z :: tpls
+               end)
+  ].
+
+Definition lex_sem := Verbatim.Examples.PPM.Lexer.Semantic.SemLexer.Impl.lex_sem.
+Definition lex_rus := Verbatim.Examples.PPM.Lexer.Literal.rus.
+Definition lex_ppm := lex_sem lex_rus. 
+
+Definition parse := PPM_Parser.ParserAndProofs.PEF.PS.P.parse.
+Definition parse_ppm := parse (grammarOfEntryList ppmGrammarEntries) (grammarOfEntryList_wf _) Document.
