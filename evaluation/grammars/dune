@@ -1,3 +1,0 @@
-(executable
-  (name normalize_rules)
-  (libraries core str yojson))
