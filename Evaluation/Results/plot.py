@@ -80,5 +80,5 @@ if datafile == "python__antlr-parser.json":
 #ax.set_title("ANTLR parser, after cache warm-up")
 #plt.ylim([0.0, 0.04])
 
-plt.savefig(plotfile, format="eps", bbox_inches='tight', pad_inches=0, dpi=1000)
+plt.savefig(plotfile, format="pdf", bbox_inches='tight', pad_inches=0, dpi=1000)
 print ("results saved to evaluation/results/" + plotfile)

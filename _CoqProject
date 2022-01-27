@@ -20,5 +20,5 @@ Parser_error_free.v
 Parser_complete.v
 Main.v
 
-Evaluation/PPM.v
-Evaluation/Extraction.v
+Evaluation/Grammars/PPM.v
+Evaluation/Grammars/Extraction.v

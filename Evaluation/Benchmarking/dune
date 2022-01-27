@@ -1,0 +1,6 @@
+(executable
+  (name runEval)
+  (libraries unix yojson)
+  (ocamlopt_flags (:standard -O3)))
+
+(include_subdirs unqualified)

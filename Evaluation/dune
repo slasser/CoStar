@@ -1,4 +1,0 @@
-(executable
-  (name runEval)
-  (libraries unix yojson)
-  (ocamlopt_flags (:standard -O3)))
