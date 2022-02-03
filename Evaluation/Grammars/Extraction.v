@@ -1,4 +1,8 @@
 Require Import CoStar.Evaluation.Grammars.PPM.
+Require Import ExtrOcamlBasic.
+Require Import ExtrOcamlNatInt.
+Require Import ExtrOcamlZInt.
+Require Import ExtrOcamlString.
 
 Extraction Blacklist List String.
 

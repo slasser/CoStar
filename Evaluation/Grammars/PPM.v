@@ -1,4 +1,4 @@
-Require Import List String.
+Require Import Bool List String.
 Import ListNotations.
 Require Import Verbatim.Examples.PPM.Lexer.Literal.
 Require Import Verbatim.Examples.PPM.Lexer.Semantic.
@@ -9,6 +9,23 @@ Record rgb_triple : Type :=
               ; green : nat
               ; blue  : nat
               }.
+
+Require Import PeanoNat.
+
+Definition triple_le_max (t : rgb_triple) (m : nat) : bool :=
+  match t with
+  | mkRGBTriple r g b =>
+      (r <=? m) && (g <=? m) && (b <=? m)
+  end.
+
+Fixpoint triples_le_max (ts : list rgb_triple) (m : nat) : bool :=
+  match ts with
+  | [] => true
+  | t :: ts' => triple_le_max t m && triples_le_max ts' m
+  end.
+
+Definition width_x_height_eq_length {A : Type} (w h : nat) (l : list A) : bool :=
+  (w * h =? List.length l)%nat.
 
 Record ppm_value : Type :=
   mkPPMValue { width   : nat
@@ -104,15 +121,6 @@ End D.
 
 Module Export PPM_Parser := Make D.
 
-Definition prod : production := (Document, [T NAT ; T NAT ; T NAT ; NT Triples]).
-Compute predicate_semty prod.
-Definition p    : predicate_semty prod :=
-  fun tup =>
-    match tup with
-    | (w, (h, (m, (tpls, _)))) =>
-      Nat.eqb (Nat.mul w h) (List.length tpls)
-    end.
-
 Definition ppmGrammarEntries : list grammar_entry :=
   [
     @existT _ _
@@ -120,7 +128,7 @@ Definition ppmGrammarEntries : list grammar_entry :=
             (fun tup =>
                match tup with
                | (_, (w, (h, (m, (ts, _))))) =>
-                 Nat.eqb (Nat.mul w h) (List.length ts)
+                   width_x_height_eq_length w h ts && triples_le_max ts m
                end,
              fun tup =>
                match tup with

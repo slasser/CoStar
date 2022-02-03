@@ -1,4 +1,4 @@
-all: parser # evaluation
+all: parser evaluation
 .PHONY: all
 
 parser: CoqMakefile
@@ -12,8 +12,9 @@ evaluation:
 
 clean:
 	$(MAKE) -f CoqMakefile clean
-	rm Evaluation/Benchmarking/Extracted/*
-#	$(MAKE) -C evaluation clean
+	cd Evaluation/Benchmarking && dune clean
+	find Evaluation/Benchmarking/Extracted -type f -not -name "README" -delete
+	cd Evaluation/Results && rm -f *.json *.eps *.pdf
 .PHONY: clean
 
 CoqMakefile: _CoqProject
@@ -23,7 +24,7 @@ CoqMakefile: _CoqProject
 # before running these benchmarks
 
 bench-ppm:
-	Evaluation/Benchmarking/_build/default/runEval.exe -ppm Evaluation/Data/PPM 10 Evaluation/Results/ppm_results.json
+	Evaluation/Benchmarking/_build/default/runEval.exe -ppm Evaluation/Data/PPM/Instances 10 Evaluation/Results/ppm_results.json
 	python3.7 Evaluation/Results/plot.py Evaluation/Results/ppm_results.json Evaluation/Results/ppm_results.pdf
 
 bench-json-nobel:

@@ -1,4 +1,4 @@
-Require Import Bool List Omega.
+Require Import Bool Lia List.
 Require Import CoStar.Defs. 
 Require Import CoStar.Lex.
 Require Import CoStar.LLPrediction_error_free.
@@ -723,7 +723,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
     - destruct wpre as [| t wpre]; sis.
       + destruct wmid as [| t wmid]; sis.
         * apply move_step_word_length_lt in hm; apply mcms_word_length_le in hms.
-          omega.
+          lia.
         * inv hm; eauto.
       + inv hm; destruct (IH wpre wmid) as [sp' [hms' hms'']]; eauto.
   Qed.
@@ -769,7 +769,7 @@ Module LLPredictionCompleteFn (Import D : Defs.T).
       -> sp = sp'.
   Proof.
     intros g sp sp' ts ts' hm heq; inv_mcms hm; auto.
-    apply move_step_word_length_lt in hm'; apply mcms_word_length_le in hms; omega.
+    apply move_step_word_length_lt in hm'; apply mcms_word_length_le in hms; lia.
   Qed.
 
   Lemma mcms_words_eq__subparsers_eq :

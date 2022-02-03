@@ -1,4 +1,4 @@
-Require Import Arith Bool FMaps List MSets Omega PeanoNat Program.Wf String.
+Require Import Arith Bool FMaps Lia List MSets PeanoNat Program.Wf String.
 Require Import CoStar.Defs.
 Require Import CoStar.Lex.
 Require Import CoStar.Tactics.

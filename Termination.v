@@ -1,4 +1,4 @@
-Require Import Arith List Omega.
+Require Import Arith Lia List PeanoNat.
 Require Import CoStar.Defs.
 Require Import CoStar.Lex.
 Require Import CoStar.Tactics.
@@ -49,7 +49,7 @@ Module TerminationFn (Export D : Defs.T).
   Proof.
     intros b e1 e2 [Hlt Hlt']. 
     destruct b as [| b']. 
-    - destruct e1; destruct e2; auto; omega.
+    - destruct e1; destruct e2; auto; lia.
     - apply Nat.pow_le_mono_r; auto. 
   Qed.
   
@@ -73,7 +73,7 @@ Module TerminationFn (Export D : Defs.T).
     induction frs as [| fr frs' IH]; intros b e1 e2 Hlt; simpl; auto.
     apply plus_le_compat.
     - apply nonzero_exponents_le__tailFrameScore_le; auto.
-    - apply IH; omega.
+    - apply IH; lia.
   Qed.
 
   Lemma nonzero_exponents_le__stackScore_le :
@@ -122,7 +122,7 @@ Module TerminationFn (Export D : Defs.T).
       NtSet.mem x s = true -> 0 < NtSet.cardinal s.
   Proof.
     intros x s Hm.
-    apply mem_true_cardinality_neq_0 in Hm; omega.
+    apply mem_true_cardinality_neq_0 in Hm; lia.
   Qed.
 
   Lemma cardinal_diff_remove_gt_0 :
@@ -208,13 +208,13 @@ Module TerminationFn (Export D : Defs.T).
     destruct (NtSet.mem x vi) eqn:hm.
     - apply NF.mem_iff in hm.
       assert (hi' : NtSet.In x u) by ND.fsetdec.
-      apply nonzero_exponents_le__stackScore_le; split; try omega.
+      apply nonzero_exponents_le__stackScore_le; split; try lia.
       + apply cardinal_diff_remove_gt_0; auto. 
       + apply cardinal_diff_remove_le; auto.
       + apply le_n_S; apply cardinal_diff_remove_le; auto. 
     - apply not_mem_iff in hm.
       rewrite diff_remove_equal_diff_2; auto.
-      apply nonzero_exponents_le__stackScore_le; split; try omega.
+      apply nonzero_exponents_le__stackScore_le; split; try lia.
       eapply cardinal_diff_gt_0; eauto.
   Qed.
 
@@ -239,7 +239,7 @@ Module TerminationFn (Export D : Defs.T).
   Proof.
     intros x s Hm.
     rewrite <- remove_cardinal_1 with (s := s) (x := x); auto.
-    omega.
+    lia.
   Qed.
 
   Lemma lt_lt_mul_nonzero_r :
@@ -247,9 +247,7 @@ Module TerminationFn (Export D : Defs.T).
       x < y -> 0 < z -> x < y * z.
   Proof.
     intros y x z Hxy Hz.
-    destruct z as [| z]; try omega.
-    rewrite Nat.mul_succ_r. 
-    apply Nat.lt_lt_add_l; auto.
+    destruct z as [| z]; try lia.
   Qed.
 
   Lemma base_gt_zero_power_gt_zero :
@@ -258,8 +256,7 @@ Module TerminationFn (Export D : Defs.T).
       -> 0 < b ^ e.
   Proof.
     intros b e Hlt; induction e as [| e IH]; simpl in *; auto.
-    destruct b as [| b]; try omega.
-    apply lt_lt_mul_nonzero_r; auto.
+    destruct b as [| b]; try lia.
   Qed.
 
   Lemma less_significant_value_lt_more_significant_digit :
@@ -268,18 +265,18 @@ Module TerminationFn (Export D : Defs.T).
       -> e1 < e2
       -> v * (b ^ e1) < b ^ e2.
   Proof.
-    intros e2; induction e2 as [| e2 IH]; intros e1 v b Hvb Hee; sis; try omega.
-    destruct b as [| b]; try omega.
+    intros e2; induction e2 as [| e2 IH]; intros e1 v b Hvb Hee; sis; try lia.
+    destruct b as [| b]; try lia.
     destruct e1 as [| e1].
     - rewrite Nat.mul_1_r.
       apply lt_lt_mul_nonzero_r; auto.
-      apply base_gt_zero_power_gt_zero; omega.    
-    - rewrite Nat.pow_succ_r; try omega. 
+      apply base_gt_zero_power_gt_zero; lia.
+    - rewrite Nat.pow_succ_r; try lia.
       rewrite <- Nat.mul_comm.
       rewrite <- Nat.mul_assoc.
-      apply mult_lt_compat_l; try omega.
+      apply mult_lt_compat_l; try lia.
       rewrite Nat.mul_comm.
-      apply IH; omega. 
+      apply IH; lia.
   Qed.
 
   Lemma diff_add_equal_remove_diff :

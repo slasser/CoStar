@@ -1,4 +1,4 @@
-Require Import FSets FSets.FMapAVL List Omega String.
+Require Import FSets FSets.FMapAVL Lia List String.
 Require Import CoLoR.Util.FGraph.TransClos.
 Require Import CoStar.Orders.
 Require Import CoStar.Tactics.

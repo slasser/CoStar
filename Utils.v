@@ -1,4 +1,4 @@
-Require Import Bool List Omega Relations Relation_Operators.
+Require Import Bool Lia List PeanoNat Relations Relation_Operators.
 Require Import CoStar.Tactics.
         Import ListNotations.
 
@@ -102,10 +102,10 @@ Proof.
   intros x ys Hin; induction ys as [| y ys IH]; simpl in *.
   - inv Hin.
   - destruct Hin as [Heq | Hin]; subst.
-    + apply Max.le_max_l.
+    + apply Nat.le_max_l.
     + apply IH in Hin.
-      eapply le_trans; eauto.
-      apply Max.le_max_r.
+      eapply Nat.le_trans; eauto.
+      apply Nat.le_max_r.
 Qed.
 
 Definition lengths {A} (xss : list (list A)) : list nat :=
@@ -138,7 +138,7 @@ Lemma mem_length_lt_max_plus_1 :
     -> List.length xs < 1 + maxLength xss.
 Proof.
   intros A xs xss hi.
-  apply mem_length_le_max in hi; omega.
+  apply mem_length_le_max in hi; lia.
 Qed.
 
 (* Lemmas about standard library definitions *)
@@ -440,5 +440,3 @@ Lemma fold_left_preserves_list_invar' :
     | H : (_, _) = (_, _) |- _ =>
       inv H
     end.
-
-  

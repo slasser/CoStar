@@ -40,7 +40,7 @@ fit_fn = np.poly1d(fit)
 p1 = plt.plot(sizes, fit_fn(sizes), 'k--', lw=1.5)
 
 # lowess line
-z = lowess(times, sizes, frac=0.1)
+z = lowess(times, sizes, frac=0.3)
 p2 = plt.plot(z[:,0], z[:,1], '-', lw = 1.5, color = 'r', label = "Lowess fit")
 
 # legend
@@ -81,4 +81,4 @@ if datafile == "python__antlr-parser.json":
 #plt.ylim([0.0, 0.04])
 
 plt.savefig(plotfile, format="pdf", bbox_inches='tight', pad_inches=0, dpi=1000)
-print ("results saved to evaluation/results/" + plotfile)
+print ("results saved to Evaluation/Results/" + plotfile)

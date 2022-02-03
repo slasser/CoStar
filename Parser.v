@@ -1,4 +1,4 @@
-Require Import FMaps Omega PeanoNat String. 
+Require Import FMaps PeanoNat String. 
 Require Import CoStar.Defs.
 Require Import CoStar.Lex.
 Require Import CoStar.SLLPrediction_complete.
