@@ -1,0 +1,3640 @@
+[
+    {
+        "id": {
+            "bioguide": "B000944",
+            "thomas": "00136",
+            "lis": "S307",
+            "govtrack": 400050,
+            "opensecrets": "N00003535",
+            "votesmart": 27018,
+            "fec": [
+                "H2OH13033",
+                "S6OH00163"
+            ],
+            "cspan": 5051,
+            "wikipedia": "Sherrod Brown",
+            "house_history": 9996,
+            "ballotpedia": "Sherrod Brown",
+            "maplight": 168,
+            "icpsr": 29389,
+            "wikidata": "Q381880",
+            "google_entity_id": "kg:/m/034s80"
+        },
+        "name": {
+            "first": "Sherrod",
+            "last": "Brown",
+            "official_full": "Sherrod Brown"
+        },
+        "bio": {
+            "birthday": "1952-11-09",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1995-01-03",
+                "state": "OH",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "OH",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "OH",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "OH",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "OH",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2003-01-07",
+                "end": "2005-01-03",
+                "state": "OH",
+                "district": 13,
+                "party": "Democrat",
+                "url": "http://www.house.gov/sherrodbrown"
+            },
+            {
+                "type": "rep",
+                "start": "2005-01-04",
+                "end": "2007-01-03",
+                "state": "OH",
+                "district": 13,
+                "party": "Democrat",
+                "url": "http://www.house.gov/sherrodbrown"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "OH",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://brown.senate.gov/",
+                "address": "713 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-2315",
+                "fax": "202-228-6321",
+                "contact_form": "http://www.brown.senate.gov/contact/",
+                "office": "713 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "OH",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.brown.senate.gov",
+                "address": "713 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2315",
+                "fax": "202-228-6321",
+                "contact_form": "http://www.brown.senate.gov/contact/",
+                "office": "713 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.brown.senate.gov/rss/feeds/?type=all&amp;"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "OH",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.brown.senate.gov",
+                "rss_url": "http://www.brown.senate.gov/rss/feeds/?type=all&amp;",
+                "contact_form": "https://www.brown.senate.gov/contact/",
+                "address": "503 Hart Senate Office Building Washington DC 20510",
+                "office": "503 Hart Senate Office Building",
+                "phone": "202-224-2315"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "C000127",
+            "thomas": "00172",
+            "lis": "S275",
+            "govtrack": 300018,
+            "opensecrets": "N00007836",
+            "votesmart": 27122,
+            "fec": [
+                "S8WA00194",
+                "H2WA01054"
+            ],
+            "cspan": 26137,
+            "wikipedia": "Maria Cantwell",
+            "house_history": 10608,
+            "ballotpedia": "Maria Cantwell",
+            "maplight": 544,
+            "icpsr": 39310,
+            "wikidata": "Q22250",
+            "google_entity_id": "kg:/m/01x68t"
+        },
+        "name": {
+            "first": "Maria",
+            "last": "Cantwell",
+            "official_full": "Maria Cantwell"
+        },
+        "bio": {
+            "birthday": "1958-10-13",
+            "gender": "F"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1995-01-03",
+                "state": "WA",
+                "district": 1,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "2001-01-03",
+                "end": "2007-01-03",
+                "state": "WA",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://cantwell.senate.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "WA",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://cantwell.senate.gov",
+                "address": "311 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-3441",
+                "fax": "202-228-0514",
+                "contact_form": "http://www.cantwell.senate.gov/contact/",
+                "office": "311 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "WA",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.cantwell.senate.gov",
+                "address": "511 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-3441",
+                "fax": "202-228-0514",
+                "contact_form": "http://www.cantwell.senate.gov/public/index.cfm/email-maria",
+                "office": "511 Hart Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.cantwell.senate.gov/public/index.cfm/rss/feed"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "WA",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "junior",
+                "url": "https://www.cantwell.senate.gov",
+                "rss_url": "http://www.cantwell.senate.gov/public/index.cfm/rss/feed",
+                "contact_form": "https://www.cantwell.senate.gov/public/index.cfm/email-maria",
+                "address": "511 Hart Senate Office Building Washington DC 20510",
+                "office": "511 Hart Senate Office Building",
+                "phone": "202-224-3441"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "C000141",
+            "thomas": "00174",
+            "lis": "S308",
+            "govtrack": 400064,
+            "opensecrets": "N00001955",
+            "votesmart": 26888,
+            "icpsr": 15408,
+            "fec": [
+                "H6MD03177",
+                "S6MD03177"
+            ],
+            "cspan": 4004,
+            "wikipedia": "Ben Cardin",
+            "house_history": 10629,
+            "ballotpedia": "Ben Cardin",
+            "maplight": 182,
+            "wikidata": "Q723295",
+            "google_entity_id": "kg:/m/025k3k"
+        },
+        "name": {
+            "first": "Benjamin",
+            "middle": "L.",
+            "last": "Cardin",
+            "official_full": "Benjamin L. Cardin"
+        },
+        "bio": {
+            "birthday": "1943-10-05",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1987-01-06",
+                "end": "1989-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1989-01-03",
+                "end": "1991-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1991-01-03",
+                "end": "1993-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1995-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2003-01-07",
+                "end": "2005-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat",
+                "url": "http://www.house.gov/cardin"
+            },
+            {
+                "type": "rep",
+                "start": "2005-01-04",
+                "end": "2007-01-03",
+                "state": "MD",
+                "district": 3,
+                "party": "Democrat",
+                "url": "http://www.house.gov/cardin"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "MD",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://cardin.senate.gov/",
+                "address": "509 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-4524",
+                "fax": "202-224-1651",
+                "contact_form": "http://www.cardin.senate.gov/contact/",
+                "office": "509 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "MD",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.cardin.senate.gov",
+                "address": "509 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-4524",
+                "fax": "202-224-1651",
+                "contact_form": "http://www.cardin.senate.gov/contact/",
+                "office": "509 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.cardin.senate.gov/rss/feeds/?type=all"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "MD",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.cardin.senate.gov",
+                "rss_url": "http://www.cardin.senate.gov/rss/feeds/?type=all",
+                "contact_form": "https://www.cardin.senate.gov/contact/",
+                "address": "509 Hart Senate Office Building Washington DC 20510",
+                "office": "509 Hart Senate Office Building",
+                "phone": "202-224-4524"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "C000174",
+            "thomas": "00179",
+            "lis": "S277",
+            "govtrack": 300019,
+            "opensecrets": "N00012508",
+            "votesmart": 22421,
+            "icpsr": 15015,
+            "fec": [
+                "S8DE00079"
+            ],
+            "cspan": 663,
+            "wikipedia": "Tom Carper",
+            "house_history": 10671,
+            "ballotpedia": "Tom Carper",
+            "maplight": 545,
+            "wikidata": "Q457432",
+            "google_entity_id": "kg:/m/01xw7t"
+        },
+        "name": {
+            "first": "Thomas",
+            "middle": "Richard",
+            "last": "Carper",
+            "official_full": "Thomas R. Carper"
+        },
+        "bio": {
+            "birthday": "1947-01-23",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1983-01-03",
+                "end": "1985-01-03",
+                "state": "DE",
+                "district": 0,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1985-01-03",
+                "end": "1987-01-03",
+                "state": "DE",
+                "district": 0,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1987-01-06",
+                "end": "1989-01-03",
+                "state": "DE",
+                "district": 0,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1989-01-03",
+                "end": "1991-01-03",
+                "state": "DE",
+                "district": 0,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1991-01-03",
+                "end": "1993-01-03",
+                "state": "DE",
+                "district": 0,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "2001-01-03",
+                "end": "2007-01-03",
+                "state": "DE",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://carper.senate.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "DE",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://carper.senate.gov",
+                "address": "513 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-2441",
+                "fax": "202-228-2190",
+                "contact_form": "http://www.carper.senate.gov/contact/",
+                "office": "513 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "DE",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.carper.senate.gov/public",
+                "address": "513 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2441",
+                "fax": "202-228-2190",
+                "contact_form": "http://www.carper.senate.gov/public/index.cfm/email-senator-carper",
+                "office": "513 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.carper.senate.gov/public/index.cfm/rss/feed"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "DE",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.carper.senate.gov/public",
+                "rss_url": "http://www.carper.senate.gov/public/index.cfm/rss/feed",
+                "contact_form": "https://www.carper.senate.gov/public/index.cfm/email-senator-carper",
+                "address": "513 Hart Senate Office Building Washington DC 20510",
+                "office": "513 Hart Senate Office Building",
+                "phone": "202-224-2441"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "C001070",
+            "thomas": "01828",
+            "lis": "S309",
+            "govtrack": 412246,
+            "opensecrets": "N00027503",
+            "votesmart": 2541,
+            "fec": [
+                "S6PA00217"
+            ],
+            "cspan": 47036,
+            "wikipedia": "Bob Casey Jr.",
+            "ballotpedia": "Bob Casey, Jr.",
+            "maplight": 727,
+            "icpsr": 40703,
+            "wikidata": "Q887841",
+            "google_entity_id": "kg:/m/047ymw"
+        },
+        "name": {
+            "first": "Robert",
+            "middle": "P.",
+            "last": "Casey",
+            "nickname": "Bob",
+            "suffix": "Jr.",
+            "official_full": "Robert P. Casey, Jr."
+        },
+        "bio": {
+            "gender": "M",
+            "birthday": "1960-04-13"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "PA",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://casey.senate.gov/",
+                "address": "393 RUSSELL SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-6324",
+                "fax": "202-228-0604",
+                "contact_form": "http://www.casey.senate.gov/contact/",
+                "office": "393 Russell Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "PA",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.casey.senate.gov",
+                "address": "393 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-6324",
+                "fax": "202-228-0604",
+                "contact_form": "https://www.casey.senate.gov/contact/",
+                "office": "393 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.casey.senate.gov/rss/feeds/?all"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "PA",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.casey.senate.gov",
+                "rss_url": "http://www.casey.senate.gov/rss/feeds/?all",
+                "contact_form": "https://www.casey.senate.gov/contact",
+                "address": "393 Russell Senate Office Building Washington DC 20510",
+                "office": "393 Russell Senate Office Building",
+                "phone": "202-224-6324"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "F000062",
+            "thomas": "01332",
+            "lis": "S221",
+            "govtrack": 300043,
+            "opensecrets": "N00007364",
+            "votesmart": 53273,
+            "fec": [
+                "S0CA00199"
+            ],
+            "cspan": 13061,
+            "wikipedia": "Dianne Feinstein",
+            "house_history": 13044,
+            "ballotpedia": "Dianne Feinstein",
+            "maplight": 567,
+            "icpsr": 49300,
+            "wikidata": "Q230733",
+            "google_entity_id": "kg:/m/01gqws"
+        },
+        "name": {
+            "first": "Dianne",
+            "last": "Feinstein",
+            "official_full": "Dianne Feinstein"
+        },
+        "bio": {
+            "birthday": "1933-06-22",
+            "gender": "F"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "1992-11-10",
+                "end": "1995-01-03",
+                "state": "CA",
+                "class": 1,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "1995-01-04",
+                "end": "2001-01-03",
+                "state": "CA",
+                "class": 1,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "2001-01-03",
+                "end": "2007-01-03",
+                "state": "CA",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://feinstein.senate.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "CA",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://feinstein.senate.gov",
+                "address": "331 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-3841",
+                "fax": "202-228-3954",
+                "contact_form": "http://www.feinstein.senate.gov/public/index.cfm/e-mail-me",
+                "office": "331 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "CA",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.feinstein.senate.gov",
+                "address": "331 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-3841",
+                "fax": "202-228-3954",
+                "contact_form": "https://www.feinstein.senate.gov/public/index.cfm/e-mail-me",
+                "office": "331 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.feinstein.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "CA",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.feinstein.senate.gov",
+                "rss_url": "http://www.feinstein.senate.gov/public/?a=rss.feed",
+                "contact_form": "https://www.feinstein.senate.gov/public/index.cfm/e-mail-me",
+                "address": "331 Hart Senate Office Building Washington DC 20510",
+                "office": "331 Hart Senate Office Building",
+                "phone": "202-224-3841"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "K000367",
+            "thomas": "01826",
+            "lis": "S311",
+            "govtrack": 412242,
+            "opensecrets": "N00027500",
+            "votesmart": 65092,
+            "fec": [
+                "S6MN00267"
+            ],
+            "cspan": 83701,
+            "wikipedia": "Amy Klobuchar",
+            "house_history": 16558,
+            "ballotpedia": "Amy Klobuchar",
+            "maplight": 724,
+            "icpsr": 40700,
+            "wikidata": "Q22237",
+            "google_entity_id": "kg:/m/05fbpt"
+        },
+        "name": {
+            "first": "Amy",
+            "middle": "Jean",
+            "last": "Klobuchar",
+            "official_full": "Amy Klobuchar"
+        },
+        "bio": {
+            "birthday": "1960-05-25",
+            "gender": "F"
+        },
+        "leadership_roles": [
+            {
+                "title": "Senate Democratic Steering Committee Chair",
+                "chamber": "senate",
+                "start": "2019-01-03",
+                "end": "2021-01-03"
+            },
+            {
+                "title": "Senate Democratic Steering Committee Chair",
+                "chamber": "senate",
+                "start": "2021-01-03"
+            }
+        ],
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "MN",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://klobuchar.senate.gov/",
+                "address": "302 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-3244",
+                "fax": "202-228-2186",
+                "contact_form": "http://www.klobuchar.senate.gov/emailamy.cfm",
+                "office": "302 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "MN",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.klobuchar.senate.gov",
+                "address": "302 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-3244",
+                "fax": "202-228-2186",
+                "contact_form": "http://www.klobuchar.senate.gov/public/index.cfm/contact",
+                "office": "302 Hart Senate Office Building",
+                "state_rank": "senior"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "MN",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.klobuchar.senate.gov",
+                "contact_form": "https://www.klobuchar.senate.gov/public/index.cfm/contact",
+                "address": "425 Dirksen Senate Office Building Washington DC 20510",
+                "office": "425 Dirksen Senate Office Building",
+                "phone": "202-224-3244"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "M000639",
+            "thomas": "00791",
+            "lis": "S306",
+            "govtrack": 400272,
+            "opensecrets": "N00000699",
+            "votesmart": 26961,
+            "fec": [
+                "H2NJ13075",
+                "S6NJ00289"
+            ],
+            "cspan": 29608,
+            "house_history": 18124,
+            "wikipedia": "Bob Menendez",
+            "ballotpedia": "Bob Menendez",
+            "maplight": 368,
+            "icpsr": 29373,
+            "wikidata": "Q888132",
+            "google_entity_id": "kg:/m/033d3p"
+        },
+        "name": {
+            "first": "Robert",
+            "last": "Menendez",
+            "nickname": "Bob",
+            "official_full": "Robert Menendez"
+        },
+        "other_names": [
+            {
+                "last": "Menendez"
+            }
+        ],
+        "bio": {
+            "birthday": "1954-01-01",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1995-01-03",
+                "state": "NJ",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "NJ",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "NJ",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "NJ",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "NJ",
+                "district": 13,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2003-01-07",
+                "end": "2005-01-03",
+                "state": "NJ",
+                "district": 13,
+                "party": "Democrat",
+                "url": "http://menendez.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2005-01-04",
+                "end": "2006-01-16",
+                "state": "NJ",
+                "district": 13,
+                "party": "Democrat",
+                "url": "http://menendez.house.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2006-01-18",
+                "end": "2007-01-03",
+                "state": "NJ",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://menendez.senate.gov/",
+                "how": "appointment"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "NJ",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://menendez.senate.gov/",
+                "address": "528 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-4744",
+                "fax": "202-228-2197",
+                "contact_form": "http://menendez.senate.gov/contact/",
+                "office": "528 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "NJ",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.menendez.senate.gov",
+                "address": "528 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-4744",
+                "fax": "202-228-2197",
+                "contact_form": "https://www.menendez.senate.gov/contact",
+                "office": "528 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.menendez.senate.gov/rss/feeds/index.cfm?type=news"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "NJ",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.menendez.senate.gov",
+                "rss_url": "http://www.menendez.senate.gov/rss/feeds/index.cfm?type=news",
+                "contact_form": "https://www.menendez.senate.gov/contact",
+                "address": "528 Hart Senate Office Building Washington DC 20510",
+                "office": "528 Hart Senate Office Building",
+                "phone": "202-224-4744"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "S000033",
+            "thomas": "01010",
+            "lis": "S313",
+            "govtrack": 400357,
+            "opensecrets": "N00000528",
+            "votesmart": 27110,
+            "fec": [
+                "H8VT01016",
+                "S4VT00033"
+            ],
+            "cspan": 994,
+            "wikipedia": "Bernie Sanders",
+            "ballotpedia": "Bernie Sanders",
+            "maplight": 450,
+            "icpsr": 29147,
+            "house_history": 21173,
+            "wikidata": "Q359442",
+            "google_entity_id": "kg:/m/01_gbv"
+        },
+        "name": {
+            "first": "Bernard",
+            "last": "Sanders",
+            "nickname": "Bernie",
+            "official_full": "Bernard Sanders"
+        },
+        "bio": {
+            "birthday": "1941-09-08",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1991-01-03",
+                "end": "1993-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1995-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2003-01-07",
+                "end": "2005-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat",
+                "url": "http://bernie.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2005-01-04",
+                "end": "2007-01-03",
+                "state": "VT",
+                "district": 0,
+                "party": "Independent",
+                "caucus": "Democrat",
+                "url": "http://bernie.house.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "VT",
+                "class": 1,
+                "party": "Independent",
+                "caucus": "Democrat",
+                "url": "http://sanders.senate.gov/",
+                "address": "332 DIRKSEN SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-5141",
+                "fax": "202-228-0776",
+                "contact_form": "http://www.sanders.senate.gov/contact/",
+                "office": "332 Dirksen Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "VT",
+                "party": "Independent",
+                "caucus": "Democrat",
+                "class": 1,
+                "url": "https://www.sanders.senate.gov",
+                "address": "332 Dirksen Senate Office Building Washington DC 20510",
+                "phone": "202-224-5141",
+                "fax": "202-228-0776",
+                "contact_form": "http://www.sanders.senate.gov/contact/",
+                "office": "332 Dirksen Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.sanders.senate.gov/rss/"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "VT",
+                "class": 1,
+                "party": "Independent",
+                "caucus": "Democrat",
+                "state_rank": "junior",
+                "url": "https://www.sanders.senate.gov",
+                "rss_url": "http://www.sanders.senate.gov/rss/",
+                "contact_form": "https://www.sanders.senate.gov/contact/",
+                "address": "332 Dirksen Senate Office Building Washington DC 20510",
+                "office": "332 Dirksen Senate Office Building",
+                "phone": "202-224-5141"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "S000770",
+            "thomas": "01531",
+            "lis": "S284",
+            "govtrack": 300093,
+            "opensecrets": "N00004118",
+            "votesmart": 515,
+            "fec": [
+                "S8MI00281",
+                "H6MI08163"
+            ],
+            "cspan": 45451,
+            "wikipedia": "Debbie Stabenow",
+            "ballotpedia": "Debbie Stabenow",
+            "maplight": 612,
+            "icpsr": 29732,
+            "house_history": 22090,
+            "wikidata": "Q241092",
+            "google_entity_id": "kg:/m/01xh64"
+        },
+        "name": {
+            "first": "Debbie",
+            "middle": "Ann",
+            "last": "Stabenow",
+            "official_full": "Debbie Stabenow"
+        },
+        "bio": {
+            "birthday": "1950-04-29",
+            "gender": "F"
+        },
+        "leadership_roles": [
+            {
+                "title": "Senate Democratic Policy & Communications Committee Chair",
+                "chamber": "senate",
+                "start": "2019-01-03",
+                "end": "2021-01-03"
+            },
+            {
+                "title": "Senate Democratic Policy & Communications Committee Chair",
+                "chamber": "senate",
+                "start": "2021-01-03"
+            }
+        ],
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "MI",
+                "district": 8,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "MI",
+                "district": 8,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "2001-01-03",
+                "end": "2007-01-03",
+                "state": "MI",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://stabenow.senate.gov/"
+            },
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "MI",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://stabenow.senate.gov/",
+                "address": "133 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-4822",
+                "fax": "202-228-0325",
+                "contact_form": "http://www.stabenow.senate.gov/?p=contact",
+                "office": "133 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "MI",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.stabenow.senate.gov",
+                "address": "731 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-4822",
+                "fax": "202-228-0325",
+                "contact_form": "https://www.stabenow.senate.gov/contact",
+                "office": "731 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://stabenow.senate.gov/rss/?p=news"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "MI",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.stabenow.senate.gov",
+                "rss_url": "http://stabenow.senate.gov/rss/?p=news",
+                "contact_form": "https://www.stabenow.senate.gov/contact",
+                "address": "731 Hart Senate Office Building Washington DC 20510",
+                "office": "731 Hart Senate Office Building",
+                "phone": "202-224-4822"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "T000464",
+            "thomas": "01829",
+            "lis": "S314",
+            "govtrack": 412244,
+            "opensecrets": "N00027605",
+            "votesmart": 20928,
+            "fec": [
+                "S6MT00162"
+            ],
+            "cspan": 1020176,
+            "wikipedia": "Jon Tester",
+            "ballotpedia": "Jon Tester",
+            "maplight": 726,
+            "icpsr": 40702,
+            "wikidata": "Q529351",
+            "google_entity_id": "kg:/m/066cdp"
+        },
+        "name": {
+            "first": "Jon",
+            "last": "Tester",
+            "official_full": "Jon Tester"
+        },
+        "bio": {
+            "birthday": "1956-08-21",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "MT",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://tester.senate.gov/",
+                "address": "724 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-2644",
+                "fax": "202-224-8594",
+                "contact_form": "http://www.tester.senate.gov/Contact/index.cfm",
+                "office": "724 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "MT",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.tester.senate.gov",
+                "address": "311 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2644",
+                "fax": "202-224-8594",
+                "contact_form": "https://www.tester.senate.gov/?p=email_senator",
+                "office": "311 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.tester.senate.gov/rss/?p=hot_topic"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "MT",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.tester.senate.gov",
+                "rss_url": "http://www.tester.senate.gov/rss/?p=hot_topic",
+                "contact_form": "https://www.tester.senate.gov/?p=email_senator",
+                "address": "311 Hart Senate Office Building Washington DC 20510",
+                "office": "311 Hart Senate Office Building",
+                "phone": "202-224-2644"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "W000802",
+            "thomas": "01823",
+            "lis": "S316",
+            "govtrack": 412247,
+            "opensecrets": "N00027533",
+            "votesmart": 2572,
+            "fec": [
+                "S6RI00221"
+            ],
+            "cspan": 92235,
+            "wikipedia": "Sheldon Whitehouse",
+            "ballotpedia": "Sheldon Whitehouse",
+            "maplight": 728,
+            "icpsr": 40704,
+            "wikidata": "Q652066",
+            "google_entity_id": "kg:/m/07qw94"
+        },
+        "name": {
+            "first": "Sheldon",
+            "last": "Whitehouse",
+            "official_full": "Sheldon Whitehouse"
+        },
+        "bio": {
+            "gender": "M",
+            "birthday": "1955-10-20"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2007-01-04",
+                "end": "2013-01-03",
+                "state": "RI",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://whitehouse.senate.gov/",
+                "address": "717 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-2921",
+                "fax": "202-228-6362",
+                "contact_form": "http://www.whitehouse.senate.gov/contact/",
+                "office": "717 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "RI",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.whitehouse.senate.gov",
+                "address": "530 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2921",
+                "fax": "202-228-6362",
+                "contact_form": "https://www.whitehouse.senate.gov/contact/email-sheldon",
+                "office": "530 Hart Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.whitehouse.senate.gov/rss/feeds/?type=all&amp;cachebuster=1"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "RI",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "junior",
+                "url": "https://www.whitehouse.senate.gov",
+                "rss_url": "http://www.whitehouse.senate.gov/rss/feeds/?type=all&amp;cachebuster=1",
+                "contact_form": "https://www.whitehouse.senate.gov/contact/email-sheldon",
+                "address": "530 Hart Senate Office Building Washington DC 20510",
+                "office": "530 Hart Senate Office Building",
+                "phone": "202-224-2921"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "B001261",
+            "thomas": "01881",
+            "lis": "S317",
+            "govtrack": 412251,
+            "opensecrets": "N00006236",
+            "votesmart": 52662,
+            "fec": [
+                "S6WY00068"
+            ],
+            "cspan": 1024777,
+            "wikipedia": "John Barrasso",
+            "ballotpedia": "John Barrasso",
+            "maplight": 732,
+            "icpsr": 40707,
+            "wikidata": "Q720521",
+            "google_entity_id": "kg:/m/02rsm32"
+        },
+        "name": {
+            "first": "John",
+            "middle": "A.",
+            "last": "Barrasso",
+            "official_full": "John Barrasso"
+        },
+        "bio": {
+            "birthday": "1952-07-21",
+            "gender": "M"
+        },
+        "leadership_roles": [
+            {
+                "title": "Senate Republican Conference Chair",
+                "chamber": "senate",
+                "start": "2019-01-03",
+                "end": "2021-01-03"
+            },
+            {
+                "title": "Senate Republican Conference Chair",
+                "chamber": "senate",
+                "start": "2021-01-03"
+            }
+        ],
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2007-06-25",
+                "end": "2013-01-03",
+                "state": "WY",
+                "class": 1,
+                "party": "Republican",
+                "url": "http://barrasso.senate.gov",
+                "address": "307 DIRKSEN SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-6441",
+                "fax": "202-224-1724",
+                "contact_form": "http://www.barrasso.senate.gov/public/index.cfm?FuseAction=ContactUs.ContactForm",
+                "office": "307 Dirksen Senate Office Building",
+                "how": "appointment"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "WY",
+                "party": "Republican",
+                "class": 1,
+                "url": "https://www.barrasso.senate.gov",
+                "address": "307 Dirksen Senate Office Building Washington DC 20510",
+                "phone": "202-224-6441",
+                "fax": "202-224-1724",
+                "contact_form": "https://www.barrasso.senate.gov/public/index.cfm/contact-form",
+                "office": "307 Dirksen Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.barrasso.senate.gov/public/index.cfm?FuseAction=Rss.Feed"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "WY",
+                "class": 1,
+                "party": "Republican",
+                "state_rank": "senior",
+                "url": "https://www.barrasso.senate.gov",
+                "rss_url": "http://www.barrasso.senate.gov/public/index.cfm?FuseAction=Rss.Feed",
+                "contact_form": "https://www.barrasso.senate.gov/public/index.cfm/contact-form",
+                "address": "307 Dirksen Senate Office Building Washington DC 20510",
+                "office": "307 Dirksen Senate Office Building",
+                "phone": "202-224-6441"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "W000437",
+            "thomas": "01226",
+            "lis": "S318",
+            "govtrack": 400432,
+            "opensecrets": "N00003280",
+            "votesmart": 21926,
+            "fec": [
+                "H4MS01078",
+                "S8MS00196"
+            ],
+            "cspan": 18203,
+            "wikipedia": "Roger Wicker",
+            "ballotpedia": "Roger Wicker",
+            "maplight": 517,
+            "icpsr": 29534,
+            "house_history": 23734,
+            "wikidata": "Q390491",
+            "google_entity_id": "kg:/m/025xxb"
+        },
+        "name": {
+            "first": "Roger",
+            "middle": "F.",
+            "last": "Wicker",
+            "official_full": "Roger F. Wicker"
+        },
+        "bio": {
+            "birthday": "1951-07-05",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "MS",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "MS",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "MS",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "MS",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "2003-01-07",
+                "end": "2005-01-03",
+                "state": "MS",
+                "district": 1,
+                "party": "Republican",
+                "url": "http://www.house.gov/wicker"
+            },
+            {
+                "type": "rep",
+                "start": "2005-01-04",
+                "end": "2007-01-03",
+                "state": "MS",
+                "district": 1,
+                "party": "Republican",
+                "url": "http://www.house.gov/wicker"
+            },
+            {
+                "type": "rep",
+                "start": "2007-01-04",
+                "end": "2007-12-31",
+                "state": "MS",
+                "district": 1,
+                "party": "Republican",
+                "url": "http://www.house.gov/wicker"
+            },
+            {
+                "type": "sen",
+                "start": "2007-12-31",
+                "end": "2013-01-03",
+                "state": "MS",
+                "class": 1,
+                "party": "Republican",
+                "url": "http://wicker.senate.gov",
+                "address": "555 DIRKSEN SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-6253",
+                "fax": "202-228-0378",
+                "contact_form": "http://www.wicker.senate.gov/public/index.cfm?FuseAction=Contact.EMailSenatorWicker",
+                "office": "555 Dirksen Senate Office Building",
+                "how": "appointment"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "MS",
+                "party": "Republican",
+                "class": 1,
+                "url": "https://www.wicker.senate.gov",
+                "address": "555 Dirksen Senate Office Building Washington DC 20510",
+                "phone": "202-224-6253",
+                "fax": "202-228-0378",
+                "contact_form": "https://www.wicker.senate.gov/public/index.cfm/contact",
+                "office": "555 Dirksen Senate Office Building",
+                "state_rank": "senior"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "MS",
+                "class": 1,
+                "party": "Republican",
+                "state_rank": "senior",
+                "url": "https://www.wicker.senate.gov",
+                "contact_form": "https://www.wicker.senate.gov/public/index.cfm/contact",
+                "address": "555 Dirksen Senate Office Building Washington DC 20510",
+                "office": "555 Dirksen Senate Office Building",
+                "phone": "202-224-6253"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "C001035",
+            "thomas": "01541",
+            "lis": "S252",
+            "govtrack": 300025,
+            "opensecrets": "N00000491",
+            "votesmart": 379,
+            "fec": [
+                "S6ME00159"
+            ],
+            "cspan": 45738,
+            "wikipedia": "Susan Collins",
+            "house_history": 11742,
+            "ballotpedia": "Susan Collins",
+            "maplight": 551,
+            "icpsr": 49703,
+            "wikidata": "Q22279",
+            "google_entity_id": "kg:/m/020y8m"
+        },
+        "name": {
+            "first": "Susan",
+            "middle": "M.",
+            "last": "Collins",
+            "official_full": "Susan M. Collins"
+        },
+        "bio": {
+            "birthday": "1952-12-07",
+            "gender": "F"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "1997-01-07",
+                "end": "2003-01-03",
+                "state": "ME",
+                "class": 2,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "2003-01-07",
+                "end": "2009-01-03",
+                "state": "ME",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://collins.senate.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "ME",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://www.collins.senate.gov",
+                "address": "413 Dirksen Senate Office Building Washington DC 20510",
+                "phone": "202-224-2523",
+                "fax": "202-224-2693",
+                "contact_form": "http://www.collins.senate.gov/public/index.cfm/email",
+                "office": "413 Dirksen Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.collins.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "ME",
+                "class": 2,
+                "party": "Republican",
+                "url": "https://www.collins.senate.gov",
+                "address": "413 Dirksen Senate Office Building Washington DC 20510",
+                "phone": "202-224-2523",
+                "fax": "202-224-2693",
+                "contact_form": "http://www.collins.senate.gov/contact",
+                "office": "413 Dirksen Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.collins.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "ME",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Republican",
+                "url": "https://www.collins.senate.gov",
+                "rss_url": "http://www.collins.senate.gov/public/?a=rss.feed",
+                "contact_form": "https://www.collins.senate.gov/contact",
+                "address": "413 Dirksen Senate Office Building Washington DC 20510",
+                "office": "413 Dirksen Senate Office Building",
+                "phone": "202-224-2523"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "C001056",
+            "thomas": "01692",
+            "lis": "S287",
+            "govtrack": 300027,
+            "opensecrets": "N00024852",
+            "votesmart": 15375,
+            "fec": [
+                "S2TX00106"
+            ],
+            "cspan": 93131,
+            "wikipedia": "John Cornyn",
+            "ballotpedia": "John Cornyn",
+            "maplight": 553,
+            "icpsr": 40305,
+            "wikidata": "Q719568",
+            "google_entity_id": "kg:/m/01xcqs"
+        },
+        "name": {
+            "first": "John",
+            "last": "Cornyn",
+            "official_full": "John Cornyn"
+        },
+        "bio": {
+            "birthday": "1952-02-02",
+            "gender": "M"
+        },
+        "leadership_roles": [
+            {
+                "title": "Senate Minority Whip",
+                "chamber": "senate",
+                "start": "2013-01-03",
+                "end": "2015-01-03"
+            },
+            {
+                "title": "Senate Majority Whip",
+                "chamber": "senate",
+                "start": "2015-01-03",
+                "end": "2017-01-03"
+            },
+            {
+                "title": "Senate Majority Whip",
+                "chamber": "senate",
+                "start": "2017-01-03",
+                "end": "2019-01-03"
+            }
+        ],
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2002-11-30",
+                "end": "2003-01-03",
+                "state": "TX",
+                "class": 2,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "2003-01-07",
+                "end": "2009-01-03",
+                "state": "TX",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://cornyn.senate.gov/"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "TX",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://www.cornyn.senate.gov",
+                "address": "517 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2934",
+                "fax": "202-228-2856",
+                "contact_form": "http://www.cornyn.senate.gov/public/index.cfm?p=ContactForm",
+                "office": "517 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.cornyn.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "TX",
+                "class": 2,
+                "party": "Republican",
+                "url": "https://www.cornyn.senate.gov",
+                "address": "517 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2934",
+                "fax": "202-228-2856",
+                "contact_form": "https://www.cornyn.senate.gov/contact",
+                "office": "517 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.cornyn.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "TX",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Republican",
+                "url": "https://www.cornyn.senate.gov",
+                "rss_url": "http://www.cornyn.senate.gov/public/?a=rss.feed",
+                "contact_form": "https://www.cornyn.senate.gov/contact",
+                "address": "517 Hart Senate Office Building Washington DC 20510",
+                "office": "517 Hart Senate Office Building",
+                "phone": "202-224-2934"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "D000563",
+            "thomas": "00326",
+            "lis": "S253",
+            "govtrack": 300038,
+            "opensecrets": "N00004981",
+            "votesmart": 26847,
+            "icpsr": 15021,
+            "fec": [
+                "S6IL00151",
+                "H2IL20026"
+            ],
+            "cspan": 6741,
+            "wikipedia": "Dick Durbin",
+            "house_history": 12527,
+            "ballotpedia": "Dick Durbin",
+            "maplight": 563,
+            "wikidata": "Q434804",
+            "google_entity_id": "kg:/m/01xcd1"
+        },
+        "name": {
+            "first": "Richard",
+            "middle": "J.",
+            "last": "Durbin",
+            "official_full": "Richard J. Durbin"
+        },
+        "bio": {
+            "birthday": "1944-11-21",
+            "gender": "M"
+        },
+        "leadership_roles": [
+            {
+                "title": "Senate Minority Whip",
+                "chamber": "senate",
+                "start": "2005-01-04",
+                "end": "2007-01-03"
+            },
+            {
+                "title": "Senate Majority Whip",
+                "chamber": "senate",
+                "start": "2007-01-04",
+                "end": "2009-01-06"
+            },
+            {
+                "title": "Senate Majority Whip",
+                "chamber": "senate",
+                "start": "2009-01-06",
+                "end": "2011-01-05"
+            },
+            {
+                "title": "Senate Majority Whip",
+                "chamber": "senate",
+                "start": "2011-01-05",
+                "end": "2013-01-03"
+            },
+            {
+                "title": "Senate Majority Whip",
+                "chamber": "senate",
+                "start": "2013-01-03",
+                "end": "2015-01-03"
+            },
+            {
+                "title": "Senate Minority Whip",
+                "chamber": "senate",
+                "start": "2015-01-03",
+                "end": "2017-01-03"
+            },
+            {
+                "title": "Senate Minority Whip",
+                "chamber": "senate",
+                "start": "2017-01-03",
+                "end": "2019-01-03"
+            },
+            {
+                "title": "Senate Minority Whip",
+                "chamber": "senate",
+                "start": "2019-01-03",
+                "end": "2021-01-03"
+            },
+            {
+                "title": "Senate Minority Whip",
+                "chamber": "senate",
+                "start": "2021-01-03",
+                "end": "2021-01-20"
+            },
+            {
+                "title": "Senate Majority Whip",
+                "chamber": "senate",
+                "start": "2021-01-20"
+            }
+        ],
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1983-01-03",
+                "end": "1985-01-03",
+                "state": "IL",
+                "district": 20,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1985-01-03",
+                "end": "1987-01-03",
+                "state": "IL",
+                "district": 20,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1987-01-06",
+                "end": "1989-01-03",
+                "state": "IL",
+                "district": 20,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1989-01-03",
+                "end": "1991-01-03",
+                "state": "IL",
+                "district": 20,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1991-01-03",
+                "end": "1993-01-03",
+                "state": "IL",
+                "district": 20,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1995-01-03",
+                "state": "IL",
+                "district": 20,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "IL",
+                "district": 20,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "1997-01-07",
+                "end": "2003-01-03",
+                "state": "IL",
+                "class": 2,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "2003-01-07",
+                "end": "2009-01-03",
+                "state": "IL",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://durbin.senate.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "IL",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://www.durbin.senate.gov",
+                "address": "711 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2152",
+                "fax": "202-228-0400",
+                "contact_form": "http://www.durbin.senate.gov/public/index.cfm/contact",
+                "office": "711 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://durbin.senate.gov/public/index.cfm/rss/feed"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "IL",
+                "class": 2,
+                "party": "Democrat",
+                "url": "https://www.durbin.senate.gov",
+                "address": "711 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2152",
+                "fax": "202-228-0400",
+                "contact_form": "https://www.durbin.senate.gov/contact/",
+                "office": "711 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://durbin.senate.gov/public/index.cfm/rss/feed"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "IL",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Democrat",
+                "url": "https://www.durbin.senate.gov",
+                "rss_url": "http://durbin.senate.gov/public/index.cfm/rss/feed",
+                "contact_form": "https://www.durbin.senate.gov/contact/",
+                "address": "711 Hart Senate Office Building Washington DC 20510",
+                "office": "711 Hart Senate Office Building",
+                "phone": "202-224-2152"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "G000359",
+            "thomas": "00452",
+            "lis": "S293",
+            "govtrack": 300047,
+            "opensecrets": "N00009975",
+            "votesmart": 21992,
+            "fec": [
+                "S0SC00149",
+                "H4SC03087"
+            ],
+            "cspan": 36782,
+            "wikipedia": "Lindsey Graham",
+            "house_history": 14015,
+            "ballotpedia": "Lindsey Graham",
+            "maplight": 569,
+            "icpsr": 29566,
+            "wikidata": "Q22212",
+            "google_entity_id": "kg:/m/01_pdg"
+        },
+        "name": {
+            "first": "Lindsey",
+            "middle": "O.",
+            "last": "Graham",
+            "official_full": "Lindsey Graham"
+        },
+        "bio": {
+            "birthday": "1955-07-09",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "SC",
+                "district": 3,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "SC",
+                "district": 3,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "SC",
+                "district": 3,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "SC",
+                "district": 3,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "2003-01-07",
+                "end": "2009-01-03",
+                "state": "SC",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://lgraham.senate.gov/"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "SC",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://www.lgraham.senate.gov",
+                "address": "290 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-5972",
+                "fax": "202-224-3808",
+                "contact_form": "http://www.lgraham.senate.gov/public/index.cfm?FuseAction=Contact.EmailSenatorGraham",
+                "office": "290 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.lgraham.senate.gov/public/index.cfm?FuseAction=Rss.Feed"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "SC",
+                "class": 2,
+                "party": "Republican",
+                "url": "https://www.lgraham.senate.gov/public",
+                "address": "290 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-5972",
+                "fax": "202-224-3808",
+                "contact_form": "https://www.lgraham.senate.gov/public/index.cfm/e-mail-senator-graham",
+                "office": "290 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.lgraham.senate.gov/public/index.cfm?FuseAction=Rss.Feed"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "SC",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Republican",
+                "url": "https://www.lgraham.senate.gov/public",
+                "rss_url": "http://www.lgraham.senate.gov/public/index.cfm?FuseAction=Rss.Feed",
+                "contact_form": "https://www.lgraham.senate.gov/public/index.cfm/e-mail-senator-graham",
+                "address": "290 Russell Senate Office Building Washington DC 20510",
+                "office": "290 Russell Senate Office Building",
+                "phone": "202-224-5972"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "I000024",
+            "thomas": "00583",
+            "lis": "S236",
+            "govtrack": 300055,
+            "opensecrets": "N00005582",
+            "votesmart": 27027,
+            "icpsr": 15424,
+            "fec": [
+                "S4OK00083",
+                "H6OK01102"
+            ],
+            "cspan": 5619,
+            "wikipedia": "Jim Inhofe",
+            "house_history": 15645,
+            "ballotpedia": "Jim Inhofe",
+            "maplight": 576,
+            "wikidata": "Q723134",
+            "google_entity_id": "kg:/m/021kpl"
+        },
+        "name": {
+            "first": "James",
+            "middle": "M.",
+            "last": "Inhofe",
+            "nickname": "Jim",
+            "official_full": "James M. Inhofe"
+        },
+        "bio": {
+            "birthday": "1934-11-17",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1987-01-06",
+                "end": "1989-01-03",
+                "state": "OK",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1989-01-03",
+                "end": "1991-01-03",
+                "state": "OK",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1991-01-03",
+                "end": "1993-01-03",
+                "state": "OK",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1994-11-15",
+                "state": "OK",
+                "district": 1,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "1994-11-17",
+                "end": "1997-01-03",
+                "state": "OK",
+                "class": 2,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "1997-01-07",
+                "end": "2003-01-03",
+                "state": "OK",
+                "class": 2,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "2003-01-07",
+                "end": "2009-01-03",
+                "state": "OK",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://inhofe.senate.gov/"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "OK",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://www.inhofe.senate.gov",
+                "address": "205 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-4721",
+                "fax": "202-228-0380",
+                "contact_form": "http://www.inhofe.senate.gov/contact",
+                "office": "205 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.inhofe.senate.gov/rss/feeds/?type=all&amp;cachebuster=eea6c4d7%2d939c%2d5c1e%2db6c7aa3b8b291208"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "OK",
+                "class": 2,
+                "party": "Republican",
+                "url": "https://www.inhofe.senate.gov",
+                "address": "205 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-4721",
+                "fax": "202-228-0380",
+                "contact_form": "https://www.inhofe.senate.gov/contact",
+                "office": "205 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.inhofe.senate.gov/rss/feeds/?type=all&amp;cachebuster=eea6c4d7%2d939c%2d5c1e%2db6c7aa3b8b291208"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "OK",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Republican",
+                "url": "https://www.inhofe.senate.gov",
+                "rss_url": "http://www.inhofe.senate.gov/rss/feeds/?type=all&amp;cachebuster=eea6c4d7%2d939c%2d5c1e%2db6c7aa3b8b291208",
+                "contact_form": "https://www.inhofe.senate.gov/contact",
+                "address": "205 Russell Senate Office Building Washington DC 20510",
+                "office": "205 Russell Senate Office Building",
+                "phone": "202-224-4721"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "M000355",
+            "thomas": "01395",
+            "lis": "S174",
+            "govtrack": 300072,
+            "opensecrets": "N00003389",
+            "votesmart": 53298,
+            "icpsr": 14921,
+            "fec": [
+                "S2KY00012"
+            ],
+            "cspan": 2351,
+            "wikipedia": "Mitch McConnell",
+            "ballotpedia": "Mitch McConnell",
+            "maplight": 593,
+            "wikidata": "Q355522",
+            "google_entity_id": "kg:/m/01z6ls"
+        },
+        "name": {
+            "first": "Mitch",
+            "last": "McConnell",
+            "official_full": "Mitch McConnell"
+        },
+        "bio": {
+            "birthday": "1942-02-20",
+            "gender": "M"
+        },
+        "leadership_roles": [
+            {
+                "title": "Senate Minority Leader",
+                "chamber": "senate",
+                "start": "2007-01-04",
+                "end": "2009-01-06"
+            },
+            {
+                "title": "Senate Minority Leader",
+                "chamber": "senate",
+                "start": "2009-01-06",
+                "end": "2011-01-05"
+            },
+            {
+                "title": "Senate Minority Leader",
+                "chamber": "senate",
+                "start": "2011-01-05",
+                "end": "2013-01-03"
+            },
+            {
+                "title": "Senate Minority Leader",
+                "chamber": "senate",
+                "start": "2013-01-03",
+                "end": "2015-01-03"
+            },
+            {
+                "title": "Senate Majority Leader",
+                "chamber": "senate",
+                "start": "2015-01-03",
+                "end": "2017-01-03"
+            },
+            {
+                "title": "Senate Majority Leader",
+                "chamber": "senate",
+                "start": "2017-01-03",
+                "end": "2019-01-03"
+            },
+            {
+                "title": "Senate Majority Leader",
+                "chamber": "senate",
+                "start": "2019-01-03",
+                "end": "2021-01-03"
+            },
+            {
+                "title": "Senate Majority Leader",
+                "chamber": "senate",
+                "start": "2021-01-03",
+                "end": "2021-01-20"
+            },
+            {
+                "title": "Senate Minority Leader",
+                "chamber": "senate",
+                "start": "2021-01-20"
+            }
+        ],
+        "terms": [
+            {
+                "type": "sen",
+                "start": "1985-01-03",
+                "end": "1991-01-03",
+                "state": "KY",
+                "class": 2,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "1991-01-03",
+                "end": "1997-01-03",
+                "state": "KY",
+                "class": 2,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "1997-01-07",
+                "end": "2003-01-03",
+                "state": "KY",
+                "class": 2,
+                "party": "Republican"
+            },
+            {
+                "type": "sen",
+                "start": "2003-01-07",
+                "end": "2009-01-03",
+                "state": "KY",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://mcconnell.senate.gov/"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "KY",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://www.mcconnell.senate.gov",
+                "address": "317 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-2541",
+                "fax": "202-224-2499",
+                "contact_form": "http://www.mcconnell.senate.gov/public/index.cfm?p=ContactForm",
+                "office": "317 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.mcconnell.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "KY",
+                "class": 2,
+                "party": "Republican",
+                "url": "https://www.mcconnell.senate.gov",
+                "address": "317 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-2541",
+                "fax": "202-224-2499",
+                "contact_form": "http://www.mcconnell.senate.gov/public/index.cfm?p=contact",
+                "office": "317 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.mcconnell.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "KY",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Republican",
+                "url": "https://www.mcconnell.senate.gov",
+                "rss_url": "http://www.mcconnell.senate.gov/public/?a=rss.feed",
+                "contact_form": "https://www.mcconnell.senate.gov/public/index.cfm?p=contact",
+                "address": "317 Russell Senate Office Building Washington DC 20510",
+                "office": "317 Russell Senate Office Building",
+                "phone": "202-224-2541"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "M001176",
+            "thomas": "01900",
+            "lis": "S322",
+            "govtrack": 412325,
+            "opensecrets": "N00029303",
+            "votesmart": 23644,
+            "fec": [
+                "S8OR00207"
+            ],
+            "cspan": 1029842,
+            "wikipedia": "Jeff Merkley",
+            "ballotpedia": "Jeff Merkley",
+            "maplight": 807,
+            "icpsr": 40908,
+            "wikidata": "Q1368405",
+            "google_entity_id": "kg:/m/026k60f"
+        },
+        "name": {
+            "first": "Jeff",
+            "last": "Merkley",
+            "official_full": "Jeff Merkley"
+        },
+        "bio": {
+            "birthday": "1956-10-24",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "OR",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://www.merkley.senate.gov",
+                "address": "313 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-3753",
+                "fax": "202-228-3997",
+                "contact_form": "http://www.merkley.senate.gov/contact/",
+                "office": "313 Hart Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.merkley.senate.gov/rss/"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "OR",
+                "class": 2,
+                "party": "Democrat",
+                "url": "https://www.merkley.senate.gov",
+                "address": "313 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-3753",
+                "fax": "202-228-3997",
+                "contact_form": "http://www.merkley.senate.gov/contact/",
+                "office": "313 Hart Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.merkley.senate.gov/rss/"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "OR",
+                "class": 2,
+                "state_rank": "junior",
+                "party": "Democrat",
+                "url": "https://www.merkley.senate.gov",
+                "rss_url": "http://www.merkley.senate.gov/rss/",
+                "contact_form": "https://www.merkley.senate.gov/contact/",
+                "address": "531 Hart Senate Office Building Washington DC 20510",
+                "office": "531 Hart Senate Office Building",
+                "phone": "202-224-3753"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "R000122",
+            "thomas": "00949",
+            "lis": "S259",
+            "govtrack": 300081,
+            "opensecrets": "N00000362",
+            "votesmart": 27060,
+            "fec": [
+                "S6RI00163",
+                "H0RI02071"
+            ],
+            "cspan": 24239,
+            "wikipedia": "Jack Reed (Rhode Island politician)",
+            "house_history": 20232,
+            "ballotpedia": "Jack Reed",
+            "maplight": 600,
+            "icpsr": 29142,
+            "wikidata": "Q528979",
+            "google_entity_id": "kg:/m/0202mc"
+        },
+        "name": {
+            "first": "John",
+            "middle": "F.",
+            "last": "Reed",
+            "nickname": "Jack",
+            "official_full": "Jack Reed"
+        },
+        "bio": {
+            "birthday": "1949-11-12",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1991-01-03",
+                "end": "1993-01-03",
+                "state": "RI",
+                "district": 2,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1993-01-05",
+                "end": "1995-01-03",
+                "state": "RI",
+                "district": 2,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "1995-01-04",
+                "end": "1997-01-03",
+                "state": "RI",
+                "district": 2,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "1997-01-07",
+                "end": "2003-01-03",
+                "state": "RI",
+                "class": 2,
+                "party": "Democrat"
+            },
+            {
+                "type": "sen",
+                "start": "2003-01-07",
+                "end": "2009-01-03",
+                "state": "RI",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://reed.senate.gov/"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "RI",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://www.reed.senate.gov",
+                "address": "728 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-4642",
+                "fax": "202-224-4680",
+                "contact_form": "http://www.reed.senate.gov/contact/",
+                "office": "728 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "https://www.reed.senate.gov//rss/feeds/?type=all"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "RI",
+                "class": 2,
+                "party": "Democrat",
+                "url": "https://www.reed.senate.gov",
+                "address": "728 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-4642",
+                "fax": "202-224-4680",
+                "contact_form": "https://www.reed.senate.gov/contact/",
+                "office": "728 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "https://www.reed.senate.gov//rss/feeds/?type=all"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "RI",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Democrat",
+                "url": "https://www.reed.senate.gov",
+                "rss_url": "https://www.reed.senate.gov//rss/feeds/?type=all",
+                "contact_form": "https://www.reed.senate.gov/contact/",
+                "address": "728 Hart Senate Office Building Washington DC 20510",
+                "office": "728 Hart Senate Office Building",
+                "phone": "202-224-4642"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "R000584",
+            "thomas": "01896",
+            "lis": "S323",
+            "govtrack": 412322,
+            "opensecrets": "N00029441",
+            "votesmart": 2919,
+            "fec": [
+                "S8ID00092"
+            ],
+            "cspan": 1020034,
+            "wikipedia": "Jim Risch",
+            "ballotpedia": "Jim Risch",
+            "maplight": 804,
+            "icpsr": 40902,
+            "wikidata": "Q721871",
+            "google_entity_id": "kg:/m/06y9p0"
+        },
+        "name": {
+            "first": "James",
+            "middle": "E.",
+            "last": "Risch",
+            "official_full": "James E. Risch"
+        },
+        "bio": {
+            "birthday": "1943-05-03",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "ID",
+                "class": 2,
+                "party": "Republican",
+                "url": "http://www.risch.senate.gov",
+                "address": "483 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-2752",
+                "fax": "202-224-2573",
+                "contact_form": "http://www.risch.senate.gov/public/index.cfm?p=Email",
+                "office": "483 Russell Senate Office Building",
+                "state_rank": "junior"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "ID",
+                "class": 2,
+                "party": "Republican",
+                "url": "https://www.risch.senate.gov",
+                "address": "483 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-2752",
+                "fax": "202-224-2573",
+                "contact_form": "http://www.risch.senate.gov/public/index.cfm?p=Email",
+                "office": "483 Russell Senate Office Building",
+                "state_rank": "junior"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "ID",
+                "class": 2,
+                "state_rank": "junior",
+                "party": "Republican",
+                "url": "https://www.risch.senate.gov",
+                "contact_form": "https://www.risch.senate.gov/public/index.cfm?p=Email",
+                "address": "483 Russell Senate Office Building Washington DC 20510",
+                "office": "483 Russell Senate Office Building",
+                "phone": "202-224-2752"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "S001181",
+            "thomas": "01901",
+            "lis": "S324",
+            "govtrack": 412323,
+            "opensecrets": "N00024790",
+            "votesmart": 1663,
+            "fec": [
+                "S0NH00219"
+            ],
+            "cspan": 22850,
+            "wikipedia": "Jeanne Shaheen",
+            "ballotpedia": "Jeanne Shaheen",
+            "maplight": 805,
+            "icpsr": 40906,
+            "house_history": 22618,
+            "wikidata": "Q270316",
+            "google_entity_id": "kg:/m/01rrm2"
+        },
+        "name": {
+            "first": "Jeanne",
+            "last": "Shaheen",
+            "official_full": "Jeanne Shaheen"
+        },
+        "bio": {
+            "gender": "F",
+            "birthday": "1947-01-28"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "NH",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://www.shaheen.senate.gov",
+                "address": "520 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2841",
+                "contact_form": "http://www.shaheen.senate.gov/contact/",
+                "office": "520 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.shaheen.senate.gov/rss/",
+                "fax": "202-228-3194"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "NH",
+                "class": 2,
+                "party": "Democrat",
+                "url": "https://www.shaheen.senate.gov",
+                "address": "506 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2841",
+                "contact_form": "https://www.shaheen.senate.gov/contact/contact-jeanne",
+                "office": "506 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.shaheen.senate.gov/rss/",
+                "fax": "202-228-3194"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "NH",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Democrat",
+                "url": "https://www.shaheen.senate.gov",
+                "rss_url": "http://www.shaheen.senate.gov/rss/",
+                "contact_form": "https://www.shaheen.senate.gov/contact/contact-jeanne",
+                "address": "506 Hart Senate Office Building Washington DC 20510",
+                "office": "506 Hart Senate Office Building",
+                "phone": "202-224-2841"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "W000805",
+            "thomas": "01897",
+            "lis": "S327",
+            "govtrack": 412321,
+            "opensecrets": "N00002097",
+            "votesmart": 535,
+            "fec": [
+                "S6VA00093",
+                "P80003023"
+            ],
+            "cspan": 7630,
+            "wikipedia": "Mark Warner",
+            "ballotpedia": "Mark Warner",
+            "maplight": 803,
+            "icpsr": 40909,
+            "wikidata": "Q453893",
+            "google_entity_id": "kg:/m/024mm1"
+        },
+        "name": {
+            "first": "Mark",
+            "middle": "R.",
+            "last": "Warner",
+            "official_full": "Mark R. Warner"
+        },
+        "bio": {
+            "gender": "M",
+            "birthday": "1954-12-15"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2009-01-06",
+                "end": "2015-01-03",
+                "state": "VA",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://www.warner.senate.gov",
+                "address": "475 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-2023",
+                "fax": "202-224-6295",
+                "contact_form": "http://www.warner.senate.gov/public//index.cfm?p=ContactPage#form_f9db6196-2dc7-4cda-8add-f8435a71318a",
+                "office": "475 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.warner.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "VA",
+                "class": 2,
+                "party": "Democrat",
+                "url": "https://www.warner.senate.gov",
+                "address": "703 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-2023",
+                "fax": "202-224-6295",
+                "contact_form": "http://www.warner.senate.gov/public/index.cfm?p=Contact",
+                "office": "703 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.warner.senate.gov/public/?a=rss.feed"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "VA",
+                "class": 2,
+                "state_rank": "senior",
+                "party": "Democrat",
+                "url": "https://www.warner.senate.gov",
+                "rss_url": "http://www.warner.senate.gov/public/?a=rss.feed",
+                "contact_form": "https://www.warner.senate.gov/public/index.cfm?p=Contact",
+                "address": "703 Hart Senate Office Building Washington DC 20510",
+                "office": "703 Hart Senate Office Building",
+                "phone": "202-224-2023"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "G000555",
+            "thomas": "01866",
+            "lis": "S331",
+            "govtrack": 412223,
+            "opensecrets": "N00027658",
+            "votesmart": 65147,
+            "fec": [
+                "H6NY20167",
+                "S0NY00410"
+            ],
+            "cspan": 1022862,
+            "wikipedia": "Kirsten Gillibrand",
+            "house_history": 14269,
+            "ballotpedia": "Kirsten Gillibrand",
+            "maplight": 708,
+            "icpsr": 20735,
+            "wikidata": "Q22222",
+            "google_entity_id": "kg:/m/0gnfc4"
+        },
+        "name": {
+            "first": "Kirsten",
+            "middle": "E.",
+            "last": "Gillibrand",
+            "official_full": "Kirsten E. Gillibrand"
+        },
+        "bio": {
+            "gender": "F",
+            "birthday": "1966-12-09"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "2007-01-04",
+                "end": "2009-01-03",
+                "state": "NY",
+                "district": 20,
+                "party": "Democrat",
+                "url": "http://gillibrand.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2009-01-06",
+                "end": "2009-01-26",
+                "state": "NY",
+                "district": 20,
+                "party": "Democrat",
+                "url": "http://gillibrand.house.gov"
+            },
+            {
+                "type": "sen",
+                "start": "2009-01-27",
+                "end": "2013-01-03",
+                "state": "NY",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://gillibrand.senate.gov",
+                "address": "478 RUSSELL SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-4451",
+                "fax": "202-228-0282",
+                "contact_form": "http://www.gillibrand.senate.gov/contact/",
+                "office": "478 Russell Senate Office Building",
+                "how": "appointment"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "NY",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.gillibrand.senate.gov",
+                "address": "478 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-4451",
+                "fax": "202-228-0282",
+                "contact_form": "https://www.gillibrand.senate.gov/contact/email-me",
+                "office": "478 Russell Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.gillibrand.senate.gov/rss/"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "NY",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "junior",
+                "url": "https://www.gillibrand.senate.gov",
+                "rss_url": "http://www.gillibrand.senate.gov/rss/",
+                "contact_form": "https://www.gillibrand.senate.gov/contact/email-me",
+                "address": "478 Russell Senate Office Building Washington DC 20510",
+                "office": "478 Russell Senate Office Building",
+                "phone": "202-224-4451"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "C001088",
+            "thomas": "01984",
+            "lis": "S337",
+            "govtrack": 412390,
+            "opensecrets": "N00031820",
+            "votesmart": 122834,
+            "fec": [
+                "S0DE00092"
+            ],
+            "cspan": 9269028,
+            "wikipedia": "Chris Coons",
+            "ballotpedia": "Chris Coons",
+            "maplight": 1371,
+            "icpsr": 40916,
+            "wikidata": "Q923242",
+            "google_entity_id": "kg:/m/082d3d"
+        },
+        "name": {
+            "first": "Christopher",
+            "middle": "Andrew",
+            "last": "Coons",
+            "official_full": "Christopher A. Coons"
+        },
+        "bio": {
+            "birthday": "1963-09-09",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2010-11-15",
+                "end": "2015-01-03",
+                "state": "DE",
+                "class": 2,
+                "party": "Democrat",
+                "url": "http://www.coons.senate.gov",
+                "address": "127A Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-5042",
+                "fax": "202-228-3075",
+                "contact_form": "http://www.coons.senate.gov/contact/",
+                "office": "127a Russell Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.coons.senate.gov/rss/feeds/?type=all"
+            },
+            {
+                "type": "sen",
+                "start": "2015-01-06",
+                "end": "2021-01-03",
+                "state": "DE",
+                "class": 2,
+                "party": "Democrat",
+                "url": "https://www.coons.senate.gov",
+                "address": "218 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-5042",
+                "contact_form": "https://www.coons.senate.gov/contact",
+                "office": "218 Russell Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.coons.senate.gov/rss/feeds/?type=all",
+                "fax": "202-228-3075"
+            },
+            {
+                "type": "sen",
+                "start": "2021-01-03",
+                "end": "2027-01-03",
+                "state": "DE",
+                "class": 2,
+                "state_rank": "junior",
+                "party": "Democrat",
+                "url": "https://www.coons.senate.gov",
+                "rss_url": "http://www.coons.senate.gov/rss/feeds/?type=all",
+                "contact_form": "https://www.coons.senate.gov/contact",
+                "address": "218 Russell Senate Office Building Washington DC 20510",
+                "office": "218 Russell Senate Office Building",
+                "phone": "202-224-5042"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "M001183",
+            "thomas": "01983",
+            "lis": "S338",
+            "govtrack": 412391,
+            "opensecrets": "N00032838",
+            "votesmart": 7547,
+            "fec": [
+                "S0WV00090"
+            ],
+            "cspan": 62864,
+            "wikipedia": "Joe Manchin",
+            "ballotpedia": "Joe Manchin III",
+            "maplight": 1372,
+            "icpsr": 40915,
+            "wikidata": "Q538868",
+            "google_entity_id": "kg:/m/04lc5t"
+        },
+        "name": {
+            "first": "Joe",
+            "last": "Manchin",
+            "suffix": "III",
+            "official_full": "Joe Manchin, III"
+        },
+        "bio": {
+            "birthday": "1947-08-24",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2010-11-15",
+                "end": "2013-01-03",
+                "state": "WV",
+                "class": 1,
+                "party": "Democrat",
+                "url": "http://manchin.senate.gov/",
+                "address": "303 HART SENATE OFFICE BUILDING WASHINGTON DC 20510",
+                "phone": "202-224-3954",
+                "contact_form": "http://www.manchin.senate.gov/contact_form.cfm",
+                "office": "303 Hart Senate Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "WV",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.manchin.senate.gov",
+                "address": "306 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-3954",
+                "contact_form": "http://www.manchin.senate.gov/public/index.cfm/contact-form",
+                "office": "306 Hart Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.manchin.senate.gov/public/index.cfm/rss/feed",
+                "fax": "202-228-0002"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "WV",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "senior",
+                "url": "https://www.manchin.senate.gov",
+                "rss_url": "http://www.manchin.senate.gov/public/index.cfm/rss/feed",
+                "contact_form": "https://www.manchin.senate.gov/public/index.cfm/contact-form",
+                "address": "306 Hart Senate Office Building Washington DC 20510",
+                "office": "306 Hart Senate Office Building",
+                "phone": "202-224-3954"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "A000055",
+            "thomas": "01460",
+            "govtrack": 400004,
+            "opensecrets": "N00003028",
+            "votesmart": 441,
+            "fec": [
+                "H6AL04098"
+            ],
+            "cspan": 45516,
+            "wikipedia": "Robert Aderholt",
+            "house_history": 8333,
+            "ballotpedia": "Robert B. Aderholt",
+            "maplight": 127,
+            "icpsr": 29701,
+            "wikidata": "Q672671",
+            "google_entity_id": "kg:/m/024p03"
+        },
+        "name": {
+            "first": "Robert",
+            "last": "Aderholt",
+            "official_full": "Robert B. Aderholt",
+            "middle": "B."
+        },
+        "bio": {
+            "birthday": "1965-07-22",
+            "gender": "M"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1997-01-07",
+                "end": "1999-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican"
+            },
+            {
+                "type": "rep",
+                "start": "2003-01-07",
+                "end": "2005-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "url": "http://www.house.gov/aderholt"
+            },
+            {
+                "type": "rep",
+                "start": "2005-01-04",
+                "end": "2007-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "url": "http://www.house.gov/aderholt"
+            },
+            {
+                "type": "rep",
+                "start": "2007-01-04",
+                "end": "2009-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "url": "http://aderholt.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2009-01-06",
+                "end": "2011-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "url": "http://aderholt.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2011-01-05",
+                "end": "2013-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "url": "http://aderholt.house.gov",
+                "address": "2264 Rayburn HOB; Washington DC 20515-0104",
+                "phone": "202-225-4876",
+                "fax": "202-225-5587",
+                "contact_form": "http://aderholt.house.gov/?sectionid=195&amp;sectiontree=195",
+                "office": "2264 Rayburn House Office Building"
+            },
+            {
+                "type": "rep",
+                "start": "2013-01-03",
+                "end": "2015-01-03",
+                "state": "AL",
+                "party": "Republican",
+                "district": 4,
+                "url": "http://aderholt.house.gov",
+                "address": "2369 Rayburn HOB; Washington DC 20515-0104",
+                "phone": "202-225-4876",
+                "fax": "202-225-5587",
+                "contact_form": "http://aderholt.house.gov/email-me2/",
+                "office": "2369 Rayburn House Office Building",
+                "rss_url": "http://aderholt.house.gov/common/rss//index.cfm?rss=20"
+            },
+            {
+                "type": "rep",
+                "start": "2015-01-06",
+                "end": "2017-01-03",
+                "state": "AL",
+                "party": "Republican",
+                "district": 4,
+                "url": "https://aderholt.house.gov",
+                "address": "235 Cannon HOB; Washington DC 20515-0104",
+                "phone": "202-225-4876",
+                "fax": "202-225-5587",
+                "contact_form": "http://aderholt.house.gov/email-me2/",
+                "office": "235 Cannon House Office Building",
+                "rss_url": "http://aderholt.house.gov/common/rss//index.cfm?rss=20"
+            },
+            {
+                "type": "rep",
+                "start": "2017-01-03",
+                "end": "2019-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "phone": "202-225-4876",
+                "url": "https://aderholt.house.gov",
+                "rss_url": "http://aderholt.house.gov/common/rss//index.cfm?rss=20",
+                "address": "235 Cannon House Office Building; Washington DC 20515-0104",
+                "office": "235 Cannon House Office Building",
+                "fax": "202-225-5587"
+            },
+            {
+                "type": "rep",
+                "start": "2019-01-03",
+                "end": "2021-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "phone": "202-225-4876",
+                "address": "1203 Longworth House Office Building Washington DC 20515-0104",
+                "office": "1203 Longworth House Office Building",
+                "url": "https://aderholt.house.gov",
+                "rss_url": "http://aderholt.house.gov/common/rss//index.cfm?rss=20"
+            },
+            {
+                "type": "rep",
+                "start": "2021-01-03",
+                "end": "2023-01-03",
+                "state": "AL",
+                "district": 4,
+                "party": "Republican",
+                "url": "https://aderholt.house.gov",
+                "rss_url": "http://aderholt.house.gov/common/rss//index.cfm?rss=20",
+                "address": "266 Cannon House Office Building Washington DC 20515-0104",
+                "office": "266 Cannon House Office Building",
+                "phone": "202-225-4876"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "B001230",
+            "thomas": "01558",
+            "lis": "S354",
+            "govtrack": 400013,
+            "opensecrets": "N00004367",
+            "votesmart": 3470,
+            "fec": [
+                "H8WI00018",
+                "S2WI00219"
+            ],
+            "cspan": 57884,
+            "wikipedia": "Tammy Baldwin",
+            "house_history": 10361,
+            "ballotpedia": "Tammy Baldwin",
+            "maplight": 136,
+            "icpsr": 29940,
+            "wikidata": "Q40628",
+            "google_entity_id": "kg:/m/024v02"
+        },
+        "name": {
+            "first": "Tammy",
+            "last": "Baldwin",
+            "official_full": "Tammy Baldwin"
+        },
+        "bio": {
+            "birthday": "1962-02-11",
+            "gender": "F"
+        },
+        "leadership_roles": [
+            {
+                "title": "Senate Democratic Caucus Secretary",
+                "chamber": "senate",
+                "start": "2021-01-03"
+            }
+        ],
+        "terms": [
+            {
+                "type": "rep",
+                "start": "1999-01-06",
+                "end": "2001-01-03",
+                "state": "WI",
+                "district": 2,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2001-01-03",
+                "end": "2003-01-03",
+                "state": "WI",
+                "district": 2,
+                "party": "Democrat"
+            },
+            {
+                "type": "rep",
+                "start": "2003-01-07",
+                "end": "2005-01-03",
+                "state": "WI",
+                "district": 2,
+                "party": "Democrat",
+                "url": "http://tammybaldwin.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2005-01-04",
+                "end": "2007-01-03",
+                "state": "WI",
+                "district": 2,
+                "party": "Democrat",
+                "url": "http://tammybaldwin.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2007-01-04",
+                "end": "2009-01-03",
+                "state": "WI",
+                "district": 2,
+                "party": "Democrat",
+                "url": "http://tammybaldwin.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2009-01-06",
+                "end": "2011-01-03",
+                "state": "WI",
+                "district": 2,
+                "party": "Democrat",
+                "url": "http://tammybaldwin.house.gov"
+            },
+            {
+                "type": "rep",
+                "start": "2011-01-05",
+                "end": "2013-01-03",
+                "state": "WI",
+                "district": 2,
+                "party": "Democrat",
+                "url": "http://tammybaldwin.house.gov",
+                "address": "2446 Rayburn HOB; Washington DC 20515-4902",
+                "phone": "202-225-2906",
+                "fax": "202-225-6942",
+                "contact_form": "http://www.house.gov/formbaldwin/IMA/get_address.htm",
+                "office": "2446 Rayburn House Office Building"
+            },
+            {
+                "type": "sen",
+                "start": "2013-01-03",
+                "end": "2019-01-03",
+                "state": "WI",
+                "party": "Democrat",
+                "class": 1,
+                "url": "https://www.baldwin.senate.gov",
+                "address": "709 Hart Senate Office Building Washington DC 20510",
+                "phone": "202-224-5653",
+                "fax": "202-225-6942",
+                "contact_form": "https://www.baldwin.senate.gov/feedback",
+                "office": "709 Hart Senate Office Building",
+                "state_rank": "junior",
+                "rss_url": "http://www.baldwin.senate.gov/rss/feeds/?type=all"
+            },
+            {
+                "type": "sen",
+                "start": "2019-01-03",
+                "end": "2025-01-03",
+                "state": "WI",
+                "class": 1,
+                "party": "Democrat",
+                "state_rank": "junior",
+                "url": "https://www.baldwin.senate.gov",
+                "rss_url": "http://www.baldwin.senate.gov/rss/feeds/?type=all",
+                "contact_form": "https://www.baldwin.senate.gov/feedback",
+                "address": "709 Hart Senate Office Building Washington DC 20510",
+                "office": "709 Hart Senate Office Building",
+                "phone": "202-224-5653"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "B001270",
+            "thomas": "01996",
+            "govtrack": 412404,
+            "opensecrets": "N00031877",
+            "votesmart": 28963,
+            "fec": [
+                "H0CA33117"
+            ],
+            "cspan": 62502,
+            "wikipedia": "Karen Bass",
+            "house_history": 10433,
+            "maplight": 1249,
+            "icpsr": 21110,
+            "wikidata": "Q461739",
+            "google_entity_id": "kg:/m/027g9m6",
+            "ballotpedia": "Karen Bass"
+        },
+        "name": {
+            "first": "Karen",
+            "last": "Bass",
+            "official_full": "Karen Bass"
+        },
+        "bio": {
+            "birthday": "1953-10-03",
+            "gender": "F"
+        },
+        "terms": [
+            {
+                "type": "rep",
+                "start": "2011-01-05",
+                "end": "2013-01-03",
+                "state": "CA",
+                "district": 33,
+                "party": "Democrat",
+                "url": "http://karenbass.house.gov/",
+                "address": "408 Cannon HOB; Washington DC 20515-0533",
+                "phone": "202-225-7084",
+                "fax": "202-225-2422",
+                "office": "408 Cannon House Office Building"
+            },
+            {
+                "type": "rep",
+                "start": "2013-01-03",
+                "end": "2015-01-03",
+                "state": "CA",
+                "party": "Democrat",
+                "district": 37,
+                "url": "http://bass.house.gov",
+                "address": "408 Cannon HOB; Washington DC 20515-0537",
+                "phone": "202-225-7084",
+                "fax": "202-225-2422",
+                "office": "408 Cannon House Office Building",
+                "rss_url": "http://bass.house.gov/rss.xml",
+                "contact_form": "https://bass.house.gov/contact-me/email-me"
+            },
+            {
+                "type": "rep",
+                "start": "2015-01-06",
+                "end": "2017-01-03",
+                "state": "CA",
+                "party": "Democrat",
+                "district": 37,
+                "url": "http://bass.house.gov",
+                "address": "408 Cannon HOB; Washington DC 20515-0537",
+                "phone": "202-225-7084",
+                "fax": "202-225-2422",
+                "office": "408 Cannon House Office Building",
+                "rss_url": "http://bass.house.gov/rss.xml",
+                "contact_form": "https://bass.house.gov/contact-me/email-me"
+            },
+            {
+                "type": "rep",
+                "start": "2017-01-03",
+                "end": "2019-01-03",
+                "state": "CA",
+                "district": 37,
+                "party": "Democrat",
+                "phone": "202-225-7084",
+                "url": "https://bass.house.gov",
+                "rss_url": "http://bass.house.gov/rss.xml",
+                "address": "2241 Rayburn House Office Building; Washington DC 20515-0537",
+                "office": "2241 Rayburn House Office Building",
+                "fax": "202-225-2422"
+            },
+            {
+                "type": "rep",
+                "start": "2019-01-03",
+                "end": "2021-01-03",
+                "state": "CA",
+                "district": 37,
+                "party": "Democrat",
+                "phone": "202-225-7084",
+                "address": "2059 Rayburn House Office Building Washington DC 20515-0537",
+                "office": "2059 Rayburn House Office Building",
+                "url": "https://bass.house.gov",
+                "rss_url": "http://bass.house.gov/rss.xml"
+            },
+            {
+                "type": "rep",
+                "start": "2021-01-03",
+                "end": "2023-01-03",
+                "state": "CA",
+                "district": 37,
+                "party": "Democrat",
+                "url": "https://bass.house.gov",
+                "rss_url": "http://bass.house.gov/rss.xml",
+                "address": "2021 Rayburn House Office Building Washington DC 20515-0537",
+                "office": "2021 Rayburn House Office Building",
+                "phone": "202-225-7084"
+            }
+        ]
+    },
+    {
+        "id": {
+            "bioguide": "B001267",
+            "thomas": "01965",
+            "lis": "S330",
+            "govtrack": 412330,
+            "opensecrets": "N00030608",
+            "votesmart": 110942,
+            "fec": [
+                "S0CO00211"
+            ],
+            "cspan": 1031622,
+            "wikipedia": "Michael Bennet",
+            "ballotpedia": "Michael Bennet",
+            "maplight": 1092,
+            "icpsr": 40910,
+            "wikidata": "Q554792",
+            "google_entity_id": "kg:/m/05b60qf"
+        },
+        "name": {
+            "first": "Michael",
+            "middle": "F.",
+            "last": "Bennet",
+            "official_full": "Michael F. Bennet"
+        },
+        "bio": {
+            "gender": "M",
+            "birthday": "1964-11-28"
+        },
+        "terms": [
+            {
+                "type": "sen",
+                "start": "2009-01-22",
+                "end": "2011-01-03",
+                "state": "CO",
+                "class": 3,
+                "party": "Democrat",
+                "url": "http://bennet.senate.gov/",
+                "how": "appointment"
+            },
+            {
+                "type": "sen",
+                "start": "2011-01-05",
+                "end": "2017-01-03",
+                "state": "CO",
+                "class": 3,
+                "party": "Democrat",
+                "url": "https://www.bennet.senate.gov",
+                "address": "261 Russell Senate Office Building Washington DC 20510",
+                "phone": "202-224-5852",
+                "fax": "202-228-5097",
+                "contact_form": "http://www.bennet.senate.gov/contact/email",
+                "office": "261 Russell Senate Office Building",
+                "state_rank": "senior",
+                "rss_url": "http://www.bennet.senate.gov/rss/feeds/?type=news"
+            },
+            {
+                "type": "sen",
+                "start": "2017-01-03",
+                "end": "2023-01-03",
+                "state": "CO",
+                "class": 3,
+                "state_rank": "senior",
+                "party": "Democrat",
+                "url": "https://www.bennet.senate.gov/public",
+                "rss_url": "http://www.bennet.senate.gov/rss/feeds/?type=news",
+                "address": "261 Russell Senate Office Building Washington DC 20510",
+                "office": "261 Russell Senate Office Building",
+                "phone": "202-224-5852",
+                "contact_form": "https://www.bennet.senate.gov/public/index.cfm/contact",
+                "fax": "202-228-5097"
+            }
+        ]
+    }
+]
