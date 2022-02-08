@@ -1,4 +1,4 @@
-Require Import Bool List String.
+Require Import Bool List PeanoNat String.
 Import ListNotations.
 Require Import Verbatim.Examples.PPM.Lexer.Literal.
 Require Import Verbatim.Examples.PPM.Lexer.Semantic.
@@ -9,8 +9,6 @@ Record rgb_triple : Type :=
               ; green : nat
               ; blue  : nat
               }.
-
-Require Import PeanoNat.
 
 Definition triple_le_max (t : rgb_triple) (m : nat) : bool :=
   match t with
