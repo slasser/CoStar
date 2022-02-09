@@ -1,3 +1,4 @@
+open JSON
 open PPM
 module Yb = Yojson.Basic
 module Yu = Yojson.Basic.Util
@@ -91,7 +92,8 @@ let main () =
   let outfile    = Sys.argv.(4) in
   let results    =
     (match lang with
-     | "-ppm" -> benchmark_lexer_and_parser_on_dataset lex_ppm parse_ppm show_ppm_result data_dir num_trials
+     | "-ppm"  -> benchmark_lexer_and_parser_on_dataset lex_ppm parse_ppm show_ppm_result data_dir num_trials
+     | "-json" -> benchmark_lexer_and_parser_on_dataset lex_json parse_json show_json_result data_dir num_trials
      | _ -> failwith ("unrecognized lang argument: " ^ lang))
   in  write_test_results results outfile
 

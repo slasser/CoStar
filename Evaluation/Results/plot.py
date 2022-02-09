@@ -40,7 +40,7 @@ fit_fn = np.poly1d(fit)
 p1 = plt.plot(sizes, fit_fn(sizes), 'k--', lw=1.5)
 
 # lowess line
-z = lowess(times, sizes, frac=0.3)
+z = lowess(times, sizes, frac=0.4)
 p2 = plt.plot(z[:,0], z[:,1], '-', lw = 1.5, color = 'r', label = "Lowess fit")
 
 # legend

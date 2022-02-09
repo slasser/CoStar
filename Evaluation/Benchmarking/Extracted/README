@@ -1,1 +1,0 @@
-After the Coq source files are compiled, this directory will contain OCaml code for extracted parsers.

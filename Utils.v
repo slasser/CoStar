@@ -1,6 +1,6 @@
-Require Import Bool Lia List PeanoNat Relations Relation_Operators.
+Require Import Ascii BinNat Bool Lia List PeanoNat Relations Relation_Operators String.
 Require Import CoStar.Tactics.
-        Import ListNotations.
+Import ListNotations.
 
 (* STANDARD LIBRARY-LIKE DEFINITIONS *)
 
@@ -440,3 +440,19 @@ Lemma fold_left_preserves_list_invar' :
     | H : (_, _) = (_, _) |- _ =>
       inv H
     end.
+
+  (* String comparisons (available in later versions of Coq) *)
+  Definition cmpAscii (x y : ascii) : comparison :=
+    N.compare (N_of_ascii x) (N_of_ascii y).
+  
+  Fixpoint cmpString (s1 s2 : string) : comparison :=
+  match s1, s2 with
+  | EmptyString, EmptyString => Eq
+  | EmptyString, String _ _ => Lt
+  | String _ _ , EmptyString => Gt
+  | String c1 s1', String c2 s2' =>
+    match cmpAscii c1 c2 with
+    | Eq => cmpString s1' s2'
+    | ne => ne
+    end
+  end.

@@ -27,14 +27,6 @@ bench-ppm:
 	Evaluation/Benchmarking/_build/default/runEval.exe -ppm Evaluation/Data/PPM/Instances 10 Evaluation/Results/ppm_results.json
 	python3.7 Evaluation/Results/plot.py Evaluation/Results/ppm_results.json Evaluation/Results/ppm_results.pdf
 
-bench-json-nobel:
-	$(MAKE) -C evaluation bench-json-nobel
-
-bench-xml-plos:
-	$(MAKE) -C evaluation bench-xml-plos
-
-bench-dot:
-	$(MAKE) -C evaluation bench-dot
-
-bench-python3:
-	$(MAKE) -C evaluation bench-python3
+bench-json:
+	Evaluation/Benchmarking/_build/default/runEval.exe -json Evaluation/Data/JSON/SmallInstances 10 Evaluation/Results/json_results.json
+	python3.7 Evaluation/Results/plot.py Evaluation/Results/json_results.json Evaluation/Results/json_results.pdf

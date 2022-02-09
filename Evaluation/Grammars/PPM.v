@@ -164,7 +164,5 @@ Definition lex_ppm  (s : String) : option (list token) * String :=
   | (None, _) => res'
   end.
 
-Definition parse := PPM_Parser.ParserAndProofs.PEF.PS.P.parse.
-Definition parse_ppm := parse (grammarOfEntryList ppmGrammarEntries) (grammarOfEntryList_wf _) Document.
-
+Definition parse_ppm       := parse (grammarOfEntryList ppmGrammarEntries) (grammarOfEntryList_wf _) Document.
 Definition show_ppm_result := PPM_Parser.ParserAndProofs.PEF.PS.P.showResult Document.
