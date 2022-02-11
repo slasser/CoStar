@@ -4,8 +4,8 @@ Require Import Verbatim.Examples.Newick.Lexer.Semantic.
 Require Import CoStar.Defs CoStar.Main.
 
 Inductive newick_tree : Type :=
-| Leaf (label : nat) (branch_length : float)
-| Node (descendants : list newick_tree) (label : nat) (branch_length : float).
+| NewickLeaf (label : nat) (branch_length : Decimal.decimal)
+| NewickNode (descendants : list newick_tree) (branch_length : Decimal.decimal).
 
 Module Newick_Symbol_Types <: SYMBOL_TYPES.
 
@@ -52,8 +52,9 @@ Module Newick_Symbol_Types <: SYMBOL_TYPES.
   
   Inductive nonterminal' :=
   | Root
-  | Subtree
-  | SubtreeList
+  | Tree
+  | Trees
+  | Trees'
   | BranchLength.
   
   Definition nonterminal := nonterminal'.
@@ -61,8 +62,9 @@ Module Newick_Symbol_Types <: SYMBOL_TYPES.
   Definition showNT (x : nonterminal) : string :=
     match x with
     | Root => "Root"
-    | Subtree => "Subtree"
-    | SubtreeList => "SubtreeList"
+    | Tree => "Tree"
+    | Trees => "Trees"
+    | Trees' => "Trees'"
     | BranchLength => "BranchLength"
     end.
 
@@ -97,9 +99,10 @@ Module Newick_Symbol_Types <: SYMBOL_TYPES.
   Definition nt_semty (x : nonterminal) : Type :=
     match x with
     | Root => list newick_tree
-    | Subtree => newick_tree
-    | SubtreeList => list newick_tree
-    | BranchLength => float
+    | Tree => newick_tree
+    | Trees => list newick_tree
+    | Trees' => list newick_tree
+    | BranchLength => Decimal.decimal
     end.
 
 End Newick_Symbol_Types.
@@ -110,5 +113,68 @@ Module D <: Defs.T.
 End D.
 
 Module Export Newick_Parser := Make D.
+Require Import List.
+Import ListNotations.
 
+Definition newickGrammarEntries : list grammar_entry :=
+  [
+    @existT _ _
+            (Root, [NT Trees ; T SEMICOLON])
+            (fun _ => true, fun tup =>
+                              match tup with
+                              | (ts, (_, _)) => ts
+                              end)
+    ; @existT _ _ (Trees, [T L_PAREN ; NT Tree ; NT Trees' ; T R_PAREN])
+              (fun _ => true, fun tup =>
+                                match tup with
+                                | (_, (t, (ts, (_, _)))) => t :: ts
+                                end)
 
+    ; @existT _ _ (Trees', [T COMMA ; NT Tree ; NT Trees'])
+              (fun _ => true, fun tup =>
+                                match tup with
+                                | (_, (t, (ts, _))) => t :: ts
+                                end)
+
+    ; @existT _ _ (Trees', [])
+              (fun _ => true, fun _ => [])
+
+    ; @existT _ _ (Tree, [NT Trees ; T COLON ; NT BranchLength])
+              (fun _ => true, fun tup =>
+                                match tup with
+                                | (ts, (_, (l, _))) => NewickNode ts l
+                                end)
+
+    ; @existT _ _ (Tree, [T NAT ; T COLON ; NT BranchLength])
+              (fun _ => true, fun tup =>
+                                match tup with
+                                | (n, (_, (l, _))) => NewickLeaf n l
+                                end)
+              (* INCORRECT -- change *)
+    ; @existT _ _ (BranchLength, [T NAT ; T DECIMAL_POINT ; T NAT])
+              (fun _ => true, fun tup =>
+                                match tup with
+                                | (i, (_, (m, _))) => Decimal.Decimal (Nat.to_int i) (Nat.to_uint m)
+                                end)
+                                    
+    
+  ].
+
+Definition notWS (t : token) : bool :=
+  match t with
+  | @existT _ _ WS _ => false
+  | _ => true
+  end.
+
+Definition lex_sem   := Verbatim.Examples.Newick.Lexer.Semantic.SemLexer.Impl.lex_sem.
+Definition lex_rus   := Verbatim.Examples.Newick.Lexer.Literal.rus.
+Definition lex_newick' := lex_sem lex_rus.
+Definition lex_newick (s : String) : option (list token) * String :=
+  let res' := lex_newick' s in
+  match res' with
+  | (Some ts, rem) => (Some (List.filter notWS ts), rem)
+  | (None, _) => res'
+  end.
+
+Definition parse_newick       := parse (grammarOfEntryList newickGrammarEntries) (grammarOfEntryList_wf _) Root.
+Definition show_newick_result := showResult Root.

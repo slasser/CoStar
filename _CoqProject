@@ -22,4 +22,5 @@ Main.v
 
 Evaluation/Grammars/PPM.v
 Evaluation/Grammars/JSON.v
+Evaluation/Grammars/Newick.v
 Evaluation/Grammars/Extraction.v

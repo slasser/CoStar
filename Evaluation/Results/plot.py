@@ -40,7 +40,7 @@ fit_fn = np.poly1d(fit)
 p1 = plt.plot(sizes, fit_fn(sizes), 'k--', lw=1.5)
 
 # lowess line
-z = lowess(times, sizes, frac=0.4)
+z = lowess(times, sizes, frac=0.3)
 p2 = plt.plot(z[:,0], z[:,1], '-', lw = 1.5, color = 'r', label = "Lowess fit")
 
 # legend
@@ -67,7 +67,8 @@ plt.setp(ax.get_xticklabels(), fontsize=14)
 plt.setp(ax.get_yticklabels(), fontsize=14)
 
 # divide x-axis values by 1000 (convert tokens to "thousands of tokens")
-plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(round(x / 1000)), ',')))
+if "newick" not in datafile:
+    plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(round(x / 1000)), ',')))
 
 # make x and y axes start at zero
 ax.set_xlim([0, None])

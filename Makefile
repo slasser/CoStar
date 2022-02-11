@@ -38,3 +38,7 @@ bench-json:
 bench-json-small:
 	Evaluation/Benchmarking/_build/default/runEval.exe -json Evaluation/Data/JSON/SmallInstances 10 Evaluation/Results/json_results_small.json
 	python3.7 Evaluation/Results/plot.py Evaluation/Results/json_results_small.json Evaluation/Results/json_results_small.pdf
+
+bench-newick-small:
+	Evaluation/Benchmarking/_build/default/runEval.exe -newick Evaluation/Data/Newick/SmallInstances 10 Evaluation/Results/newick_results_small.json
+	python3.7 Evaluation/Results/plot.py Evaluation/Results/newick_results_small.json Evaluation/Results/newick_results_small.pdf
