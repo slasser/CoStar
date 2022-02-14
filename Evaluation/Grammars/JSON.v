@@ -144,7 +144,6 @@ End D.
 
 Module Export JSON_Parser := Make D.
 
-(* to do *)
 Definition jsonGrammarEntries : list grammar_entry :=
   [
     @existT _ _

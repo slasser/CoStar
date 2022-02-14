@@ -1,6 +1,7 @@
 open JSON
 open PPM
 open Newick
+open XML
 module Yb = Yojson.Basic
 module Yu = Yojson.Basic.Util
 (***********************************************************************)
@@ -96,6 +97,7 @@ let main () =
      | "-ppm"    -> benchmark_lexer_and_parser_on_dataset lex_ppm parse_ppm show_ppm_result data_dir num_trials
      | "-json"   -> benchmark_lexer_and_parser_on_dataset lex_json parse_json show_json_result data_dir num_trials
      | "-newick" -> benchmark_lexer_and_parser_on_dataset lex_newick parse_newick show_newick_result data_dir num_trials
+     | "-xml"    -> benchmark_lexer_and_parser_on_dataset lex_xml parse_xml show_xml_result data_dir num_trials
      | _ -> failwith ("unrecognized lang argument: " ^ lang))
   in  write_test_results results outfile
 
