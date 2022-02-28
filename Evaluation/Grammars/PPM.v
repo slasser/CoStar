@@ -1,34 +1,34 @@
-Require Import Bool List PeanoNat String.
+Require Import BinNat Bool List NArith PeanoNat String.
 Import ListNotations.
 Require Import Verbatim.Examples.PPM.Lexer.Literal.
 Require Import Verbatim.Examples.PPM.Lexer.Semantic.
 Require Import CoStar.Tactics CoStar.Defs CoStar.Main.
 
 Record rgb_triple : Type :=
-  mkRGBTriple { red   : nat
-              ; green : nat
-              ; blue  : nat
+  mkRGBTriple { red   : N
+              ; green : N
+              ; blue  : N
               }.
 
-Definition triple_le_max (t : rgb_triple) (m : nat) : bool :=
+Definition triple_le_max (t : rgb_triple) (m : N) : bool :=
   match t with
   | mkRGBTriple r g b =>
-      (r <=? m) && (g <=? m) && (b <=? m)
+      (r <=? m)%N && (g <=? m)%N && (b <=? m)%N
   end.
 
-Fixpoint triples_le_max (ts : list rgb_triple) (m : nat) : bool :=
+Fixpoint triples_le_max (ts : list rgb_triple) (m : N) : bool :=
   match ts with
   | [] => true
   | t :: ts' => triple_le_max t m && triples_le_max ts' m
   end.
 
-Definition width_x_height_eq_length {A : Type} (w h : nat) (l : list A) : bool :=
-  (w * h =? List.length l)%nat.
+Definition width_x_height_eq_length {A : Type} (w h : N) (l : list A) : bool :=
+  (w * h =? N.of_nat (List.length l))%N.
 
 Record ppm_value : Type :=
-  mkPPMValue { width   : nat
-             ; height  : nat
-             ; max     : nat
+  mkPPMValue { width   : N
+             ; height  : N
+             ; max     : N
              ; triples : list rgb_triple
              }.  
 

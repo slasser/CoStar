@@ -67,8 +67,7 @@ plt.setp(ax.get_xticklabels(), fontsize=14)
 plt.setp(ax.get_yticklabels(), fontsize=14)
 
 # divide x-axis values by 1000 (convert tokens to "thousands of tokens")
-if "newick" not in datafile:
-    plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(round(x / 1000)), ',')))
+plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(round(x / 1000)), ',')))
 
 # make x and y axes start at zero
 ax.set_xlim([0, None])

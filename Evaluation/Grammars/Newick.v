@@ -1,11 +1,15 @@
-Require Import Floats String.
+Require Import List QArith String.
 Require Import Verbatim.Examples.Newick.Lexer.Literal.
 Require Import Verbatim.Examples.Newick.Lexer.Semantic.
-Require Import CoStar.Defs CoStar.Main.
+Require Import CoStar.Tactics CoStar.Utils CoStar.Defs CoStar.Main.
+Import ListNotations.
+
+Inductive newick_node : Type :=
+| NkLeaf (label : N) (branch_length : Q)
+| NkINode (descendants : list newick_node) (branch_length : Q).
 
 Inductive newick_tree : Type :=
-| NewickLeaf (label : nat) (branch_length : Decimal.decimal)
-| NewickNode (descendants : list newick_tree) (branch_length : Decimal.decimal).
+| NkTree : list newick_node -> newick_tree.
 
 Module Newick_Symbol_Types <: SYMBOL_TYPES.
 
@@ -22,8 +26,6 @@ Module Newick_Symbol_Types <: SYMBOL_TYPES.
     | SEMICOLON => "SEMICOLON"
     | WS => "WS"               
     end.
-
-  Require Import CoStar.Tactics CoStar.Utils.
 
   Ltac all_terminal_comparisons x y :=
     match goal with
@@ -51,20 +53,22 @@ Module Newick_Symbol_Types <: SYMBOL_TYPES.
   Qed.
   
   Inductive nonterminal' :=
-  | Root
-  | Tree
   | Trees
-  | Trees'
+  | Tree
+  | Subtree
+  | Subtrees
+  | Subtrees'
   | BranchLength.
   
   Definition nonterminal := nonterminal'.
 
   Definition showNT (x : nonterminal) : string :=
     match x with
-    | Root => "Root"
-    | Tree => "Tree"
     | Trees => "Trees"
-    | Trees' => "Trees'"
+    | Tree => "Tree"
+    | Subtree => "Subtree"
+    | Subtrees => "Subtrees"
+    | Subtrees' => "Subtrees'"
     | BranchLength => "BranchLength"
     end.
 
@@ -98,11 +102,12 @@ Module Newick_Symbol_Types <: SYMBOL_TYPES.
 
   Definition nt_semty (x : nonterminal) : Type :=
     match x with
-    | Root => list newick_tree
-    | Tree => newick_tree
     | Trees => list newick_tree
-    | Trees' => list newick_tree
-    | BranchLength => Decimal.decimal
+    | Tree => newick_tree
+    | Subtree => newick_node
+    | Subtrees => list newick_node
+    | Subtrees' => list newick_node
+    | BranchLength => Q
     end.
 
 End Newick_Symbol_Types.
@@ -113,51 +118,60 @@ Module D <: Defs.T.
 End D.
 
 Module Export Newick_Parser := Make D.
-Require Import List.
-Import ListNotations.
 
 Definition newickGrammarEntries : list grammar_entry :=
-  [
-    @existT _ _
-            (Root, [NT Trees ; T SEMICOLON])
+  [ @existT _ _
+            (Trees, [])
+            (fun _ => true, fun _ => [])
+
+  ; @existT _ _
+            (Trees, [NT Tree ; NT Trees])
             (fun _ => true, fun tup =>
                               match tup with
-                              | (ts, (_, _)) => ts
+                              | (t, (ts, _)) => t :: ts
+                              end) 
+  ; @existT _ _
+            (Tree, [NT Subtrees ; T SEMICOLON])
+            (fun _ => true, fun tup =>
+                              match tup with
+                              | (ts, (_, _)) => NkTree ts
                               end)
-    ; @existT _ _ (Trees, [T L_PAREN ; NT Tree ; NT Trees' ; T R_PAREN])
-              (fun _ => true, fun tup =>
-                                match tup with
-                                | (_, (t, (ts, (_, _)))) => t :: ts
-                                end)
+            
+  ; @existT _ _ (Subtrees, [T L_PAREN ; NT Subtree ; NT Subtrees' ; T R_PAREN])
+            (fun _ => true, fun tup =>
+                              match tup with
+                              | (_, (t, (ts, (_, _)))) => t :: ts
+                              end)
 
-    ; @existT _ _ (Trees', [T COMMA ; NT Tree ; NT Trees'])
-              (fun _ => true, fun tup =>
-                                match tup with
-                                | (_, (t, (ts, _))) => t :: ts
-                                end)
+  ; @existT _ _ (Subtrees', [T COMMA ; NT Subtree ; NT Subtrees'])
+            (fun _ => true, fun tup =>
+                              match tup with
+                              | (_, (t, (ts, _))) => t :: ts
+                              end)
 
-    ; @existT _ _ (Trees', [])
-              (fun _ => true, fun _ => [])
+  ; @existT _ _ (Subtrees', [])
+            (fun _ => true, fun _ => [])
 
-    ; @existT _ _ (Tree, [NT Trees ; T COLON ; NT BranchLength])
-              (fun _ => true, fun tup =>
-                                match tup with
-                                | (ts, (_, (l, _))) => NewickNode ts l
-                                end)
+  ; @existT _ _ (Subtree, [NT Subtrees ; T COLON ; NT BranchLength])
+            (fun _ => true, fun tup =>
+                              match tup with
+                              | (ts, (_, (l, _))) => NkINode ts l
+                              end)
 
-    ; @existT _ _ (Tree, [T NAT ; T COLON ; NT BranchLength])
-              (fun _ => true, fun tup =>
-                                match tup with
-                                | (n, (_, (l, _))) => NewickLeaf n l
-                                end)
-              (* INCORRECT -- change *)
-    ; @existT _ _ (BranchLength, [T NAT ; T DECIMAL_POINT ; T NAT])
-              (fun _ => true, fun tup =>
-                                match tup with
-                                | (i, (_, (m, _))) => Decimal.Decimal (Nat.to_int i) (Nat.to_uint m)
-                                end)
-                                    
-    
+  ; @existT _ _ (Subtree, [T NAT ; T COLON ; NT BranchLength])
+            (fun _ => true, fun tup =>
+                              match tup with
+                              | (n, (_, (l, _))) => NkLeaf n l 
+                              end)
+
+  ; @existT _ _ (BranchLength, [T NAT ; T DECIMAL_POINT ; T NAT])
+            (fun _ => true, fun tup =>
+                              match tup with
+                              | (i, (_, (m, _))) =>
+                                  let q1 :=  Z.of_N i # 1            in
+                                  let q2 := (Z.of_N m # 1) / 1000000 in
+                                  q1 + q2
+                              end)        
   ].
 
 Definition notWS (t : token) : bool :=
@@ -176,5 +190,5 @@ Definition lex_newick (s : String) : option (list token) * String :=
   | (None, _) => res'
   end.
 
-Definition parse_newick       := parse (grammarOfEntryList newickGrammarEntries) (grammarOfEntryList_wf _) Root.
-Definition show_newick_result := showResult Root.
+Definition parse_newick       := parse (grammarOfEntryList newickGrammarEntries) (grammarOfEntryList_wf _) Trees.
+Definition show_newick_result := showResult Trees.
