@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graph xmlns="http://www.xces.org/ns/GrAF/1.0/">
+    <header>
+        <tagsDecl>
+            <tagUsage gi="NounChunk" occurs="83"/>
+        </tagsDecl>
+        <dependencies>
+            <dependsOn type="hepple"/>
+        </dependencies>
+        <annotationSets>
+            <annotationSet name="xces" type="http://www.xces.org/schema/2003"/>
+        </annotationSets>
+    </header>
+    <node xml:id="np-n0"/>
+    <a label="NounChunk" ref="np-n0" as="xces"/>
+    <node xml:id="np-n1"/>
+    <a label="NounChunk" ref="np-n1" as="xces"/>
+    <node xml:id="np-n10"/>
+    <a label="NounChunk" ref="np-n10" as="xces"/>
+    <node xml:id="np-n11"/>
+    <a label="NounChunk" ref="np-n11" as="xces"/>
+    <node xml:id="np-n12"/>
+    <a label="NounChunk" ref="np-n12" as="xces"/>
+    <node xml:id="np-n13"/>
+    <a label="NounChunk" ref="np-n13" as="xces"/>
+    <node xml:id="np-n14"/>
+    <a label="NounChunk" ref="np-n14" as="xces"/>
+    <node xml:id="np-n15"/>
+    <a label="NounChunk" ref="np-n15" as="xces"/>
+    <node xml:id="np-n16"/>
+    <a label="NounChunk" ref="np-n16" as="xces"/>
+    <node xml:id="np-n17"/>
+    <a label="NounChunk" ref="np-n17" as="xces"/>
+    <node xml:id="np-n18"/>
+    <a label="NounChunk" ref="np-n18" as="xces"/>
+    <node xml:id="np-n19"/>
+    <a label="NounChunk" ref="np-n19" as="xces"/>
+    <node xml:id="np-n2"/>
+    <a label="NounChunk" ref="np-n2" as="xces"/>
+    <node xml:id="np-n20"/>
+    <a label="NounChunk" ref="np-n20" as="xces"/>
+    <node xml:id="np-n21"/>
+    <a label="NounChunk" ref="np-n21" as="xces"/>
+    <node xml:id="np-n22"/>
+    <a label="NounChunk" ref="np-n22" as="xces"/>
+    <node xml:id="np-n23"/>
+    <a label="NounChunk" ref="np-n23" as="xces"/>
+    <node xml:id="np-n24"/>
+    <a label="NounChunk" ref="np-n24" as="xces"/>
+    <node xml:id="np-n25"/>
+    <a label="NounChunk" ref="np-n25" as="xces"/>
+    <node xml:id="np-n26"/>
+    <a label="NounChunk" ref="np-n26" as="xces"/>
+    <node xml:id="np-n27"/>
+    <a label="NounChunk" ref="np-n27" as="xces"/>
+    <node xml:id="np-n28"/>
+    <a label="NounChunk" ref="np-n28" as="xces"/>
+    <node xml:id="np-n29"/>
+    <a label="NounChunk" ref="np-n29" as="xces"/>
+    <node xml:id="np-n3"/>
+    <a label="NounChunk" ref="np-n3" as="xces"/>
+    <node xml:id="np-n30"/>
+    <a label="NounChunk" ref="np-n30" as="xces"/>
+    <node xml:id="np-n31"/>
+    <a label="NounChunk" ref="np-n31" as="xces"/>
+    <node xml:id="np-n32"/>
+    <a label="NounChunk" ref="np-n32" as="xces"/>
+    <node xml:id="np-n33"/>
+    <a label="NounChunk" ref="np-n33" as="xces"/>
+    <node xml:id="np-n34"/>
+    <a label="NounChunk" ref="np-n34" as="xces"/>
+    <node xml:id="np-n35"/>
+    <a label="NounChunk" ref="np-n35" as="xces"/>
+    <node xml:id="np-n36"/>
+    <a label="NounChunk" ref="np-n36" as="xces"/>
+    <node xml:id="np-n37"/>
+    <a label="NounChunk" ref="np-n37" as="xces"/>
+    <node xml:id="np-n38"/>
+    <a label="NounChunk" ref="np-n38" as="xces"/>
+    <node xml:id="np-n39"/>
+    <a label="NounChunk" ref="np-n39" as="xces"/>
+    <node xml:id="np-n4"/>
+    <a label="NounChunk" ref="np-n4" as="xces"/>
+    <node xml:id="np-n40"/>
+    <a label="NounChunk" ref="np-n40" as="xces"/>
+    <node xml:id="np-n41"/>
+    <a label="NounChunk" ref="np-n41" as="xces"/>
+    <node xml:id="np-n42"/>
+    <a label="NounChunk" ref="np-n42" as="xces"/>
+    <node xml:id="np-n43"/>
+    <a label="NounChunk" ref="np-n43" as="xces"/>
+    <node xml:id="np-n44"/>
+    <a label="NounChunk" ref="np-n44" as="xces"/>
+    <node xml:id="np-n45"/>
+    <a label="NounChunk" ref="np-n45" as="xces"/>
+    <node xml:id="np-n46"/>
+    <a label="NounChunk" ref="np-n46" as="xces"/>
+    <node xml:id="np-n47"/>
+    <a label="NounChunk" ref="np-n47" as="xces"/>
+    <node xml:id="np-n48"/>
+    <a label="NounChunk" ref="np-n48" as="xces"/>
+    <node xml:id="np-n49"/>
+    <a label="NounChunk" ref="np-n49" as="xces"/>
+    <node xml:id="np-n5"/>
+    <a label="NounChunk" ref="np-n5" as="xces"/>
+    <node xml:id="np-n50"/>
+    <a label="NounChunk" ref="np-n50" as="xces"/>
+    <node xml:id="np-n51"/>
+    <a label="NounChunk" ref="np-n51" as="xces"/>
+    <node xml:id="np-n52"/>
+    <a label="NounChunk" ref="np-n52" as="xces"/>
+    <node xml:id="np-n53"/>
+    <a label="NounChunk" ref="np-n53" as="xces"/>
+    <node xml:id="np-n54"/>
+    <a label="NounChunk" ref="np-n54" as="xces"/>
+    <node xml:id="np-n55"/>
+    <a label="NounChunk" ref="np-n55" as="xces"/>
+    <node xml:id="np-n56"/>
+    <a label="NounChunk" ref="np-n56" as="xces"/>
+    <node xml:id="np-n57"/>
+    <a label="NounChunk" ref="np-n57" as="xces"/>
+    <node xml:id="np-n58"/>
+    <a label="NounChunk" ref="np-n58" as="xces"/>
+    <node xml:id="np-n59"/>
+    <a label="NounChunk" ref="np-n59" as="xces"/>
+    <node xml:id="np-n6"/>
+    <a label="NounChunk" ref="np-n6" as="xces"/>
+    <node xml:id="np-n60"/>
+    <a label="NounChunk" ref="np-n60" as="xces"/>
+    <node xml:id="np-n61"/>
+    <a label="NounChunk" ref="np-n61" as="xces"/>
+    <node xml:id="np-n62"/>
+    <a label="NounChunk" ref="np-n62" as="xces"/>
+    <node xml:id="np-n63"/>
+    <a label="NounChunk" ref="np-n63" as="xces"/>
+    <node xml:id="np-n64"/>
+    <a label="NounChunk" ref="np-n64" as="xces"/>
+    <node xml:id="np-n65"/>
+    <a label="NounChunk" ref="np-n65" as="xces"/>
+    <node xml:id="np-n66"/>
+    <a label="NounChunk" ref="np-n66" as="xces"/>
+    <node xml:id="np-n67"/>
+    <a label="NounChunk" ref="np-n67" as="xces"/>
+    <node xml:id="np-n68"/>
+    <a label="NounChunk" ref="np-n68" as="xces"/>
+    <node xml:id="np-n69"/>
+    <a label="NounChunk" ref="np-n69" as="xces"/>
+    <node xml:id="np-n7"/>
+    <a label="NounChunk" ref="np-n7" as="xces"/>
+    <node xml:id="np-n70"/>
+    <a label="NounChunk" ref="np-n70" as="xces"/>
+    <node xml:id="np-n71"/>
+    <a label="NounChunk" ref="np-n71" as="xces"/>
+    <node xml:id="np-n72"/>
+    <a label="NounChunk" ref="np-n72" as="xces"/>
+    <node xml:id="np-n73"/>
+    <a label="NounChunk" ref="np-n73" as="xces"/>
+    <node xml:id="np-n74"/>
+    <a label="NounChunk" ref="np-n74" as="xces"/>
+    <node xml:id="np-n75"/>
+    <a label="NounChunk" ref="np-n75" as="xces"/>
+    <node xml:id="np-n76"/>
+    <a label="NounChunk" ref="np-n76" as="xces"/>
+    <node xml:id="np-n77"/>
+    <a label="NounChunk" ref="np-n77" as="xces"/>
+    <node xml:id="np-n78"/>
+    <a label="NounChunk" ref="np-n78" as="xces"/>
+    <node xml:id="np-n79"/>
+    <a label="NounChunk" ref="np-n79" as="xces"/>
+    <node xml:id="np-n8"/>
+    <a label="NounChunk" ref="np-n8" as="xces"/>
+    <node xml:id="np-n80"/>
+    <a label="NounChunk" ref="np-n80" as="xces"/>
+    <node xml:id="np-n81"/>
+    <a label="NounChunk" ref="np-n81" as="xces"/>
+    <node xml:id="np-n82"/>
+    <a label="NounChunk" ref="np-n82" as="xces"/>
+    <node xml:id="np-n9"/>
+    <a label="NounChunk" ref="np-n9" as="xces"/>
+    <edge xml:id="lnk109" from="np-n54" to="penn-n221"/>
+    <edge xml:id="lnk108" from="np-n53" to="penn-n219"/>
+    <edge xml:id="lnk107" from="np-n53" to="penn-n218"/>
+    <edge xml:id="lnk106" from="np-n52" to="penn-n216"/>
+    <edge xml:id="lnk105" from="np-n52" to="penn-n215"/>
+    <edge xml:id="lnk104" from="np-n52" to="penn-n214"/>
+    <edge xml:id="lnk103" from="np-n51" to="penn-n211"/>
+    <edge xml:id="lnk102" from="np-n50" to="penn-n208"/>
+    <edge xml:id="lnk101" from="np-n50" to="penn-n207"/>
+    <edge xml:id="lnk100" from="np-n50" to="penn-n206"/>
+    <edge xml:id="lnk99" from="np-n50" to="penn-n205"/>
+    <edge xml:id="lnk98" from="np-n50" to="penn-n204"/>
+    <edge xml:id="lnk97" from="np-n50" to="penn-n203"/>
+    <edge xml:id="lnk96" from="np-n49" to="penn-n200"/>
+    <edge xml:id="lnk95" from="np-n49" to="penn-n199"/>
+    <edge xml:id="lnk94" from="np-n49" to="penn-n198"/>
+    <edge xml:id="lnk93" from="np-n48" to="penn-n196"/>
+    <edge xml:id="lnk92" from="np-n48" to="penn-n195"/>
+    <edge xml:id="lnk91" from="np-n47" to="penn-n191"/>
+    <edge xml:id="lnk90" from="np-n47" to="penn-n190"/>
+    <edge xml:id="lnk89" from="np-n46" to="penn-n188"/>
+    <edge xml:id="lnk88" from="np-n45" to="penn-n186"/>
+    <edge xml:id="lnk87" from="np-n44" to="penn-n180"/>
+    <edge xml:id="lnk86" from="np-n44" to="penn-n179"/>
+    <edge xml:id="lnk85" from="np-n43" to="penn-n177"/>
+    <edge xml:id="lnk84" from="np-n43" to="penn-n176"/>
+    <edge xml:id="lnk83" from="np-n42" to="penn-n175"/>
+    <edge xml:id="lnk82" from="np-n42" to="penn-n174"/>
+    <edge xml:id="lnk81" from="np-n41" to="penn-n166"/>
+    <edge xml:id="lnk80" from="np-n40" to="penn-n163"/>
+    <edge xml:id="lnk79" from="np-n39" to="penn-n157"/>
+    <edge xml:id="lnk78" from="np-n39" to="penn-n156"/>
+    <edge xml:id="lnk77" from="np-n38" to="penn-n154"/>
+    <edge xml:id="lnk76" from="np-n37" to="penn-n149"/>
+    <edge xml:id="lnk75" from="np-n36" to="penn-n148"/>
+    <edge xml:id="lnk74" from="np-n35" to="penn-n146"/>
+    <edge xml:id="lnk73" from="np-n35" to="penn-n145"/>
+    <edge xml:id="lnk72" from="np-n35" to="penn-n144"/>
+    <edge xml:id="lnk71" from="np-n34" to="penn-n141"/>
+    <edge xml:id="lnk70" from="np-n33" to="penn-n138"/>
+    <edge xml:id="lnk69" from="np-n32" to="penn-n132"/>
+    <edge xml:id="lnk68" from="np-n31" to="penn-n130"/>
+    <edge xml:id="lnk67" from="np-n31" to="penn-n129"/>
+    <edge xml:id="lnk66" from="np-n30" to="penn-n119"/>
+    <edge xml:id="lnk65" from="np-n30" to="penn-n118"/>
+    <edge xml:id="lnk64" from="np-n30" to="penn-n117"/>
+    <edge xml:id="lnk63" from="np-n29" to="penn-n113"/>
+    <edge xml:id="lnk62" from="np-n29" to="penn-n112"/>
+    <edge xml:id="lnk61" from="np-n29" to="penn-n111"/>
+    <edge xml:id="lnk60" from="np-n28" to="penn-n107"/>
+    <edge xml:id="lnk176" from="np-n82" to="penn-n330"/>
+    <edge xml:id="lnk175" from="np-n82" to="penn-n329"/>
+    <edge xml:id="lnk174" from="np-n81" to="penn-n327"/>
+    <edge xml:id="lnk173" from="np-n81" to="penn-n326"/>
+    <edge xml:id="lnk59" from="np-n27" to="penn-n105"/>
+    <edge xml:id="lnk172" from="np-n81" to="penn-n325"/>
+    <edge xml:id="lnk58" from="np-n26" to="penn-n103"/>
+    <edge xml:id="lnk171" from="np-n80" to="penn-n319"/>
+    <edge xml:id="lnk57" from="np-n26" to="penn-n102"/>
+    <edge xml:id="lnk170" from="np-n79" to="penn-n318"/>
+    <edge xml:id="lnk56" from="np-n25" to="penn-n100"/>
+    <edge xml:id="lnk55" from="np-n25" to="penn-n99"/>
+    <edge xml:id="lnk54" from="np-n25" to="penn-n98"/>
+    <edge xml:id="lnk53" from="np-n25" to="penn-n97"/>
+    <edge xml:id="lnk52" from="np-n24" to="penn-n95"/>
+    <edge xml:id="lnk51" from="np-n24" to="penn-n94"/>
+    <edge xml:id="lnk50" from="np-n23" to="penn-n92"/>
+    <edge xml:id="lnk169" from="np-n79" to="penn-n317"/>
+    <edge xml:id="lnk168" from="np-n78" to="penn-n315"/>
+    <edge xml:id="lnk167" from="np-n78" to="penn-n314"/>
+    <edge xml:id="lnk166" from="np-n78" to="penn-n313"/>
+    <edge xml:id="lnk165" from="np-n78" to="penn-n312"/>
+    <edge xml:id="lnk164" from="np-n78" to="penn-n311"/>
+    <edge xml:id="lnk163" from="np-n78" to="penn-n310"/>
+    <edge xml:id="lnk49" from="np-n22" to="penn-n90"/>
+    <edge xml:id="lnk162" from="np-n77" to="penn-n308"/>
+    <edge xml:id="lnk48" from="np-n22" to="penn-n89"/>
+    <edge xml:id="lnk161" from="np-n77" to="penn-n307"/>
+    <edge xml:id="lnk47" from="np-n21" to="penn-n87"/>
+    <edge xml:id="lnk160" from="np-n77" to="penn-n306"/>
+    <edge xml:id="lnk46" from="np-n21" to="penn-n86"/>
+    <edge xml:id="lnk45" from="np-n21" to="penn-n85"/>
+    <edge xml:id="lnk44" from="np-n21" to="penn-n84"/>
+    <edge xml:id="lnk43" from="np-n21" to="penn-n83"/>
+    <edge xml:id="lnk42" from="np-n20" to="penn-n81"/>
+    <edge xml:id="lnk41" from="np-n20" to="penn-n80"/>
+    <edge xml:id="lnk40" from="np-n19" to="penn-n74"/>
+    <edge xml:id="lnk9" from="np-n2" to="penn-n12"/>
+    <edge xml:id="lnk8" from="np-n2" to="penn-n11"/>
+    <edge xml:id="lnk7" from="np-n2" to="penn-n10"/>
+    <edge xml:id="lnk6" from="np-n2" to="penn-n9"/>
+    <edge xml:id="lnk5" from="np-n2" to="penn-n8"/>
+    <edge xml:id="lnk4" from="np-n1" to="penn-n5"/>
+    <edge xml:id="lnk3" from="np-n1" to="penn-n4"/>
+    <edge xml:id="lnk2" from="np-n0" to="penn-n2"/>
+    <edge xml:id="lnk1" from="np-n0" to="penn-n1"/>
+    <edge xml:id="lnk159" from="np-n77" to="penn-n305"/>
+    <edge xml:id="lnk0" from="np-n0" to="penn-n0"/>
+    <edge xml:id="lnk158" from="np-n77" to="penn-n304"/>
+    <edge xml:id="lnk157" from="np-n77" to="penn-n303"/>
+    <edge xml:id="lnk156" from="np-n76" to="penn-n301"/>
+    <edge xml:id="lnk155" from="np-n76" to="penn-n300"/>
+    <edge xml:id="lnk154" from="np-n75" to="penn-n297"/>
+    <edge xml:id="lnk153" from="np-n74" to="penn-n295"/>
+    <edge xml:id="lnk39" from="np-n18" to="penn-n69"/>
+    <edge xml:id="lnk152" from="np-n74" to="penn-n294"/>
+    <edge xml:id="lnk38" from="np-n18" to="penn-n68"/>
+    <edge xml:id="lnk151" from="np-n73" to="penn-n292"/>
+    <edge xml:id="lnk37" from="np-n17" to="penn-n66"/>
+    <edge xml:id="lnk150" from="np-n72" to="penn-n291"/>
+    <edge xml:id="lnk36" from="np-n17" to="penn-n65"/>
+    <edge xml:id="lnk35" from="np-n17" to="penn-n64"/>
+    <edge xml:id="lnk34" from="np-n16" to="penn-n57"/>
+    <edge xml:id="lnk33" from="np-n15" to="penn-n52"/>
+    <edge xml:id="lnk32" from="np-n15" to="penn-n51"/>
+    <edge xml:id="lnk31" from="np-n14" to="penn-n49"/>
+    <edge xml:id="lnk30" from="np-n14" to="penn-n48"/>
+    <edge xml:id="lnk149" from="np-n72" to="penn-n290"/>
+    <edge xml:id="lnk148" from="np-n72" to="penn-n289"/>
+    <edge xml:id="lnk147" from="np-n72" to="penn-n288"/>
+    <edge xml:id="lnk146" from="np-n72" to="penn-n287"/>
+    <edge xml:id="lnk145" from="np-n71" to="penn-n280"/>
+    <edge xml:id="lnk144" from="np-n71" to="penn-n279"/>
+    <edge xml:id="lnk143" from="np-n70" to="penn-n277"/>
+    <edge xml:id="lnk29" from="np-n13" to="penn-n46"/>
+    <edge xml:id="lnk28" from="np-n13" to="penn-n45"/>
+    <edge xml:id="lnk142" from="np-n69" to="penn-n275"/>
+    <edge xml:id="lnk27" from="np-n12" to="penn-n43"/>
+    <edge xml:id="lnk141" from="np-n68" to="penn-n273"/>
+    <edge xml:id="lnk26" from="np-n11" to="penn-n41"/>
+    <edge xml:id="lnk140" from="np-n68" to="penn-n272"/>
+    <edge xml:id="lnk25" from="np-n11" to="penn-n40"/>
+    <edge xml:id="lnk24" from="np-n11" to="penn-n39"/>
+    <edge xml:id="lnk23" from="np-n11" to="penn-n38"/>
+    <edge xml:id="lnk22" from="np-n10" to="penn-n36"/>
+    <edge xml:id="lnk21" from="np-n10" to="penn-n35"/>
+    <edge xml:id="lnk20" from="np-n9" to="penn-n33"/>
+    <edge xml:id="lnk139" from="np-n67" to="penn-n271"/>
+    <edge xml:id="lnk138" from="np-n66" to="penn-n269"/>
+    <edge xml:id="lnk137" from="np-n65" to="penn-n267"/>
+    <edge xml:id="lnk136" from="np-n65" to="penn-n266"/>
+    <edge xml:id="lnk135" from="np-n64" to="penn-n261"/>
+    <edge xml:id="lnk134" from="np-n64" to="penn-n260"/>
+    <edge xml:id="lnk19" from="np-n8" to="penn-n31"/>
+    <edge xml:id="lnk133" from="np-n63" to="penn-n257"/>
+    <edge xml:id="lnk18" from="np-n7" to="penn-n29"/>
+    <edge xml:id="lnk132" from="np-n63" to="penn-n256"/>
+    <edge xml:id="lnk17" from="np-n7" to="penn-n28"/>
+    <edge xml:id="lnk131" from="np-n63" to="penn-n255"/>
+    <edge xml:id="lnk16" from="np-n7" to="penn-n27"/>
+    <edge xml:id="lnk130" from="np-n63" to="penn-n254"/>
+    <edge xml:id="lnk15" from="np-n6" to="penn-n25"/>
+    <edge xml:id="lnk14" from="np-n5" to="penn-n22"/>
+    <edge xml:id="lnk13" from="np-n4" to="penn-n17"/>
+    <edge xml:id="lnk12" from="np-n3" to="penn-n15"/>
+    <edge xml:id="lnk11" from="np-n3" to="penn-n14"/>
+    <edge xml:id="lnk10" from="np-n2" to="penn-n13"/>
+    <edge xml:id="lnk129" from="np-n62" to="penn-n251"/>
+    <edge xml:id="lnk128" from="np-n62" to="penn-n250"/>
+    <edge xml:id="lnk127" from="np-n61" to="penn-n248"/>
+    <edge xml:id="lnk126" from="np-n61" to="penn-n247"/>
+    <edge xml:id="lnk125" from="np-n61" to="penn-n246"/>
+    <edge xml:id="lnk124" from="np-n61" to="penn-n245"/>
+    <edge xml:id="lnk123" from="np-n60" to="penn-n243"/>
+    <edge xml:id="lnk122" from="np-n60" to="penn-n242"/>
+    <edge xml:id="lnk121" from="np-n59" to="penn-n240"/>
+    <edge xml:id="lnk120" from="np-n59" to="penn-n239"/>
+    <edge xml:id="lnk119" from="np-n58" to="penn-n238"/>
+    <edge xml:id="lnk118" from="np-n58" to="penn-n237"/>
+    <edge xml:id="lnk117" from="np-n58" to="penn-n236"/>
+    <edge xml:id="lnk116" from="np-n57" to="penn-n234"/>
+    <edge xml:id="lnk115" from="np-n57" to="penn-n233"/>
+    <edge xml:id="lnk114" from="np-n56" to="penn-n230"/>
+    <edge xml:id="lnk113" from="np-n56" to="penn-n229"/>
+    <edge xml:id="lnk112" from="np-n56" to="penn-n228"/>
+    <edge xml:id="lnk111" from="np-n55" to="penn-n226"/>
+    <edge xml:id="lnk110" from="np-n55" to="penn-n225"/>
+</graph>

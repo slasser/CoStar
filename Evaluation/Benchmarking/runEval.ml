@@ -30,12 +30,13 @@ let read_tokens_from_file (t_of_string : coq_string -> 'a) (fname : string) : ('
 (* Utilities for writing JSON representations of benchmark results     *)
 (***********************************************************************)
 type test_result =
-  { filename    : string
-  ; num_tokens  : int
-  ; parse_times : float list}
+  { filename     : string
+  ; num_tokens   : int
+  ; parse_times  : float list
+  ; parse_result : string }
 
-let mk_test_result (fn : string) (nt : int) (pts : float list) : test_result =
-  {filename = fn; num_tokens = nt; parse_times = pts}
+let mk_test_result (fn : string) (nt : int) (pts : float list) (pr : string) : test_result =
+  {filename = fn; num_tokens = nt; parse_times = pts; parse_result = pr}
 
 (* Int.compare causes an "unbound value" error *)
 let cmp_test_results (tr : test_result) (tr' : test_result) : int =
@@ -43,9 +44,12 @@ let cmp_test_results (tr : test_result) (tr' : test_result) : int =
 
 let json_of_test_result (tr : test_result) : Yb.t =
   match tr with
-  | {filename = fn; num_tokens = nt; parse_times = pts} ->
+  | {filename = fn; num_tokens = nt; parse_times = pts; parse_result = pr} ->
      let json_floats = List.map (fun pt -> `Float pt) pts
-     in  `Assoc [("filename", `String fn); ("num_tokens", `Int nt); ("execution_times", `List json_floats)]
+     in  `Assoc [ ("filename", `String fn)
+                ; ("num_tokens", `Int nt)
+                ; ("execution_times", `List json_floats)
+                ; ("parse_result", `String pr) ]
 
 let json_of_test_results (trs : test_result list) : Yb.t =
   `List (List.map json_of_test_result (List.sort cmp_test_results trs))
@@ -77,13 +81,14 @@ let benchmark_lexer_and_parser_on_dataset lex parse show_result data_dir num_tri
     match ts_o with
     | None -> ()
     | Some ts ->
-       let parse_times = ref []                                               in
+       let parse_times = ref [] in
        (for j = 0 to num_trials - 1 do
           let (time, res) = benchmark parse ts in
           if j = 0 then print_result fname (show_result res) else ();
           parse_times := time :: !parse_times
         done);
-       results := (mk_test_result fname (List.length ts) !parse_times) :: !results
+       let parse_res = str_of_coqstr (show_result (parse ts)) in
+       results := (mk_test_result fname (List.length ts) !parse_times parse_res) :: !results
   done;
   !results
        

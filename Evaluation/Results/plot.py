@@ -44,21 +44,21 @@ z = lowess(times, sizes, frac=0.3)
 p2 = plt.plot(z[:,0], z[:,1], '-', lw = 1.5, color = 'r', label = "Lowess fit")
 
 # legend
-if (datafile=="json__costar-parser.json"):
+if (datafile=="json_results.json"):
     l1 = plt.Line2D([0,0], [1,1], color='k', linestyle='--')
     l2 = plt.Line2D([0,0], [1,1], color='r')
     plt.legend([l1,l2], ["Regression", "LOWESS"],prop={'size':11}, loc='lower right')
 
 # text that lists number of data points (e.g., "24 JSON files")
 lang = ""
-if datafile.split("__")[0] == "json":
+if datafile.split("_")[0] == "json":
     lang = "JSON"
-elif datafile.split("__")[0] == "xml":
+elif datafile.split("_")[0] == "xml":
     lang = "XML"
-elif datafile.split("__")[0] == "dot":
-    lang = "DOT"
-elif datafile.split("__")[0] == "python":
-    lang = "Python"
+elif datafile.split("_")[0] == "ppm":
+    lang = "PPM"
+elif datafile.split("_")[0] == "newick":
+    lang = "Newick"
 
 plt.text(max(sizes)/13.0, max(times)/1.5, "%d %s files"%(len(test_results),lang), family="serif", size=14)
 
@@ -81,4 +81,4 @@ if datafile == "python__antlr-parser.json":
 #plt.ylim([0.0, 0.04])
 
 plt.savefig(plotfile, format="pdf", bbox_inches='tight', pad_inches=0, dpi=1000)
-print ("results saved to Evaluation/Results/" + plotfile)
+print ("results saved to " + plotfile)

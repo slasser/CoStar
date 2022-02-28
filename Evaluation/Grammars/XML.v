@@ -161,11 +161,13 @@ Definition xmlGrammarEntries : list grammar_entry :=
     ; @existT _ _ (Content, [])
               (fun _ => true, fun _ => [])
 
-              (* to do : add constraint *)
     ; @existT _ _ (Element, [T OPEN ; T NAME ; NT Attrs ; T CLOSE ; NT Content ; T OPEN ; T SLASH ; T NAME ; T CLOSE])
-              (fun _ => true, fun tup => match tup with
-                                         | (_, (nm, (attrs, (_, (ts, (_, (_, (nm', (_, _))))))))) => XmlNode nm attrs ts
-                                         end)
+              (fun tup => match tup with
+                          | (_, (nm, (attrs, (_, (ts, (_, (_, (nm', (_, _))))))))) => String.eqb nm nm'
+                          end,
+               fun tup => match tup with
+                          | (_, (nm, (attrs, (_, (ts, (_, (_, (nm', (_, _))))))))) => XmlNode nm attrs ts
+                          end)
 
     ; @existT _ _ (Element, [T OPEN ; T NAME ; NT Attrs ; T SLASH_CLOSE])
               (fun _ => true, fun tup => match tup with
