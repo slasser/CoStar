@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graph xmlns="http://www.xces.org/ns/GrAF/1.0/">
+    <header>
+        <tagsDecl>
+            <tagUsage gi="VG" occurs="18"/>
+        </tagsDecl>
+        <dependencies>
+            <dependsOn type="hepple"/>
+        </dependencies>
+        <annotationSets>
+            <annotationSet name="xces" type="http://www.xces.org/schema/2003"/>
+        </annotationSets>
+    </header>
+    <node xml:id="vp-n0"/>
+    <a label="VG" ref="vp-n0" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPre"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n1"/>
+    <a label="VG" ref="vp-n1" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="Pre"/>
+            <f name="type" value="PART"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n10"/>
+    <a label="VG" ref="vp-n10" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPre"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n11"/>
+    <a label="VG" ref="vp-n11" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="Inf"/>
+            <f name="type" value="NFVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n12"/>
+    <a label="VG" ref="vp-n12" as="xces">
+        <fs>
+            <f name="voice" value="passive"/>
+            <f name="tense" value="Inf"/>
+            <f name="type" value="NFVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n13"/>
+    <a label="VG" ref="vp-n13" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="Inf"/>
+            <f name="type" value="NFVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n14"/>
+    <a label="VG" ref="vp-n14" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="PreCon"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n15"/>
+    <a label="VG" ref="vp-n15" as="xces">
+        <fs>
+            <f name="type" value="FVG"/>
+            <f name="tense" value="SimPre"/>
+            <f name="voice" value="active"/>
+            <f name="neg" value="yes"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n16"/>
+    <a label="VG" ref="vp-n16" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPre"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n17"/>
+    <a label="VG" ref="vp-n17" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPre"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n2"/>
+    <a label="VG" ref="vp-n2" as="xces">
+        <fs>
+            <f name="voice" value="none"/>
+            <f name="tense" value="Pas"/>
+            <f name="type" value="PART"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n3"/>
+    <a label="VG" ref="vp-n3" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPas"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n4"/>
+    <a label="VG" ref="vp-n4" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPre"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n5"/>
+    <a label="VG" ref="vp-n5" as="xces">
+        <fs>
+            <f name="voice" value="none"/>
+            <f name="tense" value="Pas"/>
+            <f name="type" value="PART"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n6"/>
+    <a label="VG" ref="vp-n6" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPre"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n7"/>
+    <a label="VG" ref="vp-n7" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="SimPre"/>
+            <f name="type" value="FVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n8"/>
+    <a label="VG" ref="vp-n8" as="xces">
+        <fs>
+            <f name="voice" value="passive"/>
+            <f name="tense" value="Inf"/>
+            <f name="type" value="NFVG"/>
+        </fs>
+    </a>
+    <node xml:id="vp-n9"/>
+    <a label="VG" ref="vp-n9" as="xces">
+        <fs>
+            <f name="voice" value="active"/>
+            <f name="tense" value="Inf"/>
+            <f name="type" value="NFVG"/>
+        </fs>
+    </a>
+    <edge xml:id="lnk25" from="vp-n17" to="penn-n155"/>
+    <edge xml:id="lnk24" from="vp-n16" to="penn-n149"/>
+    <edge xml:id="lnk23" from="vp-n15" to="penn-n143"/>
+    <edge xml:id="lnk9" from="vp-n8" to="penn-n88"/>
+    <edge xml:id="lnk22" from="vp-n15" to="penn-n142"/>
+    <edge xml:id="lnk8" from="vp-n8" to="penn-n87"/>
+    <edge xml:id="lnk21" from="vp-n15" to="penn-n141"/>
+    <edge xml:id="lnk7" from="vp-n7" to="penn-n83"/>
+    <edge xml:id="lnk20" from="vp-n14" to="penn-n134"/>
+    <edge xml:id="lnk6" from="vp-n6" to="penn-n81"/>
+    <edge xml:id="lnk5" from="vp-n5" to="penn-n57"/>
+    <edge xml:id="lnk4" from="vp-n4" to="penn-n56"/>
+    <edge xml:id="lnk3" from="vp-n3" to="penn-n21"/>
+    <edge xml:id="lnk2" from="vp-n2" to="penn-n8"/>
+    <edge xml:id="lnk1" from="vp-n1" to="penn-n2"/>
+    <edge xml:id="lnk0" from="vp-n0" to="penn-n1"/>
+    <edge xml:id="lnk19" from="vp-n14" to="penn-n133"/>
+    <edge xml:id="lnk18" from="vp-n14" to="penn-n132"/>
+    <edge xml:id="lnk17" from="vp-n13" to="penn-n128"/>
+    <edge xml:id="lnk16" from="vp-n13" to="penn-n127"/>
+    <edge xml:id="lnk15" from="vp-n12" to="penn-n124"/>
+    <edge xml:id="lnk14" from="vp-n12" to="penn-n123"/>
+    <edge xml:id="lnk13" from="vp-n11" to="penn-n120"/>
+    <edge xml:id="lnk12" from="vp-n10" to="penn-n118"/>
+    <edge xml:id="lnk11" from="vp-n9" to="penn-n102"/>
+    <edge xml:id="lnk10" from="vp-n9" to="penn-n101"/>
+</graph>

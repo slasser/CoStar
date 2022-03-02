@@ -7,13 +7,15 @@ from matplotlib.ticker import FuncFormatter
 from sys import argv
 from statsmodels.nonparametric.smoothers_lowess import lowess as lowess
 import math
+import os
 
 # avoid Type 3 fonts (required for camera-ready copy)
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype']  = 42
 
-datafile = argv[1]
-plotfile = argv[2]
+datafile          = argv[1]
+datafile_basename = os.path.basename(datafile)
+plotfile          = argv[2]
 
 with open(datafile, "r") as fh:
     test_results      = json.load(fh)
@@ -44,20 +46,20 @@ z = lowess(times, sizes, frac=0.3)
 p2 = plt.plot(z[:,0], z[:,1], '-', lw = 1.5, color = 'r', label = "Lowess fit")
 
 # legend
-if (datafile=="json_results.json"):
+if (datafile_basename == "json_results.json"):
     l1 = plt.Line2D([0,0], [1,1], color='k', linestyle='--')
     l2 = plt.Line2D([0,0], [1,1], color='r')
     plt.legend([l1,l2], ["Regression", "LOWESS"],prop={'size':11}, loc='lower right')
 
 # text that lists number of data points (e.g., "24 JSON files")
 lang = ""
-if datafile.split("_")[0] == "json":
+if datafile_basename.split("_")[0] == "json":
     lang = "JSON"
-elif datafile.split("_")[0] == "xml":
+elif datafile_basename.split("_")[0] == "xml":
     lang = "XML"
-elif datafile.split("_")[0] == "ppm":
+elif datafile_basename.split("_")[0] == "ppm":
     lang = "PPM"
-elif datafile.split("_")[0] == "newick":
+elif datafile_basename.split("_")[0] == "newick":
     lang = "Newick"
 
 plt.text(max(sizes)/13.0, max(times)/1.5, "%d %s files"%(len(test_results),lang), family="serif", size=14)
@@ -72,13 +74,6 @@ plt.gca().get_xaxis().set_major_formatter(FuncFormatter(lambda x, p: format(int(
 # make x and y axes start at zero
 ax.set_xlim([0, None])
 ax.set_ylim([0, None])
-
-# For ANTLR Python parser plots
-if datafile == "python__antlr-parser.json":
-    ax.set_title("ANTLR parser, no cache warm-up")
-    
-#ax.set_title("ANTLR parser, after cache warm-up")
-#plt.ylim([0.0, 0.04])
 
 plt.savefig(plotfile, format="pdf", bbox_inches='tight', pad_inches=0, dpi=1000)
 print ("results saved to " + plotfile)

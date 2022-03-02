@@ -21,7 +21,7 @@ Module Make (Export D : Defs.T).
            (word  : list token)
            (sem_v : nt_semty start),
       no_left_recursion gr
-      -> parse gr hw start word = Accept _ sem_v
+      -> parse gr hw start word = Unique _ sem_v
       -> sem_value_derivation gr (NT start) word sem_v
          /\ (forall sem_v',
                 sem_value_derivation gr (NT start) word sem_v'
@@ -87,7 +87,7 @@ Module Make (Export D : Defs.T).
            (sem_v : nt_semty start),
       no_left_recursion gr
       -> sem_value_derivation gr (NT start) word sem_v
-      -> (parse gr hw start word = Accept _ sem_v
+      -> (parse gr hw start word = Unique _ sem_v
           /\ (forall sem_v', sem_value_derivation gr (NT start) word sem_v' -> sem_v' = sem_v))
          \/
          ((exists sem_v',

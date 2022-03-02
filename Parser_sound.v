@@ -1001,7 +1001,7 @@ Module ParserSoundFn (Import D : Defs.T).
       -> closure_map_complete gr cm
       -> stack_wf gr sk
       -> unique_stack_prefix_derivation gr w sk ts un
-      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha' = Accept x v
+      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha' = Unique x v
       -> sem_value_derivation gr (NT x) w v 
          /\ (forall v',
                 sem_value_derivation gr (NT x) w v'
@@ -1066,7 +1066,7 @@ Module ParserSoundFn (Import D : Defs.T).
       -> closure_map_complete gr cm
       -> stack_wf gr sk
       -> unique_stack_prefix_derivation gr w sk ts un
-      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha = Accept x v
+      -> multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha = Unique x v
       -> sem_value_derivation gr (NT x) w v
          /\ (forall v',
                 sem_value_derivation gr (NT x) w v'

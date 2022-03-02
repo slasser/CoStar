@@ -205,7 +205,7 @@ Module ParserCompleteFn (Import D : Defs.T).
       no_left_recursion g
       -> sem_value_derivation g (NT x) w v
       -> exists (v' : nt_semty x),
-          parse g hw x w = Accept _ v'
+          parse g hw x w = Unique _ v'
           \/ parse g hw x w = Ambig _ v'.
   Proof.
     intros g hw x w v hn hd.

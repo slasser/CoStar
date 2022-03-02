@@ -306,7 +306,7 @@ Module ParserFn (Import D : Defs.T).
   Defined.
 
   Inductive parse_result (x : nonterminal) : Type :=
-  | Accept : nt_semty x  -> parse_result x
+  | Unique : nt_semty x  -> parse_result x
   | Ambig  : nt_semty x  -> parse_result x
   | Reject : string      -> parse_result x
   | Error  : parse_error -> parse_result x.
@@ -314,7 +314,7 @@ Module ParserFn (Import D : Defs.T).
   (* For validation *)
   Definition showResult (x : nonterminal) (pr : parse_result x) : string :=
     match pr with
-    | Accept _ v => "Accept"
+    | Unique _ v => "Unique"
     | Ambig  _ v => "Ambig"
     | Reject _ s => "Reject: " ++ s
     | Error  _ e => "Error:  " ++ showParseError e
@@ -341,7 +341,7 @@ Module ParserFn (Import D : Defs.T).
     | StepAccept x' v' =>
       fun hs  =>
         let v := cast_nt_semty x' x (step_accept_result_eq_start _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs) v'
-        in  if un then Accept x v else Ambig x v
+        in  if un then Unique x v else Ambig x v
     | StepReject s              => fun _  => Reject _ s
     | StepError e               => fun _  => Error  _ e
     | StepK sk' ts' vi' un' ca' =>
@@ -359,7 +359,7 @@ Module ParserFn (Import D : Defs.T).
       | StepAccept x' v' =>
         fun hs =>
           let v := cast_nt_semty x' x (step_accept_result_eq_start _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs) v'
-          in  if un then Accept x v else Ambig x v
+          in  if un then Unique x v else Ambig x v
       | StepReject s                  => fun _  => Reject _ s
       | StepError e                   => fun _  => Error  _ e
       | StepK sk' ts' vi' un' ca' =>
@@ -397,7 +397,7 @@ Module ParserFn (Import D : Defs.T).
       | StepAccept x' v' =>
         fun hs =>
           let v := cast_nt_semty x' x (step_accept_result_eq_start _ _ _ _ _ _ _ _ _ _ _ _ _ _ hb hs) v'
-          in  if un then Accept x v else Ambig x v
+          in  if un then Unique x v else Ambig x v
       | StepReject s                  => fun _ => Reject _ s
       | StepError s                   => fun _ => Error _ s
       | StepK sk' ts' vi' un' ca' =>
@@ -408,10 +408,10 @@ Module ParserFn (Import D : Defs.T).
                             (StepK_result_acc _ _ _ _ _ _ _ _ _ _ _ _ _ _ hc hk ha hs)
       end heq = pr
       -> match pr with
-         | Accept _ f => (sr = StepAccept x f /\ un = true)
+         | Unique _ f => (sr = StepAccept x f /\ un = true)
                        \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                               sr = StepK sk' ts' vi' un' ca'
-                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Accept x f)
+                              /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Unique x f)
          | Ambig _ f  => (sr = StepAccept x f /\ un = false)
                        \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                               sr = StepK sk' ts' vi' un' ca'
@@ -458,10 +458,10 @@ Module ParserFn (Import D : Defs.T).
            (pr  : parse_result x),
       multistep gr hw rm hr cm x sk ts vi un ca hc hk hb ha = pr
       -> match pr with
-         | Accept _ f => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = true)
+         | Unique _ f => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = true)
                          \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                                 step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'
-                                /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Accept x f)
+                                /\ multistep gr hw rm hr cm x sk' ts' vi' un' ca' hc' hk' hb' ha' = Unique x f)
          | Ambig _ f  => (step gr hw rm cm sk ts vi un ca hc hk = StepAccept x f /\ un = false)
                          \/ (exists sk' ts' vi' un' ca' hc' hk' hb' ha',
                                 step gr hw rm cm sk ts vi un ca hc hk = StepK sk' ts' vi' un' ca'

@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graph xmlns="http://www.xces.org/ns/GrAF/1.0/">
+    <header>
+        <tagsDecl>
+            <tagUsage gi="body" occurs="1"/>
+            <tagUsage gi="text" occurs="1"/>
+            <tagUsage gi="p" occurs="12"/>
+            <tagUsage gi="div" occurs="6"/>
+            <tagUsage gi="hi" occurs="21"/>
+            <tagUsage gi="cesDoc" occurs="1"/>
+            <tagUsage gi="head" occurs="6"/>
+        </tagsDecl>
+        <annotationSets>
+            <annotationSet name="xces" type="http://www.xces.org/schema/2003"/>
+        </annotationSets>
+    </header>
+    <region xml:id="n-r0" anchors="0 15374"/>
+    <node xml:id="n-n0">
+        <link targets="n-r0"/>
+    </node>
+    <a label="cesDoc" ref="n-n0" as="xces">
+        <fs>
+            <f name="xmlns" value="http://www.xces.org/schema/2003"/>
+            <f name="version" value="1.0.4"/>
+        </fs>
+    </a>
+    <region xml:id="n-r1" anchors="3 15373"/>
+    <node xml:id="n-n1">
+        <link targets="n-r1"/>
+    </node>
+    <a label="text" ref="n-n1" as="xces"/>
+    <region xml:id="n-r2" anchors="8 15370"/>
+    <node xml:id="n-n2">
+        <link targets="n-r2"/>
+    </node>
+    <a label="body" ref="n-n2" as="xces"/>
+    <region xml:id="n-r3" anchors="15 1578"/>
+    <node xml:id="n-n3">
+        <link targets="n-r3"/>
+    </node>
+    <a label="div" ref="n-n3" as="xces">
+        <fs>
+            <f name="type" value="section"/>
+            <f name="id" value="s1"/>
+        </fs>
+    </a>
+    <region xml:id="n-r4" anchors="24 24"/>
+    <node xml:id="n-n4">
+        <link targets="n-r4"/>
+    </node>
+    <a label="head" ref="n-n4" as="xces"/>
+    <region xml:id="n-r5" anchors="33 1066"/>
+    <node xml:id="n-n5">
+        <link targets="n-r5"/>
+    </node>
+    <a label="p" ref="n-n5" as="xces">
+        <fs>
+            <f name="id" value="p1"/>
+        </fs>
+    </a>
+    <region xml:id="n-r6" anchors="1075 1571"/>
+    <node xml:id="n-n6">
+        <link targets="n-r6"/>
+    </node>
+    <a label="p" ref="n-n6" as="xces">
+        <fs>
+            <f name="id" value="p2"/>
+        </fs>
+    </a>
+    <region xml:id="n-r7" anchors="1585 4766"/>
+    <node xml:id="n-n7">
+        <link targets="n-r7"/>
+    </node>
+    <a label="div" ref="n-n7" as="xces">
+        <fs>
+            <f name="type" value="section"/>
+            <f name="id" value="s2"/>
+        </fs>
+    </a>
+    <region xml:id="n-r8" anchors="1594 1639"/>
+    <node xml:id="n-n8">
+        <link targets="n-r8"/>
+    </node>
+    <a label="head" ref="n-n8" as="xces"/>
+    <region xml:id="n-r9" anchors="1648 3612"/>
+    <node xml:id="n-n9">
+        <link targets="n-r9"/>
+    </node>
+    <a label="p" ref="n-n9" as="xces">
+        <fs>
+            <f name="id" value="p3"/>
+        </fs>
+    </a>
+    <region xml:id="n-r10" anchors="3070 3071"/>
+    <node xml:id="n-n10">
+        <link targets="n-r10"/>
+    </node>
+    <a label="hi" ref="n-n10" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r11" anchors="3137 3138"/>
+    <node xml:id="n-n11">
+        <link targets="n-r11"/>
+    </node>
+    <a label="hi" ref="n-n11" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r12" anchors="3621 4759"/>
+    <node xml:id="n-n12">
+        <link targets="n-r12"/>
+    </node>
+    <a label="p" ref="n-n12" as="xces">
+        <fs>
+            <f name="id" value="p4"/>
+        </fs>
+    </a>
+    <region xml:id="n-r13" anchors="3843 3859"/>
+    <node xml:id="n-n13">
+        <link targets="n-r13"/>
+    </node>
+    <a label="hi" ref="n-n13" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r14" anchors="4004 4005"/>
+    <node xml:id="n-n14">
+        <link targets="n-r14"/>
+    </node>
+    <a label="hi" ref="n-n14" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r15" anchors="4049 4050"/>
+    <node xml:id="n-n15">
+        <link targets="n-r15"/>
+    </node>
+    <a label="hi" ref="n-n15" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r16" anchors="4160 4161"/>
+    <node xml:id="n-n16">
+        <link targets="n-r16"/>
+    </node>
+    <a label="hi" ref="n-n16" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r17" anchors="4177 4178"/>
+    <node xml:id="n-n17">
+        <link targets="n-r17"/>
+    </node>
+    <a label="hi" ref="n-n17" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r18" anchors="4773 8086"/>
+    <node xml:id="n-n18">
+        <link targets="n-r18"/>
+    </node>
+    <a label="div" ref="n-n18" as="xces">
+        <fs>
+            <f name="type" value="section"/>
+            <f name="id" value="s3"/>
+        </fs>
+    </a>
+    <region xml:id="n-r19" anchors="4782 4848"/>
+    <node xml:id="n-n19">
+        <link targets="n-r19"/>
+    </node>
+    <a label="head" ref="n-n19" as="xces"/>
+    <region xml:id="n-r20" anchors="4857 5597"/>
+    <node xml:id="n-n20">
+        <link targets="n-r20"/>
+    </node>
+    <a label="p" ref="n-n20" as="xces">
+        <fs>
+            <f name="id" value="p5"/>
+        </fs>
+    </a>
+    <region xml:id="n-r21" anchors="5606 7127"/>
+    <node xml:id="n-n21">
+        <link targets="n-r21"/>
+    </node>
+    <a label="p" ref="n-n21" as="xces">
+        <fs>
+            <f name="id" value="p6"/>
+        </fs>
+    </a>
+    <region xml:id="n-r22" anchors="5748 5761"/>
+    <node xml:id="n-n22">
+        <link targets="n-r22"/>
+    </node>
+    <a label="hi" ref="n-n22" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r23" anchors="6264 6265"/>
+    <node xml:id="n-n23">
+        <link targets="n-r23"/>
+    </node>
+    <a label="hi" ref="n-n23" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r24" anchors="6483 6484"/>
+    <node xml:id="n-n24">
+        <link targets="n-r24"/>
+    </node>
+    <a label="hi" ref="n-n24" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r25" anchors="6894 6895"/>
+    <node xml:id="n-n25">
+        <link targets="n-r25"/>
+    </node>
+    <a label="hi" ref="n-n25" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r26" anchors="7097 7098"/>
+    <node xml:id="n-n26">
+        <link targets="n-r26"/>
+    </node>
+    <a label="hi" ref="n-n26" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r27" anchors="7117 7118"/>
+    <node xml:id="n-n27">
+        <link targets="n-r27"/>
+    </node>
+    <a label="hi" ref="n-n27" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r28" anchors="7136 8079"/>
+    <node xml:id="n-n28">
+        <link targets="n-r28"/>
+    </node>
+    <a label="p" ref="n-n28" as="xces">
+        <fs>
+            <f name="id" value="p7"/>
+        </fs>
+    </a>
+    <region xml:id="n-r29" anchors="7535 7536"/>
+    <node xml:id="n-n29">
+        <link targets="n-r29"/>
+    </node>
+    <a label="hi" ref="n-n29" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r30" anchors="7556 7560"/>
+    <node xml:id="n-n30">
+        <link targets="n-r30"/>
+    </node>
+    <a label="hi" ref="n-n30" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r31" anchors="7572 7573"/>
+    <node xml:id="n-n31">
+        <link targets="n-r31"/>
+    </node>
+    <a label="hi" ref="n-n31" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r32" anchors="7878 7882"/>
+    <node xml:id="n-n32">
+        <link targets="n-r32"/>
+    </node>
+    <a label="hi" ref="n-n32" as="xces">
+        <fs>
+            <f name="rend" value="sub"/>
+        </fs>
+    </a>
+    <region xml:id="n-r33" anchors="8093 9359"/>
+    <node xml:id="n-n33">
+        <link targets="n-r33"/>
+    </node>
+    <a label="div" ref="n-n33" as="xces">
+        <fs>
+            <f name="type" value="section"/>
+            <f name="id" value="s4"/>
+        </fs>
+    </a>
+    <region xml:id="n-r34" anchors="8102 8179"/>
+    <node xml:id="n-n34">
+        <link targets="n-r34"/>
+    </node>
+    <a label="head" ref="n-n34" as="xces"/>
+    <region xml:id="n-r35" anchors="8188 9352"/>
+    <node xml:id="n-n35">
+        <link targets="n-r35"/>
+    </node>
+    <a label="p" ref="n-n35" as="xces">
+        <fs>
+            <f name="id" value="p8"/>
+        </fs>
+    </a>
+    <region xml:id="n-r36" anchors="9366 13848"/>
+    <node xml:id="n-n36">
+        <link targets="n-r36"/>
+    </node>
+    <a label="div" ref="n-n36" as="xces">
+        <fs>
+            <f name="type" value="section"/>
+            <f name="id" value="s5"/>
+        </fs>
+    </a>
+    <region xml:id="n-r37" anchors="9375 9418"/>
+    <node xml:id="n-n37">
+        <link targets="n-r37"/>
+    </node>
+    <a label="head" ref="n-n37" as="xces"/>
+    <region xml:id="n-r38" anchors="9427 10972"/>
+    <node xml:id="n-n38">
+        <link targets="n-r38"/>
+    </node>
+    <a label="p" ref="n-n38" as="xces">
+        <fs>
+            <f name="id" value="p9"/>
+        </fs>
+    </a>
+    <region xml:id="n-r39" anchors="10143 10145"/>
+    <node xml:id="n-n39">
+        <link targets="n-r39"/>
+    </node>
+    <a label="hi" ref="n-n39" as="xces">
+        <fs>
+            <f name="rend" value="sup"/>
+        </fs>
+    </a>
+    <region xml:id="n-r40" anchors="10649 10651"/>
+    <node xml:id="n-n40">
+        <link targets="n-r40"/>
+    </node>
+    <a label="hi" ref="n-n40" as="xces">
+        <fs>
+            <f name="rend" value="sup"/>
+        </fs>
+    </a>
+    <region xml:id="n-r41" anchors="10981 12122"/>
+    <node xml:id="n-n41">
+        <link targets="n-r41"/>
+    </node>
+    <a label="p" ref="n-n41" as="xces">
+        <fs>
+            <f name="id" value="p10"/>
+        </fs>
+    </a>
+    <region xml:id="n-r42" anchors="11386 11398"/>
+    <node xml:id="n-n42">
+        <link targets="n-r42"/>
+    </node>
+    <a label="hi" ref="n-n42" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r43" anchors="12131 13841"/>
+    <node xml:id="n-n43">
+        <link targets="n-r43"/>
+    </node>
+    <a label="p" ref="n-n43" as="xces">
+        <fs>
+            <f name="id" value="p11"/>
+        </fs>
+    </a>
+    <region xml:id="n-r44" anchors="13164 13176"/>
+    <node xml:id="n-n44">
+        <link targets="n-r44"/>
+    </node>
+    <a label="hi" ref="n-n44" as="xces">
+        <fs>
+            <f name="rend" value="it"/>
+        </fs>
+    </a>
+    <region xml:id="n-r45" anchors="13855 15365"/>
+    <node xml:id="n-n45">
+        <link targets="n-r45"/>
+    </node>
+    <a label="div" ref="n-n45" as="xces">
+        <fs>
+            <f name="type" value="section"/>
+            <f name="id" value="s6"/>
+        </fs>
+    </a>
+    <region xml:id="n-r46" anchors="13864 13895"/>
+    <node xml:id="n-n46">
+        <link targets="n-r46"/>
+    </node>
+    <a label="head" ref="n-n46" as="xces"/>
+    <region xml:id="n-r47" anchors="13904 15358"/>
+    <node xml:id="n-n47">
+        <link targets="n-r47"/>
+    </node>
+    <a label="p" ref="n-n47" as="xces">
+        <fs>
+            <f name="id" value="p12"/>
+        </fs>
+    </a>
+</graph>
