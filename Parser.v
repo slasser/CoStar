@@ -505,7 +505,7 @@ Module ParserFn (Import D : Defs.T).
 
   (* This curried pattern enables us to partially apply the parser to a grammar
      and compute the closure map once, instead of each time we parse an input *)
-  Definition parse (gr : grammar) (hw : grammar_wf gr) : forall (x : nonterminal), list token -> parse_result x :=
+  Definition parse (gr : grammar) (hw : grammar_wf gr) : forall (x : nonterminal), list token -> parse_result x := 
     let rm := mkRhsMap gr         in
     let hr := mkRhsMap_correct gr in
     let cm := mkClosureMap gr     in
