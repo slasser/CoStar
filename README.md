@@ -1,6 +1,8 @@
 # CoStar
 A parser based on the ALL(*) algorithm, implemented and verified with Coq.
 
+NASA Formal Methods 2023 reviewers: note that the semantic version of CoStar described in our submission, CoStar++, lives in the predicates-and-actions branch of this repository. 
+
 ### Parser Dependencies
 
 (Version numbers are for versions used during development/testing; other versions might work, too. Installation instructions have been tested on a machine running the Ubuntu 16.04 OS.)
