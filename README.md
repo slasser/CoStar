@@ -34,15 +34,24 @@ A parser based on the ALL(*) algorithm, implemented and verified with Coq.
   opam install dune.2.7.1 core_kernel.v0.14.0 yojson.1.7.0
   ```
 
-* Python 3.7
+* Python 3.8, pip3
   ```
-  sudo apt-get install python3.7
+  sudo apt-get install python3.8 python3-pip
   ```
 
-* Python libraries: numpy, matplotlib, statsmodels
+* Python libraries: pandas, numpy, matplotlib, statsmodels
   ```
-  pip3 install numpy matplotlib statsmodels
+  pip3 install pandas numpy matplotlib statsmodels
   ```
+
+* Verbatim (verified lexer interpreter)
+- Download from GitHub:
+```
+cd ~/clones
+git clone https://github.com/egolf-cs/Verbatim.git
+```
+- In the Verbatim root directory, run `make`.
+- If the path for the Verbatim root is something other than ~/clones/Verbatim, open CoStar/Makefile and replace ~/clones/Verbatim with the correct location of Verbatim.
 
 ### Building the Project
 
