@@ -45,17 +45,17 @@ A parser based on the ALL(*) algorithm, implemented and verified with Coq.
   ```
 
 * Verbatim (verified lexer interpreter)
-- Download from GitHub:
-```
-cd ~/clones
-git clone https://github.com/egolf-cs/Verbatim.git
-```
-- In the Verbatim root directory, run `make`.
-- If the path for the Verbatim root is something other than ~/clones/Verbatim, open CoStar/Makefile and replace ~/clones/Verbatim with the correct location of Verbatim.
+  - Download from GitHub:
+  ```
+  cd ~/clones
+  git clone https://github.com/egolf-cs/Verbatim.git
+  ```
+  - In the Verbatim root directory, run `make`.
+  - If the path for the Verbatim root is something other than `~/clones/Verbatim`, open `CoStar/Makefile` and replace `~/clones/Verbatim` with the correct location of     Verbatim.
 
 ### Building the Project
 
-(All shell commands are run from the project root.)
+(All shell commands are run from the CoStar project root.)
 
 To build the parser and the evaluation framework:
 
