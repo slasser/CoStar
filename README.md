@@ -3,7 +3,7 @@ A parser based on the ALL(*) algorithm, implemented and verified with Coq.
 
 ### Parser Dependencies
 
-(Version numbers are for versions used during development/testing; other versions might work, too. Installation instructions have been tested on a machine running the Ubuntu 16.04 OS.)
+(Version numbers are for versions used during development/testing; other versions might work, too. Installation instructions have been tested on a machine running the Ubuntu 20.04 OS.)
 
 * OCaml 4.11.1+flambda
   ```
