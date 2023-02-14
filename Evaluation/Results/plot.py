@@ -32,8 +32,8 @@ avg_parse_times = [np.mean(g) for g in parse_time_groups]
 fig = plt.figure(figsize=(3.8, 1.7))
 ax = fig.add_subplot(111)
 
-sizes = np.array(token_counts, np.int)
-times = np.array(avg_parse_times, np.float)
+sizes = np.array(token_counts, int)
+times = np.array(avg_parse_times, float)
 plt.scatter(sizes,times,s=5,color='#6a86d9')
 
 # lin regression line
